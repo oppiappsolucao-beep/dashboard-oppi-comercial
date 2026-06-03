@@ -36,22 +36,19 @@ SCOPES = [
 st.markdown(
     """
     <style>
-        /* Fundo geral */
         .stApp {
             background: #F4F7FC;
         }
 
-        /* Remove espaçamentos excessivos */
         .block-container {
             padding-top: 1.4rem;
             padding-bottom: 2rem;
             max-width: 1500px;
         }
 
-        /* Sidebar */
         section[data-testid="stSidebar"] {
             background: linear-gradient(180deg, #061F4A 0%, #0A3471 100%);
-            border-right: 1px solid rgba(255,255,255,0.08);
+            border-right: 1px solid rgba(255, 255, 255, 0.08);
         }
 
         section[data-testid="stSidebar"] * {
@@ -61,22 +58,20 @@ st.markdown(
         section[data-testid="stSidebar"] .stRadio label {
             background: transparent;
             border-radius: 12px;
-            padding: 7px 9px;
-            margin-bottom: 4px;
+            padding: 8px 9px;
+            margin-bottom: 5px;
             transition: 0.2s;
         }
 
         section[data-testid="stSidebar"] .stRadio label:hover {
-            background: rgba(255,255,255,0.10);
+            background: rgba(255, 255, 255, 0.10);
         }
 
-        /* Títulos */
         h1, h2, h3 {
             color: #082A5C;
             letter-spacing: -0.02em;
         }
 
-        /* Cards */
         .metric-card {
             background: #FFFFFF;
             border: 1px solid #E4EAF4;
@@ -98,7 +93,7 @@ st.markdown(
             justify-content: center;
             align-items: center;
             font-size: 1.45rem;
-            color: white;
+            color: #FFFFFF;
         }
 
         .metric-title {
@@ -122,7 +117,6 @@ st.markdown(
             margin-top: 7px;
         }
 
-        /* Blocos */
         .content-card {
             background: #FFFFFF;
             border: 1px solid #E4EAF4;
@@ -142,58 +136,65 @@ st.markdown(
         .content-subtitle {
             color: #748198;
             font-size: 0.80rem;
-            margin-bottom: 8px;
+            margin-bottom: 4px;
         }
 
-        /* Tabela */
         div[data-testid="stDataFrame"] {
             border: 1px solid #E4EAF4;
             border-radius: 16px;
             overflow: hidden;
         }
 
-        /* Botões */
-        .stButton > button {
-            border-radius: 999px;
-            border: none;
-            background: #246BD3;
-            color: #FFFFFF;
-            font-weight: 800;
-            padding: 0.55rem 1rem;
-        }
-
-        .stButton > button:hover {
-            background: #1859B4;
-            color: #FFFFFF;
-        }
-
-        /* Inputs */
         div[data-baseweb="select"] > div,
         div[data-baseweb="input"] > div {
             border-radius: 12px;
         }
 
-        /* Login */
-        .login-box {
-            max-width: 520px;
-            margin: 60px auto 18px auto;
-            background: #FFFFFF;
-            border: 1px solid #E4EAF4;
-            border-radius: 24px;
-            padding: 26px;
-            box-shadow: 0 16px 42px rgba(15, 23, 42, 0.08);
+        .sidebar-logo-box {
+            padding: 16px 6px 8px 6px;
+            margin-bottom: 12px;
         }
 
-        .login-logo {
-            font-size: 1.40rem;
+        .sidebar-logo-icon {
+            width: 58px;
+            height: 58px;
+            border-radius: 18px;
+            background: #2F78D4;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.65rem;
+            margin-bottom: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.18);
+        }
+
+        .sidebar-title {
+            color: #FFFFFF;
+            font-size: 1.05rem;
             font-weight: 950;
-            color: #082A5C;
-            margin-bottom: 6px;
+            line-height: 1.15;
         }
 
-        .login-text {
-            color: #718096;
-            font-size: 0.88rem;
+        .sidebar-subtitle {
+            color: #C9D9F1;
+            font-size: 0.66rem;
+            letter-spacing: 0.16em;
+            font-weight: 800;
+            margin-top: 7px;
+        }
+
+        .sidebar-footer {
+            margin-top: 34px;
+            color: #BFD1EA;
+            font-size: 0.69rem;
+            line-height: 1.5;
+        }
+
+        .sidebar-divider {
+            border: none;
+            height: 1px;
+            background: rgba(255, 255, 255, 0.18);
+            margin: 12px 0 16px 0;
         }
     </style>
     """,
@@ -221,8 +222,13 @@ def normalize_text(value) -> str:
 def normalize_search_text(value) -> str:
     text = normalize_text(value).lower()
     text = unicodedata.normalize("NFKD", text)
-    text = "".join(char for char in text if not unicodedata.combining(char))
+    text = "".join(
+        character
+        for character in text
+        if not unicodedata.combining(character)
+    )
     text = re.sub(r"\s+", " ", text).strip()
+
     return text
 
 
@@ -251,13 +257,18 @@ def format_money(value) -> str:
     except Exception:
         number = 0.0
 
-    return f"R$ {number:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    return (
+        f"R$ {number:,.2f}"
+        .replace(",", "X")
+        .replace(".", ",")
+        .replace("X", ".")
+    )
 
 
 def make_unique_headers(headers: list[str]) -> list[str]:
     """
-    Evita erro quando a planilha possui colunas repetidas,
-    como CPF para Sócio 1, Sócio 2 e Sócio 3.
+    Evita erros quando a planilha possui colunas repetidas,
+    como as colunas de CPF dos diferentes sócios.
     """
     result = []
     counter = {}
@@ -279,7 +290,10 @@ def make_unique_headers(headers: list[str]) -> list[str]:
     return result
 
 
-def first_existing_column(df: pd.DataFrame, possible_names: list[str]) -> Optional[str]:
+def first_existing_column(
+    df: pd.DataFrame,
+    possible_names: list[str],
+) -> Optional[str]:
     if df is None or df.empty:
         return None
 
@@ -297,19 +311,18 @@ def first_existing_column(df: pd.DataFrame, possible_names: list[str]) -> Option
     return None
 
 
-def safe_series(df: pd.DataFrame, column: Optional[str], default_value="") -> pd.Series:
+def safe_series(
+    df: pd.DataFrame,
+    column: Optional[str],
+    default_value="",
+) -> pd.Series:
     if column and column in df.columns:
         return df[column]
 
-    return pd.Series([default_value] * len(df), index=df.index)
-
-
-def count_filled(df: pd.DataFrame, column: Optional[str]) -> int:
-    if not column or column not in df.columns:
-        return 0
-
-    series = df[column].astype(str).str.strip()
-    return int((series != "").sum())
+    return pd.Series(
+        [default_value] * len(df),
+        index=df.index,
+    )
 
 
 def status_group(value: str) -> str:
@@ -318,25 +331,72 @@ def status_group(value: str) -> str:
     if not status:
         return "Sem status"
 
-    if any(word in status for word in ["fechado", "cliente", "ganho", "vendido", "contrato"]):
+    if any(
+        word in status
+        for word in [
+            "fechado",
+            "cliente",
+            "ganho",
+            "vendido",
+            "contrato",
+        ]
+    ):
         return "Fechado"
 
-    if any(word in status for word in ["proposta", "orcamento", "orçamento"]):
+    if any(
+        word in status
+        for word in [
+            "proposta",
+            "orcamento",
+        ]
+    ):
         return "Proposta enviada"
 
-    if any(word in status for word in ["negociacao", "negociação", "reuniao", "reunião"]):
+    if any(
+        word in status
+        for word in [
+            "negociacao",
+            "reuniao",
+        ]
+    ):
         return "Em negociação"
 
-    if any(word in status for word in ["sem interesse", "perdido", "recusado"]):
+    if any(
+        word in status
+        for word in [
+            "sem interesse",
+            "perdido",
+            "recusado",
+        ]
+    ):
         return "Sem interesse"
 
-    if any(word in status for word in ["sem resposta", "nao respondeu", "não respondeu"]):
+    if any(
+        word in status
+        for word in [
+            "sem resposta",
+            "nao respondeu",
+        ]
+    ):
         return "Sem resposta"
 
-    if any(word in status for word in ["contato", "chamado", "andamento"]):
+    if any(
+        word in status
+        for word in [
+            "contato",
+            "chamado",
+            "andamento",
+        ]
+    ):
         return "Em contato"
 
-    if any(word in status for word in ["novo", "lead"]):
+    if any(
+        word in status
+        for word in [
+            "novo",
+            "lead",
+        ]
+    ):
         return "Novo lead"
 
     return normalize_text(value)
@@ -345,29 +405,43 @@ def status_group(value: str) -> str:
 def calculate_score(row: pd.Series, columns: dict) -> int:
     """
     Regra inicial de pesos e medidas.
-    Posteriormente podemos personalizar os pontos conforme o processo comercial da Oppi.
+    Pode ser alterada posteriormente conforme o processo comercial da Oppi.
     """
     score = 0
 
-    if normalize_text(row.get(columns.get("telefone_b2b", ""), "")):
+    if normalize_text(
+        row.get(columns.get("telefone_b2b", ""), "")
+    ):
         score += 15
 
-    if normalize_text(row.get(columns.get("email", ""), "")):
+    if normalize_text(
+        row.get(columns.get("email", ""), "")
+    ):
         score += 10
 
-    if normalize_text(row.get(columns.get("site", ""), "")):
+    if normalize_text(
+        row.get(columns.get("site", ""), "")
+    ):
         score += 10
 
-    if normalize_text(row.get(columns.get("instagram", ""), "")):
+    if normalize_text(
+        row.get(columns.get("instagram", ""), "")
+    ):
         score += 10
 
-    if normalize_text(row.get(columns.get("linkedin", ""), "")):
+    if normalize_text(
+        row.get(columns.get("linkedin", ""), "")
+    ):
         score += 5
 
-    if normalize_text(row.get(columns.get("socio_1", ""), "")):
+    if normalize_text(
+        row.get(columns.get("socio_1", ""), "")
+    ):
         score += 10
 
-    capital_value = parse_money(row.get(columns.get("capital", ""), ""))
+    capital_value = parse_money(
+        row.get(columns.get("capital", ""), "")
+    )
 
     if capital_value >= 100000:
         score += 20
@@ -376,7 +450,9 @@ def calculate_score(row: pd.Series, columns: dict) -> int:
     elif capital_value > 0:
         score += 8
 
-    grouped_status = status_group(row.get(columns.get("status", ""), ""))
+    grouped_status = status_group(
+        row.get(columns.get("status", ""), "")
+    )
 
     if grouped_status == "Fechado":
         score += 20
@@ -402,11 +478,20 @@ def score_classification(score: int) -> str:
     return "Lead frio"
 
 
-def metric_card(title: str, value: str, subtitle: str, emoji: str, color: str):
+def metric_card(
+    title: str,
+    value: str,
+    subtitle: str,
+    emoji: str,
+    color: str,
+):
     st.markdown(
         f"""
         <div class="metric-card">
-            <div class="metric-icon" style="background:{color};">{emoji}</div>
+            <div class="metric-icon" style="background:{color};">
+                {emoji}
+            </div>
+
             <div>
                 <div class="metric-title">{title}</div>
                 <div class="metric-value">{value}</div>
@@ -418,7 +503,10 @@ def metric_card(title: str, value: str, subtitle: str, emoji: str, color: str):
     )
 
 
-def section_header(title: str, subtitle: str):
+def section_header(
+    title: str,
+    subtitle: str,
+):
     st.markdown(
         f"""
         <div class="content-card">
@@ -431,69 +519,15 @@ def section_header(title: str, subtitle: str):
 
 
 # =========================================================
-# LOGIN
-# =========================================================
-
-def get_secret_value(key: str, default_value: str = "") -> str:
-    try:
-        return normalize_text(st.secrets.get(key, default_value))
-    except Exception:
-        return default_value
-
-
-def login_is_configured() -> bool:
-    username = get_secret_value("APP_USERNAME")
-    password = get_secret_value("APP_PASSWORD")
-
-    return bool(username and password)
-
-
-def show_login():
-    if not login_is_configured():
-        return
-
-    if st.session_state.get("authenticated"):
-        return
-
-    st.markdown(
-        """
-        <div class="login-box">
-            <div class="login-logo">📊 Dashboard Oppi Comercial</div>
-            <div class="login-text">
-                Digite seu usuário e sua senha para acessar os indicadores comerciais.
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    login_col_1, login_col_2, login_col_3 = st.columns([1, 1.3, 1])
-
-    with login_col_2:
-        username = st.text_input("Usuário")
-        password = st.text_input("Senha", type="password")
-
-        if st.button("Entrar", use_container_width=True):
-            correct_username = get_secret_value("APP_USERNAME")
-            correct_password = get_secret_value("APP_PASSWORD")
-
-            if username == correct_username and password == correct_password:
-                st.session_state["authenticated"] = True
-                st.rerun()
-            else:
-                st.error("Usuário ou senha incorretos.")
-
-    st.stop()
-
-
-# =========================================================
 # CONEXÃO COM GOOGLE SHEETS
 # =========================================================
 
 @st.cache_resource
 def get_gsheet_client():
     try:
-        credentials_info = dict(st.secrets["gcp_service_account"])
+        credentials_info = dict(
+            st.secrets["gcp_service_account"]
+        )
     except Exception:
         return None
 
@@ -512,7 +546,12 @@ def load_sheet_data() -> pd.DataFrame:
     if client is None:
         return pd.DataFrame()
 
-    worksheet = client.open_by_key(SHEET_ID).worksheet(WORKSHEET_NAME)
+    worksheet = (
+        client
+        .open_by_key(SHEET_ID)
+        .worksheet(WORKSHEET_NAME)
+    )
+
     values = worksheet.get_all_values()
 
     if not values:
@@ -521,14 +560,24 @@ def load_sheet_data() -> pd.DataFrame:
     headers = make_unique_headers(values[0])
     rows = values[1:]
 
-    df = pd.DataFrame(rows, columns=headers)
+    df = pd.DataFrame(
+        rows,
+        columns=headers,
+    )
 
     for column in df.columns:
-        df[column] = df[column].astype(str).str.strip()
+        df[column] = (
+            df[column]
+            .astype(str)
+            .str.strip()
+        )
 
     df = df[
         df.apply(
-            lambda row: any(normalize_text(value) for value in row),
+            lambda row: any(
+                normalize_text(value)
+                for value in row
+            ),
             axis=1,
         )
     ].copy()
@@ -537,91 +586,173 @@ def load_sheet_data() -> pd.DataFrame:
 
 
 # =========================================================
-# IDENTIFICAÇÃO DAS COLUNAS DA PLANILHA
+# IDENTIFICAÇÃO DAS COLUNAS
 # =========================================================
 
 def identify_columns(df: pd.DataFrame) -> dict:
     return {
         "empresa": first_existing_column(
             df,
-            ["Nome da empresa", "Empresa", "Nome Empresa"],
+            [
+                "Nome da empresa",
+                "Empresa",
+                "Nome Empresa",
+            ],
         ),
+
         "data_abertura": first_existing_column(
             df,
-            ["Data de abertura", "Data abertura"],
+            [
+                "Data de abertura",
+                "Data abertura",
+            ],
         ),
+
         "capital": first_existing_column(
             df,
-            ["Capital", "Capital social"],
+            [
+                "Capital",
+                "Capital social",
+            ],
         ),
+
         "cnpj": first_existing_column(
             df,
-            ["CNPJ"],
+            [
+                "CNPJ",
+            ],
         ),
+
         "endereco": first_existing_column(
             df,
-            ["Endereço", "Endereco"],
+            [
+                "Endereço",
+                "Endereco",
+            ],
         ),
+
         "email": first_existing_column(
             df,
-            ["Email", "E-mail"],
+            [
+                "Email",
+                "E-mail",
+            ],
         ),
+
         "site": first_existing_column(
             df,
-            ["Site empresa", "Site", "Website"],
+            [
+                "Site empresa",
+                "Site",
+                "Website",
+            ],
         ),
+
         "telefone_b2b": first_existing_column(
             df,
-            ["Telefone (b2b)", "Telefone b2b", "Telefone"],
+            [
+                "Telefone (b2b)",
+                "Telefone b2b",
+                "Telefone",
+            ],
         ),
+
         "telefone_fixo": first_existing_column(
             df,
-            ["Telefone fixo", "Fixo"],
+            [
+                "Telefone fixo",
+                "Fixo",
+            ],
         ),
+
         "telefone_alternativo": first_existing_column(
             df,
-            ["Telefone lemitt", "Telefone alternativo", "Outro telefone"],
+            [
+                "Telefone lemitt",
+                "Telefone alternativo",
+                "Outro telefone",
+            ],
         ),
+
         "socio_1": first_existing_column(
             df,
-            ["Sócio 1", "Socio 1"],
+            [
+                "Sócio 1",
+                "Socio 1",
+            ],
         ),
+
         "socio_2": first_existing_column(
             df,
-            ["Sócio 2", "Socio 2"],
+            [
+                "Sócio 2",
+                "Socio 2",
+            ],
         ),
+
         "socio_3": first_existing_column(
             df,
-            ["Sócio 3", "Socio 3"],
+            [
+                "Sócio 3",
+                "Socio 3",
+            ],
         ),
+
         "instagram": first_existing_column(
             df,
-            ["Instagram"],
+            [
+                "Instagram",
+            ],
         ),
+
         "linkedin": first_existing_column(
             df,
-            ["Linkedin", "LinkedIn"],
+            [
+                "Linkedin",
+                "LinkedIn",
+            ],
         ),
+
         "vendedor": first_existing_column(
             df,
-            ["Vendedor", "Responsável", "Responsavel"],
+            [
+                "Vendedor",
+                "Responsável",
+                "Responsavel",
+            ],
         ),
+
         "status": first_existing_column(
             df,
-            ["Status", "Etapa"],
+            [
+                "Status",
+                "Etapa",
+            ],
         ),
+
         "data_chamado": first_existing_column(
             df,
-            ["Data do chamado", "Data chamado"],
+            [
+                "Data do chamado",
+                "Data chamado",
+            ],
         ),
+
         "ultima_atualizacao": first_existing_column(
             df,
-            ["Ultima atualização", "Última atualização", "Última atualizacao"],
+            [
+                "Ultima atualização",
+                "Última atualização",
+                "Última atualizacao",
+            ],
         ),
     }
 
 
-def prepare_data(df: pd.DataFrame, columns: dict) -> pd.DataFrame:
+def prepare_data(
+    df: pd.DataFrame,
+    columns: dict,
+) -> pd.DataFrame:
     df_result = df.copy()
 
     empresa_col = columns.get("empresa")
@@ -629,75 +760,73 @@ def prepare_data(df: pd.DataFrame, columns: dict) -> pd.DataFrame:
     status_col = columns.get("status")
     vendedor_col = columns.get("vendedor")
 
-    df_result["_empresa"] = safe_series(df_result, empresa_col)
-    df_result["_capital_num"] = safe_series(df_result, capital_col).apply(parse_money)
-    df_result["_status_original"] = safe_series(df_result, status_col)
-    df_result["_status_grupo"] = df_result["_status_original"].apply(status_group)
-    df_result["_vendedor"] = safe_series(df_result, vendedor_col).replace("", "Sem vendedor")
+    df_result["_empresa"] = safe_series(
+        df_result,
+        empresa_col,
+    )
+
+    df_result["_capital_num"] = safe_series(
+        df_result,
+        capital_col,
+    ).apply(parse_money)
+
+    df_result["_status_original"] = safe_series(
+        df_result,
+        status_col,
+    )
+
+    df_result["_status_grupo"] = (
+        df_result["_status_original"]
+        .apply(status_group)
+    )
+
+    df_result["_vendedor"] = (
+        safe_series(
+            df_result,
+            vendedor_col,
+        )
+        .replace("", "Sem vendedor")
+    )
 
     df_result["_pontuacao"] = df_result.apply(
-        lambda row: calculate_score(row, columns),
+        lambda row: calculate_score(
+            row,
+            columns,
+        ),
         axis=1,
     )
 
-    df_result["_classificacao"] = df_result["_pontuacao"].apply(score_classification)
+    df_result["_classificacao"] = (
+        df_result["_pontuacao"]
+        .apply(score_classification)
+    )
 
     return df_result
 
 
 # =========================================================
-# SIDEBAR
+# MENU LATERAL
 # =========================================================
 
 def render_sidebar() -> str:
     with st.sidebar:
         st.markdown(
             """
-            <div style="
-                padding:16px 6px 8px 6px;
-                margin-bottom:12px;
-            ">
-                <div style="
-                    width:58px;
-                    height:58px;
-                    border-radius:18px;
-                    background:#2F78D4;
-                    display:flex;
-                    align-items:center;
-                    justify-content:center;
-                    font-size:1.65rem;
-                    margin-bottom:12px;
-                    border:1px solid rgba(255,255,255,0.18);
-                ">
+            <div class="sidebar-logo-box">
+                <div class="sidebar-logo-icon">
                     📊
                 </div>
 
-                <div style="
-                    color:white;
-                    font-size:1.05rem;
-                    font-weight:950;
-                    line-height:1.15;
-                ">
+                <div class="sidebar-title">
                     DASHBOARD OPPI
                 </div>
 
-                <div style="
-                    color:#C9D9F1;
-                    font-size:0.66rem;
-                    letter-spacing:0.16em;
-                    font-weight:800;
-                    margin-top:7px;
-                ">
+                <div class="sidebar-subtitle">
                     GESTÃO COMERCIAL
                 </div>
             </div>
 
-            <hr style="
-                border:none;
-                height:1px;
-                background:rgba(255,255,255,0.18);
-                margin:12px 0 16px 0;
-            ">
+            <hr class="sidebar-divider">
             """,
             unsafe_allow_html=True,
         )
@@ -714,25 +843,13 @@ def render_sidebar() -> str:
 
         st.markdown(
             """
-            <div style="
-                margin-top:34px;
-                color:#BFD1EA;
-                font-size:0.69rem;
-                line-height:1.5;
-            ">
+            <div class="sidebar-footer">
                 Oppi Tech<br>
                 Dashboard comercial
             </div>
             """,
             unsafe_allow_html=True,
         )
-
-        if login_is_configured():
-            st.markdown("<br>", unsafe_allow_html=True)
-
-            if st.button("Sair", use_container_width=True):
-                st.session_state["authenticated"] = False
-                st.rerun()
 
     return selected_page
 
@@ -741,13 +858,21 @@ def render_sidebar() -> str:
 # FILTROS
 # =========================================================
 
-def render_filters(df: pd.DataFrame):
-    filter_col_1, filter_col_2, filter_col_3 = st.columns([1.1, 1.1, 1.8])
+def render_filters(df: pd.DataFrame) -> pd.DataFrame:
+    filter_col_1, filter_col_2, filter_col_3 = st.columns(
+        [1.1, 1.1, 1.8]
+    )
 
     seller_options = sorted(
         [
             seller
-            for seller in df["_vendedor"].dropna().astype(str).unique().tolist()
+            for seller in (
+                df["_vendedor"]
+                .dropna()
+                .astype(str)
+                .unique()
+                .tolist()
+            )
             if normalize_text(seller)
         ]
     )
@@ -755,7 +880,13 @@ def render_filters(df: pd.DataFrame):
     status_options = sorted(
         [
             status
-            for status in df["_status_grupo"].dropna().astype(str).unique().tolist()
+            for status in (
+                df["_status_grupo"]
+                .dropna()
+                .astype(str)
+                .unique()
+                .tolist()
+            )
             if normalize_text(status)
         ]
     )
@@ -784,24 +915,36 @@ def render_filters(df: pd.DataFrame):
 
     if selected_sellers:
         filtered_df = filtered_df[
-            filtered_df["_vendedor"].isin(selected_sellers)
+            filtered_df["_vendedor"].isin(
+                selected_sellers
+            )
         ].copy()
 
     if selected_statuses:
         filtered_df = filtered_df[
-            filtered_df["_status_grupo"].isin(selected_statuses)
+            filtered_df["_status_grupo"].isin(
+                selected_statuses
+            )
         ].copy()
 
     if normalize_text(search_term):
-        normalized_term = normalize_search_text(search_term)
+        normalized_term = normalize_search_text(
+            search_term
+        )
 
         search_mask = filtered_df.apply(
             lambda row: normalized_term
-            in normalize_search_text(" | ".join(row.astype(str).tolist())),
+            in normalize_search_text(
+                " | ".join(
+                    row.astype(str).tolist()
+                )
+            ),
             axis=1,
         )
 
-        filtered_df = filtered_df[search_mask].copy()
+        filtered_df = filtered_df[
+            search_mask
+        ].copy()
 
     return filtered_df
 
@@ -810,22 +953,56 @@ def render_filters(df: pd.DataFrame):
 # PÁGINA: VISÃO GERAL
 # =========================================================
 
-def render_overview_page(df: pd.DataFrame, columns: dict):
+def render_overview_page(
+    df: pd.DataFrame,
+    columns: dict,
+):
     st.title("Visão Geral")
-    st.caption("Acompanhe os principais indicadores da operação comercial da Oppi.")
+
+    st.caption(
+        "Acompanhe os principais indicadores da operação comercial da Oppi."
+    )
 
     filtered_df = render_filters(df)
 
     total_companies = len(filtered_df)
-    new_leads = int((filtered_df["_status_grupo"] == "Novo lead").sum())
-    in_progress = int(
-        filtered_df["_status_grupo"].isin(
-            ["Em contato", "Em negociação"]
+
+    new_leads = int(
+        (
+            filtered_df["_status_grupo"]
+            == "Novo lead"
         ).sum()
     )
-    sent_proposals = int((filtered_df["_status_grupo"] == "Proposta enviada").sum())
-    closed_clients = int((filtered_df["_status_grupo"] == "Fechado").sum())
-    total_capital = float(filtered_df["_capital_num"].sum())
+
+    in_progress = int(
+        filtered_df["_status_grupo"]
+        .isin(
+            [
+                "Em contato",
+                "Em negociação",
+            ]
+        )
+        .sum()
+    )
+
+    sent_proposals = int(
+        (
+            filtered_df["_status_grupo"]
+            == "Proposta enviada"
+        ).sum()
+    )
+
+    closed_clients = int(
+        (
+            filtered_df["_status_grupo"]
+            == "Fechado"
+        ).sum()
+    )
+
+    total_capital = float(
+        filtered_df["_capital_num"]
+        .sum()
+    )
 
     card_col_1, card_col_2, card_col_3 = st.columns(3)
 
@@ -856,7 +1033,10 @@ def render_overview_page(df: pd.DataFrame, columns: dict):
             "#0F9F81",
         )
 
-    st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
+    st.markdown(
+        "<div style='height:12px'></div>",
+        unsafe_allow_html=True,
+    )
 
     card_col_4, card_col_5, card_col_6 = st.columns(3)
 
@@ -887,7 +1067,10 @@ def render_overview_page(df: pd.DataFrame, columns: dict):
             "#C23B6D",
         )
 
-    st.markdown("<div style='height:18px'></div>", unsafe_allow_html=True)
+    st.markdown(
+        "<div style='height:18px'></div>",
+        unsafe_allow_html=True,
+    )
 
     chart_col_1, chart_col_2 = st.columns(2)
 
@@ -903,7 +1086,10 @@ def render_overview_page(df: pd.DataFrame, columns: dict):
             .reset_index()
         )
 
-        status_chart_df.columns = ["Status", "Quantidade"]
+        status_chart_df.columns = [
+            "Status",
+            "Quantidade",
+        ]
 
         fig_status = px.bar(
             status_chart_df,
@@ -914,7 +1100,12 @@ def render_overview_page(df: pd.DataFrame, columns: dict):
 
         fig_status.update_layout(
             height=330,
-            margin=dict(l=20, r=20, t=20, b=20),
+            margin=dict(
+                l=20,
+                r=20,
+                t=20,
+                b=20,
+            ),
             plot_bgcolor="#FFFFFF",
             paper_bgcolor="#FFFFFF",
             showlegend=False,
@@ -927,7 +1118,10 @@ def render_overview_page(df: pd.DataFrame, columns: dict):
             textposition="outside",
         )
 
-        st.plotly_chart(fig_status, use_container_width=True)
+        st.plotly_chart(
+            fig_status,
+            use_container_width=True,
+        )
 
     with chart_col_2:
         section_header(
@@ -941,7 +1135,10 @@ def render_overview_page(df: pd.DataFrame, columns: dict):
             .reset_index()
         )
 
-        seller_chart_df.columns = ["Vendedor", "Quantidade"]
+        seller_chart_df.columns = [
+            "Vendedor",
+            "Quantidade",
+        ]
 
         fig_seller = px.bar(
             seller_chart_df,
@@ -952,7 +1149,12 @@ def render_overview_page(df: pd.DataFrame, columns: dict):
 
         fig_seller.update_layout(
             height=330,
-            margin=dict(l=20, r=20, t=20, b=20),
+            margin=dict(
+                l=20,
+                r=20,
+                t=20,
+                b=20,
+            ),
             plot_bgcolor="#FFFFFF",
             paper_bgcolor="#FFFFFF",
             showlegend=False,
@@ -965,7 +1167,10 @@ def render_overview_page(df: pd.DataFrame, columns: dict):
             textposition="outside",
         )
 
-        st.plotly_chart(fig_seller, use_container_width=True)
+        st.plotly_chart(
+            fig_seller,
+            use_container_width=True,
+        )
 
     section_header(
         "📋 Empresas cadastradas",
@@ -1002,9 +1207,15 @@ def render_overview_page(df: pd.DataFrame, columns: dict):
 # PÁGINA: PROPOSTAS
 # =========================================================
 
-def render_proposals_page(df: pd.DataFrame, columns: dict):
+def render_proposals_page(
+    df: pd.DataFrame,
+    columns: dict,
+):
     st.title("Propostas")
-    st.caption("Acompanhe os leads que avançaram no processo comercial.")
+
+    st.caption(
+        "Acompanhe os leads que avançaram no processo comercial."
+    )
 
     filtered_df = render_filters(df)
 
@@ -1019,9 +1230,27 @@ def render_proposals_page(df: pd.DataFrame, columns: dict):
     ].copy()
 
     total_proposals = len(proposals_df)
-    sent_proposals = int((proposals_df["_status_grupo"] == "Proposta enviada").sum())
-    in_negotiation = int((proposals_df["_status_grupo"] == "Em negociação").sum())
-    closed_clients = int((proposals_df["_status_grupo"] == "Fechado").sum())
+
+    sent_proposals = int(
+        (
+            proposals_df["_status_grupo"]
+            == "Proposta enviada"
+        ).sum()
+    )
+
+    in_negotiation = int(
+        (
+            proposals_df["_status_grupo"]
+            == "Em negociação"
+        ).sum()
+    )
+
+    closed_clients = int(
+        (
+            proposals_df["_status_grupo"]
+            == "Fechado"
+        ).sum()
+    )
 
     card_col_1, card_col_2, card_col_3, card_col_4 = st.columns(4)
 
@@ -1061,7 +1290,10 @@ def render_proposals_page(df: pd.DataFrame, columns: dict):
             "#16A34A",
         )
 
-    st.markdown("<div style='height:18px'></div>", unsafe_allow_html=True)
+    st.markdown(
+        "<div style='height:18px'></div>",
+        unsafe_allow_html=True,
+    )
 
     section_header(
         "📄 Controle de propostas",
@@ -1073,6 +1305,7 @@ def render_proposals_page(df: pd.DataFrame, columns: dict):
             "Ainda não existem empresas com status de proposta enviada, "
             "em negociação ou fechado."
         )
+
         return
 
     display_columns = [
@@ -1108,23 +1341,49 @@ def render_proposals_page(df: pd.DataFrame, columns: dict):
 # PÁGINA: PESOS E MEDIDAS
 # =========================================================
 
-def render_scoring_page(df: pd.DataFrame, columns: dict):
+def render_scoring_page(
+    df: pd.DataFrame,
+    columns: dict,
+):
     st.title("Pesos e Medidas")
+
     st.caption(
-        "Classificação inicial dos leads conforme a qualidade do cadastro "
-        "e o avanço dentro do processo comercial."
+        "Classificação inicial dos leads conforme a qualidade "
+        "do cadastro e o avanço comercial."
     )
 
     filtered_df = render_filters(df)
 
-    hot_leads = int((filtered_df["_classificacao"] == "Lead quente").sum())
-    warm_leads = int((filtered_df["_classificacao"] == "Lead morno").sum())
-    cold_leads = int((filtered_df["_classificacao"] == "Lead frio").sum())
+    hot_leads = int(
+        (
+            filtered_df["_classificacao"]
+            == "Lead quente"
+        ).sum()
+    )
+
+    warm_leads = int(
+        (
+            filtered_df["_classificacao"]
+            == "Lead morno"
+        ).sum()
+    )
+
+    cold_leads = int(
+        (
+            filtered_df["_classificacao"]
+            == "Lead frio"
+        ).sum()
+    )
 
     if filtered_df.empty:
         average_score = 0
     else:
-        average_score = int(round(filtered_df["_pontuacao"].mean()))
+        average_score = int(
+            round(
+                filtered_df["_pontuacao"]
+                .mean()
+            )
+        )
 
     card_col_1, card_col_2, card_col_3, card_col_4 = st.columns(4)
 
@@ -1164,9 +1423,14 @@ def render_scoring_page(df: pd.DataFrame, columns: dict):
             "#7C3AED",
         )
 
-    st.markdown("<div style='height:18px'></div>", unsafe_allow_html=True)
+    st.markdown(
+        "<div style='height:18px'></div>",
+        unsafe_allow_html=True,
+    )
 
-    chart_col_1, chart_col_2 = st.columns([1, 1.2])
+    chart_col_1, chart_col_2 = st.columns(
+        [1, 1.2]
+    )
 
     with chart_col_1:
         section_header(
@@ -1180,7 +1444,10 @@ def render_scoring_page(df: pd.DataFrame, columns: dict):
             .reset_index()
         )
 
-        class_chart_df.columns = ["Classificação", "Quantidade"]
+        class_chart_df.columns = [
+            "Classificação",
+            "Quantidade",
+        ]
 
         fig_classification = px.pie(
             class_chart_df,
@@ -1191,16 +1458,24 @@ def render_scoring_page(df: pd.DataFrame, columns: dict):
 
         fig_classification.update_layout(
             height=340,
-            margin=dict(l=20, r=20, t=20, b=20),
+            margin=dict(
+                l=20,
+                r=20,
+                t=20,
+                b=20,
+            ),
             paper_bgcolor="#FFFFFF",
         )
 
-        st.plotly_chart(fig_classification, use_container_width=True)
+        st.plotly_chart(
+            fig_classification,
+            use_container_width=True,
+        )
 
     with chart_col_2:
         section_header(
             "📏 Regra inicial de pontuação",
-            "Os pesos podem ser alterados posteriormente conforme a estratégia da Oppi.",
+            "Os pesos podem ser alterados conforme a estratégia da Oppi.",
         )
 
         rule_df = pd.DataFrame(
@@ -1214,7 +1489,10 @@ def render_scoring_page(df: pd.DataFrame, columns: dict):
                 ["Capital social informado", "Até 20 pontos"],
                 ["Evolução comercial", "Até 20 pontos"],
             ],
-            columns=["Critério", "Peso"],
+            columns=[
+                "Critério",
+                "Peso",
+            ],
         )
 
         st.dataframe(
@@ -1253,7 +1531,9 @@ def render_scoring_page(df: pd.DataFrame, columns: dict):
         if column and column in ranking_df.columns
     ]
 
-    ranking_df = ranking_df[ranking_columns].rename(
+    ranking_df = ranking_df[
+        ranking_columns
+    ].rename(
         columns={
             "_pontuacao": "Pontuação",
             "_classificacao": "Classificação",
@@ -1273,47 +1553,68 @@ def render_scoring_page(df: pd.DataFrame, columns: dict):
 # =========================================================
 
 def main():
-    show_login()
-
     selected_page = render_sidebar()
 
-    df = load_sheet_data()
+    try:
+        df = load_sheet_data()
+
+    except Exception as error:
+        st.title("Dashboard Oppi Comercial")
+
+        st.error(
+            "Não consegui acessar a planilha. "
+            "Confira se ela foi compartilhada com o e-mail "
+            "da conta de serviço."
+        )
+
+        st.code(str(error))
+
+        return
 
     if df.empty:
         st.title("Dashboard Oppi Comercial")
 
         st.warning(
-            "O painel ainda não conseguiu carregar os dados da planilha. "
-            "Isso é esperado enquanto a credencial do Google Sheets não estiver "
-            "configurada no Streamlit."
+            "O painel ainda não conseguiu carregar os dados da planilha."
         )
 
         st.markdown(
             """
-            ### Próxima etapa
+            ### Confira estas etapas
 
-            Depois da publicação, configure a credencial em:
-
-            **Streamlit → App settings → Secrets**
-
-            Também será necessário compartilhar a planilha com o e-mail da conta
-            de serviço do Google.
+            1. Compartilhe a planilha com o e-mail da conta de serviço.
+            2. Confirme que a aba se chama **Folha1**.
+            3. Confirme que o ID da planilha está correto no `app.py`.
+            4. Verifique se os Secrets foram salvos no Streamlit.
             """
         )
 
         return
 
     columns = identify_columns(df)
-    prepared_df = prepare_data(df, columns)
+
+    prepared_df = prepare_data(
+        df,
+        columns,
+    )
 
     if selected_page == "📌 Visão Geral":
-        render_overview_page(prepared_df, columns)
+        render_overview_page(
+            prepared_df,
+            columns,
+        )
 
     elif selected_page == "📄 Propostas":
-        render_proposals_page(prepared_df, columns)
+        render_proposals_page(
+            prepared_df,
+            columns,
+        )
 
     elif selected_page == "⚖️ Pesos e Medidas":
-        render_scoring_page(prepared_df, columns)
+        render_scoring_page(
+            prepared_df,
+            columns,
+        )
 
 
 if __name__ == "__main__":
