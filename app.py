@@ -1,6 +1,5 @@
 import html
 import re
-import textwrap
 import unicodedata
 from typing import Optional
 
@@ -34,15 +33,22 @@ SCOPES = [
 
 
 # =========================================================
-# FUNÇÃO PARA RENDERIZAR HTML SEM VIRAR TEXTO
+# FUNÇÃO PARA EXIBIR HTML CORRETAMENTE
 # =========================================================
 
 def render_html(content: str):
     """
-    Remove espaços no começo das linhas antes de enviar o HTML ao Streamlit.
-    Isso evita que o Streamlit interprete o HTML como bloco de código.
+    Converte todo o HTML em uma única linha antes de enviar
+    para o Streamlit.
+
+    Isso impede que espaços internos sejam interpretados como
+    blocos de código.
     """
-    clean_content = textwrap.dedent(content).strip()
+    clean_content = " ".join(
+        line.strip()
+        for line in content.splitlines()
+        if line.strip()
+    )
 
     st.markdown(
         clean_content,
@@ -108,7 +114,7 @@ render_html(
         .metric-icon {
             width: 52px;
             height: 52px;
-            flex-shrink: 0;
+            min-width: 52px;
             border-radius: 16px;
             display: flex;
             justify-content: center;
@@ -183,8 +189,8 @@ render_html(
             border-radius: 18px;
             background: #2F78D4;
             display: flex;
-            align-items: center;
             justify-content: center;
+            align-items: center;
             font-size: 1.65rem;
             margin-bottom: 12px;
             border: 1px solid rgba(255, 255, 255, 0.18);
@@ -264,7 +270,11 @@ def normalize_search_text(value) -> str:
         if not unicodedata.combining(character)
     )
 
-    return re.sub(r"\s+", " ", text).strip()
+    return re.sub(
+        r"\s+",
+        " ",
+        text,
+    ).strip()
 
 
 def parse_money(value) -> float:
@@ -308,7 +318,9 @@ def format_money(value) -> str:
     )
 
 
-def make_unique_headers(headers: list[str]) -> list[str]:
+def make_unique_headers(
+    headers: list[str],
+) -> list[str]:
     result = []
     counter = {}
 
@@ -320,7 +332,10 @@ def make_unique_headers(headers: list[str]) -> list[str]:
 
         if clean_header in counter:
             counter[clean_header] += 1
-            clean_header = f"{clean_header}_{counter[clean_header]}"
+            clean_header = (
+                f"{clean_header}_"
+                f"{counter[clean_header]}"
+            )
         else:
             counter[clean_header] = 1
 
@@ -361,7 +376,9 @@ def safe_series(
     )
 
 
-def status_group(value: str) -> str:
+def status_group(
+    value: str,
+) -> str:
     status = normalize_search_text(value)
 
     if not status:
@@ -530,7 +547,9 @@ def calculate_score(
     )
 
 
-def score_classification(score: int) -> str:
+def score_classification(
+    score: int,
+) -> str:
     if score >= 70:
         return "Lead quente"
 
@@ -604,7 +623,8 @@ def get_gsheet_client():
 
     except Exception as error:
         raise RuntimeError(
-            "Não encontrei a seção [gcp_service_account] "
+            "Não encontrei a seção "
+            "[gcp_service_account] "
             "nos Secrets do Streamlit."
         ) from error
 
@@ -652,9 +672,12 @@ def get_gsheet_client():
         + "\n"
     )
 
-    credentials = Credentials.from_service_account_info(
-        credentials_info,
-        scopes=SCOPES,
+    credentials = (
+        Credentials
+        .from_service_account_info(
+            credentials_info,
+            scopes=SCOPES,
+        )
     )
 
     return gspread.authorize(
@@ -1015,12 +1038,14 @@ def render_sidebar() -> str:
 def render_filters(
     df: pd.DataFrame,
 ) -> pd.DataFrame:
-    filter_col_1, filter_col_2, filter_col_3 = st.columns(
-        [
-            1.1,
-            1.1,
-            1.8,
-        ]
+    filter_col_1, filter_col_2, filter_col_3 = (
+        st.columns(
+            [
+                1.1,
+                1.1,
+                1.8,
+            ]
+        )
     )
 
     seller_options = sorted(
@@ -1183,8 +1208,10 @@ def render_overview_page(
         .sum()
     )
 
-    card_col_1, card_col_2, card_col_3 = st.columns(
-        3
+    card_col_1, card_col_2, card_col_3 = (
+        st.columns(
+            3
+        )
     )
 
     with card_col_1:
@@ -1224,8 +1251,10 @@ def render_overview_page(
         "<div style='height:12px'></div>"
     )
 
-    card_col_4, card_col_5, card_col_6 = st.columns(
-        3
+    card_col_4, card_col_5, card_col_6 = (
+        st.columns(
+            3
+        )
     )
 
     with card_col_4:
@@ -1265,8 +1294,10 @@ def render_overview_page(
         "<div style='height:18px'></div>"
     )
 
-    chart_col_1, chart_col_2 = st.columns(
-        2
+    chart_col_1, chart_col_2 = (
+        st.columns(
+            2
+        )
     )
 
     with chart_col_1:
@@ -1495,8 +1526,10 @@ def render_proposals_page(
         ).sum()
     )
 
-    card_col_1, card_col_2, card_col_3, card_col_4 = st.columns(
-        4
+    card_col_1, card_col_2, card_col_3, card_col_4 = (
+        st.columns(
+            4
+        )
     )
 
     with card_col_1:
@@ -1668,8 +1701,10 @@ def render_scoring_page(
             )
         )
 
-    card_col_1, card_col_2, card_col_3, card_col_4 = st.columns(
-        4
+    card_col_1, card_col_2, card_col_3, card_col_4 = (
+        st.columns(
+            4
+        )
     )
 
     with card_col_1:
@@ -1720,11 +1755,13 @@ def render_scoring_page(
         "<div style='height:18px'></div>"
     )
 
-    chart_col_1, chart_col_2 = st.columns(
-        [
-            1,
-            1.2,
-        ]
+    chart_col_1, chart_col_2 = (
+        st.columns(
+            [
+                1,
+                1.2,
+            ]
+        )
     )
 
     with chart_col_1:
