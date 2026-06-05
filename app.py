@@ -1141,11 +1141,11 @@ def apply_dashboard_css() -> None:
             .latest-calls-shell {
                 margin-top: 18px;
                 margin-bottom: 18px;
-                padding: 20px 22px;
+                padding: 22px 24px;
                 border-radius: 26px;
-                background: #F5F5F8;
-                border: 1px solid rgba(28, 20, 46, 0.08);
-                box-shadow: 0 18px 48px rgba(0,0,0,0.18);
+                background: linear-gradient(145deg, rgba(22,20,42,0.98), rgba(10,9,25,0.98));
+                border: 1px solid rgba(255,255,255,0.06);
+                box-shadow: 0 18px 46px rgba(0,0,0,0.22);
             }
 
             .latest-calls-head {
@@ -1157,7 +1157,7 @@ def apply_dashboard_css() -> None:
             }
 
             .latest-calls-title {
-                color: #12101C;
+                color: #FFFFFF;
                 font-size: 1.05rem;
                 font-weight: 900;
                 line-height: 1.2;
@@ -1165,7 +1165,7 @@ def apply_dashboard_css() -> None:
             }
 
             .latest-calls-subtitle {
-                color: #7C7891;
+                color: rgba(255,255,255,0.68);
                 font-size: 0.88rem;
                 line-height: 1.45;
             }
@@ -1177,9 +1177,9 @@ def apply_dashboard_css() -> None:
                 padding: 8px 14px;
                 min-width: 88px;
                 border-radius: 999px;
-                background: #FFF6D9;
+                background: rgba(255, 246, 217, 0.08);
                 border: 1px solid rgba(232, 194, 67, 0.92);
-                color: #9A7400;
+                color: #E8C243;
                 font-size: 0.78rem;
                 font-weight: 900;
                 letter-spacing: 0.04em;
@@ -1238,21 +1238,21 @@ def apply_dashboard_css() -> None:
             }
 
             .latest-table-card {
-                margin-top: 28px;
-                padding: 18px 18px 14px 18px;
-                border-radius: 22px;
-                background: #FFFFFF;
-                border: 1px solid #E7E8EF;
-                box-shadow: 0 10px 26px rgba(14, 13, 27, 0.05);
+                margin-top: 30px;
+                padding: 20px 20px 16px 20px;
+                border-radius: 24px;
+                background: linear-gradient(145deg, rgba(22,20,42,0.98), rgba(10,9,25,0.98));
+                border: 1px solid rgba(255,255,255,0.06);
+                box-shadow: 0 18px 46px rgba(0,0,0,0.22);
             }
 
             .latest-placeholder-card {
                 margin-top: 26px;
                 padding: 22px 24px;
                 border-radius: 22px;
-                background: rgba(255,255,255,0.92);
-                border: 1px dashed rgba(169, 28, 255, 0.28);
-                color: #6F6980;
+                background: linear-gradient(145deg, rgba(22,20,42,0.98), rgba(10,9,25,0.98));
+                border: 1px dashed rgba(255, 75, 170, 0.45);
+                color: rgba(255,255,255,0.78);
                 font-size: 0.92rem;
                 font-weight: 700;
                 text-align: center;
@@ -1267,7 +1267,7 @@ def apply_dashboard_css() -> None:
             }
 
             .latest-table-title {
-                color: #12101C;
+                color: #FFFFFF;
                 font-size: 1rem;
                 font-weight: 900;
                 line-height: 1.2;
@@ -1275,7 +1275,7 @@ def apply_dashboard_css() -> None:
             }
 
             .latest-table-subtitle {
-                color: #7C7891;
+                color: rgba(255,255,255,0.68);
                 font-size: 0.84rem;
                 line-height: 1.45;
             }
@@ -1286,9 +1286,9 @@ def apply_dashboard_css() -> None:
                 justify-content: center;
                 padding: 7px 12px;
                 border-radius: 999px;
-                background: #FFF6D9;
+                background: rgba(255, 246, 217, 0.08);
                 border: 1px solid rgba(232, 194, 67, 0.92);
-                color: #2E2500;
+                color: #E8C243;
                 font-size: 0.76rem;
                 font-weight: 900;
                 white-space: nowrap;
