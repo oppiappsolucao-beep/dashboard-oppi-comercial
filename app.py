@@ -1138,10 +1138,153 @@ def apply_dashboard_css() -> None:
                 background: linear-gradient(90deg, #FF4BAA 0%, #A91CFF 100%) !important;
             }
 
+            .latest-calls-shell {
+                margin-top: 8px;
+                padding: 18px 18px 16px 18px;
+                border-radius: 26px;
+                background: #F5F5F8;
+                border: 1px solid rgba(28, 20, 46, 0.08);
+                box-shadow: 0 18px 48px rgba(0,0,0,0.18);
+            }
+
+            .latest-calls-head {
+                display: flex;
+                align-items: flex-start;
+                justify-content: space-between;
+                gap: 16px;
+                margin-bottom: 14px;
+            }
+
+            .latest-calls-title {
+                color: #12101C;
+                font-size: 1.05rem;
+                font-weight: 900;
+                line-height: 1.2;
+                margin-bottom: 4px;
+            }
+
+            .latest-calls-subtitle {
+                color: #7C7891;
+                font-size: 0.88rem;
+                line-height: 1.45;
+            }
+
+            .latest-calls-chip {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                padding: 8px 14px;
+                min-width: 88px;
+                border-radius: 999px;
+                background: #FFF6D9;
+                border: 1px solid rgba(232, 194, 67, 0.92);
+                color: #9A7400;
+                font-size: 0.78rem;
+                font-weight: 900;
+                letter-spacing: 0.04em;
+                text-transform: uppercase;
+            }
+
+            .latest-status-card {
+                min-height: 108px;
+                padding: 14px 14px 12px 14px;
+                border-radius: 20px;
+                background: #FFFFFF;
+                border: 1px solid #E7E8EF;
+                box-shadow: 0 10px 26px rgba(14, 13, 27, 0.05);
+            }
+
+            .latest-status-top {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                margin-bottom: 8px;
+            }
+
+            .latest-status-icon {
+                width: 36px;
+                height: 36px;
+                min-width: 36px;
+                border-radius: 12px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 0.95rem;
+                font-weight: 900;
+            }
+
+            .latest-status-name {
+                color: #12101C;
+                font-size: 0.90rem;
+                font-weight: 850;
+                line-height: 1.2;
+            }
+
+            .latest-status-number {
+                color: #111111;
+                font-size: 1.15rem;
+                line-height: 1;
+                font-weight: 950;
+                margin-top: 4px;
+            }
+
+            .latest-status-caption {
+                color: #8D89A3;
+                font-size: 0.77rem;
+                font-weight: 700;
+                margin-top: 6px;
+            }
+
+            .latest-table-card {
+                margin-top: 16px;
+                padding: 14px 14px 12px 14px;
+                border-radius: 22px;
+                background: #FFFFFF;
+                border: 1px solid #E7E8EF;
+                box-shadow: 0 10px 26px rgba(14, 13, 27, 0.05);
+            }
+
+            .latest-table-head {
+                display: flex;
+                align-items: flex-start;
+                justify-content: space-between;
+                gap: 14px;
+                margin-bottom: 8px;
+            }
+
+            .latest-table-title {
+                color: #12101C;
+                font-size: 1rem;
+                font-weight: 900;
+                line-height: 1.2;
+                margin-bottom: 4px;
+            }
+
+            .latest-table-subtitle {
+                color: #7C7891;
+                font-size: 0.84rem;
+                line-height: 1.45;
+            }
+
+            .latest-table-badge {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                padding: 7px 12px;
+                border-radius: 999px;
+                background: #FFF6D9;
+                border: 1px solid rgba(232, 194, 67, 0.92);
+                color: #2E2500;
+                font-size: 0.76rem;
+                font-weight: 900;
+                white-space: nowrap;
+            }
+
             div[data-testid="stDataFrame"] {
                 overflow: hidden;
                 border-radius: 16px;
-                border: 1px solid rgba(255,255,255,0.08);
+                border: 1px solid rgba(20,16,36,0.10);
+                box-shadow: 0 8px 18px rgba(14, 13, 27, 0.04);
             }
         </style>
         """
@@ -1346,6 +1489,98 @@ def render_status_summary(filtered_df: pd.DataFrame) -> None:
         <div class="status-wrap">{rows_html}</div>
         """
     )
+
+
+def render_latest_calls_section(filtered_df: pd.DataFrame) -> None:
+    statuses = [
+        ("Novo Lead", "✦", "#E8F0FF", "#5C8BFF"),
+        ("Chamando", "•", "#F8EFE6", "#B37A2A"),
+        ("Sem Interesse", "⊘", "#E9F8FA", "#2F9FB3"),
+        ("Não Responde", "⚑", "#FBECEF", "#DA5C78"),
+        ("Fechado", "✓", "#EAF8EF", "#58B97A"),
+    ]
+
+    state_key = "ultimos_chamados_status"
+    if state_key not in st.session_state:
+        st.session_state[state_key] = statuses[0][0]
+
+    selected_status = st.session_state.get(state_key, statuses[0][0])
+
+    render_html(
+        """
+        <div class="latest-calls-shell">
+            <div class="latest-calls-head">
+                <div>
+                    <div class="latest-calls-title">Últimos chamados</div>
+                    <div class="latest-calls-subtitle">Clique em “Ver nomes” para visualizar as empresas daquela etapa.</div>
+                </div>
+                <div class="latest-calls-chip">Status</div>
+            </div>
+        """
+    )
+
+    card_columns = st.columns(5, gap="small")
+    for column, (status_name, icon, bg_color, icon_color) in zip(card_columns, statuses):
+        count = int((filtered_df["_status_grupo"] == status_name).sum())
+        active = selected_status == status_name
+        border = "2px solid #F0C23B" if active else "1px solid #E7E8EF"
+        render_target = column
+        with render_target:
+            render_html(
+                f"""
+                <div class="latest-status-card" style="border:{border};">
+                    <div class="latest-status-top">
+                        <div class="latest-status-icon" style="background:{bg_color}; color:{icon_color};">{icon}</div>
+                        <div class="latest-status-name">{html.escape(status_name)}</div>
+                    </div>
+                    <div class="latest-status-number">{count}</div>
+                    <div class="latest-status-caption">registros nesta sessão</div>
+                </div>
+                """
+            )
+            if st.button("Ver nomes", key=f"btn_ultimos_{status_name}", use_container_width=True):
+                st.session_state[state_key] = status_name
+                st.rerun()
+
+    current_status = st.session_state.get(state_key, statuses[0][0])
+    selected_df = filtered_df[filtered_df["_status_grupo"] == current_status].copy()
+    selected_df = selected_df.sort_values(["_data_chamado", "_empresa"], ascending=[False, True])
+
+    display_df = pd.DataFrame(
+        {
+            "Empresa": selected_df["_empresa"],
+            "Telefone": selected_df["_telefone"],
+            "Status": selected_df["_status_grupo"],
+            "Vendedor": selected_df["_vendedor"],
+            "Data": selected_df["_data_chamado"].dt.strftime("%d/%m/%Y").fillna(""),
+        }
+    )
+
+    badge_text = f"{len(display_df)} registro(s)"
+    render_html(
+        f"""
+        <div class="latest-table-card">
+            <div class="latest-table-head">
+                <div>
+                    <div class="latest-table-title">{html.escape(current_status)}</div>
+                    <div class="latest-table-subtitle">Empresas registradas no comercial com status e responsável.</div>
+                </div>
+                <div class="latest-table-badge">{html.escape(badge_text)}</div>
+            </div>
+        """
+    )
+
+    if display_df.empty:
+        st.info("Nenhum chamado encontrado para este status no período selecionado.")
+    else:
+        st.dataframe(
+            display_df,
+            use_container_width=True,
+            hide_index=True,
+            height=320,
+        )
+
+    render_html("</div></div>")
 
 
 def prepare_filters(df: pd.DataFrame):
@@ -1557,32 +1792,7 @@ def render_overview_page(df: pd.DataFrame, columns: dict) -> None:
         render_status_summary(filtered_df)
 
     st.write("")
-
-    render_html(
-        """
-        <div class="section-heading">Últimos chamados</div>
-        <div class="section-subtitle">Empresas registradas no comercial com status e responsável.</div>
-        """
-    )
-
-    table_df = filtered_df.copy()
-
-    display_df = pd.DataFrame(
-        {
-            "Empresa": table_df["_empresa"],
-            "Telefone": table_df["_telefone"],
-            "Status": table_df["_status_grupo"],
-            "Vendedor": table_df["_vendedor"],
-            "Data": table_df["_data_chamado"].dt.strftime("%d/%m/%Y").fillna(""),
-        }
-    )
-
-    st.dataframe(
-        display_df,
-        use_container_width=True,
-        hide_index=True,
-        height=340,
-    )
+    render_latest_calls_section(filtered_df)
 
 
 # =========================================================
