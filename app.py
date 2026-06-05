@@ -1190,9 +1190,9 @@ def apply_dashboard_css() -> None:
                 min-height: 118px;
                 padding: 16px 15px 14px 15px;
                 border-radius: 20px;
-                background: #FFFFFF;
-                border: 1px solid #E7E8EF;
-                box-shadow: 0 10px 26px rgba(14, 13, 27, 0.05);
+                background: linear-gradient(145deg, rgba(22,20,42,0.98), rgba(10,9,25,0.98));
+                border: 1px solid rgba(255,255,255,0.06);
+                box-shadow: 0 18px 46px rgba(0,0,0,0.22);
                 margin-bottom: 12px;
             }
 
@@ -1216,14 +1216,14 @@ def apply_dashboard_css() -> None:
             }
 
             .latest-status-name {
-                color: #12101C;
+                color: #FFFFFF;
                 font-size: 0.90rem;
                 font-weight: 850;
                 line-height: 1.2;
             }
 
             .latest-status-number {
-                color: #111111;
+                color: #FFFFFF;
                 font-size: 1.15rem;
                 line-height: 1;
                 font-weight: 950;
@@ -1231,7 +1231,7 @@ def apply_dashboard_css() -> None:
             }
 
             .latest-status-caption {
-                color: #8D89A3;
+                color: #55DF7D;
                 font-size: 0.77rem;
                 font-weight: 700;
                 margin-top: 6px;
@@ -1541,8 +1541,8 @@ def render_latest_calls_section(filtered_df: pd.DataFrame) -> None:
         count = int((filtered_df["_status_grupo"] == status_name).sum())
         active = selected_status == status_name
 
-        border = "2px solid #F0C23B" if active else "1px solid #E7E8EF"
-        shadow = "0 16px 34px rgba(240, 194, 59, 0.18)" if active else "0 10px 26px rgba(14, 13, 27, 0.05)"
+        border = "1px solid rgba(255, 75, 170, 0.85)" if active else "1px solid rgba(255,255,255,0.06)"
+        shadow = "0 0 0 1px rgba(169, 28, 255, 0.18), 0 18px 46px rgba(0,0,0,0.28), 0 0 22px rgba(255, 75, 170, 0.14)" if active else "0 18px 46px rgba(0,0,0,0.22)"
 
         with column:
             render_html(
