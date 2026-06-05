@@ -1027,8 +1027,33 @@ def apply_dashboard_css() -> None:
                 font-weight: 650 !important;
             }
 
-            .stTextInput input {
+            /* Campo de busca da Visão Geral: permanece escuro ao digitar e ao focar */
+            div[data-testid="stTextInput"] [data-baseweb="input"],
+            div[data-testid="stTextInput"] [data-baseweb="input"] > div,
+            div[data-testid="stTextInput"] input {
+                background: #0B0918 !important;
                 color: #FFFFFF !important;
+                -webkit-text-fill-color: #FFFFFF !important;
+                caret-color: #FF4BAA !important;
+            }
+
+            div[data-testid="stTextInput"] [data-baseweb="input"]:focus-within {
+                background: #0B0918 !important;
+                border-color: rgba(255, 75, 170, 0.88) !important;
+                box-shadow: 0 0 0 1px rgba(255, 75, 170, 0.42) !important;
+            }
+
+            div[data-testid="stTextInput"] input::placeholder {
+                color: rgba(255,255,255,0.54) !important;
+                -webkit-text-fill-color: rgba(255,255,255,0.54) !important;
+            }
+
+            div[data-testid="stTextInput"] input:-webkit-autofill,
+            div[data-testid="stTextInput"] input:-webkit-autofill:hover,
+            div[data-testid="stTextInput"] input:-webkit-autofill:focus {
+                -webkit-box-shadow: 0 0 0 1000px #0B0918 inset !important;
+                -webkit-text-fill-color: #FFFFFF !important;
+                caret-color: #FF4BAA !important;
             }
 
             .stButton > button {
