@@ -1013,44 +1013,71 @@ def apply_dashboard_css() -> None:
                 font-weight: 750;
             }
 
-            div[data-baseweb="select"] > div,
-            div[data-baseweb="input"] > div {
-                min-height: 54px;
+            /* Filtros da visão geral: todos no mesmo estilo escuro, mesma altura e borda rosa */
+            div[data-testid="stSelectbox"] > div[data-baseweb="select"] > div,
+            div[data-testid="stTextInput"] div[data-baseweb="input"] > div,
+            div[data-testid="stDateInput"] div[data-baseweb="input"] > div {
+                min-height: 54px !important;
                 border-radius: 15px !important;
-                border: 1px solid rgba(255,255,255,0.08) !important;
-                background: rgba(255,255,255,0.03) !important;
+                border: 1px solid rgba(255, 75, 170, 0.55) !important;
+                background: rgba(8, 7, 24, 0.92) !important;
+                box-shadow: inset 0 1px 0 rgba(255,255,255,0.03), 0 10px 30px rgba(0,0,0,0.16) !important;
                 color: #FFFFFF !important;
             }
 
-            label {
-                color: rgba(255,255,255,0.80) !important;
-                font-weight: 650 !important;
+            div[data-testid="stSelectbox"] > div[data-baseweb="select"] > div:hover,
+            div[data-testid="stTextInput"] div[data-baseweb="input"] > div:hover,
+            div[data-testid="stDateInput"] div[data-baseweb="input"] > div:hover {
+                border-color: rgba(255, 75, 170, 0.78) !important;
             }
 
-            /* Campo de busca da Visão Geral: permanece escuro ao digitar e ao focar */
+            div[data-testid="stSelectbox"] > div[data-baseweb="select"] > div:focus-within,
+            div[data-testid="stTextInput"] div[data-baseweb="input"] > div:focus-within,
+            div[data-testid="stDateInput"] div[data-baseweb="input"] > div:focus-within {
+                border-color: rgba(255, 75, 170, 0.95) !important;
+                box-shadow: 0 0 0 1px rgba(255, 75, 170, 0.35), 0 0 22px rgba(169, 28, 255, 0.16) !important;
+                background: rgba(8, 7, 24, 0.98) !important;
+            }
+
+            label {
+                color: rgba(255,255,255,0.88) !important;
+                font-weight: 700 !important;
+            }
+
+            div[data-testid="stSelectbox"] * {
+                color: #FFFFFF !important;
+            }
+
             div[data-testid="stTextInput"] [data-baseweb="input"],
             div[data-testid="stTextInput"] [data-baseweb="input"] > div,
-            div[data-testid="stTextInput"] input {
-                background: #0B0918 !important;
+            div[data-testid="stTextInput"] input,
+            div[data-testid="stDateInput"] [data-baseweb="input"],
+            div[data-testid="stDateInput"] [data-baseweb="input"] > div,
+            div[data-testid="stDateInput"] input {
+                background: transparent !important;
                 color: #FFFFFF !important;
                 -webkit-text-fill-color: #FFFFFF !important;
                 caret-color: #FF4BAA !important;
             }
 
-            div[data-testid="stTextInput"] [data-baseweb="input"]:focus-within {
-                background: #0B0918 !important;
-                border-color: rgba(255, 75, 170, 0.88) !important;
-                box-shadow: 0 0 0 1px rgba(255, 75, 170, 0.42) !important;
-            }
-
-            div[data-testid="stTextInput"] input::placeholder {
+            div[data-testid="stTextInput"] input::placeholder,
+            div[data-testid="stDateInput"] input::placeholder {
                 color: rgba(255,255,255,0.54) !important;
                 -webkit-text-fill-color: rgba(255,255,255,0.54) !important;
             }
 
+            div[data-testid="stDateInput"] button,
+            div[data-testid="stDateInput"] svg {
+                color: #FFFFFF !important;
+                fill: #FFFFFF !important;
+            }
+
             div[data-testid="stTextInput"] input:-webkit-autofill,
             div[data-testid="stTextInput"] input:-webkit-autofill:hover,
-            div[data-testid="stTextInput"] input:-webkit-autofill:focus {
+            div[data-testid="stTextInput"] input:-webkit-autofill:focus,
+            div[data-testid="stDateInput"] input:-webkit-autofill,
+            div[data-testid="stDateInput"] input:-webkit-autofill:hover,
+            div[data-testid="stDateInput"] input:-webkit-autofill:focus {
                 -webkit-box-shadow: 0 0 0 1000px #0B0918 inset !important;
                 -webkit-text-fill-color: #FFFFFF !important;
                 caret-color: #FF4BAA !important;
@@ -1303,7 +1330,7 @@ def prepare_filters(df: pd.DataFrame):
         date_max = valid_dates.max().date()
 
     filter_1, filter_2, filter_3, filter_4 = st.columns(
-        [1.2, 1.2, 1.1, 1.2],
+        [1, 1, 1, 1],
         gap="medium",
     )
 
