@@ -1198,12 +1198,30 @@ def apply_dashboard_css() -> None:
 
             .latest-calls-shell {
                 margin-top: 18px;
-                margin-bottom: 18px;
-                padding: 22px 24px;
+                margin-bottom: 14px;
+                padding: 22px 24px 18px 24px;
                 border-radius: 26px;
                 background: linear-gradient(145deg, rgba(22,20,42,0.98), rgba(10,9,25,0.98));
                 border: 1px solid rgba(255,255,255,0.06);
                 box-shadow: 0 18px 46px rgba(0,0,0,0.22);
+            }
+
+            .latest-filter-title {
+                color: #FFFFFF;
+                font-size: 1.08rem;
+                font-weight: 900;
+                line-height: 1.2;
+                margin-bottom: 4px;
+            }
+
+            .latest-filter-subtitle {
+                color: rgba(255,255,255,0.68);
+                font-size: 0.88rem;
+                line-height: 1.45;
+            }
+
+            .latest-filter-spacer {
+                height: 2px;
             }
 
             .latest-calls-head {
@@ -1245,8 +1263,9 @@ def apply_dashboard_css() -> None:
             }
 
             .latest-status-card {
-                min-height: 118px;
-                padding: 16px 15px 14px 15px;
+                min-height: 132px;
+                height: 132px;
+                padding: 14px 12px 12px 12px;
                 border-radius: 20px;
                 background: linear-gradient(145deg, rgba(22,20,42,0.98), rgba(10,9,25,0.98));
                 border: 1px solid rgba(255,255,255,0.06);
@@ -1275,7 +1294,7 @@ def apply_dashboard_css() -> None:
 
             .latest-status-name {
                 color: #FFFFFF;
-                font-size: 0.90rem;
+                font-size: 0.82rem;
                 font-weight: 850;
                 line-height: 1.2;
             }
@@ -1290,7 +1309,7 @@ def apply_dashboard_css() -> None:
 
             .latest-status-caption {
                 color: #55DF7D;
-                font-size: 0.77rem;
+                font-size: 0.72rem;
                 font-weight: 700;
                 margin-top: 6px;
             }
@@ -1666,7 +1685,11 @@ def render_status_summary(filtered_df: pd.DataFrame) -> None:
     )
 
 
-def render_latest_calls_section(filtered_df: pd.DataFrame, columns: dict) -> None:
+def render_latest_calls_section(
+    filtered_df: pd.DataFrame,
+    columns: dict,
+    source_df: pd.DataFrame,
+) -> None:
     statuses = [
         ("Novo Lead", "✦", "#E8F0FF", "#5C8BFF"),
         ("Chamando", "•", "#F8EFE6", "#B37A2A"),
@@ -1677,83 +1700,117 @@ def render_latest_calls_section(filtered_df: pd.DataFrame, columns: dict) -> Non
         ("Reunião", "◉", "#F3EAFE", "#A65BDB"),
     ]
 
-    filter_key = "ultimos_chamados_filtro_status"
+    selected_card_key = "ultimos_chamados_status_selecionado"
 
-    if filter_key not in st.session_state:
-        st.session_state[filter_key] = "Todos os status"
+    if selected_card_key not in st.session_state:
+        st.session_state[selected_card_key] = None
 
-    filter_copy, filter_control = st.columns([2.5, 1.25], gap="large")
+    valid_dates = source_df["_data_chamado"].dropna()
 
-    with filter_copy:
-        render_html(
-            """
-            <div class="latest-calls-shell">
-                <div class="latest-calls-head">
-                    <div>
-                        <div class="latest-calls-title">Filtrar chamados por status</div>
-                        <div class="latest-calls-subtitle">Selecione uma etapa ou clique em “Ver nomes” para visualizar as empresas.</div>
-                    </div>
-                    <div class="latest-calls-chip">Status</div>
+    if valid_dates.empty:
+        date_max = date.today()
+        date_min = date_max - timedelta(days=30)
+    else:
+        date_min = valid_dates.min().date()
+        date_max = valid_dates.max().date()
+
+    seller_options = sorted(
+        [
+            seller
+            for seller in source_df["_vendedor"].dropna().astype(str).unique().tolist()
+            if normalize_text(seller)
+        ]
+    )
+
+    render_html(
+        """
+        <div class="latest-calls-shell">
+            <div class="latest-calls-head">
+                <div>
+                    <div class="latest-filter-title">Filtros dos chamados</div>
+                    <div class="latest-filter-subtitle">Refine os resultados por vendedor, status, período ou empresa.</div>
                 </div>
+                <div class="latest-calls-chip">Filtros</div>
             </div>
-            """
+        </div>
+        """
+    )
+
+    filter_1, filter_2, filter_3, filter_4 = st.columns(4, gap="medium")
+
+    with filter_1:
+        st.selectbox(
+            "Vendedor",
+            ["Todos os vendedores"] + seller_options,
+            key="dashboard_filter_seller",
         )
 
-    with filter_control:
-        st.write("")
-        selected_status = st.selectbox(
+    with filter_2:
+        st.selectbox(
             "Status",
             ["Todos os status"] + STATUS_OPTIONS,
-            key=filter_key,
+            key="dashboard_filter_status",
         )
 
-    selected_status = None if selected_status == "Todos os status" else selected_status
+    with filter_3:
+        st.date_input(
+            "Período",
+            min_value=date_min,
+            max_value=max(date_max, date.today()),
+            key="dashboard_filter_period",
+        )
+
+    with filter_4:
+        st.text_input(
+            "Buscar empresa ou telefone",
+            placeholder="Digite para buscar...",
+            key="dashboard_filter_search",
+        )
+
+    st.write("")
 
     def choose_status(status_name: str) -> None:
-        st.session_state[filter_key] = status_name
+        st.session_state[selected_card_key] = status_name
 
-    status_rows = [statuses[:4], statuses[4:]]
+    selected_status = st.session_state.get(selected_card_key)
+    card_columns = st.columns(7, gap="small")
 
-    for row_index, status_row in enumerate(status_rows):
-        card_columns = st.columns(len(status_row), gap="medium")
+    for column, (status_name, icon, bg_color, icon_color) in zip(card_columns, statuses):
+        count = int((filtered_df["_status_grupo"] == status_name).sum())
+        active = selected_status == status_name
 
-        for column, (status_name, icon, bg_color, icon_color) in zip(card_columns, status_row):
-            count = int((filtered_df["_status_grupo"] == status_name).sum())
-            active = selected_status == status_name
+        border = "1px solid rgba(255, 75, 170, 0.85)" if active else "1px solid rgba(255,255,255,0.06)"
+        shadow = "0 0 0 1px rgba(169, 28, 255, 0.18), 0 18px 46px rgba(0,0,0,0.28), 0 0 22px rgba(255, 75, 170, 0.14)" if active else "0 18px 46px rgba(0,0,0,0.22)"
 
-            border = "1px solid rgba(255, 75, 170, 0.85)" if active else "1px solid rgba(255,255,255,0.06)"
-            shadow = "0 0 0 1px rgba(169, 28, 255, 0.18), 0 18px 46px rgba(0,0,0,0.28), 0 0 22px rgba(255, 75, 170, 0.14)" if active else "0 18px 46px rgba(0,0,0,0.22)"
-
-            with column:
-                render_html(
-                    f"""
-                    <div class="latest-status-card" style="border:{border}; box-shadow:{shadow};">
-                        <div class="latest-status-top">
-                            <div class="latest-status-icon" style="background:{bg_color}; color:{icon_color};">{icon}</div>
-                            <div class="latest-status-name">{html.escape(status_name)}</div>
-                        </div>
-                        <div class="latest-status-number">{count}</div>
-                        <div class="latest-status-caption">registros nesta sessão</div>
+        with column:
+            render_html(
+                f"""
+                <div class="latest-status-card" style="border:{border}; box-shadow:{shadow};">
+                    <div class="latest-status-top">
+                        <div class="latest-status-icon" style="background:{bg_color}; color:{icon_color};">{icon}</div>
+                        <div class="latest-status-name">{html.escape(status_name)}</div>
                     </div>
-                    """
-                )
+                    <div class="latest-status-number">{count}</div>
+                    <div class="latest-status-caption">registros nesta sessão</div>
+                </div>
+                """
+            )
 
-                st.button(
-                    "Ver nomes",
-                    key=f"btn_ultimos_{status_name}",
-                    use_container_width=True,
-                    on_click=choose_status,
-                    args=(status_name,),
-                )
+            st.button(
+                "Ver nomes",
+                key=f"btn_ultimos_{status_name}",
+                use_container_width=True,
+                on_click=choose_status,
+                args=(status_name,),
+            )
 
-        if row_index == 0:
-            st.write("")
+    selected_status = st.session_state.get(selected_card_key)
 
     if not selected_status:
         render_html(
             """
             <div class="latest-placeholder-card">
-                Selecione um status acima ou clique em “Ver nomes” para visualizar os registros.
+                Selecione um status clicando em “Ver nomes” para visualizar os registros.
             </div>
             """
         )
@@ -1878,7 +1935,7 @@ def render_latest_calls_section(filtered_df: pd.DataFrame, columns: dict) -> Non
                 st.code(str(error))
 
 
-def prepare_filters(df: pd.DataFrame):
+def prepare_filters(df: pd.DataFrame) -> pd.DataFrame:
     title_column, refresh_column = st.columns([3.8, 1.0], gap="large")
 
     with title_column:
@@ -1905,11 +1962,6 @@ def prepare_filters(df: pd.DataFrame):
         date_min = valid_dates.min().date()
         date_max = valid_dates.max().date()
 
-    filter_1, filter_2, filter_3 = st.columns(
-        [1, 1, 1],
-        gap="medium",
-    )
-
     seller_options = sorted(
         [
             seller
@@ -1918,32 +1970,38 @@ def prepare_filters(df: pd.DataFrame):
         ]
     )
 
-    with filter_1:
-        selected_seller = st.selectbox(
-            "Vendedor",
-            ["Todos os vendedores"] + seller_options,
-        )
+    if "dashboard_filter_seller" not in st.session_state:
+        st.session_state.dashboard_filter_seller = "Todos os vendedores"
 
-    with filter_2:
-        selected_range = st.date_input(
-            "Período",
-            value=(date_min, date_max),
-            min_value=date_min,
-            max_value=max(date_max, date.today()),
-        )
+    if st.session_state.dashboard_filter_seller not in ["Todos os vendedores"] + seller_options:
+        st.session_state.dashboard_filter_seller = "Todos os vendedores"
 
-    with filter_3:
-        search_term = st.text_input(
-            "Buscar empresa ou telefone",
-            placeholder="Digite para buscar...",
-        )
+    if "dashboard_filter_status" not in st.session_state:
+        st.session_state.dashboard_filter_status = "Todos os status"
+
+    if st.session_state.dashboard_filter_status not in ["Todos os status"] + STATUS_OPTIONS:
+        st.session_state.dashboard_filter_status = "Todos os status"
+
+    if "dashboard_filter_period" not in st.session_state:
+        st.session_state.dashboard_filter_period = (date_min, date_max)
+
+    if "dashboard_filter_search" not in st.session_state:
+        st.session_state.dashboard_filter_search = ""
+
+    selected_seller = st.session_state.dashboard_filter_seller
+    selected_status = st.session_state.dashboard_filter_status
+    selected_range = st.session_state.dashboard_filter_period
+    search_term = st.session_state.dashboard_filter_search
 
     filtered_df = df.copy()
 
     if selected_seller != "Todos os vendedores":
         filtered_df = filtered_df[filtered_df["_vendedor"] == selected_seller].copy()
 
-    if isinstance(selected_range, tuple) and len(selected_range) == 2:
+    if selected_status != "Todos os status":
+        filtered_df = filtered_df[filtered_df["_status_grupo"] == selected_status].copy()
+
+    if isinstance(selected_range, (tuple, list)) and len(selected_range) == 2:
         start_date, end_date = selected_range
 
         filtered_df = filtered_df[
@@ -2069,7 +2127,7 @@ def render_overview_page(df: pd.DataFrame, columns: dict) -> None:
         render_status_summary(filtered_df)
 
     st.write("")
-    render_latest_calls_section(filtered_df, columns)
+    render_latest_calls_section(filtered_df, columns, df)
 
 
 # =========================================================
