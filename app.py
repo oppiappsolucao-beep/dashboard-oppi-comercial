@@ -1330,23 +1330,23 @@ def apply_dashboard_css() -> None:
 
             .latest-table-card {
                 margin-top: 30px;
-                padding: 20px 20px 16px 20px;
-                border-radius: 24px;
-                background: linear-gradient(145deg, rgba(22,20,42,0.98), rgba(10,9,25,0.98));
-                border: 1px solid rgba(255,255,255,0.06);
-                box-shadow: 0 18px 46px rgba(0,0,0,0.22);
+                padding: 0;
+                border-radius: 26px;
+                background: linear-gradient(135deg, rgba(255,75,170,0.96), rgba(169,28,255,0.96));
+                box-shadow:
+                    0 20px 52px rgba(0,0,0,0.26),
+                    0 0 34px rgba(169,28,255,0.18);
             }
 
-            .latest-placeholder-card {
-                margin-top: 26px;
-                padding: 22px 24px;
-                border-radius: 22px;
-                background: linear-gradient(145deg, rgba(22,20,42,0.98), rgba(10,9,25,0.98));
-                border: 1px dashed rgba(255, 75, 170, 0.45);
-                color: rgba(255,255,255,0.78);
-                font-size: 0.92rem;
-                font-weight: 700;
-                text-align: center;
+            .latest-table-card-inner {
+                margin: 1px;
+                padding: 18px 18px 16px 18px;
+                border-radius: 25px;
+                background:
+                    radial-gradient(circle at 100% 0%, rgba(169,28,255,0.16), transparent 28%),
+                    radial-gradient(circle at 0% 100%, rgba(255,75,170,0.12), transparent 30%),
+                    linear-gradient(145deg, rgba(22,20,42,0.99), rgba(10,9,25,0.99));
+                border: 1px solid rgba(255,255,255,0.06);
             }
 
             .latest-table-head {
@@ -1354,37 +1354,95 @@ def apply_dashboard_css() -> None:
                 align-items: flex-start;
                 justify-content: space-between;
                 gap: 14px;
-                margin-bottom: 8px;
+                margin-bottom: 12px;
+            }
+
+            .latest-table-title-wrap {
+                display: flex;
+                align-items: center;
+                gap: 12px;
+            }
+
+            .latest-table-icon {
+                width: 42px;
+                height: 42px;
+                min-width: 42px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                border-radius: 14px;
+                background: linear-gradient(135deg, rgba(255,75,170,0.22), rgba(169,28,255,0.24));
+                border: 1px solid rgba(255,75,170,0.34);
+                color: #FF8CCC;
+                font-size: 1.05rem;
+                box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
             }
 
             .latest-table-title {
                 color: #FFFFFF;
-                font-size: 1rem;
+                font-size: 1.04rem;
                 font-weight: 900;
                 line-height: 1.2;
                 margin-bottom: 4px;
             }
 
             .latest-table-subtitle {
-                color: rgba(255,255,255,0.68);
+                color: rgba(255,255,255,0.66);
                 font-size: 0.84rem;
                 line-height: 1.45;
             }
 
-            .latest-table-badge {
+            .latest-table-badges {
+                display: flex;
+                flex-wrap: wrap;
+                align-items: center;
+                justify-content: flex-end;
+                gap: 8px;
+            }
+
+            .latest-table-badge,
+            .latest-table-status-badge {
                 display: inline-flex;
                 align-items: center;
                 justify-content: center;
                 padding: 7px 12px;
                 border-radius: 999px;
-                background: rgba(255, 246, 217, 0.08);
-                border: 1px solid rgba(232, 194, 67, 0.92);
-                color: #E8C243;
                 font-size: 0.76rem;
                 font-weight: 900;
                 white-space: nowrap;
             }
 
+            .latest-table-badge {
+                background: rgba(255, 246, 217, 0.08);
+                border: 1px solid rgba(232, 194, 67, 0.92);
+                color: #E8C243;
+            }
+
+            .latest-table-status-badge {
+                background: rgba(255,75,170,0.10);
+                border: 1px solid rgba(255,75,170,0.44);
+                color: #FF8CCC;
+            }
+
+            .latest-company-fields {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 8px;
+                margin-top: 10px;
+            }
+
+            .latest-company-field {
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                padding: 6px 9px;
+                border-radius: 999px;
+                background: rgba(255,255,255,0.045);
+                border: 1px solid rgba(255,255,255,0.07);
+                color: rgba(255,255,255,0.72);
+                font-size: 0.72rem;
+                font-weight: 750;
+            }
 
             .latest-editor-help {
                 display: flex;
@@ -1394,16 +1452,18 @@ def apply_dashboard_css() -> None:
                 margin: 14px 0 12px 0;
                 padding: 14px 16px;
                 border-radius: 16px;
-                background: linear-gradient(145deg, rgba(22,20,42,0.98), rgba(10,9,25,0.98));
-                border: 1px solid rgba(255,75,170,0.28);
-                color: rgba(255,255,255,0.74);
+                background:
+                    linear-gradient(90deg, rgba(255,75,170,0.10), rgba(169,28,255,0.10)),
+                    rgba(13,11,31,0.94);
+                border: 1px solid rgba(255,75,170,0.30);
+                color: rgba(255,255,255,0.76);
                 font-size: 0.84rem;
                 line-height: 1.45;
                 box-shadow: 0 12px 30px rgba(0,0,0,0.16);
             }
 
             .latest-editor-help strong {
-                color: #FF64BC;
+                color: #FF8CCC;
             }
 
             .latest-sync-badge {
@@ -1425,7 +1485,7 @@ def apply_dashboard_css() -> None:
                 display: flex;
                 flex-wrap: wrap;
                 gap: 8px;
-                margin: 10px 0 12px 0;
+                margin: 10px 0 14px 0;
             }
 
             .latest-status-pill {
@@ -1436,7 +1496,7 @@ def apply_dashboard_css() -> None:
                 border-radius: 999px;
                 background: rgba(255,255,255,0.045);
                 border: 1px solid rgba(255,255,255,0.08);
-                color: rgba(255,255,255,0.84);
+                color: rgba(255,255,255,0.86);
                 font-size: 0.73rem;
                 font-weight: 800;
             }
@@ -1446,19 +1506,19 @@ def apply_dashboard_css() -> None:
                 height: 8px;
                 border-radius: 50%;
                 display: inline-block;
+                box-shadow: 0 0 12px currentColor;
             }
 
-            /* Tabela editável: visual detalhado em rosa e roxo, sem zoom no hover */
+            /* Planilha editável: detalhes em rosa e roxo, sem zoom */
             div[data-testid="stDataEditor"] {
                 overflow: hidden;
-                border-radius: 22px;
-                border: 1px solid rgba(255,75,170,0.44);
-                background:
-                    linear-gradient(180deg, rgba(255,255,255,0.99), rgba(249,247,255,0.99));
+                border-radius: 20px;
+                border: 1px solid rgba(255,75,170,0.52);
+                background: linear-gradient(180deg, rgba(255,255,255,0.995), rgba(249,247,255,0.995));
                 box-shadow:
                     0 18px 44px rgba(0,0,0,0.24),
                     0 0 0 1px rgba(169,28,255,0.10),
-                    0 0 30px rgba(169,28,255,0.12);
+                    0 0 32px rgba(169,28,255,0.14);
                 transform: none !important;
                 transition:
                     border-color 0.22s ease,
@@ -1466,18 +1526,18 @@ def apply_dashboard_css() -> None:
             }
 
             div[data-testid="stDataEditor"] [role="grid"] {
-                border-radius: 22px;
+                border-radius: 20px;
                 overflow: hidden;
                 transform: none !important;
             }
 
             div[data-testid="stDataEditor"]:hover {
                 transform: none !important;
-                border-color: rgba(255,75,170,0.72);
+                border-color: rgba(255,75,170,0.80);
                 box-shadow:
                     0 20px 48px rgba(0,0,0,0.25),
-                    0 0 0 1px rgba(169,28,255,0.20),
-                    0 0 34px rgba(255,75,170,0.14) !important;
+                    0 0 0 1px rgba(169,28,255,0.22),
+                    0 0 36px rgba(255,75,170,0.16) !important;
             }
 
             div[data-testid="stDataEditor"] * {
@@ -1485,30 +1545,37 @@ def apply_dashboard_css() -> None:
             }
 
             div[data-testid="stDataEditor"] [role="columnheader"] {
-                background: linear-gradient(90deg, rgba(255,75,170,0.14), rgba(169,28,255,0.14)) !important;
-                border-bottom: 1px solid rgba(169,28,255,0.18) !important;
+                background: linear-gradient(90deg, rgba(255,75,170,0.22), rgba(169,28,255,0.22)) !important;
+                border-bottom: 1px solid rgba(169,28,255,0.24) !important;
                 color: #2A183E !important;
-                font-weight: 850 !important;
+                font-weight: 900 !important;
+                letter-spacing: 0.01em !important;
             }
 
             div[data-testid="stDataEditor"] [role="gridcell"] {
-                border-color: rgba(169,28,255,0.09) !important;
+                border-color: rgba(169,28,255,0.10) !important;
                 color: #261C35 !important;
+                background: rgba(255,255,255,0.99) !important;
             }
 
             div[data-testid="stDataEditor"] [role="row"]:nth-child(even) [role="gridcell"] {
-                background: rgba(169,28,255,0.035) !important;
+                background: rgba(169,28,255,0.045) !important;
             }
 
             div[data-testid="stDataEditor"] [role="row"]:hover [role="gridcell"] {
-                background: rgba(255,75,170,0.075) !important;
+                background: linear-gradient(90deg, rgba(255,75,170,0.095), rgba(169,28,255,0.065)) !important;
             }
 
             div[data-testid="stDataEditor"] [role="gridcell"]:focus,
             div[data-testid="stDataEditor"] [role="gridcell"]:focus-within {
-                outline: 2px solid rgba(255,75,170,0.72) !important;
+                outline: 2px solid rgba(255,75,170,0.82) !important;
                 outline-offset: -2px !important;
-                background: rgba(255,75,170,0.08) !important;
+                background: rgba(255,75,170,0.10) !important;
+            }
+
+            div[data-testid="stDataEditor"] button,
+            div[data-testid="stDataEditor"] svg {
+                color: #A91CFF !important;
             }
 
             div[data-testid="stDataFrame"] {
@@ -1948,6 +2015,8 @@ def render_latest_calls_section(
         {
             "Empresa": selected_df["_empresa"],
             "Telefone": selected_df["_telefone"],
+            "E-mail": safe_series(selected_df, columns.get("email")),
+            "CNPJ": safe_series(selected_df, columns.get("cnpj")),
             "Status": selected_df["_status_grupo"],
             "Vendedor": selected_df["_vendedor"],
             "Data": selected_df["_data_chamado"].dt.strftime("%d/%m/%Y").fillna(""),
@@ -1956,15 +2025,35 @@ def render_latest_calls_section(
 
     badge_text = f"{len(display_df)} registro(s)"
 
+    company_fields_html = "".join(
+        [
+            '<span class="latest-company-field">🏢 Empresa</span>',
+            '<span class="latest-company-field">📞 Telefone</span>',
+            '<span class="latest-company-field">✉️ E-mail</span>',
+            '<span class="latest-company-field">🧾 CNPJ</span>',
+            '<span class="latest-company-field">👤 Vendedor</span>',
+            '<span class="latest-company-field">🗓️ Data</span>',
+        ]
+    )
+
     render_html(
         f"""
         <div class="latest-table-card">
-            <div class="latest-table-head">
-                <div>
-                    <div class="latest-table-title">{html.escape(selected_status)}</div>
-                    <div class="latest-table-subtitle">Empresas registradas no comercial com status e responsável.</div>
+            <div class="latest-table-card-inner">
+                <div class="latest-table-head">
+                    <div class="latest-table-title-wrap">
+                        <div class="latest-table-icon">✦</div>
+                        <div>
+                            <div class="latest-table-title">Empresas em {html.escape(selected_status)}</div>
+                            <div class="latest-table-subtitle">Informações comerciais detalhadas com atualização de status diretamente no dashboard.</div>
+                        </div>
+                    </div>
+                    <div class="latest-table-badges">
+                        <div class="latest-table-status-badge">{html.escape(selected_status)}</div>
+                        <div class="latest-table-badge">{html.escape(badge_text)}</div>
+                    </div>
                 </div>
-                <div class="latest-table-badge">{html.escape(badge_text)}</div>
+                <div class="latest-company-fields">{company_fields_html}</div>
             </div>
         </div>
         """
@@ -2007,19 +2096,21 @@ def render_latest_calls_section(
         hide_index=True,
         height=360,
         row_height=42,
-        disabled=["Empresa", "Telefone", "Vendedor", "Data", "_sheet_row"],
+        disabled=["Empresa", "Telefone", "E-mail", "CNPJ", "Vendedor", "Data", "_sheet_row"],
         column_config={
-            "Empresa": st.column_config.TextColumn("Empresa", width="large"),
-            "Telefone": st.column_config.TextColumn("Telefone", width="medium"),
+            "Empresa": st.column_config.TextColumn("🏢 Empresa", width="large"),
+            "Telefone": st.column_config.TextColumn("📞 Telefone", width="medium"),
+            "E-mail": st.column_config.TextColumn("✉️ E-mail", width="large"),
+            "CNPJ": st.column_config.TextColumn("🧾 CNPJ", width="medium"),
             "Status": st.column_config.SelectboxColumn(
-                "Status",
+                "✨ Status",
                 help="Escolha uma das etapas comerciais. O salvamento é automático.",
                 options=STATUS_OPTIONS,
                 required=True,
                 width="medium",
             ),
-            "Vendedor": st.column_config.TextColumn("Vendedor", width="medium"),
-            "Data": st.column_config.TextColumn("Data", width="small"),
+            "Vendedor": st.column_config.TextColumn("👤 Vendedor", width="medium"),
+            "Data": st.column_config.TextColumn("🗓️ Data", width="small"),
             "_sheet_row": None,
         },
         key=editor_key,
