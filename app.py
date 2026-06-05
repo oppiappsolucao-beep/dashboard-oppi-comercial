@@ -2,6 +2,7 @@ import base64
 import html
 import re
 import unicodedata
+from io import BytesIO
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Optional
@@ -10,6 +11,7 @@ import gspread
 import pandas as pd
 import plotly.express as px
 import streamlit as st
+from PIL import Image
 from google.oauth2.service_account import Credentials
 from gspread.exceptions import SpreadsheetNotFound, WorksheetNotFound
 
@@ -262,6 +264,30 @@ def score_classification(score: int) -> str:
 
 
 
+def _build_transparent_logo_data_uri(file_path: Path) -> str:
+    """Remove o fundo preto da logo e devolve um data URI em PNG com transparência."""
+    try:
+        image = Image.open(file_path).convert("RGBA")
+        pixels = []
+
+        for r, g, b, a in image.getdata():
+            # Remove o fundo preto/escuro, preservando a marca rosa/roxa.
+            if a == 0 or (r <= 25 and g <= 25 and b <= 25):
+                pixels.append((0, 0, 0, 0))
+            else:
+                pixels.append((r, g, b, a))
+
+        image.putdata(pixels)
+        buffer = BytesIO()
+        image.save(buffer, format="PNG")
+        encoded = base64.b64encode(buffer.getvalue()).decode("utf-8")
+        return f"data:image/png;base64,{encoded}"
+    except Exception:
+        mime = "image/png" if file_path.suffix.lower() == ".png" else "image/jpeg"
+        encoded = base64.b64encode(file_path.read_bytes()).decode("utf-8")
+        return f"data:{mime};base64,{encoded}"
+
+
 def get_logo_data_uri() -> str:
     possible_paths = [
         Path(__file__).parent / "logo_oppi.png",
@@ -272,9 +298,7 @@ def get_logo_data_uri() -> str:
 
     for file_path in possible_paths:
         if file_path.exists():
-            mime = "image/png" if file_path.suffix.lower() == ".png" else "image/jpeg"
-            encoded = base64.b64encode(file_path.read_bytes()).decode("utf-8")
-            return f"data:{mime};base64,{encoded}"
+            return _build_transparent_logo_data_uri(file_path)
 
     return ""
 # =========================================================
