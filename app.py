@@ -758,33 +758,44 @@ def apply_dashboard_css() -> None:
                 color: #FFFFFF;
             }
 
-            .side-logo {
-                width: 78px;
-                height: 78px;
+            .side-logo-wrap {
+                margin: 10px 0 24px 0;
+            }
+
+            .side-logo-img {
+                width: 100px;
+                height: 100px;
+                object-fit: contain;
+                display: block;
+                filter: drop-shadow(0 14px 30px rgba(215, 58, 255, 0.22));
+            }
+
+            .side-logo-fallback {
+                width: 92px;
+                height: 92px;
                 border-radius: 50%;
                 background: linear-gradient(145deg, #FF4BAA 10%, #9C19FF 88%);
                 position: relative;
-                margin: 14px 0 26px 4px;
             }
 
-            .side-logo::before {
+            .side-logo-fallback::before {
                 content: "";
                 position: absolute;
-                width: 27px;
-                height: 27px;
+                width: 32px;
+                height: 32px;
                 border-radius: 50%;
                 background: #05050D;
-                top: 20px;
-                left: 26px;
+                top: 24px;
+                left: 30px;
             }
 
-            .side-logo::after {
+            .side-logo-fallback::after {
                 content: "";
                 position: absolute;
-                width: 28px;
-                height: 28px;
+                width: 32px;
+                height: 32px;
                 left: 2px;
-                bottom: 0;
+                bottom: 1px;
                 clip-path: polygon(0 100%, 25% 26%, 100% 0);
                 background: linear-gradient(145deg, #FF4BAA 10%, #9C19FF 88%);
             }
@@ -845,6 +856,88 @@ def apply_dashboard_css() -> None:
                 font-size: 0.82rem;
                 line-height: 1.48;
                 color: rgba(255,255,255,0.76);
+            }
+
+            section[data-testid="stSidebar"] div[data-testid="stRadio"] > label,
+            section[data-testid="stSidebar"] div[data-testid="stRadio"] label {
+                color: rgba(255,255,255,0.72) !important;
+                font-weight: 700 !important;
+            }
+
+            section[data-testid="stSidebar"] div[role="radiogroup"] {
+                gap: 10px !important;
+            }
+
+            section[data-testid="stSidebar"] div[role="radiogroup"] > label {
+                display: flex !important;
+                align-items: center !important;
+                gap: 12px !important;
+                margin: 0 0 10px 0 !important;
+                padding: 12px 14px !important;
+                border-radius: 16px !important;
+                background: linear-gradient(180deg, rgba(243,244,248,0.92), rgba(221,224,233,0.88)) !important;
+                border: 1px solid rgba(255,255,255,0.22) !important;
+                box-shadow: inset 0 1px 0 rgba(255,255,255,0.55), 0 8px 22px rgba(0,0,0,0.18) !important;
+                transition: all 0.18s ease !important;
+            }
+
+            section[data-testid="stSidebar"] div[role="radiogroup"] > label p,
+            section[data-testid="stSidebar"] div[role="radiogroup"] > label span {
+                color: #1B1330 !important;
+                font-weight: 800 !important;
+            }
+
+            section[data-testid="stSidebar"] div[role="radiogroup"] > label:hover {
+                transform: translateY(-1px);
+                background: linear-gradient(180deg, rgba(248,249,252,0.96), rgba(230,233,242,0.92)) !important;
+                box-shadow: inset 0 1px 0 rgba(255,255,255,0.75), 0 12px 24px rgba(0,0,0,0.20) !important;
+            }
+
+            section[data-testid="stSidebar"] div[role="radiogroup"] > label:has(input:checked) {
+                background: linear-gradient(90deg, #FF4BAA 0%, #A91CFF 100%) !important;
+                border: 1px solid rgba(255,255,255,0.24) !important;
+                box-shadow: 0 14px 30px rgba(190, 46, 255, 0.28) !important;
+            }
+
+            section[data-testid="stSidebar"] div[role="radiogroup"] > label:has(input:checked) p,
+            section[data-testid="stSidebar"] div[role="radiogroup"] > label:has(input:checked) span {
+                color: #FFFFFF !important;
+            }
+
+            section[data-testid="stSidebar"] div[role="radiogroup"] > label input {
+                accent-color: #B02AFF !important;
+            }
+
+            .side-tip {
+                display: flex;
+                gap: 12px;
+                align-items: center;
+                margin: 18px 0 22px 0;
+                padding: 14px;
+                border-radius: 16px;
+                background: linear-gradient(180deg, rgba(243,244,248,0.92), rgba(221,224,233,0.88));
+                border: 1px solid rgba(255,255,255,0.25);
+                box-shadow: inset 0 1px 0 rgba(255,255,255,0.55), 0 8px 22px rgba(0,0,0,0.18);
+            }
+
+            .side-tip-icon {
+                width: 44px;
+                height: 44px;
+                min-width: 44px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                color: #8B29FF;
+                border: 1px solid rgba(160, 84, 255, 0.45);
+                background: rgba(255,255,255,0.55);
+                border-radius: 14px;
+            }
+
+            .side-tip-text {
+                font-size: 0.82rem;
+                line-height: 1.48;
+                color: #2B2340;
+                font-weight: 700;
             }
 
             .page-title {
@@ -1085,9 +1178,16 @@ def render_login_page() -> None:
 # =========================================================
 def render_sidebar() -> str:
     with st.sidebar:
+        logo_data_uri = get_logo_data_uri()
+        logo_html = (
+            f'<div class="side-logo-wrap"><img src="{logo_data_uri}" class="side-logo-img" alt="Oppi Tech"></div>'
+            if logo_data_uri
+            else '<div class="side-logo-wrap"><div class="side-logo-fallback"></div></div>'
+        )
+
         render_html(
-            """
-            <div class="side-logo"></div>
+            f"""
+            {logo_html}
             <div class="side-title">
                 Dashboard
                 <span class="side-highlight">Oppi Comercial</span>
