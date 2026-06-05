@@ -1420,6 +1420,11 @@ def apply_dashboard_css() -> None:
                 white-space: nowrap;
             }
 
+            /* Ao clicar em “Ver nomes”, exibe somente a planilha editável. */
+            div[data-testid="stDataEditor"] {
+                margin-top: 24px !important;
+            }
+
             .latest-table-badge {
                 background: rgba(255, 246, 217, 0.08);
                 border: 1px solid rgba(232, 194, 67, 0.92);
@@ -2031,63 +2036,9 @@ def render_latest_calls_section(
         }
     )
 
-    badge_text = f"{len(display_df)} registro(s)"
-
-    company_fields_html = "".join(
-        [
-            '<span class="latest-company-field">🏢 Empresa</span>',
-            '<span class="latest-company-field">📞 Telefone</span>',
-            '<span class="latest-company-field">✉️ E-mail</span>',
-            '<span class="latest-company-field">🧾 CNPJ</span>',
-            '<span class="latest-company-field">👤 Vendedor</span>',
-            '<span class="latest-company-field">🗓️ Data</span>',
-        ]
-    )
-
-    render_html(
-        f"""
-        <div class="latest-table-card">
-            <div class="latest-table-card-inner">
-                <div class="latest-table-head">
-                    <div class="latest-table-title-wrap">
-                        <div class="latest-table-icon">✦</div>
-                        <div>
-                            <div class="latest-table-title">Empresas em {html.escape(selected_status)}</div>
-                            <div class="latest-table-subtitle">Informações comerciais detalhadas com atualização de status diretamente no dashboard.</div>
-                        </div>
-                    </div>
-                    <div class="latest-table-badges">
-                        <div class="latest-table-status-badge">{html.escape(selected_status)}</div>
-                        <div class="latest-table-badge">{html.escape(badge_text)}</div>
-                    </div>
-                </div>
-                <div class="latest-company-fields">{company_fields_html}</div>
-            </div>
-        </div>
-        """
-    )
-
     if display_df.empty:
         st.info("Nenhum chamado encontrado para este status no período selecionado.")
         return
-
-    legend_html = "".join(
-        f'<span class="latest-status-pill"><span class="latest-status-dot" style="background:{STATUS_COLORS[status][1]};"></span>{html.escape(status)}</span>'
-        for status in STATUS_OPTIONS
-    )
-
-    render_html(
-        f"""
-        <div class="latest-editor-help">
-            <div>
-                <strong>Editar status:</strong> clique na coluna “Status” e escolha a nova etapa.
-                A alteração será salva automaticamente no Google Sheets.
-            </div>
-            <div class="latest-sync-badge">● Sincronização automática</div>
-        </div>
-        <div class="latest-status-legend">{legend_html}</div>
-        """
-    )
 
     editor_df = display_df.copy()
     editor_df["_sheet_row"] = selected_df["_sheet_row"].astype(int).values
