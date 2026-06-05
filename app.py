@@ -1526,52 +1526,28 @@ def apply_dashboard_css() -> None:
 
             /* Tabela premium personalizada com botão Copiar */
             .premium-inline-table-header {
-                margin-top: 14px;
-                margin-bottom: 7px;
-                padding: 10px 12px;
-                border-radius: 16px;
-                background:
-                    linear-gradient(90deg, rgba(255,75,170,0.22), rgba(169,28,255,0.22));
-                border: 1px solid rgba(255,75,170,0.34);
-                box-shadow:
-                    inset 0 1px 0 rgba(255,255,255,0.08),
-                    0 12px 26px rgba(0,0,0,0.12);
-                color: rgba(255,255,255,0.92);
-                font-size: 0.78rem;
-                font-weight: 900;
-                letter-spacing: 0.01em;
-            }
-
-            .premium-inline-table-row {
-                margin-bottom: 7px;
-                padding: 7px 8px;
-                border-radius: 15px;
-                background:
-                    linear-gradient(90deg, rgba(255,255,255,0.995), rgba(249,247,255,0.995));
-                border: 1px solid rgba(169,28,255,0.14);
-                box-shadow:
-                    0 8px 18px rgba(0,0,0,0.10),
-                    0 0 0 1px rgba(255,75,170,0.03);
-            }
-
-            .premium-inline-table-row:hover {
-                border-color: rgba(255,75,170,0.50);
-                box-shadow:
-                    0 12px 26px rgba(0,0,0,0.14),
-                    0 0 22px rgba(169,28,255,0.10);
+                margin-top: 10px;
+                margin-bottom: 5px;
+                padding: 9px 10px;
+                border-radius: 13px;
+                background: linear-gradient(90deg, rgba(255,75,170,0.18), rgba(169,28,255,0.18));
+                border: 1px solid rgba(255,75,170,0.30);
+                color: rgba(255,255,255,0.94);
+                font-size: 0.76rem;
+                font-weight: 850;
             }
 
             .premium-inline-cell {
-                min-height: 42px;
+                min-height: 40px;
                 display: flex;
                 align-items: center;
                 padding: 7px 9px;
-                border-radius: 11px;
-                background: rgba(255,255,255,0.86);
-                border: 1px solid rgba(169,28,255,0.08);
+                border-radius: 10px;
+                background: rgba(255,255,255,0.96);
+                border: 1px solid rgba(169,28,255,0.10);
                 color: #261C35;
-                font-size: 0.80rem;
-                line-height: 1.25;
+                font-size: 0.79rem;
+                line-height: 1.22;
                 word-break: break-word;
             }
 
@@ -1583,30 +1559,22 @@ def apply_dashboard_css() -> None:
             .premium-inline-cell.date {
                 justify-content: center;
                 color: #5B5369;
-                font-size: 0.76rem;
+                font-size: 0.75rem;
             }
 
             .premium-inline-cell.muted {
-                color: #7B7489;
-            }
-
-            .premium-inline-status-title {
-                color: rgba(255,255,255,0.72);
-                font-size: 0.74rem;
-                font-weight: 800;
-                margin-bottom: 4px;
+                color: #6E667A;
             }
 
             .premium-inline-hint {
-                margin: 10px 0 10px 0;
-                padding: 11px 14px;
-                border-radius: 14px;
-                background:
-                    linear-gradient(90deg, rgba(255,75,170,0.10), rgba(169,28,255,0.10));
-                border: 1px solid rgba(255,75,170,0.24);
-                color: rgba(255,255,255,0.78);
-                font-size: 0.80rem;
-                line-height: 1.45;
+                margin: 9px 0 9px 0;
+                padding: 10px 13px;
+                border-radius: 13px;
+                background: linear-gradient(90deg, rgba(255,75,170,0.08), rgba(169,28,255,0.08));
+                border: 1px solid rgba(255,75,170,0.20);
+                color: rgba(255,255,255,0.76);
+                font-size: 0.78rem;
+                line-height: 1.40;
             }
 
             .premium-inline-hint strong {
@@ -1615,13 +1583,12 @@ def apply_dashboard_css() -> None:
 
             /* A tabela não deve ampliar no hover */
             .premium-inline-table-header,
-            .premium-inline-table-row,
-            .premium-inline-table-row *,
-            .premium-inline-cell {
+            .premium-inline-table-header:hover,
+            .premium-inline-cell,
+            .premium-inline-cell:hover {
                 transform: none !important;
                 transition:
                     border-color 0.18s ease,
-                    box-shadow 0.18s ease,
                     background 0.18s ease !important;
             }
 
@@ -2278,15 +2245,14 @@ def render_latest_calls_section(
     render_html(
         """
         <div class="premium-inline-hint">
-            <strong>Status editável:</strong> altere a etapa comercial diretamente na coluna “Status”.
-            A atualização será enviada automaticamente para o Google Sheets.
-            Use o botão <strong>Copiar</strong> para enviar o telefone à sua área de transferência.
+            <strong>Status editável:</strong> altere a etapa diretamente no seletor.
+            Use <strong>Copiar</strong> para enviar o telefone à sua área de transferência.
         </div>
         """
     )
 
     header_columns = st.columns(
-        [2.55, 1.16, 0.66, 2.05, 1.28, 1.34, 1.20, 0.82],
+        [3.15, 1.45, 0.92, 1.65, 1.35, 0.90],
         gap="small",
     )
 
@@ -2294,8 +2260,6 @@ def render_latest_calls_section(
         "🏢 Empresa",
         "📞 Telefone",
         "📋 Copiar",
-        "✉️ E-mail",
-        "🧾 CNPJ",
         "✨ Status",
         "👤 Vendedor",
         "🗓️ Data",
@@ -2315,7 +2279,7 @@ def render_latest_calls_section(
             original_status = "Novo Lead"
 
         row_columns = st.columns(
-            [2.55, 1.16, 0.66, 2.05, 1.28, 1.34, 1.20, 0.82],
+            [3.15, 1.45, 0.92, 1.65, 1.35, 0.90],
             gap="small",
         )
 
@@ -2333,16 +2297,6 @@ def render_latest_calls_section(
             render_phone_copy_button(
                 normalize_text(row["Telefone"]),
                 row_key=f"phone-{sheet_row}",
-            )
-
-        with row_columns[3]:
-            render_html(
-                f'<div class="premium-inline-cell muted">{html.escape(normalize_text(row["E-mail"]) or "Sem e-mail")}</div>'
-            )
-
-        with row_columns[4]:
-            render_html(
-                f'<div class="premium-inline-cell muted">{html.escape(normalize_text(row["CNPJ"]) or "Sem CNPJ")}</div>'
             )
 
         status_widget_key = f"inline_status_{sheet_row}_{normalize_search_text(original_status).replace(' ', '_')}"
@@ -2385,7 +2339,7 @@ def render_latest_calls_section(
                 )
                 st.session_state[widget_key] = previous_status
 
-        with row_columns[5]:
+        with row_columns[3]:
             st.selectbox(
                 "Status",
                 STATUS_OPTIONS,
@@ -2395,12 +2349,12 @@ def render_latest_calls_section(
                 on_change=save_inline_status,
             )
 
-        with row_columns[6]:
+        with row_columns[4]:
             render_html(
                 f'<div class="premium-inline-cell muted">{html.escape(normalize_text(row["Vendedor"]) or "Sem vendedor")}</div>'
             )
 
-        with row_columns[7]:
+        with row_columns[5]:
             render_html(
                 f'<div class="premium-inline-cell date">{html.escape(normalize_text(row["Data"]))}</div>'
             )
