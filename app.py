@@ -780,6 +780,158 @@ render_html(
             section[data-testid="stSidebar"] { width: 220px !important; }
             section[data-testid="stSidebar"] > div { width: 220px !important; }
         }
+
+
+        /* =====================================================
+           LOGIN COMPACTO — PROPORÇÕES INSPIRADAS NO MODELO CLEAR
+           ===================================================== */
+        div[data-testid="stHorizontalBlock"]:has(.login-left-marker) {
+            width: min(760px, calc(100% - 40px));
+            min-height: 570px;
+            margin: 18px auto 0 auto;
+            gap: 0 !important;
+            border-radius: 0;
+            overflow: hidden;
+            border: 1px solid rgba(255,255,255,.08);
+            background: #080812;
+            box-shadow: 0 28px 74px rgba(0,0,0,.34);
+        }
+
+        div[data-testid="stHorizontalBlock"]:has(.login-left-marker) > div[data-testid="column"]:first-child {
+            min-height: 570px;
+            padding: 30px 25px;
+            background:
+                radial-gradient(circle at 30% 86%, rgba(141,36,255,.22), transparent 30%),
+                linear-gradient(180deg, #070710 0%, #0a0a13 100%);
+        }
+
+        div[data-testid="stHorizontalBlock"]:has(.login-right-marker) > div[data-testid="column"]:last-child {
+            min-height: 570px;
+            display: block;
+            padding: 30px 36px 32px 36px;
+            background: #fbfbfd;
+        }
+
+        .login-brand-content h1 {
+            margin-top: 42px;
+            font-size: 1.86rem !important;
+            line-height: 1.04;
+        }
+
+        .login-brand-content p {
+            color: #b2b2c1;
+            font-size: .84rem;
+            margin-top: 18px;
+        }
+
+        .login-info-header {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+
+        .login-info-logo-wrap {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .login-info-logo {
+            width: 86px;
+            height: 86px;
+            object-fit: contain;
+            filter: drop-shadow(0 9px 16px rgba(125, 20, 157, .14));
+        }
+
+        .login-info-title {
+            color: #151525;
+            font-size: 1.04rem;
+            line-height: 1.22;
+            font-weight: 900;
+            text-align: center;
+        }
+
+        .login-info-sub {
+            color: #77778a;
+            font-size: .82rem;
+            margin-top: 5px;
+            text-align: center;
+        }
+
+        div[data-testid="stHorizontalBlock"]:has(.login-right-marker) .login-form-title {
+            color: #252538;
+            margin-top: 22px;
+            margin-bottom: 8px;
+            font-size: .78rem;
+            font-weight: 900;
+        }
+
+        div[data-testid="stHorizontalBlock"]:has(.login-right-marker)
+        div[data-testid="stTextInput"] label p {
+            color: #252538 !important;
+            font-size: .74rem !important;
+            font-weight: 850 !important;
+        }
+
+        div[data-testid="stHorizontalBlock"]:has(.login-right-marker)
+        div[data-testid="stTextInput"] input,
+        div[data-testid="stHorizontalBlock"]:has(.login-right-marker)
+        div[data-testid="stTextInput"] > div > div {
+            min-height: 44px;
+            background: #ffffff !important;
+            color: #151525 !important;
+            border-color: rgba(21,21,37,.12) !important;
+            border-radius: 22px !important;
+        }
+
+        div[data-testid="stHorizontalBlock"]:has(.login-right-marker)
+        div[data-testid="stTextInput"] input::placeholder {
+            color: #9292a2 !important;
+        }
+
+        div[data-testid="stHorizontalBlock"]:has(.login-right-marker)
+        .stButton > button {
+            width: 100%;
+            min-height: 48px;
+            margin-top: 7px;
+            border: 0;
+            border-radius: 24px;
+            color: #fff;
+            font-size: .86rem;
+            font-weight: 900;
+            background: linear-gradient(90deg, #f33c96, #8a20f8);
+            box-shadow: 0 10px 22px rgba(208,43,210,.18);
+        }
+
+        @media (max-width: 760px) {
+            div[data-testid="stHorizontalBlock"]:has(.login-left-marker) {
+                display: block;
+                width: min(520px, calc(100% - 24px));
+                min-height: auto;
+                margin-top: 10px;
+            }
+
+            div[data-testid="stHorizontalBlock"]:has(.login-left-marker) > div[data-testid="column"]:first-child {
+                min-height: auto;
+                padding: 22px 22px 20px 22px;
+            }
+
+            div[data-testid="stHorizontalBlock"]:has(.login-right-marker) > div[data-testid="column"]:last-child {
+                min-height: auto;
+                padding: 24px 22px 26px 22px;
+            }
+
+            .login-brand-content h1 {
+                margin-top: 22px;
+                font-size: 1.7rem !important;
+            }
+
+            .login-info-logo {
+                width: 72px;
+                height: 72px;
+            }
+        }
+
     </style>
     """
 )
@@ -1093,8 +1245,20 @@ def show_login() -> None:
             + '<h1>Dashboard<br><span class="gradient-title">Oppi Comercial</span></h1>'
             '<p>Painel de gestão comercial</p>'
             '<div class="sidebar-accent"></div>'
-            '<div class="login-form-title">Entre para acessar o painel</div>'
             '</div>'
+        )
+
+    with right_panel:
+        render_html(
+            '<div class="login-right-marker"></div>'
+            '<div class="login-info-header">'
+            '<div class="login-info-logo-wrap">'
+            + logo_html("login-info-logo")
+            + '</div>'
+            '<div class="login-info-title">Acesse o painel comercial da Oppi Tech</div>'
+            '<div class="login-info-sub">Faça login para continuar</div>'
+            '</div>'
+            '<div class="login-form-title">Entre para acessar o painel</div>'
         )
 
         username = st.text_input(
@@ -1118,20 +1282,6 @@ def show_login() -> None:
                 st.rerun()
 
             st.error("Usuário ou senha incorretos.")
-
-    with right_panel:
-        render_html(
-            '<div class="login-right-marker"></div>'
-            '<div class="login-info-card">'
-            '<div class="login-info-logo-wrap">'
-            + logo_html("login-info-logo")
-            + '</div>'
-            '<div class="login-info-text">'
-            '<div class="login-info-title">Acesse o painel comercial da Oppi Tech</div>'
-            '<div class="login-info-sub">Faça login para continuar</div>'
-            '</div>'
-            '</div>'
-        )
 
     st.stop()
 
