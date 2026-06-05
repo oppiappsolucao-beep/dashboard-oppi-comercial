@@ -1448,21 +1448,67 @@ def apply_dashboard_css() -> None:
                 display: inline-block;
             }
 
+            /* Tabela editável: visual detalhado em rosa e roxo, sem zoom no hover */
             div[data-testid="stDataEditor"] {
                 overflow: hidden;
-                border-radius: 18px;
-                border: 1px solid rgba(255,75,170,0.22);
-                background: rgba(255,255,255,0.98);
-                box-shadow: 0 18px 44px rgba(0,0,0,0.22), 0 0 24px rgba(169,28,255,0.08);
+                border-radius: 22px;
+                border: 1px solid rgba(255,75,170,0.44);
+                background:
+                    linear-gradient(180deg, rgba(255,255,255,0.99), rgba(249,247,255,0.99));
+                box-shadow:
+                    0 18px 44px rgba(0,0,0,0.24),
+                    0 0 0 1px rgba(169,28,255,0.10),
+                    0 0 30px rgba(169,28,255,0.12);
+                transform: none !important;
+                transition:
+                    border-color 0.22s ease,
+                    box-shadow 0.22s ease !important;
             }
 
             div[data-testid="stDataEditor"] [role="grid"] {
-                border-radius: 18px;
+                border-radius: 22px;
+                overflow: hidden;
+                transform: none !important;
             }
 
             div[data-testid="stDataEditor"]:hover {
-                border-color: rgba(255,75,170,0.48);
-                box-shadow: 0 22px 52px rgba(0,0,0,0.26), 0 0 30px rgba(169,28,255,0.12);
+                transform: none !important;
+                border-color: rgba(255,75,170,0.72);
+                box-shadow:
+                    0 20px 48px rgba(0,0,0,0.25),
+                    0 0 0 1px rgba(169,28,255,0.20),
+                    0 0 34px rgba(255,75,170,0.14) !important;
+            }
+
+            div[data-testid="stDataEditor"] * {
+                transform: none !important;
+            }
+
+            div[data-testid="stDataEditor"] [role="columnheader"] {
+                background: linear-gradient(90deg, rgba(255,75,170,0.14), rgba(169,28,255,0.14)) !important;
+                border-bottom: 1px solid rgba(169,28,255,0.18) !important;
+                color: #2A183E !important;
+                font-weight: 850 !important;
+            }
+
+            div[data-testid="stDataEditor"] [role="gridcell"] {
+                border-color: rgba(169,28,255,0.09) !important;
+                color: #261C35 !important;
+            }
+
+            div[data-testid="stDataEditor"] [role="row"]:nth-child(even) [role="gridcell"] {
+                background: rgba(169,28,255,0.035) !important;
+            }
+
+            div[data-testid="stDataEditor"] [role="row"]:hover [role="gridcell"] {
+                background: rgba(255,75,170,0.075) !important;
+            }
+
+            div[data-testid="stDataEditor"] [role="gridcell"]:focus,
+            div[data-testid="stDataEditor"] [role="gridcell"]:focus-within {
+                outline: 2px solid rgba(255,75,170,0.72) !important;
+                outline-offset: -2px !important;
+                background: rgba(255,75,170,0.08) !important;
             }
 
             div[data-testid="stDataFrame"] {
@@ -1484,8 +1530,7 @@ def apply_dashboard_css() -> None:
             .stButton > button,
             div[data-testid="stSelectbox"] > div[data-baseweb="select"] > div,
             div[data-testid="stTextInput"] div[data-baseweb="input"] > div,
-            div[data-testid="stDateInput"] div[data-baseweb="input"] > div,
-            div[data-testid="stDataFrame"] {
+            div[data-testid="stDateInput"] div[data-baseweb="input"] > div {
                 transition:
                     transform 0.22s ease,
                     box-shadow 0.22s ease,
@@ -1502,8 +1547,7 @@ def apply_dashboard_css() -> None:
             .latest-table-card:hover,
             .latest-placeholder-card:hover,
             .status-row:hover,
-            .side-tip:hover,
-            div[data-testid="stDataFrame"]:hover {
+            .side-tip:hover {
                 transform: scale(1.025);
                 box-shadow: 0 22px 54px rgba(0,0,0,0.28), 0 0 24px rgba(169, 28, 255, 0.12) !important;
                 border-color: rgba(255, 75, 170, 0.34) !important;
@@ -1526,6 +1570,19 @@ def apply_dashboard_css() -> None:
                 transform: scale(1.018);
             }
 
+            /* A tabela é a única área sem animação de zoom */
+            div[data-testid="stDataEditor"],
+            div[data-testid="stDataEditor"]:hover,
+            div[data-testid="stDataEditor"] *,
+            div[data-testid="stDataEditor"] *:hover,
+            div[data-testid="stDataFrame"],
+            div[data-testid="stDataFrame"]:hover,
+            div[data-testid="stDataFrame"] *,
+            div[data-testid="stDataFrame"] *:hover {
+                transform: none !important;
+                will-change: auto !important;
+            }
+
             @media (prefers-reduced-motion: reduce) {
                 .metric-card,
                 .latest-calls-shell,
@@ -1538,8 +1595,7 @@ def apply_dashboard_css() -> None:
                 .stButton > button,
                 div[data-testid="stSelectbox"] > div[data-baseweb="select"] > div,
                 div[data-testid="stTextInput"] div[data-baseweb="input"] > div,
-                div[data-testid="stDateInput"] div[data-baseweb="input"] > div,
-                div[data-testid="stDataFrame"] {
+                div[data-testid="stDateInput"] div[data-baseweb="input"] > div {
                     transition: none !important;
                     transform: none !important;
                 }
