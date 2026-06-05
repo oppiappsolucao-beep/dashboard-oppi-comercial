@@ -1524,30 +1524,30 @@ def apply_dashboard_css() -> None:
                 box-shadow: 0 0 12px currentColor;
             }
 
-            /* Tabela premium personalizada com botão Copiar */
+            /* Tabela comercial compacta com botão Copiar */
             .premium-inline-table-header {
-                margin-top: 10px;
-                margin-bottom: 5px;
-                padding: 9px 10px;
-                border-radius: 13px;
-                background: linear-gradient(90deg, rgba(255,75,170,0.18), rgba(169,28,255,0.18));
-                border: 1px solid rgba(255,75,170,0.30);
+                margin-top: 4px;
+                margin-bottom: 3px;
+                padding: 8px 9px;
+                border-radius: 10px;
+                background: linear-gradient(90deg, rgba(255,75,170,0.15), rgba(169,28,255,0.15));
+                border: 1px solid rgba(255,75,170,0.24);
                 color: rgba(255,255,255,0.94);
-                font-size: 0.76rem;
+                font-size: 0.73rem;
                 font-weight: 850;
             }
 
             .premium-inline-cell {
-                min-height: 40px;
+                min-height: 35px;
                 display: flex;
                 align-items: center;
-                padding: 7px 9px;
-                border-radius: 10px;
-                background: rgba(255,255,255,0.96);
-                border: 1px solid rgba(169,28,255,0.10);
+                padding: 6px 8px;
+                border-radius: 8px;
+                background: rgba(255,255,255,0.97);
+                border: 1px solid rgba(169,28,255,0.08);
                 color: #261C35;
-                font-size: 0.79rem;
-                line-height: 1.22;
+                font-size: 0.77rem;
+                line-height: 1.16;
                 word-break: break-word;
             }
 
@@ -1559,7 +1559,7 @@ def apply_dashboard_css() -> None:
             .premium-inline-cell.date {
                 justify-content: center;
                 color: #5B5369;
-                font-size: 0.75rem;
+                font-size: 0.73rem;
             }
 
             .premium-inline-cell.muted {
@@ -1567,29 +1567,54 @@ def apply_dashboard_css() -> None:
             }
 
             .premium-inline-hint {
-                margin: 9px 0 9px 0;
-                padding: 10px 13px;
-                border-radius: 13px;
-                background: linear-gradient(90deg, rgba(255,75,170,0.08), rgba(169,28,255,0.08));
-                border: 1px solid rgba(255,75,170,0.20);
-                color: rgba(255,255,255,0.76);
-                font-size: 0.78rem;
-                line-height: 1.40;
+                margin: 5px 0 7px 0;
+                padding: 8px 11px;
+                border-radius: 10px;
+                background: linear-gradient(90deg, rgba(255,75,170,0.07), rgba(169,28,255,0.07));
+                border: 1px solid rgba(255,75,170,0.17);
+                color: rgba(255,255,255,0.72);
+                font-size: 0.74rem;
+                line-height: 1.30;
             }
 
             .premium-inline-hint strong {
                 color: #FF79C4;
             }
 
+            /* Linhas compactas: sem espaços exagerados entre empresas */
+            .st-key-compact_inline_table div[data-testid="stHorizontalBlock"] {
+                gap: 0.42rem !important;
+                margin-bottom: 0.12rem !important;
+            }
+
+            .st-key-compact_inline_table div[data-testid="stSelectbox"] {
+                margin-bottom: 0 !important;
+            }
+
+            .st-key-compact_inline_table div[data-testid="stSelectbox"] > div[data-baseweb="select"] > div {
+                min-height: 35px !important;
+                height: 35px !important;
+                border-radius: 8px !important;
+                padding-top: 0 !important;
+                padding-bottom: 0 !important;
+            }
+
+            .st-key-compact_inline_table iframe {
+                min-height: 35px !important;
+                height: 35px !important;
+            }
+
             /* A tabela não deve ampliar no hover */
             .premium-inline-table-header,
             .premium-inline-table-header:hover,
             .premium-inline-cell,
-            .premium-inline-cell:hover {
+            .premium-inline-cell:hover,
+            .st-key-compact_inline_table,
+            .st-key-compact_inline_table * {
                 transform: none !important;
                 transition:
-                    border-color 0.18s ease,
-                    background 0.18s ease !important;
+                    border-color 0.16s ease,
+                    background 0.16s ease !important;
             }
 
             /* Planilha editável: detalhes em rosa e roxo, sem zoom */
@@ -1978,7 +2003,7 @@ def render_phone_copy_button(phone: str, row_key: str) -> None:
                     margin: 0;
                     padding: 0;
                     width: 100%;
-                    height: 42px;
+                    height: 35px;
                     overflow: hidden;
                     background: transparent;
                     font-family: Arial, sans-serif;
@@ -1986,12 +2011,12 @@ def render_phone_copy_button(phone: str, row_key: str) -> None:
 
                 button {{
                     width: 100%;
-                    height: 38px;
+                    height: 33px;
                     border: none;
-                    border-radius: 11px;
+                    border-radius: 8px;
                     cursor: pointer;
                     color: #FFFFFF;
-                    font-size: 12px;
+                    font-size: 11px;
                     font-weight: 800;
                     letter-spacing: 0.01em;
                     background: linear-gradient(90deg, #FF4BAA 0%, #A91CFF 100%);
@@ -2073,7 +2098,7 @@ def render_phone_copy_button(phone: str, row_key: str) -> None:
         </body>
         </html>
         """,
-        height=42,
+        height=35,
         scrolling=False,
     )
 
@@ -2245,120 +2270,119 @@ def render_latest_calls_section(
     render_html(
         """
         <div class="premium-inline-hint">
-            <strong>Status editável:</strong> altere a etapa diretamente no seletor.
-            Use <strong>Copiar</strong> para enviar o telefone à sua área de transferência.
+            Altere o <strong>Status</strong> pelo seletor ou use <strong>Copiar</strong> para copiar o telefone.
         </div>
         """
     )
 
-    header_columns = st.columns(
-        [3.15, 1.45, 0.92, 1.65, 1.35, 0.90],
-        gap="small",
-    )
-
-    header_labels = [
-        "🏢 Empresa",
-        "📞 Telefone",
-        "📋 Copiar",
-        "✨ Status",
-        "👤 Vendedor",
-        "🗓️ Data",
-    ]
-
-    for column, label in zip(header_columns, header_labels):
-        with column:
-            render_html(f'<div class="premium-inline-table-header">{html.escape(label)}</div>')
-
-    status_column_name = columns.get("status")
-
-    for _, row in editor_df.iterrows():
-        sheet_row = int(row["_sheet_row"])
-        original_status = normalize_text(row["Status"])
-
-        if original_status not in STATUS_OPTIONS:
-            original_status = "Novo Lead"
-
-        row_columns = st.columns(
+    with st.container(key="compact_inline_table"):
+        header_columns = st.columns(
             [3.15, 1.45, 0.92, 1.65, 1.35, 0.90],
             gap="small",
         )
 
-        with row_columns[0]:
-            render_html(
-                f'<div class="premium-inline-cell">{html.escape(normalize_text(row["Empresa"]) or "Sem empresa")}</div>'
+        header_labels = [
+            "Empresa",
+            "Telefone",
+            "Copiar",
+            "Status",
+            "Vendedor",
+            "Data",
+        ]
+
+        for column, label in zip(header_columns, header_labels):
+            with column:
+                render_html(f'<div class="premium-inline-table-header">{html.escape(label)}</div>')
+
+        status_column_name = columns.get("status")
+
+        for _, row in editor_df.iterrows():
+            sheet_row = int(row["_sheet_row"])
+            original_status = normalize_text(row["Status"])
+
+            if original_status not in STATUS_OPTIONS:
+                original_status = "Novo Lead"
+
+            row_columns = st.columns(
+                [3.15, 1.45, 0.92, 1.65, 1.35, 0.90],
+                gap="small",
             )
 
-        with row_columns[1]:
-            render_html(
-                f'<div class="premium-inline-cell phone">{html.escape(normalize_text(row["Telefone"]) or "Sem número")}</div>'
-            )
-
-        with row_columns[2]:
-            render_phone_copy_button(
-                normalize_text(row["Telefone"]),
-                row_key=f"phone-{sheet_row}",
-            )
-
-        status_widget_key = f"inline_status_{sheet_row}_{normalize_search_text(original_status).replace(' ', '_')}"
-
-        def save_inline_status(
-            sheet_row_value: int = sheet_row,
-            widget_key: str = status_widget_key,
-            previous_status: str = original_status,
-        ) -> None:
-            new_status = normalize_text(st.session_state.get(widget_key, previous_status))
-
-            if new_status == previous_status:
-                return
-
-            if not status_column_name:
-                st.session_state["status_auto_save_error"] = (
-                    "Não encontrei a coluna Status na planilha."
-                )
-                return
-
-            try:
-                update_statuses_in_sheet(
-                    changes=[
-                        {
-                            "sheet_row": sheet_row_value,
-                            "status": new_status,
-                        }
-                    ],
-                    status_column_name=status_column_name,
-                    updated_at_column_name=columns.get("ultima_atualizacao"),
+            with row_columns[0]:
+                render_html(
+                    f'<div class="premium-inline-cell">{html.escape(normalize_text(row["Empresa"]) or "Sem empresa")}</div>'
                 )
 
-                st.session_state["status_auto_save_success"] = (
-                    f"Status alterado para “{new_status}” e salvo diretamente na planilha."
+            with row_columns[1]:
+                render_html(
+                    f'<div class="premium-inline-cell phone">{html.escape(normalize_text(row["Telefone"]) or "Sem número")}</div>'
                 )
-            except Exception as error:
-                st.session_state["status_auto_save_error"] = (
-                    "Não consegui atualizar o status diretamente na planilha: "
-                    f"{error}"
+
+            with row_columns[2]:
+                render_phone_copy_button(
+                    normalize_text(row["Telefone"]),
+                    row_key=f"phone-{sheet_row}",
                 )
-                st.session_state[widget_key] = previous_status
 
-        with row_columns[3]:
-            st.selectbox(
-                "Status",
-                STATUS_OPTIONS,
-                index=STATUS_OPTIONS.index(original_status),
-                key=status_widget_key,
-                label_visibility="collapsed",
-                on_change=save_inline_status,
-            )
+            status_widget_key = f"inline_status_{sheet_row}_{normalize_search_text(original_status).replace(' ', '_')}"
 
-        with row_columns[4]:
-            render_html(
-                f'<div class="premium-inline-cell muted">{html.escape(normalize_text(row["Vendedor"]) or "Sem vendedor")}</div>'
-            )
+            def save_inline_status(
+                sheet_row_value: int = sheet_row,
+                widget_key: str = status_widget_key,
+                previous_status: str = original_status,
+            ) -> None:
+                new_status = normalize_text(st.session_state.get(widget_key, previous_status))
 
-        with row_columns[5]:
-            render_html(
-                f'<div class="premium-inline-cell date">{html.escape(normalize_text(row["Data"]))}</div>'
-            )
+                if new_status == previous_status:
+                    return
 
+                if not status_column_name:
+                    st.session_state["status_auto_save_error"] = (
+                        "Não encontrei a coluna Status na planilha."
+                    )
+                    return
+
+                try:
+                    update_statuses_in_sheet(
+                        changes=[
+                            {
+                                "sheet_row": sheet_row_value,
+                                "status": new_status,
+                            }
+                        ],
+                        status_column_name=status_column_name,
+                        updated_at_column_name=columns.get("ultima_atualizacao"),
+                    )
+
+                    st.session_state["status_auto_save_success"] = (
+                        f"Status alterado para “{new_status}” e salvo diretamente na planilha."
+                    )
+                except Exception as error:
+                    st.session_state["status_auto_save_error"] = (
+                        "Não consegui atualizar o status diretamente na planilha: "
+                        f"{error}"
+                    )
+                    st.session_state[widget_key] = previous_status
+
+            with row_columns[3]:
+                st.selectbox(
+                    "Status",
+                    STATUS_OPTIONS,
+                    index=STATUS_OPTIONS.index(original_status),
+                    key=status_widget_key,
+                    label_visibility="collapsed",
+                    on_change=save_inline_status,
+                )
+
+            with row_columns[4]:
+                render_html(
+                    f'<div class="premium-inline-cell muted">{html.escape(normalize_text(row["Vendedor"]) or "Sem vendedor")}</div>'
+                )
+
+            with row_columns[5]:
+                render_html(
+                    f'<div class="premium-inline-cell date">{html.escape(normalize_text(row["Data"]))}</div>'
+                )
 
 def prepare_filters(df: pd.DataFrame) -> pd.DataFrame:
     title_column, refresh_column = st.columns([3.8, 1.0], gap="large")
