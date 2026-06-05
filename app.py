@@ -750,16 +750,17 @@ def apply_dashboard_css() -> None:
             }
 
             section[data-testid="stSidebar"] {
-                background: linear-gradient(180deg, rgba(0,0,0,0.90), rgba(4,4,15,0.97));
-                border-right: 1px solid rgba(255,255,255,0.05);
+                background: linear-gradient(180deg, #F1F2F5 0%, #D8DAE1 52%, #C7CAD3 100%);
+                border-right: 1px solid rgba(63, 53, 83, 0.12);
+                box-shadow: 10px 0 34px rgba(0,0,0,0.16);
             }
 
             section[data-testid="stSidebar"] * {
-                color: #FFFFFF;
+                color: #20192F;
             }
 
             .side-logo-wrap {
-                margin: 10px 0 24px 0;
+                margin: 12px 0 24px 0;
             }
 
             .side-logo-img {
@@ -767,7 +768,7 @@ def apply_dashboard_css() -> None:
                 height: 100px;
                 object-fit: contain;
                 display: block;
-                filter: drop-shadow(0 14px 30px rgba(215, 58, 255, 0.22));
+                filter: drop-shadow(0 12px 24px rgba(188, 45, 255, 0.20));
             }
 
             .side-logo-fallback {
@@ -776,6 +777,7 @@ def apply_dashboard_css() -> None:
                 border-radius: 50%;
                 background: linear-gradient(145deg, #FF4BAA 10%, #9C19FF 88%);
                 position: relative;
+                box-shadow: 0 12px 24px rgba(188, 45, 255, 0.20);
             }
 
             .side-logo-fallback::before {
@@ -784,7 +786,7 @@ def apply_dashboard_css() -> None:
                 width: 32px;
                 height: 32px;
                 border-radius: 50%;
-                background: #05050D;
+                background: #1B1725;
                 top: 24px;
                 left: 30px;
             }
@@ -801,7 +803,7 @@ def apply_dashboard_css() -> None:
             }
 
             .side-title {
-                color: #FFFFFF;
+                color: #211A30;
                 font-size: 1.16rem;
                 font-weight: 900;
                 line-height: 1.15;
@@ -816,7 +818,7 @@ def apply_dashboard_css() -> None:
             }
 
             .side-subtitle {
-                color: rgba(255,255,255,0.72);
+                color: rgba(33,26,48,0.76);
                 margin-top: 8px;
                 font-size: 0.90rem;
             }
@@ -836,8 +838,9 @@ def apply_dashboard_css() -> None:
                 margin: 18px 0 22px 0;
                 padding: 14px;
                 border-radius: 16px;
-                background: rgba(255,255,255,0.03);
-                border: 1px solid rgba(255,255,255,0.08);
+                background: rgba(255,255,255,0.44);
+                border: 1px solid rgba(90,76,118,0.12);
+                box-shadow: inset 0 1px 0 rgba(255,255,255,0.72);
             }
 
             .side-tip-icon {
@@ -855,89 +858,37 @@ def apply_dashboard_css() -> None:
             .side-tip-text {
                 font-size: 0.82rem;
                 line-height: 1.48;
-                color: rgba(255,255,255,0.76);
-            }
-
-            section[data-testid="stSidebar"] div[data-testid="stRadio"] > label,
-            section[data-testid="stSidebar"] div[data-testid="stRadio"] label {
-                color: rgba(255,255,255,0.72) !important;
-                font-weight: 700 !important;
+                color: rgba(33,26,48,0.82);
+                font-weight: 700;
             }
 
             section[data-testid="stSidebar"] div[role="radiogroup"] {
-                gap: 10px !important;
+                gap: 4px !important;
             }
 
             section[data-testid="stSidebar"] div[role="radiogroup"] > label {
                 display: flex !important;
                 align-items: center !important;
-                gap: 12px !important;
-                margin: 0 0 10px 0 !important;
-                padding: 12px 14px !important;
-                border-radius: 16px !important;
-                background: linear-gradient(180deg, rgba(243,244,248,0.92), rgba(221,224,233,0.88)) !important;
-                border: 1px solid rgba(255,255,255,0.22) !important;
-                box-shadow: inset 0 1px 0 rgba(255,255,255,0.55), 0 8px 22px rgba(0,0,0,0.18) !important;
-                transition: all 0.18s ease !important;
+                margin: 0 !important;
+                padding: 7px 0 !important;
+                background: transparent !important;
+                border: none !important;
+                box-shadow: none !important;
             }
 
             section[data-testid="stSidebar"] div[role="radiogroup"] > label p,
             section[data-testid="stSidebar"] div[role="radiogroup"] > label span {
-                color: #1B1330 !important;
+                color: #241C34 !important;
                 font-weight: 800 !important;
             }
 
-            section[data-testid="stSidebar"] div[role="radiogroup"] > label:hover {
-                transform: translateY(-1px);
-                background: linear-gradient(180deg, rgba(248,249,252,0.96), rgba(230,233,242,0.92)) !important;
-                box-shadow: inset 0 1px 0 rgba(255,255,255,0.75), 0 12px 24px rgba(0,0,0,0.20) !important;
-            }
-
-            section[data-testid="stSidebar"] div[role="radiogroup"] > label:has(input:checked) {
-                background: linear-gradient(90deg, #FF4BAA 0%, #A91CFF 100%) !important;
-                border: 1px solid rgba(255,255,255,0.24) !important;
-                box-shadow: 0 14px 30px rgba(190, 46, 255, 0.28) !important;
-            }
-
-            section[data-testid="stSidebar"] div[role="radiogroup"] > label:has(input:checked) p,
-            section[data-testid="stSidebar"] div[role="radiogroup"] > label:has(input:checked) span {
-                color: #FFFFFF !important;
+            section[data-testid="stSidebar"] div[role="radiogroup"] > label:hover p,
+            section[data-testid="stSidebar"] div[role="radiogroup"] > label:hover span {
+                color: #7D2DFF !important;
             }
 
             section[data-testid="stSidebar"] div[role="radiogroup"] > label input {
-                accent-color: #B02AFF !important;
-            }
-
-            .side-tip {
-                display: flex;
-                gap: 12px;
-                align-items: center;
-                margin: 18px 0 22px 0;
-                padding: 14px;
-                border-radius: 16px;
-                background: linear-gradient(180deg, rgba(243,244,248,0.92), rgba(221,224,233,0.88));
-                border: 1px solid rgba(255,255,255,0.25);
-                box-shadow: inset 0 1px 0 rgba(255,255,255,0.55), 0 8px 22px rgba(0,0,0,0.18);
-            }
-
-            .side-tip-icon {
-                width: 44px;
-                height: 44px;
-                min-width: 44px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                color: #8B29FF;
-                border: 1px solid rgba(160, 84, 255, 0.45);
-                background: rgba(255,255,255,0.55);
-                border-radius: 14px;
-            }
-
-            .side-tip-text {
-                font-size: 0.82rem;
-                line-height: 1.48;
-                color: #2B2340;
-                font-weight: 700;
+                accent-color: #FF4BAA !important;
             }
 
             .page-title {
