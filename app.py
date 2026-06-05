@@ -2286,7 +2286,7 @@ def render_overview_page(df: pd.DataFrame, columns: dict) -> None:
         render_metric_card("Chamados no mês", str(called_month), "Base atual", "📊", "linear-gradient(135deg,#FF4BAA,#8F2BFF)")
 
     with card_4:
-        render_metric_card("Empresas contatadas", str(companies), "Base atual filtrada", "🏢", "linear-gradient(135deg,#8F2BFF,#C94AFF)")
+        render_metric_card("Empresas cadastradas no mês", str(companies), "Base atual filtrada", "🏢", "linear-gradient(135deg,#8F2BFF,#C94AFF)")
 
     st.write("")
 
