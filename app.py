@@ -43,6 +43,16 @@ STATUS_OPTIONS = [
     "Reunião",
 ]
 
+STATUS_COLORS = {
+    "Novo Lead": ("#E8F0FF", "#5C8BFF"),
+    "Chamando": ("#F8EFE6", "#B37A2A"),
+    "Sem interesse": ("#E9F8FA", "#2F9FB3"),
+    "Não responde": ("#FBECEF", "#DA5C78"),
+    "Fechado": ("#EAF8EF", "#58B97A"),
+    "Proposta": ("#EAF2FF", "#5C9DFF"),
+    "Reunião": ("#F3EAFE", "#A65BDB"),
+}
+
 
 # =========================================================
 # ESTADO DA SESSÃO
@@ -406,6 +416,10 @@ def update_statuses_in_sheet(
     for change in changes:
         sheet_row = int(change["sheet_row"])
         new_status = normalize_text(change["status"])
+
+        if new_status not in STATUS_OPTIONS:
+            raise RuntimeError(f"Status inválido: {new_status}")
+
         cells.append(gspread.Cell(sheet_row, status_column_index, new_status))
 
         if updated_at_column_index:
@@ -1373,30 +1387,82 @@ def apply_dashboard_css() -> None:
 
 
             .latest-editor-help {
-                margin: 12px 0 10px 0;
-                padding: 12px 14px;
-                border-radius: 15px;
-                background: rgba(255,255,255,0.045);
-                border: 1px solid rgba(255,255,255,0.06);
-                color: rgba(255,255,255,0.72);
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 16px;
+                margin: 14px 0 12px 0;
+                padding: 14px 16px;
+                border-radius: 16px;
+                background: linear-gradient(145deg, rgba(22,20,42,0.98), rgba(10,9,25,0.98));
+                border: 1px solid rgba(255,75,170,0.28);
+                color: rgba(255,255,255,0.74);
                 font-size: 0.84rem;
                 line-height: 1.45;
+                box-shadow: 0 12px 30px rgba(0,0,0,0.16);
             }
 
             .latest-editor-help strong {
                 color: #FF64BC;
             }
 
+            .latest-sync-badge {
+                display: inline-flex;
+                align-items: center;
+                gap: 7px;
+                flex-shrink: 0;
+                padding: 7px 11px;
+                border-radius: 999px;
+                background: rgba(85,223,125,0.10);
+                border: 1px solid rgba(85,223,125,0.38);
+                color: #55DF7D;
+                font-size: 0.74rem;
+                font-weight: 900;
+                letter-spacing: 0.02em;
+            }
+
+            .latest-status-legend {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 8px;
+                margin: 10px 0 12px 0;
+            }
+
+            .latest-status-pill {
+                display: inline-flex;
+                align-items: center;
+                gap: 7px;
+                padding: 6px 10px;
+                border-radius: 999px;
+                background: rgba(255,255,255,0.045);
+                border: 1px solid rgba(255,255,255,0.08);
+                color: rgba(255,255,255,0.84);
+                font-size: 0.73rem;
+                font-weight: 800;
+            }
+
+            .latest-status-dot {
+                width: 8px;
+                height: 8px;
+                border-radius: 50%;
+                display: inline-block;
+            }
+
             div[data-testid="stDataEditor"] {
                 overflow: hidden;
                 border-radius: 18px;
-                border: 1px solid rgba(255,255,255,0.10);
-                background: rgba(255,255,255,0.96);
-                box-shadow: 0 16px 38px rgba(0,0,0,0.18);
+                border: 1px solid rgba(255,75,170,0.22);
+                background: rgba(255,255,255,0.98);
+                box-shadow: 0 18px 44px rgba(0,0,0,0.22), 0 0 24px rgba(169,28,255,0.08);
             }
 
             div[data-testid="stDataEditor"] [role="grid"] {
                 border-radius: 18px;
+            }
+
+            div[data-testid="stDataEditor"]:hover {
+                border-color: rgba(255,75,170,0.48);
+                box-shadow: 0 22px 52px rgba(0,0,0,0.26), 0 0 30px rgba(169,28,255,0.12);
             }
 
             div[data-testid="stDataFrame"] {
@@ -1852,29 +1918,46 @@ def render_latest_calls_section(
         st.info("Nenhum chamado encontrado para este status no período selecionado.")
         return
 
+    legend_html = "".join(
+        f'<span class="latest-status-pill"><span class="latest-status-dot" style="background:{STATUS_COLORS[status][1]};"></span>{html.escape(status)}</span>'
+        for status in STATUS_OPTIONS
+    )
+
     render_html(
-        """
+        f"""
         <div class="latest-editor-help">
-            <strong>Editar status:</strong> clique na coluna “Status”, escolha a nova etapa e depois pressione “Salvar alterações”.
+            <div>
+                <strong>Editar status:</strong> clique na coluna “Status” e escolha a nova etapa.
+                A alteração será salva automaticamente no Google Sheets.
+            </div>
+            <div class="latest-sync-badge">● Sincronização automática</div>
         </div>
+        <div class="latest-status-legend">{legend_html}</div>
         """
     )
 
     editor_df = display_df.copy()
     editor_df["_sheet_row"] = selected_df["_sheet_row"].astype(int).values
 
+    editor_version_key = f"editor_version_{selected_status}"
+    if editor_version_key not in st.session_state:
+        st.session_state[editor_version_key] = 0
+
+    editor_key = f"editor_ultimos_chamados_{selected_status}_{st.session_state[editor_version_key]}"
+
     edited_df = st.data_editor(
         editor_df,
         use_container_width=True,
         hide_index=True,
-        height=340,
+        height=360,
+        row_height=42,
         disabled=["Empresa", "Telefone", "Vendedor", "Data", "_sheet_row"],
         column_config={
             "Empresa": st.column_config.TextColumn("Empresa", width="large"),
             "Telefone": st.column_config.TextColumn("Telefone", width="medium"),
             "Status": st.column_config.SelectboxColumn(
                 "Status",
-                help="Selecione uma nova etapa comercial.",
+                help="Escolha uma das etapas comerciais. O salvamento é automático.",
                 options=STATUS_OPTIONS,
                 required=True,
                 width="medium",
@@ -1883,7 +1966,7 @@ def render_latest_calls_section(
             "Data": st.column_config.TextColumn("Data", width="small"),
             "_sheet_row": None,
         },
-        key=f"editor_ultimos_chamados_{selected_status}",
+        key=editor_key,
     )
 
     original_status_by_row = {
@@ -1900,39 +1983,33 @@ def render_latest_calls_section(
         if new_status != old_status:
             changes.append({"sheet_row": sheet_row, "status": new_status})
 
-    save_column, info_column = st.columns([1.0, 2.4], gap="medium")
+    flash_message = st.session_state.pop("status_auto_save_success", None)
+    if flash_message:
+        st.success(flash_message)
 
-    with save_column:
-        save_clicked = st.button(
-            "💾 Salvar alterações",
-            key=f"salvar_status_{selected_status}",
-            use_container_width=True,
-            disabled=not changes,
-        )
-
-    with info_column:
-        if changes:
-            st.caption(f"{len(changes)} alteração(ões) aguardando salvamento.")
-        else:
-            st.caption("Nenhuma alteração pendente.")
-
-    if save_clicked:
+    if changes:
         status_column_name = columns.get("status")
 
         if not status_column_name:
             st.error("Não encontrei a coluna Status na planilha.")
-        else:
-            try:
+            return
+
+        try:
+            with st.spinner("Salvando alteração diretamente na planilha..."):
                 update_statuses_in_sheet(
                     changes=changes,
                     status_column_name=status_column_name,
                     updated_at_column_name=columns.get("ultima_atualizacao"),
                 )
-                st.success("Status atualizado com sucesso na planilha!")
-                st.rerun()
-            except Exception as error:
-                st.error("Não consegui salvar as alterações na planilha.")
-                st.code(str(error))
+
+            st.session_state[editor_version_key] += 1
+            st.session_state["status_auto_save_success"] = (
+                f"{len(changes)} status atualizado(s) automaticamente na planilha."
+            )
+            st.rerun()
+        except Exception as error:
+            st.error("Não consegui atualizar o status diretamente na planilha.")
+            st.code(str(error))
 
 
 def prepare_filters(df: pd.DataFrame) -> pd.DataFrame:
