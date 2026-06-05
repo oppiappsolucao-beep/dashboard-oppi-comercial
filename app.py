@@ -35,7 +35,7 @@ SCOPES = [
 
 STATUS_OPTIONS = [
     "Novo Lead",
-    "Chamando",
+    "Conversando",
     "Sem interesse",
     "Não responde",
     "Proposta",
@@ -45,7 +45,7 @@ STATUS_OPTIONS = [
 
 STATUS_COLORS = {
     "Novo Lead": ("#E8F0FF", "#5C8BFF"),
-    "Chamando": ("#F8EFE6", "#B37A2A"),
+    "Conversando": ("#F8EFE6", "#B37A2A"),
     "Sem interesse": ("#E9F8FA", "#2F9FB3"),
     "Não responde": ("#FBECEF", "#DA5C78"),
     "Fechado": ("#EAF8EF", "#58B97A"),
@@ -220,8 +220,8 @@ def status_group(value: str) -> str:
     if any(word in status for word in ["sem interesse", "nao tem interesse"]):
         return "Sem interesse"
 
-    if any(word in status for word in ["chamando", "contato", "negoci", "andamento"]):
-        return "Chamando"
+    if any(word in status for word in ["chamando", "conversando", "contato", "negoci", "andamento"]):
+        return "Conversando"
 
     if any(word in status for word in ["novo", "lead"]):
         return "Novo Lead"
@@ -267,7 +267,7 @@ def calculate_score(row: pd.Series, columns: dict) -> int:
         score += 16
     elif grouped_status == "Reunião":
         score += 14
-    elif grouped_status == "Chamando":
+    elif grouped_status == "Conversando":
         score += 12
     elif grouped_status == "Novo Lead":
         score += 6
@@ -1850,7 +1850,7 @@ def render_metric_card(
 def render_status_summary(filtered_df: pd.DataFrame) -> None:
     statuses = [
         ("Novo Lead", "#697BFF"),
-        ("Chamando", "#C67A25"),
+        ("Conversando", "#C67A25"),
         ("Sem interesse", "#45B6C6"),
         ("Não responde", "#DF5578"),
         ("Proposta", "#5C9DFF"),
@@ -1889,7 +1889,7 @@ def render_latest_calls_section(
 ) -> None:
     statuses = [
         ("Novo Lead", "✦", "#E8F0FF", "#5C8BFF"),
-        ("Chamando", "•", "#F8EFE6", "#B37A2A"),
+        ("Conversando", "•", "#F8EFE6", "#B37A2A"),
         ("Sem interesse", "⊘", "#E9F8FA", "#2F9FB3"),
         ("Não responde", "⚑", "#FBECEF", "#DA5C78"),
         ("Proposta", "▤", "#EAF2FF", "#5C9DFF"),
