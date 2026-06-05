@@ -1528,8 +1528,8 @@ def apply_dashboard_css() -> None:
             .premium-inline-table-header {
                 margin-top: 4px;
                 margin-bottom: 3px;
-                padding: 8px 9px;
-                border-radius: 10px;
+                padding: 7px 8px;
+                border-radius: 9px;
                 background: linear-gradient(90deg, rgba(255,75,170,0.15), rgba(169,28,255,0.15));
                 border: 1px solid rgba(255,75,170,0.24);
                 color: rgba(255,255,255,0.94);
@@ -1538,11 +1538,11 @@ def apply_dashboard_css() -> None:
             }
 
             .premium-inline-cell {
-                min-height: 35px;
+                min-height: 30px;
                 display: flex;
                 align-items: center;
-                padding: 6px 8px;
-                border-radius: 8px;
+                padding: 4px 7px;
+                border-radius: 7px;
                 background: rgba(255,255,255,0.97);
                 border: 1px solid rgba(169,28,255,0.08);
                 color: #261C35;
@@ -1583,8 +1583,16 @@ def apply_dashboard_css() -> None:
 
             /* Linhas compactas: sem espaços exagerados entre empresas */
             .st-key-compact_inline_table div[data-testid="stHorizontalBlock"] {
-                gap: 0.42rem !important;
-                margin-bottom: 0.12rem !important;
+                gap: 0.34rem !important;
+                margin-bottom: 0 !important;
+            }
+
+            .st-key-compact_inline_table div[data-testid="stVerticalBlock"] {
+                gap: 0.20rem !important;
+            }
+
+            .st-key-compact_inline_table div[data-testid="stElementContainer"] {
+                margin-bottom: 0 !important;
             }
 
             .st-key-compact_inline_table div[data-testid="stSelectbox"] {
@@ -1592,16 +1600,16 @@ def apply_dashboard_css() -> None:
             }
 
             .st-key-compact_inline_table div[data-testid="stSelectbox"] > div[data-baseweb="select"] > div {
-                min-height: 35px !important;
-                height: 35px !important;
-                border-radius: 8px !important;
+                min-height: 30px !important;
+                height: 30px !important;
+                border-radius: 7px !important;
                 padding-top: 0 !important;
                 padding-bottom: 0 !important;
             }
 
             .st-key-compact_inline_table iframe {
-                min-height: 35px !important;
-                height: 35px !important;
+                min-height: 30px !important;
+                height: 30px !important;
             }
 
             /* A tabela não deve ampliar no hover */
@@ -2003,7 +2011,7 @@ def render_phone_copy_button(phone: str, row_key: str) -> None:
                     margin: 0;
                     padding: 0;
                     width: 100%;
-                    height: 35px;
+                    height: 30px;
                     overflow: hidden;
                     background: transparent;
                     font-family: Arial, sans-serif;
@@ -2011,9 +2019,9 @@ def render_phone_copy_button(phone: str, row_key: str) -> None:
 
                 button {{
                     width: 100%;
-                    height: 33px;
+                    height: 29px;
                     border: none;
-                    border-radius: 8px;
+                    border-radius: 7px;
                     cursor: pointer;
                     color: #FFFFFF;
                     font-size: 11px;
@@ -2098,7 +2106,7 @@ def render_phone_copy_button(phone: str, row_key: str) -> None:
         </body>
         </html>
         """,
-        height=35,
+        height=30,
         scrolling=False,
     )
 
