@@ -603,9 +603,9 @@ render_html(
         }
 
         div[data-testid="stHorizontalBlock"]:has(.login-left-marker) {
-            width: min(1180px, calc(100% - 48px));
-            min-height: 610px;
-            margin: 24px auto 0 auto;
+            width: min(1040px, calc(100% - 72px));
+            min-height: 470px;
+            margin: 22px auto 0 auto;
             gap: 0 !important;
             border-radius: 24px;
             overflow: hidden;
@@ -615,7 +615,7 @@ render_html(
         }
 
         div[data-testid="stHorizontalBlock"]:has(.login-left-marker) > div[data-testid="column"]:first-child {
-            padding: 38px 34px 32px 34px;
+            padding: 26px 28px 24px 28px;
             background:
                 radial-gradient(circle at 22% 87%, rgba(141,36,255,.26), transparent 28%),
                 linear-gradient(180deg, #070710, #0a0a13);
@@ -625,7 +625,7 @@ render_html(
             display: flex;
             justify-content: center;
             flex-direction: column;
-            padding: 34px 6%;
+            padding: 24px 5%;
             background:
                 radial-gradient(circle at 36% 65%, rgba(246,59,155,.23), transparent 32%),
                 radial-gradient(circle at 74% 35%, rgba(141,36,255,.22), transparent 34%),
@@ -638,9 +638,9 @@ render_html(
         }
 
         .login-brand-content h1 {
-            margin-top: 32px;
+            margin-top: 22px;
             color: #fff;
-            font-size: 2.30rem !important;
+            font-size: 2.08rem !important;
             line-height: 1.03;
         }
 
@@ -651,7 +651,7 @@ render_html(
         }
 
         .login-form-title {
-            margin-top: 17px;
+            margin-top: 13px;
             margin-bottom: 5px;
             color: #f8f8fb;
             font-size: .82rem;
@@ -722,20 +722,7 @@ render_html(
 
         .login-info-text {
             position: relative;
-            padding-top: 8px;
-        }
-
-        .login-info-symbol {
-            width: 42px;
-            height: 42px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 0 0 9px 0;
-            border-radius: 50%;
-            background: rgba(141,36,255,.09);
-            color: #9228f7;
-            font-size: 1rem;
+            padding-top: 0;
         }
 
         .login-info-title {
@@ -758,7 +745,7 @@ render_html(
             }
 
             div[data-testid="stHorizontalBlock"]:has(.login-left-marker) > div[data-testid="column"]:first-child {
-                padding: 34px 24px 30px 24px;
+                padding: 28px 22px 26px 22px;
             }
 
             div[data-testid="stHorizontalBlock"]:has(.login-right-marker) > div[data-testid="column"]:last-child {
@@ -780,13 +767,6 @@ render_html(
             .login-info-logo {
                 width: 68px;
                 height: 68px;
-            }
-
-            .login-info-symbol {
-                width: 34px;
-                height: 34px;
-                font-size: .86rem;
-                margin-bottom: 8px;
             }
 
             .login-info-title {
@@ -1147,7 +1127,6 @@ def show_login() -> None:
             + logo_html("login-info-logo")
             + '</div>'
             '<div class="login-info-text">'
-            '<div class="login-info-symbol">♢</div>'
             '<div class="login-info-title">Acesse o painel comercial da Oppi Tech</div>'
             '<div class="login-info-sub">Faça login para continuar</div>'
             '</div>'
