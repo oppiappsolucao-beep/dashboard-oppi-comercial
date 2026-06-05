@@ -750,7 +750,10 @@ def apply_dashboard_css() -> None:
             }
 
             section[data-testid="stSidebar"] {
-                background: linear-gradient(180deg, #F1F2F5 0%, #D8DAE1 52%, #C7CAD3 100%);
+                background:
+                    radial-gradient(circle at top left, rgba(255,255,255,0.92) 0%, rgba(255,255,255,0.00) 32%),
+                    radial-gradient(circle at bottom right, rgba(208,212,223,0.72) 0%, rgba(208,212,223,0.00) 34%),
+                    linear-gradient(180deg, #F7F8FC 0%, #ECEEF4 38%, #DCE0E9 72%, #CED3DE 100%);
                 border-right: 1px solid rgba(63, 53, 83, 0.12);
                 box-shadow: 10px 0 34px rgba(0,0,0,0.16);
             }
@@ -768,6 +771,9 @@ def apply_dashboard_css() -> None:
                 height: 100px;
                 object-fit: contain;
                 display: block;
+                background: transparent !important;
+                mix-blend-mode: screen;
+                isolation: isolate;
                 filter: drop-shadow(0 12px 24px rgba(188, 45, 255, 0.20));
             }
 
