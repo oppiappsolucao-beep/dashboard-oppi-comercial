@@ -2303,9 +2303,9 @@ def render_overview_page(df: pd.DataFrame, columns: dict) -> None:
         chart_df = filtered_df.dropna(subset=["_data_chamado"]).copy()
 
         if chart_df.empty:
-            current_week_start = pd.Timestamp.today().normalize() - pd.to_timedelta(
-                pd.Timestamp.today().weekday(),
-                unit="D",
+            current_week_start = (
+                pd.Timestamp.today().normalize()
+                - pd.to_timedelta(pd.Timestamp.today().weekday(), unit="D")
             )
             week_starts = pd.date_range(
                 end=current_week_start,
@@ -2333,22 +2333,41 @@ def render_overview_page(df: pd.DataFrame, columns: dict) -> None:
             + chart_df["FimSemana"].dt.strftime("%d/%m")
         )
 
+        # Mantém o preenchimento roxo mesmo quando existe apenas uma semana.
+        # O ponto auxiliar serve apenas para desenhar a área visualmente e não
+        # altera a contagem dos chamados.
+        plot_df = chart_df.copy()
+
+        if len(plot_df) == 1:
+            support_point = plot_df.iloc[0].copy()
+            support_point["InicioSemana"] = support_point["FimSemana"]
+            plot_df = pd.concat(
+                [plot_df, pd.DataFrame([support_point])],
+                ignore_index=True,
+            )
+
         figure = px.area(
-            chart_df,
-            x="Semana",
+            plot_df,
+            x="InicioSemana",
             y="Quantidade",
             markers=True,
+            custom_data=["Semana"],
         )
 
         figure.update_traces(
-            line=dict(color="#E14BFF", width=4),
+            line=dict(
+                color="#E14BFF",
+                width=4,
+                shape="spline",
+            ),
             marker=dict(
                 size=9,
                 color="#FFFFFF",
                 line=dict(width=3, color="#D74BFF"),
             ),
+            fill="tozeroy",
             fillcolor="rgba(224,67,255,0.34)",
-            hovertemplate="Semana: %{x}<br>Chamados: %{y}<extra></extra>",
+            hovertemplate="Semana: %{customdata[0]}<br>Chamados: %{y}<extra></extra>",
         )
 
         figure.update_layout(
@@ -2361,7 +2380,12 @@ def render_overview_page(df: pd.DataFrame, columns: dict) -> None:
             yaxis_title="",
         )
 
-        figure.update_xaxes(showgrid=False)
+        figure.update_xaxes(
+            showgrid=False,
+            tickmode="array",
+            tickvals=chart_df["InicioSemana"].tolist(),
+            ticktext=chart_df["Semana"].tolist(),
+        )
         figure.update_yaxes(gridcolor="rgba(255,255,255,0.08)")
 
         st.plotly_chart(figure, use_container_width=True)
