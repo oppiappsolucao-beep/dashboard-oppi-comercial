@@ -38,9 +38,9 @@ STATUS_OPTIONS = [
     "Chamando",
     "Sem interesse",
     "Não responde",
-    "Fechado",
     "Proposta",
     "Reunião",
+    "Fechado",
 ]
 
 STATUS_COLORS = {
@@ -1845,9 +1845,9 @@ def render_status_summary(filtered_df: pd.DataFrame) -> None:
         ("Chamando", "#C67A25"),
         ("Sem interesse", "#45B6C6"),
         ("Não responde", "#DF5578"),
-        ("Fechado", "#70C854"),
         ("Proposta", "#5C9DFF"),
         ("Reunião", "#A65BDB"),
+        ("Fechado", "#70C854"),
     ]
 
     total = max(len(filtered_df), 1)
@@ -1884,9 +1884,9 @@ def render_latest_calls_section(
         ("Chamando", "•", "#F8EFE6", "#B37A2A"),
         ("Sem interesse", "⊘", "#E9F8FA", "#2F9FB3"),
         ("Não responde", "⚑", "#FBECEF", "#DA5C78"),
-        ("Fechado", "✓", "#EAF8EF", "#58B97A"),
         ("Proposta", "▤", "#EAF2FF", "#5C9DFF"),
         ("Reunião", "◉", "#F3EAFE", "#A65BDB"),
+        ("Fechado", "✓", "#EAF8EF", "#58B97A"),
     ]
 
     selected_card_key = "ultimos_chamados_status_selecionado"
