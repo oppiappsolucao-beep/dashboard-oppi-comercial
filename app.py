@@ -1139,8 +1139,9 @@ def apply_dashboard_css() -> None:
             }
 
             .latest-calls-shell {
-                margin-top: 8px;
-                padding: 18px 18px 16px 18px;
+                margin-top: 18px;
+                margin-bottom: 18px;
+                padding: 20px 22px;
                 border-radius: 26px;
                 background: #F5F5F8;
                 border: 1px solid rgba(28, 20, 46, 0.08);
@@ -1152,7 +1153,7 @@ def apply_dashboard_css() -> None:
                 align-items: flex-start;
                 justify-content: space-between;
                 gap: 16px;
-                margin-bottom: 14px;
+                margin-bottom: 4px;
             }
 
             .latest-calls-title {
@@ -1186,12 +1187,13 @@ def apply_dashboard_css() -> None:
             }
 
             .latest-status-card {
-                min-height: 108px;
-                padding: 14px 14px 12px 14px;
+                min-height: 118px;
+                padding: 16px 15px 14px 15px;
                 border-radius: 20px;
                 background: #FFFFFF;
                 border: 1px solid #E7E8EF;
                 box-shadow: 0 10px 26px rgba(14, 13, 27, 0.05);
+                margin-bottom: 12px;
             }
 
             .latest-status-top {
@@ -1236,12 +1238,24 @@ def apply_dashboard_css() -> None:
             }
 
             .latest-table-card {
-                margin-top: 16px;
-                padding: 14px 14px 12px 14px;
+                margin-top: 28px;
+                padding: 18px 18px 14px 18px;
                 border-radius: 22px;
                 background: #FFFFFF;
                 border: 1px solid #E7E8EF;
                 box-shadow: 0 10px 26px rgba(14, 13, 27, 0.05);
+            }
+
+            .latest-placeholder-card {
+                margin-top: 26px;
+                padding: 22px 24px;
+                border-radius: 22px;
+                background: rgba(255,255,255,0.92);
+                border: 1px dashed rgba(169, 28, 255, 0.28);
+                color: #6F6980;
+                font-size: 0.92rem;
+                font-weight: 700;
+                text-align: center;
             }
 
             .latest-table-head {
@@ -1501,10 +1515,11 @@ def render_latest_calls_section(filtered_df: pd.DataFrame) -> None:
     ]
 
     state_key = "ultimos_chamados_status"
-    if state_key not in st.session_state:
-        st.session_state[state_key] = statuses[0][0]
 
-    selected_status = st.session_state.get(state_key, statuses[0][0])
+    if state_key not in st.session_state:
+        st.session_state[state_key] = None
+
+    selected_status = st.session_state.get(state_key)
 
     render_html(
         """
@@ -1516,19 +1531,23 @@ def render_latest_calls_section(filtered_df: pd.DataFrame) -> None:
                 </div>
                 <div class="latest-calls-chip">Status</div>
             </div>
+        </div>
         """
     )
 
-    card_columns = st.columns(5, gap="small")
+    card_columns = st.columns(5, gap="medium")
+
     for column, (status_name, icon, bg_color, icon_color) in zip(card_columns, statuses):
         count = int((filtered_df["_status_grupo"] == status_name).sum())
         active = selected_status == status_name
+
         border = "2px solid #F0C23B" if active else "1px solid #E7E8EF"
-        render_target = column
-        with render_target:
+        shadow = "0 16px 34px rgba(240, 194, 59, 0.18)" if active else "0 10px 26px rgba(14, 13, 27, 0.05)"
+
+        with column:
             render_html(
                 f"""
-                <div class="latest-status-card" style="border:{border};">
+                <div class="latest-status-card" style="border:{border}; box-shadow:{shadow};">
                     <div class="latest-status-top">
                         <div class="latest-status-icon" style="background:{bg_color}; color:{icon_color};">{icon}</div>
                         <div class="latest-status-name">{html.escape(status_name)}</div>
@@ -1538,13 +1557,32 @@ def render_latest_calls_section(filtered_df: pd.DataFrame) -> None:
                 </div>
                 """
             )
-            if st.button("Ver nomes", key=f"btn_ultimos_{status_name}", use_container_width=True):
+
+            if st.button(
+                "Ver nomes",
+                key=f"btn_ultimos_{status_name}",
+                use_container_width=True,
+            ):
                 st.session_state[state_key] = status_name
                 st.rerun()
 
-    current_status = st.session_state.get(state_key, statuses[0][0])
-    selected_df = filtered_df[filtered_df["_status_grupo"] == current_status].copy()
-    selected_df = selected_df.sort_values(["_data_chamado", "_empresa"], ascending=[False, True])
+    selected_status = st.session_state.get(state_key)
+
+    if not selected_status:
+        render_html(
+            """
+            <div class="latest-placeholder-card">
+                Selecione um status acima para visualizar os nomes dos chamados.
+            </div>
+            """
+        )
+        return
+
+    selected_df = filtered_df[filtered_df["_status_grupo"] == selected_status].copy()
+    selected_df = selected_df.sort_values(
+        ["_data_chamado", "_empresa"],
+        ascending=[False, True],
+    )
 
     display_df = pd.DataFrame(
         {
@@ -1557,16 +1595,18 @@ def render_latest_calls_section(filtered_df: pd.DataFrame) -> None:
     )
 
     badge_text = f"{len(display_df)} registro(s)"
+
     render_html(
         f"""
         <div class="latest-table-card">
             <div class="latest-table-head">
                 <div>
-                    <div class="latest-table-title">{html.escape(current_status)}</div>
+                    <div class="latest-table-title">{html.escape(selected_status)}</div>
                     <div class="latest-table-subtitle">Empresas registradas no comercial com status e responsável.</div>
                 </div>
                 <div class="latest-table-badge">{html.escape(badge_text)}</div>
             </div>
+        </div>
         """
     )
 
@@ -1579,8 +1619,6 @@ def render_latest_calls_section(filtered_df: pd.DataFrame) -> None:
             hide_index=True,
             height=320,
         )
-
-    render_html("</div></div>")
 
 
 def prepare_filters(df: pd.DataFrame):
