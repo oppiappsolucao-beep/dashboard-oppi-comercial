@@ -1300,6 +1300,79 @@ def apply_dashboard_css() -> None:
                 border: 1px solid rgba(20,16,36,0.10);
                 box-shadow: 0 8px 18px rgba(14, 13, 27, 0.04);
             }
+
+            /* Animações suaves de zoom ao passar o mouse */
+            .metric-card,
+            .latest-calls-shell,
+            .latest-status-card,
+            .latest-table-card,
+            .latest-placeholder-card,
+            .status-row,
+            .side-tip,
+            section[data-testid="stSidebar"] div[role="radiogroup"] > label,
+            .stButton > button,
+            div[data-testid="stSelectbox"] > div[data-baseweb="select"] > div,
+            div[data-testid="stTextInput"] div[data-baseweb="input"] > div,
+            div[data-testid="stDateInput"] div[data-baseweb="input"] > div,
+            div[data-testid="stDataFrame"] {
+                transition:
+                    transform 0.22s ease,
+                    box-shadow 0.22s ease,
+                    border-color 0.22s ease,
+                    filter 0.22s ease,
+                    background 0.22s ease !important;
+                transform-origin: center center;
+                will-change: transform;
+            }
+
+            .metric-card:hover,
+            .latest-calls-shell:hover,
+            .latest-status-card:hover,
+            .latest-table-card:hover,
+            .latest-placeholder-card:hover,
+            .status-row:hover,
+            .side-tip:hover,
+            div[data-testid="stDataFrame"]:hover {
+                transform: scale(1.025);
+                box-shadow: 0 22px 54px rgba(0,0,0,0.28), 0 0 24px rgba(169, 28, 255, 0.12) !important;
+                border-color: rgba(255, 75, 170, 0.34) !important;
+                z-index: 3;
+            }
+
+            section[data-testid="stSidebar"] div[role="radiogroup"] > label:hover {
+                transform: scale(1.035);
+            }
+
+            .stButton > button:hover {
+                transform: scale(1.035);
+                filter: brightness(1.06);
+                box-shadow: 0 14px 30px rgba(169, 28, 255, 0.28) !important;
+            }
+
+            div[data-testid="stSelectbox"] > div[data-baseweb="select"] > div:hover,
+            div[data-testid="stTextInput"] div[data-baseweb="input"] > div:hover,
+            div[data-testid="stDateInput"] div[data-baseweb="input"] > div:hover {
+                transform: scale(1.018);
+            }
+
+            @media (prefers-reduced-motion: reduce) {
+                .metric-card,
+                .latest-calls-shell,
+                .latest-status-card,
+                .latest-table-card,
+                .latest-placeholder-card,
+                .status-row,
+                .side-tip,
+                section[data-testid="stSidebar"] div[role="radiogroup"] > label,
+                .stButton > button,
+                div[data-testid="stSelectbox"] > div[data-baseweb="select"] > div,
+                div[data-testid="stTextInput"] div[data-baseweb="input"] > div,
+                div[data-testid="stDateInput"] div[data-baseweb="input"] > div,
+                div[data-testid="stDataFrame"] {
+                    transition: none !important;
+                    transform: none !important;
+                }
+            }
         </style>
         """
     )
