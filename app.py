@@ -763,17 +763,30 @@ def apply_dashboard_css() -> None:
                 color: #20192F;
             }
 
+            section[data-testid="stSidebar"] [data-testid="stSidebarUserContent"] {
+                padding-top: 0.35rem !important;
+            }
+
             .side-logo-wrap {
-                margin: 12px 0 24px 0;
+                width: 124px;
+                height: 124px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                overflow: visible;
+                margin: -4px 0 8px -10px;
             }
 
             .side-logo-img {
-                width: 100px;
-                height: 100px;
+                width: 116px;
+                height: 116px;
+                max-width: none;
                 object-fit: contain;
+                object-position: center;
                 display: block;
                 border-radius: 0;
                 background: transparent;
+                overflow: visible;
                 filter: drop-shadow(0 12px 24px rgba(188, 45, 255, 0.18));
             }
 
@@ -825,7 +838,7 @@ def apply_dashboard_css() -> None:
 
             .side-subtitle {
                 color: rgba(33,26,48,0.76);
-                margin-top: 8px;
+                margin-top: 6px;
                 font-size: 0.90rem;
             }
 
@@ -833,7 +846,7 @@ def apply_dashboard_css() -> None:
                 width: 70px;
                 height: 4px;
                 border-radius: 999px;
-                margin: 24px 0 22px 0;
+                margin: 18px 0 18px 0;
                 background: linear-gradient(90deg, #FF4BAA, #AE26FF);
             }
 
@@ -841,7 +854,7 @@ def apply_dashboard_css() -> None:
                 display: flex;
                 gap: 12px;
                 align-items: center;
-                margin: 18px 0 22px 0;
+                margin: 14px 0 18px 0;
                 padding: 14px;
                 border-radius: 16px;
                 background: rgba(255,255,255,0.44);
