@@ -2295,29 +2295,47 @@ def render_overview_page(df: pd.DataFrame, columns: dict) -> None:
     with chart_column:
         render_html(
             """
-            <div class="section-heading">Chamados por dia</div>
-            <div class="section-subtitle">Volume de chamados conforme o período selecionado.</div>
+            <div class="section-heading">Chamados por semana</div>
+            <div class="section-subtitle">Volume de chamados agrupado por semana conforme o período selecionado.</div>
             """
         )
 
         chart_df = filtered_df.dropna(subset=["_data_chamado"]).copy()
 
         if chart_df.empty:
-            chart_df = pd.DataFrame(
-                {
-                    "Dia": ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"],
-                    "Quantidade": [0, 0, 0, 0, 0, 0, 0],
-                }
+            current_week_start = pd.Timestamp.today().normalize() - pd.to_timedelta(
+                pd.Timestamp.today().weekday(),
+                unit="D",
             )
+            week_starts = pd.date_range(
+                end=current_week_start,
+                periods=4,
+                freq="7D",
+            )
+            chart_df = pd.DataFrame({"InicioSemana": week_starts})
+            chart_df["Quantidade"] = 0
         else:
-            chart_df["DiaReal"] = chart_df["_data_chamado"].dt.date
-            chart_df = chart_df.groupby("DiaReal").size().reset_index(name="Quantidade")
-            chart_df = chart_df.sort_values("DiaReal")
-            chart_df["Dia"] = pd.to_datetime(chart_df["DiaReal"]).dt.strftime("%d/%m")
+            chart_df["InicioSemana"] = (
+                chart_df["_data_chamado"].dt.normalize()
+                - pd.to_timedelta(chart_df["_data_chamado"].dt.weekday, unit="D")
+            )
+            chart_df = (
+                chart_df.groupby("InicioSemana")
+                .size()
+                .reset_index(name="Quantidade")
+                .sort_values("InicioSemana")
+            )
+
+        chart_df["FimSemana"] = chart_df["InicioSemana"] + pd.Timedelta(days=6)
+        chart_df["Semana"] = (
+            chart_df["InicioSemana"].dt.strftime("%d/%m")
+            + " – "
+            + chart_df["FimSemana"].dt.strftime("%d/%m")
+        )
 
         figure = px.area(
             chart_df,
-            x="Dia",
+            x="Semana",
             y="Quantidade",
             markers=True,
         )
@@ -2330,6 +2348,7 @@ def render_overview_page(df: pd.DataFrame, columns: dict) -> None:
                 line=dict(width=3, color="#D74BFF"),
             ),
             fillcolor="rgba(224,67,255,0.34)",
+            hovertemplate="Semana: %{x}<br>Chamados: %{y}<extra></extra>",
         )
 
         figure.update_layout(
