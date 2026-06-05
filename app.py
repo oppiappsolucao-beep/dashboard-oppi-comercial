@@ -998,12 +998,16 @@ def apply_dashboard_css() -> None:
             }
 
             .metric-card {
-                min-height: 132px;
+                height: 188px;
+                min-height: 188px;
                 padding: 17px;
                 border-radius: 20px;
                 border: 1px solid rgba(255,255,255,0.06);
                 background: linear-gradient(145deg, rgba(22,20,42,0.98), rgba(10,9,25,0.98));
                 box-shadow: 0 18px 46px rgba(0,0,0,0.22);
+                box-sizing: border-box;
+                display: flex;
+                flex-direction: column;
             }
 
             .metric-icon {
@@ -1019,9 +1023,13 @@ def apply_dashboard_css() -> None:
             }
 
             .metric-label {
+                min-height: 38px;
                 color: rgba(255,255,255,0.78);
                 font-size: 0.94rem;
                 font-weight: 750;
+                line-height: 1.18;
+                display: flex;
+                align-items: flex-end;
             }
 
             .metric-value {
