@@ -1061,6 +1061,23 @@ def apply_dashboard_css() -> None:
                 min-height: 54px !important;
                 height: 54px !important;
                 box-shadow: none !important;
+                box-sizing: border-box !important;
+                overflow: visible !important;
+            }
+
+            /* Evita corte da borda superior, principalmente no campo Buscar empresa ou telefone */
+            div[data-testid="stTextInput"],
+            div[data-testid="stDateInput"] {
+                padding-top: 3px !important;
+                overflow: visible !important;
+            }
+
+            div[data-testid="stTextInput"] > div,
+            div[data-testid="stDateInput"] > div,
+            div[data-testid="stTextInput"] [data-baseweb="base-input"],
+            div[data-testid="stDateInput"] [data-baseweb="base-input"] {
+                overflow: visible !important;
+                box-sizing: border-box !important;
             }
 
             label {
