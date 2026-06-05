@@ -1,7 +1,9 @@
+import base64
 import html
 import re
 import unicodedata
 from datetime import date, timedelta
+from pathlib import Path
 from typing import Optional
 
 import gspread
@@ -258,6 +260,23 @@ def score_classification(score: int) -> str:
     return "Lead Frio"
 
 
+
+
+def get_logo_data_uri() -> str:
+    possible_paths = [
+        Path(__file__).parent / "logo_oppi.png",
+        Path(__file__).parent / "logo.png",
+        Path(__file__).parent / "assets" / "logo_oppi.png",
+        Path(__file__).parent / "assets" / "logo.png",
+    ]
+
+    for file_path in possible_paths:
+        if file_path.exists():
+            mime = "image/png" if file_path.suffix.lower() == ".png" else "image/jpeg"
+            encoded = base64.b64encode(file_path.read_bytes()).decode("utf-8")
+            return f"data:{mime};base64,{encoded}"
+
+    return ""
 # =========================================================
 # CONEXÃO COM GOOGLE SHEETS
 # =========================================================
@@ -405,22 +424,22 @@ def apply_login_css() -> None:
             }
 
             .block-container {
-                max-width: 1560px !important;
-                padding-top: 2rem !important;
-                padding-bottom: 2rem !important;
+                max-width: 1320px !important;
+                padding-top: 1rem !important;
+                padding-bottom: 1rem !important;
             }
 
             .login-brand-panel {
-                min-height: 790px;
+                min-height: 620px;
                 border-radius: 36px;
                 border: 1px solid rgba(255,255,255,0.06);
-                padding: 56px 54px;
+                padding: 42px 38px;
                 position: relative;
                 overflow: hidden;
                 background:
                     linear-gradient(180deg, rgba(0,0,0,0.73), rgba(2,2,14,0.96)),
                     linear-gradient(145deg, #090910, #030309);
-                box-shadow: 0 32px 90px rgba(0,0,0,0.34);
+                box-shadow: 0 24px 60px rgba(0,0,0,0.30);
             }
 
             .login-brand-panel::before {
@@ -429,7 +448,7 @@ def apply_login_css() -> None:
                 left: -16%;
                 right: -18%;
                 bottom: -6%;
-                height: 240px;
+                height: 190px;
                 background:
                     radial-gradient(circle at 18% 70%, rgba(255, 42, 154, 0.35), transparent 22%),
                     radial-gradient(circle at 50% 85%, rgba(119, 30, 255, 0.30), transparent 24%),
@@ -438,34 +457,45 @@ def apply_login_css() -> None:
                 opacity: 0.90;
             }
 
-            .login-logo {
-                width: 132px;
-                height: 132px;
+            .login-logo-wrap {
+                margin: 6px 0 38px 0;
+            }
+
+            .login-logo-img {
+                width: 116px;
+                height: 116px;
+                object-fit: contain;
+                display: block;
+                filter: drop-shadow(0 18px 42px rgba(203, 38, 255, 0.24));
+            }
+
+            .login-logo-fallback {
+                width: 116px;
+                height: 116px;
                 border-radius: 50%;
                 background: linear-gradient(145deg, #FF4BAA 10%, #9C19FF 88%);
                 position: relative;
-                margin: 40px 0 70px 12px;
-                box-shadow: 0 18px 56px rgba(200, 20, 255, 0.30);
+                box-shadow: 0 18px 42px rgba(203, 38, 255, 0.24);
             }
 
-            .login-logo::before {
+            .login-logo-fallback::before {
                 content: "";
                 position: absolute;
-                width: 46px;
-                height: 46px;
+                width: 40px;
+                height: 40px;
                 border-radius: 50%;
                 background: #06060B;
-                top: 31px;
-                left: 44px;
+                top: 28px;
+                left: 38px;
             }
 
-            .login-logo::after {
+            .login-logo-fallback::after {
                 content: "";
                 position: absolute;
-                width: 46px;
-                height: 46px;
-                left: 5px;
-                bottom: 1px;
+                width: 42px;
+                height: 42px;
+                left: 4px;
+                bottom: 2px;
                 transform: rotate(-7deg);
                 clip-path: polygon(0 100%, 26% 26%, 100% 0);
                 background: linear-gradient(145deg, #FF4BAA 10%, #9C19FF 88%);
@@ -473,7 +503,7 @@ def apply_login_css() -> None:
             }
 
             .login-brand-title {
-                font-size: 3.35rem;
+                font-size: 2.95rem;
                 line-height: 1.04;
                 font-weight: 950;
                 color: #FFFFFF;
@@ -489,16 +519,16 @@ def apply_login_css() -> None:
             }
 
             .login-brand-subtitle {
-                margin-top: 18px;
+                margin-top: 14px;
                 color: rgba(255,255,255,0.84);
-                font-size: 1.08rem;
+                font-size: 1.0rem;
             }
 
             .login-accent-line {
                 width: 86px;
                 height: 4px;
                 border-radius: 999px;
-                margin: 50px 0 56px 0;
+                margin: 34px 0 34px 0;
                 background: linear-gradient(90deg, #FF4BAA, #A62CFF);
             }
 
@@ -506,56 +536,56 @@ def apply_login_css() -> None:
                 display: flex;
                 align-items: center;
                 gap: 18px;
-                max-width: 355px;
+                max-width: 320px;
                 color: rgba(255,255,255,0.82);
-                font-size: 0.98rem;
+                font-size: 0.94rem;
                 line-height: 1.55;
             }
 
             .login-benefit-icon {
-                width: 58px;
-                height: 58px;
-                min-width: 58px;
-                border-radius: 17px;
+                width: 50px;
+                height: 50px;
+                min-width: 50px;
+                border-radius: 15px;
                 border: 2px solid rgba(183, 75, 255, 0.54);
                 display: flex;
                 align-items: center;
                 justify-content: center;
                 color: #D44BFF;
-                font-size: 1.35rem;
+                font-size: 1.2rem;
             }
 
             .login-right-spacer {
-                height: 72px;
+                height: 66px;
             }
 
             [data-testid="stForm"] {
                 background: #FFFFFF !important;
                 border: none !important;
                 border-radius: 30px !important;
-                padding: 34px 42px 30px 42px !important;
+                padding: 28px 32px 24px 32px !important;
                 box-shadow: 0 34px 88px rgba(0,0,0,0.30) !important;
-                max-width: 720px !important;
+                max-width: 640px !important;
                 margin: 0 auto !important;
             }
 
             .login-top-icon {
-                width: 72px;
-                height: 72px;
+                width: 66px;
+                height: 66px;
                 border-radius: 50%;
                 background: #F4EAFB;
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                margin: 0 auto 16px auto;
+                margin: 0 auto 12px auto;
                 color: #A640FF;
-                font-size: 1.75rem;
+                font-size: 1.55rem;
             }
 
             .login-card-title {
                 text-align: center;
                 color: #1E2230;
-                font-size: 1.72rem;
+                font-size: 1.55rem;
                 font-weight: 850;
                 line-height: 1.28;
             }
@@ -565,7 +595,7 @@ def apply_login_css() -> None:
                 color: #7B8090;
                 font-size: 1rem;
                 margin-top: 5px;
-                margin-bottom: 24px;
+                margin-bottom: 18px;
             }
 
             [data-testid="stForm"] label {
@@ -575,7 +605,7 @@ def apply_login_css() -> None:
             }
 
             [data-testid="stForm"] [data-baseweb="input"] {
-                min-height: 58px !important;
+                min-height: 54px !important;
                 border: 1px solid #D7DAE2 !important;
                 border-radius: 15px !important;
                 background: #FFFFFF !important;
@@ -590,11 +620,11 @@ def apply_login_css() -> None:
             [data-testid="stForm"] .stButton > button,
             [data-testid="stForm"] button[kind="secondaryFormSubmit"] {
                 width: 100% !important;
-                min-height: 58px !important;
+                min-height: 54px !important;
                 border: none !important;
                 border-radius: 15px !important;
                 color: #FFFFFF !important;
-                font-size: 1.08rem !important;
+                font-size: 1.03rem !important;
                 font-weight: 850 !important;
                 background: linear-gradient(90deg, #FF4E97 0%, #A91CFF 100%) !important;
                 box-shadow: 0 14px 30px rgba(204, 42, 255, 0.25) !important;
@@ -606,7 +636,7 @@ def apply_login_css() -> None:
                 grid-template-columns: 1fr auto 1fr;
                 gap: 18px;
                 align-items: center;
-                margin-top: 22px;
+                margin-top: 18px;
             }
 
             .login-forgot-line {
@@ -617,11 +647,11 @@ def apply_login_css() -> None:
             .login-forgot-text {
                 color: #A23BFF;
                 font-weight: 750;
-                font-size: 0.96rem;
+                font-size: 0.92rem;
             }
 
             .login-error {
-                max-width: 720px;
+                max-width: 640px;
                 margin: 14px auto 0 auto;
                 padding: 12px 14px;
                 border-radius: 14px;
@@ -635,16 +665,16 @@ def apply_login_css() -> None:
             @media (max-width: 1050px) {
                 .login-brand-panel {
                     min-height: auto;
-                    padding: 34px;
+                    padding: 30px;
                 }
 
-                .login-logo {
-                    margin-top: 8px;
-                    margin-bottom: 36px;
+                .login-logo-wrap {
+                    margin-top: 0;
+                    margin-bottom: 24px;
                 }
 
                 .login-brand-title {
-                    font-size: 2.6rem;
+                    font-size: 2.2rem;
                 }
 
                 .login-right-spacer {
@@ -789,7 +819,7 @@ def apply_dashboard_css() -> None:
                 margin-top: 7px;
                 margin-bottom: 16px;
                 color: rgba(255,255,255,0.70);
-                font-size: 0.98rem;
+                font-size: 0.94rem;
             }
 
             .metric-card {
@@ -929,14 +959,21 @@ def check_login(username: str, password: str) -> bool:
 
 def render_login_page() -> None:
     apply_login_css()
+    logo_data_uri = get_logo_data_uri()
 
-    left_column, right_column = st.columns([0.92, 1.48], gap="large")
+    left_column, right_column = st.columns([0.86, 1.14], gap="large")
 
     with left_column:
+        logo_html = (
+            f'<div class="login-logo-wrap"><img src="{logo_data_uri}" class="login-logo-img" alt="Oppi Tech"></div>'
+            if logo_data_uri
+            else '<div class="login-logo-wrap"><div class="login-logo-fallback"></div></div>'
+        )
+
         render_html(
-            """
+            f"""
             <div class="login-brand-panel">
-                <div class="login-logo"></div>
+                {logo_html}
                 <div class="login-brand-title">
                     Dashboard
                     <span class="login-brand-highlight">Oppi Comercial</span>
