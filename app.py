@@ -33,6 +33,16 @@ SCOPES = [
     "https://www.googleapis.com/auth/drive",
 ]
 
+STATUS_OPTIONS = [
+    "Novo Lead",
+    "Chamando",
+    "Sem interesse",
+    "Não responde",
+    "Fechado",
+    "Proposta",
+    "Reunião",
+]
+
 
 # =========================================================
 # ESTADO DA SESSÃO
@@ -185,17 +195,20 @@ def status_group(value: str) -> str:
     if not status:
         return "Novo Lead"
 
+    if "reuniao" in status:
+        return "Reunião"
+
+    if "proposta" in status:
+        return "Proposta"
+
     if any(word in status for word in ["fechado", "ganho", "cliente"]):
         return "Fechado"
 
     if any(word in status for word in ["nao responde", "sem resposta"]):
-        return "Não Responde"
+        return "Não responde"
 
     if any(word in status for word in ["sem interesse", "nao tem interesse"]):
-        return "Sem Interesse"
-
-    if "proposta" in status:
-        return "Proposta"
+        return "Sem interesse"
 
     if any(word in status for word in ["chamando", "contato", "negoci", "andamento"]):
         return "Chamando"
@@ -242,6 +255,8 @@ def calculate_score(row: pd.Series, columns: dict) -> int:
         score += 20
     elif grouped_status == "Proposta":
         score += 16
+    elif grouped_status == "Reunião":
+        score += 14
     elif grouped_status == "Chamando":
         score += 12
     elif grouped_status == "Novo Lead":
@@ -343,18 +358,61 @@ def load_sheet_data() -> pd.DataFrame:
     rows = values[1:]
 
     df = pd.DataFrame(rows, columns=headers)
+    df["_sheet_row"] = list(range(2, len(rows) + 2))
 
     for column in df.columns:
-        df[column] = df[column].astype(str).str.strip()
+        if column != "_sheet_row":
+            df[column] = df[column].astype(str).str.strip()
 
+    data_columns = [column for column in df.columns if column != "_sheet_row"]
     df = df[
-        df.apply(
+        df[data_columns].apply(
             lambda row: any(normalize_text(value) for value in row),
             axis=1,
         )
     ].copy()
 
     return df.reset_index(drop=True)
+
+
+def update_statuses_in_sheet(
+    changes: list[dict],
+    status_column_name: str,
+    updated_at_column_name: Optional[str] = None,
+) -> None:
+    """Atualiza os status editados diretamente na planilha do Google Sheets."""
+    if not changes:
+        return
+
+    client = get_gsheet_client()
+    spreadsheet = client.open_by_key(SHEET_ID)
+    worksheet = spreadsheet.worksheet(WORKSHEET_NAME)
+    headers = worksheet.row_values(1)
+
+    if status_column_name not in headers:
+        raise RuntimeError(
+            f"Não encontrei a coluna '{status_column_name}' na planilha."
+        )
+
+    status_column_index = headers.index(status_column_name) + 1
+    updated_at_column_index = None
+
+    if updated_at_column_name and updated_at_column_name in headers:
+        updated_at_column_index = headers.index(updated_at_column_name) + 1
+
+    cells = []
+    now_text = pd.Timestamp.now(tz="America/Sao_Paulo").strftime("%d/%m/%Y %H:%M")
+
+    for change in changes:
+        sheet_row = int(change["sheet_row"])
+        new_status = normalize_text(change["status"])
+        cells.append(gspread.Cell(sheet_row, status_column_index, new_status))
+
+        if updated_at_column_index:
+            cells.append(gspread.Cell(sheet_row, updated_at_column_index, now_text))
+
+    worksheet.update_cells(cells, value_input_option="USER_ENTERED")
+    st.cache_data.clear()
 
 
 # =========================================================
@@ -1294,6 +1352,34 @@ def apply_dashboard_css() -> None:
                 white-space: nowrap;
             }
 
+
+            .latest-editor-help {
+                margin: 12px 0 10px 0;
+                padding: 12px 14px;
+                border-radius: 15px;
+                background: rgba(255,255,255,0.045);
+                border: 1px solid rgba(255,255,255,0.06);
+                color: rgba(255,255,255,0.72);
+                font-size: 0.84rem;
+                line-height: 1.45;
+            }
+
+            .latest-editor-help strong {
+                color: #FF64BC;
+            }
+
+            div[data-testid="stDataEditor"] {
+                overflow: hidden;
+                border-radius: 18px;
+                border: 1px solid rgba(255,255,255,0.10);
+                background: rgba(255,255,255,0.96);
+                box-shadow: 0 16px 38px rgba(0,0,0,0.18);
+            }
+
+            div[data-testid="stDataEditor"] [role="grid"] {
+                border-radius: 18px;
+            }
+
             div[data-testid="stDataFrame"] {
                 overflow: hidden;
                 border-radius: 16px;
@@ -1549,9 +1635,11 @@ def render_status_summary(filtered_df: pd.DataFrame) -> None:
     statuses = [
         ("Novo Lead", "#697BFF"),
         ("Chamando", "#C67A25"),
-        ("Sem Interesse", "#45B6C6"),
-        ("Não Responde", "#DF5578"),
+        ("Sem interesse", "#45B6C6"),
+        ("Não responde", "#DF5578"),
         ("Fechado", "#70C854"),
+        ("Proposta", "#5C9DFF"),
+        ("Reunião", "#A65BDB"),
     ]
 
     total = max(len(filtered_df), 1)
@@ -1578,74 +1666,94 @@ def render_status_summary(filtered_df: pd.DataFrame) -> None:
     )
 
 
-def render_latest_calls_section(filtered_df: pd.DataFrame) -> None:
+def render_latest_calls_section(filtered_df: pd.DataFrame, columns: dict) -> None:
     statuses = [
         ("Novo Lead", "✦", "#E8F0FF", "#5C8BFF"),
         ("Chamando", "•", "#F8EFE6", "#B37A2A"),
-        ("Sem Interesse", "⊘", "#E9F8FA", "#2F9FB3"),
-        ("Não Responde", "⚑", "#FBECEF", "#DA5C78"),
+        ("Sem interesse", "⊘", "#E9F8FA", "#2F9FB3"),
+        ("Não responde", "⚑", "#FBECEF", "#DA5C78"),
         ("Fechado", "✓", "#EAF8EF", "#58B97A"),
+        ("Proposta", "▤", "#EAF2FF", "#5C9DFF"),
+        ("Reunião", "◉", "#F3EAFE", "#A65BDB"),
     ]
 
-    state_key = "ultimos_chamados_status"
+    filter_key = "ultimos_chamados_filtro_status"
 
-    if state_key not in st.session_state:
-        st.session_state[state_key] = None
+    if filter_key not in st.session_state:
+        st.session_state[filter_key] = "Todos os status"
 
-    selected_status = st.session_state.get(state_key)
+    filter_copy, filter_control = st.columns([2.5, 1.25], gap="large")
 
-    render_html(
-        """
-        <div class="latest-calls-shell">
-            <div class="latest-calls-head">
-                <div>
-                    <div class="latest-calls-title">Últimos chamados</div>
-                    <div class="latest-calls-subtitle">Clique em “Ver nomes” para visualizar as empresas daquela etapa.</div>
-                </div>
-                <div class="latest-calls-chip">Status</div>
-            </div>
-        </div>
-        """
-    )
-
-    card_columns = st.columns(5, gap="medium")
-
-    for column, (status_name, icon, bg_color, icon_color) in zip(card_columns, statuses):
-        count = int((filtered_df["_status_grupo"] == status_name).sum())
-        active = selected_status == status_name
-
-        border = "1px solid rgba(255, 75, 170, 0.85)" if active else "1px solid rgba(255,255,255,0.06)"
-        shadow = "0 0 0 1px rgba(169, 28, 255, 0.18), 0 18px 46px rgba(0,0,0,0.28), 0 0 22px rgba(255, 75, 170, 0.14)" if active else "0 18px 46px rgba(0,0,0,0.22)"
-
-        with column:
-            render_html(
-                f"""
-                <div class="latest-status-card" style="border:{border}; box-shadow:{shadow};">
-                    <div class="latest-status-top">
-                        <div class="latest-status-icon" style="background:{bg_color}; color:{icon_color};">{icon}</div>
-                        <div class="latest-status-name">{html.escape(status_name)}</div>
+    with filter_copy:
+        render_html(
+            """
+            <div class="latest-calls-shell">
+                <div class="latest-calls-head">
+                    <div>
+                        <div class="latest-calls-title">Filtrar chamados por status</div>
+                        <div class="latest-calls-subtitle">Selecione uma etapa ou clique em “Ver nomes” para visualizar as empresas.</div>
                     </div>
-                    <div class="latest-status-number">{count}</div>
-                    <div class="latest-status-caption">registros nesta sessão</div>
+                    <div class="latest-calls-chip">Status</div>
                 </div>
-                """
-            )
+            </div>
+            """
+        )
 
-            if st.button(
-                "Ver nomes",
-                key=f"btn_ultimos_{status_name}",
-                use_container_width=True,
-            ):
-                st.session_state[state_key] = status_name
-                st.rerun()
+    with filter_control:
+        st.write("")
+        selected_status = st.selectbox(
+            "Status",
+            ["Todos os status"] + STATUS_OPTIONS,
+            key=filter_key,
+        )
 
-    selected_status = st.session_state.get(state_key)
+    selected_status = None if selected_status == "Todos os status" else selected_status
+
+    def choose_status(status_name: str) -> None:
+        st.session_state[filter_key] = status_name
+
+    status_rows = [statuses[:4], statuses[4:]]
+
+    for row_index, status_row in enumerate(status_rows):
+        card_columns = st.columns(len(status_row), gap="medium")
+
+        for column, (status_name, icon, bg_color, icon_color) in zip(card_columns, status_row):
+            count = int((filtered_df["_status_grupo"] == status_name).sum())
+            active = selected_status == status_name
+
+            border = "1px solid rgba(255, 75, 170, 0.85)" if active else "1px solid rgba(255,255,255,0.06)"
+            shadow = "0 0 0 1px rgba(169, 28, 255, 0.18), 0 18px 46px rgba(0,0,0,0.28), 0 0 22px rgba(255, 75, 170, 0.14)" if active else "0 18px 46px rgba(0,0,0,0.22)"
+
+            with column:
+                render_html(
+                    f"""
+                    <div class="latest-status-card" style="border:{border}; box-shadow:{shadow};">
+                        <div class="latest-status-top">
+                            <div class="latest-status-icon" style="background:{bg_color}; color:{icon_color};">{icon}</div>
+                            <div class="latest-status-name">{html.escape(status_name)}</div>
+                        </div>
+                        <div class="latest-status-number">{count}</div>
+                        <div class="latest-status-caption">registros nesta sessão</div>
+                    </div>
+                    """
+                )
+
+                st.button(
+                    "Ver nomes",
+                    key=f"btn_ultimos_{status_name}",
+                    use_container_width=True,
+                    on_click=choose_status,
+                    args=(status_name,),
+                )
+
+        if row_index == 0:
+            st.write("")
 
     if not selected_status:
         render_html(
             """
             <div class="latest-placeholder-card">
-                Selecione um status acima para visualizar os nomes dos chamados.
+                Selecione um status acima ou clique em “Ver nomes” para visualizar os registros.
             </div>
             """
         )
@@ -1685,13 +1793,89 @@ def render_latest_calls_section(filtered_df: pd.DataFrame) -> None:
 
     if display_df.empty:
         st.info("Nenhum chamado encontrado para este status no período selecionado.")
-    else:
-        st.dataframe(
-            display_df,
+        return
+
+    render_html(
+        """
+        <div class="latest-editor-help">
+            <strong>Editar status:</strong> clique na coluna “Status”, escolha a nova etapa e depois pressione “Salvar alterações”.
+        </div>
+        """
+    )
+
+    editor_df = display_df.copy()
+    editor_df["_sheet_row"] = selected_df["_sheet_row"].astype(int).values
+
+    edited_df = st.data_editor(
+        editor_df,
+        use_container_width=True,
+        hide_index=True,
+        height=340,
+        disabled=["Empresa", "Telefone", "Vendedor", "Data", "_sheet_row"],
+        column_config={
+            "Empresa": st.column_config.TextColumn("Empresa", width="large"),
+            "Telefone": st.column_config.TextColumn("Telefone", width="medium"),
+            "Status": st.column_config.SelectboxColumn(
+                "Status",
+                help="Selecione uma nova etapa comercial.",
+                options=STATUS_OPTIONS,
+                required=True,
+                width="medium",
+            ),
+            "Vendedor": st.column_config.TextColumn("Vendedor", width="medium"),
+            "Data": st.column_config.TextColumn("Data", width="small"),
+            "_sheet_row": None,
+        },
+        key=f"editor_ultimos_chamados_{selected_status}",
+    )
+
+    original_status_by_row = {
+        int(row["_sheet_row"]): normalize_text(row["Status"])
+        for _, row in editor_df.iterrows()
+    }
+
+    changes = []
+    for _, row in edited_df.iterrows():
+        sheet_row = int(row["_sheet_row"])
+        new_status = normalize_text(row["Status"])
+        old_status = original_status_by_row.get(sheet_row, "")
+
+        if new_status != old_status:
+            changes.append({"sheet_row": sheet_row, "status": new_status})
+
+    save_column, info_column = st.columns([1.0, 2.4], gap="medium")
+
+    with save_column:
+        save_clicked = st.button(
+            "💾 Salvar alterações",
+            key=f"salvar_status_{selected_status}",
             use_container_width=True,
-            hide_index=True,
-            height=320,
+            disabled=not changes,
         )
+
+    with info_column:
+        if changes:
+            st.caption(f"{len(changes)} alteração(ões) aguardando salvamento.")
+        else:
+            st.caption("Nenhuma alteração pendente.")
+
+    if save_clicked:
+        status_column_name = columns.get("status")
+
+        if not status_column_name:
+            st.error("Não encontrei a coluna Status na planilha.")
+        else:
+            try:
+                update_statuses_in_sheet(
+                    changes=changes,
+                    status_column_name=status_column_name,
+                    updated_at_column_name=columns.get("ultima_atualizacao"),
+                )
+                st.success("Status atualizado com sucesso na planilha!")
+                st.rerun()
+            except Exception as error:
+                st.error("Não consegui salvar as alterações na planilha.")
+                st.code(str(error))
 
 
 def prepare_filters(df: pd.DataFrame):
@@ -1721,8 +1905,8 @@ def prepare_filters(df: pd.DataFrame):
         date_min = valid_dates.min().date()
         date_max = valid_dates.max().date()
 
-    filter_1, filter_2, filter_3, filter_4 = st.columns(
-        [1, 1, 1, 1],
+    filter_1, filter_2, filter_3 = st.columns(
+        [1, 1, 1],
         gap="medium",
     )
 
@@ -1734,15 +1918,6 @@ def prepare_filters(df: pd.DataFrame):
         ]
     )
 
-    status_options = [
-        "Novo Lead",
-        "Chamando",
-        "Sem Interesse",
-        "Não Responde",
-        "Fechado",
-        "Proposta",
-    ]
-
     with filter_1:
         selected_seller = st.selectbox(
             "Vendedor",
@@ -1750,12 +1925,6 @@ def prepare_filters(df: pd.DataFrame):
         )
 
     with filter_2:
-        selected_status = st.selectbox(
-            "Status",
-            ["Todos os status"] + status_options,
-        )
-
-    with filter_3:
         selected_range = st.date_input(
             "Período",
             value=(date_min, date_max),
@@ -1763,7 +1932,7 @@ def prepare_filters(df: pd.DataFrame):
             max_value=max(date_max, date.today()),
         )
 
-    with filter_4:
+    with filter_3:
         search_term = st.text_input(
             "Buscar empresa ou telefone",
             placeholder="Digite para buscar...",
@@ -1773,9 +1942,6 @@ def prepare_filters(df: pd.DataFrame):
 
     if selected_seller != "Todos os vendedores":
         filtered_df = filtered_df[filtered_df["_vendedor"] == selected_seller].copy()
-
-    if selected_status != "Todos os status":
-        filtered_df = filtered_df[filtered_df["_status_grupo"] == selected_status].copy()
 
     if isinstance(selected_range, tuple) and len(selected_range) == 2:
         start_date, end_date = selected_range
@@ -1903,7 +2069,7 @@ def render_overview_page(df: pd.DataFrame, columns: dict) -> None:
         render_status_summary(filtered_df)
 
     st.write("")
-    render_latest_calls_section(filtered_df)
+    render_latest_calls_section(filtered_df, columns)
 
 
 # =========================================================
