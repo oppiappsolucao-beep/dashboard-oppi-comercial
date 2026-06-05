@@ -1013,11 +1013,31 @@ def apply_dashboard_css() -> None:
                 font-weight: 750;
             }
 
-            /* Filtros da visão geral: todos no mesmo estilo escuro, mesma altura e borda rosa */
+            /* Filtros da visão geral: todos no mesmo estilo escuro, mesma altura, largura total e borda rosa */
+            div[data-testid="stSelectbox"],
+            div[data-testid="stTextInput"],
+            div[data-testid="stDateInput"] {
+                width: 100% !important;
+            }
+
+            div[data-testid="stSelectbox"] > div,
+            div[data-testid="stTextInput"] > div,
+            div[data-testid="stDateInput"] > div {
+                width: 100% !important;
+            }
+
+            div[data-testid="stSelectbox"] > div[data-baseweb="select"],
+            div[data-testid="stTextInput"] div[data-baseweb="input"],
+            div[data-testid="stDateInput"] div[data-baseweb="input"] {
+                width: 100% !important;
+            }
+
             div[data-testid="stSelectbox"] > div[data-baseweb="select"] > div,
             div[data-testid="stTextInput"] div[data-baseweb="input"] > div,
             div[data-testid="stDateInput"] div[data-baseweb="input"] > div {
+                width: 100% !important;
                 min-height: 54px !important;
+                height: 54px !important;
                 border-radius: 15px !important;
                 border: 1px solid rgba(255, 75, 170, 0.55) !important;
                 background: rgba(8, 7, 24, 0.92) !important;
@@ -1070,6 +1090,19 @@ def apply_dashboard_css() -> None:
             div[data-testid="stDateInput"] svg {
                 color: #FFFFFF !important;
                 fill: #FFFFFF !important;
+            }
+
+            div[data-testid="stSelectbox"] input,
+            div[data-testid="stTextInput"] input,
+            div[data-testid="stDateInput"] input {
+                width: 100% !important;
+                min-width: 0 !important;
+            }
+
+            div[data-testid="stSelectbox"] [data-baseweb="select"] > div > div,
+            div[data-testid="stTextInput"] [data-baseweb="input"] > div > input,
+            div[data-testid="stDateInput"] [data-baseweb="input"] > div > input {
+                width: 100% !important;
             }
 
             div[data-testid="stTextInput"] input:-webkit-autofill,
