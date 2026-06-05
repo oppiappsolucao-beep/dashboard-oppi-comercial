@@ -1013,30 +1013,54 @@ def apply_dashboard_css() -> None:
                 font-weight: 750;
             }
 
-            /* Filtros da visão geral: todos no mesmo estilo escuro, mesma altura e borda rosa */
+            /* Filtros da visão geral: todos no mesmo estilo escuro, mesma altura e sem borda branca extra */
             div[data-testid="stSelectbox"] > div[data-baseweb="select"] > div,
             div[data-testid="stTextInput"] div[data-baseweb="input"] > div,
             div[data-testid="stDateInput"] div[data-baseweb="input"] > div {
                 min-height: 54px !important;
+                height: 54px !important;
                 border-radius: 15px !important;
-                border: 1px solid rgba(255, 75, 170, 0.55) !important;
+                border: 1px solid rgba(255, 75, 170, 0.72) !important;
                 background: rgba(8, 7, 24, 0.92) !important;
                 box-shadow: inset 0 1px 0 rgba(255,255,255,0.03), 0 10px 30px rgba(0,0,0,0.16) !important;
                 color: #FFFFFF !important;
+                outline: none !important;
             }
 
             div[data-testid="stSelectbox"] > div[data-baseweb="select"] > div:hover,
             div[data-testid="stTextInput"] div[data-baseweb="input"] > div:hover,
             div[data-testid="stDateInput"] div[data-baseweb="input"] > div:hover {
-                border-color: rgba(255, 75, 170, 0.78) !important;
+                border-color: rgba(255, 75, 170, 0.88) !important;
             }
 
             div[data-testid="stSelectbox"] > div[data-baseweb="select"] > div:focus-within,
             div[data-testid="stTextInput"] div[data-baseweb="input"] > div:focus-within,
             div[data-testid="stDateInput"] div[data-baseweb="input"] > div:focus-within {
-                border-color: rgba(255, 75, 170, 0.95) !important;
+                border-color: rgba(255, 75, 170, 1) !important;
                 box-shadow: 0 0 0 1px rgba(255, 75, 170, 0.35), 0 0 22px rgba(169, 28, 255, 0.16) !important;
                 background: rgba(8, 7, 24, 0.98) !important;
+            }
+
+            /* Remove bordas extras/brancas internas especificamente do Período e Busca */
+            div[data-testid="stTextInput"] [data-baseweb="base-input"],
+            div[data-testid="stTextInput"] [data-baseweb="input"],
+            div[data-testid="stTextInput"] [data-baseweb="input"] > div,
+            div[data-testid="stDateInput"] [data-baseweb="base-input"],
+            div[data-testid="stDateInput"] [data-baseweb="input"],
+            div[data-testid="stDateInput"] [data-baseweb="input"] > div,
+            div[data-testid="stDateInput"] > div,
+            div[data-testid="stTextInput"] > div {
+                border: none !important;
+                outline: none !important;
+            }
+
+            div[data-testid="stTextInput"] [data-baseweb="input"],
+            div[data-testid="stTextInput"] [data-baseweb="input"] > div,
+            div[data-testid="stDateInput"] [data-baseweb="input"],
+            div[data-testid="stDateInput"] [data-baseweb="input"] > div {
+                min-height: 54px !important;
+                height: 54px !important;
+                box-shadow: none !important;
             }
 
             label {
@@ -1058,6 +1082,11 @@ def apply_dashboard_css() -> None:
                 color: #FFFFFF !important;
                 -webkit-text-fill-color: #FFFFFF !important;
                 caret-color: #FF4BAA !important;
+                min-height: 54px !important;
+                height: 54px !important;
+                line-height: 54px !important;
+                padding-top: 0 !important;
+                padding-bottom: 0 !important;
             }
 
             div[data-testid="stTextInput"] input::placeholder,
