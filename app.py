@@ -323,8 +323,8 @@ render_html(
         }
 
         .kpi-icon {
-            width: 42px;
-            height: 42px;
+            width: 38px;
+            height: 38px;
             border-radius: 12px;
             display: flex;
             align-items: center;
@@ -603,7 +603,9 @@ render_html(
         }
 
         div[data-testid="stHorizontalBlock"]:has(.login-left-marker) {
-            min-height: 84vh;
+            width: min(1180px, calc(100% - 48px));
+            min-height: 610px;
+            margin: 24px auto 0 auto;
             gap: 0 !important;
             border-radius: 24px;
             overflow: hidden;
@@ -613,7 +615,7 @@ render_html(
         }
 
         div[data-testid="stHorizontalBlock"]:has(.login-left-marker) > div[data-testid="column"]:first-child {
-            padding: 58px 38px 44px 38px;
+            padding: 38px 34px 32px 34px;
             background:
                 radial-gradient(circle at 22% 87%, rgba(141,36,255,.26), transparent 28%),
                 linear-gradient(180deg, #070710, #0a0a13);
@@ -623,7 +625,7 @@ render_html(
             display: flex;
             justify-content: center;
             flex-direction: column;
-            padding: 42px 7%;
+            padding: 34px 6%;
             background:
                 radial-gradient(circle at 36% 65%, rgba(246,59,155,.23), transparent 32%),
                 radial-gradient(circle at 74% 35%, rgba(141,36,255,.22), transparent 34%),
@@ -636,7 +638,7 @@ render_html(
         }
 
         .login-brand-content h1 {
-            margin-top: 48px;
+            margin-top: 32px;
             color: #fff;
             font-size: 2.30rem !important;
             line-height: 1.03;
@@ -693,13 +695,13 @@ render_html(
         }
 
         .login-info-card {
-            width: min(760px, 100%);
-            min-height: 178px;
+            width: min(690px, 100%);
+            min-height: 154px;
             display: grid;
             grid-template-columns: 120px 1fr;
             align-items: center;
-            gap: 20px;
-            padding: 30px 42px;
+            gap: 18px;
+            padding: 24px 34px;
             border-radius: 22px;
             background: #fbfbfd;
             box-shadow: 0 24px 68px rgba(0,0,0,.32), 0 0 34px rgba(246,59,155,.18);
@@ -712,15 +714,15 @@ render_html(
         }
 
         .login-info-logo {
-            width: 104px;
-            height: 104px;
+            width: 92px;
+            height: 92px;
             object-fit: contain;
             filter: drop-shadow(0 9px 16px rgba(125, 20, 157, .16));
         }
 
         .login-info-text {
             position: relative;
-            padding-top: 13px;
+            padding-top: 8px;
         }
 
         .login-info-symbol {
@@ -729,7 +731,7 @@ render_html(
             display: flex;
             align-items: center;
             justify-content: center;
-            margin: 0 0 11px 0;
+            margin: 0 0 9px 0;
             border-radius: 50%;
             background: rgba(141,36,255,.09);
             color: #9228f7;
@@ -738,7 +740,7 @@ render_html(
 
         .login-info-title {
             color: #151525;
-            font-size: 1.30rem;
+            font-size: 1.18rem;
             line-height: 1.2;
             font-weight: 900;
         }
@@ -1128,8 +1130,8 @@ def show_login() -> None:
         )
 
         if st.button("Entrar", use_container_width=True, key="login_button"):
-            expected_username = secret_value("APP_USERNAME", "oppi")
-            expected_password = secret_value("APP_PASSWORD", "Oppi@2026!")
+            expected_username = secret_value("APP_USERNAME", "oppitech")
+            expected_password = secret_value("APP_PASSWORD", "100316Rahi*")
 
             if username == expected_username and password == expected_password:
                 st.session_state["authenticated"] = True
