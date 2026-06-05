@@ -951,8 +951,8 @@ def apply_dashboard_css() -> None:
 # LOGIN
 # =========================================================
 def check_login(username: str, password: str) -> bool:
-    expected_user = st.secrets.get("APP_USERNAME", "oppi")
-    expected_password = st.secrets.get("APP_PASSWORD", "Oppi@2026!")
+    expected_user = st.secrets.get("APP_USERNAME", "oppitech")
+    expected_password = st.secrets.get("APP_PASSWORD", "100316Rahi*")
 
     return username == expected_user and password == expected_password
 
