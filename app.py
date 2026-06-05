@@ -560,13 +560,41 @@ def apply_login_css() -> None:
             }
 
             [data-testid="stForm"] {
+                position: relative !important;
+                isolation: isolate !important;
+                overflow: visible !important;
                 background: #FFFFFF !important;
                 border: none !important;
                 border-radius: 30px !important;
                 padding: 28px 32px 24px 32px !important;
-                box-shadow: 0 34px 88px rgba(0,0,0,0.30) !important;
+                box-shadow:
+                    0 28px 70px rgba(0,0,0,0.30),
+                    0 0 0 1px rgba(255,255,255,0.55) !important;
                 max-width: 640px !important;
                 margin: 0 auto !important;
+            }
+
+            [data-testid="stForm"]::before {
+                content: "";
+                position: absolute;
+                inset: -24px;
+                border-radius: 42px;
+                background:
+                    radial-gradient(circle at 18% 52%, rgba(255, 72, 170, 0.34), transparent 34%),
+                    radial-gradient(circle at 82% 50%, rgba(151, 42, 255, 0.34), transparent 36%),
+                    radial-gradient(circle at 50% 100%, rgba(233, 56, 193, 0.24), transparent 32%);
+                filter: blur(24px);
+                z-index: -2;
+                opacity: 1;
+            }
+
+            [data-testid="stForm"]::after {
+                content: "";
+                position: absolute;
+                inset: -1px;
+                border-radius: 31px;
+                background: linear-gradient(135deg, rgba(255,255,255,0.90), rgba(255,255,255,0.72));
+                z-index: -1;
             }
 
             .login-top-icon {
@@ -626,9 +654,21 @@ def apply_login_css() -> None:
                 color: #FFFFFF !important;
                 font-size: 1.03rem !important;
                 font-weight: 850 !important;
-                background: linear-gradient(90deg, #FF4E97 0%, #A91CFF 100%) !important;
-                box-shadow: 0 14px 30px rgba(204, 42, 255, 0.25) !important;
+                letter-spacing: 0.01em !important;
+                background: linear-gradient(90deg, #FF4BAA 0%, #D73AFF 54%, #8C2BFF 100%) !important;
+                box-shadow:
+                    0 16px 32px rgba(188, 32, 255, 0.28),
+                    0 6px 18px rgba(255, 75, 170, 0.18) !important;
                 margin-top: 0.45rem !important;
+                transition: transform 0.15s ease, box-shadow 0.15s ease !important;
+            }
+
+            [data-testid="stForm"] .stButton > button:hover,
+            [data-testid="stForm"] button[kind="secondaryFormSubmit"]:hover {
+                transform: translateY(-1px);
+                box-shadow:
+                    0 18px 36px rgba(188, 32, 255, 0.32),
+                    0 8px 22px rgba(255, 75, 170, 0.20) !important;
             }
 
             .login-forgot-row {
