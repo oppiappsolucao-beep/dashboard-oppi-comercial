@@ -1543,6 +1543,8 @@ def apply_dashboard_css() -> None:
                 align-items: center;
                 padding: 4px 7px;
                 border-radius: 7px;
+                margin-top: 0;
+                margin-bottom: 0;
                 background: rgba(255,255,255,0.97);
                 border: 1px solid rgba(169,28,255,0.08);
                 color: #261C35;
@@ -1583,33 +1585,70 @@ def apply_dashboard_css() -> None:
 
             /* Linhas compactas: sem espaços exagerados entre empresas */
             .st-key-compact_inline_table div[data-testid="stHorizontalBlock"] {
-                gap: 0.34rem !important;
+                gap: 0.28rem !important;
+                margin-top: 0 !important;
                 margin-bottom: 0 !important;
             }
 
+            .st-key-compact_inline_table > div,
             .st-key-compact_inline_table div[data-testid="stVerticalBlock"] {
-                gap: 0.20rem !important;
+                gap: 0.02rem !important;
+                row-gap: 0.02rem !important;
             }
 
             .st-key-compact_inline_table div[data-testid="stElementContainer"] {
+                margin-top: 0 !important;
                 margin-bottom: 0 !important;
+                padding-top: 0 !important;
+                padding-bottom: 0 !important;
             }
 
             .st-key-compact_inline_table div[data-testid="stSelectbox"] {
+                margin-top: 0 !important;
                 margin-bottom: 0 !important;
             }
 
+            .st-key-compact_inline_table div[data-testid="stSelectbox"] > div[data-baseweb="select"] {
+                min-height: 34px !important;
+                height: 34px !important;
+            }
+
             .st-key-compact_inline_table div[data-testid="stSelectbox"] > div[data-baseweb="select"] > div {
-                min-height: 30px !important;
-                height: 30px !important;
+                min-height: 34px !important;
+                height: 34px !important;
                 border-radius: 7px !important;
                 padding-top: 0 !important;
                 padding-bottom: 0 !important;
+                display: flex !important;
+                align-items: center !important;
+                overflow: visible !important;
+            }
+
+            .st-key-compact_inline_table div[data-testid="stSelectbox"] [role="button"] {
+                min-height: 34px !important;
+                height: 34px !important;
+                display: flex !important;
+                align-items: center !important;
+                overflow: visible !important;
+            }
+
+            .st-key-compact_inline_table div[data-testid="stSelectbox"] [role="button"] > div {
+                min-height: 34px !important;
+                display: flex !important;
+                align-items: center !important;
+                overflow: visible !important;
+            }
+
+            .st-key-compact_inline_table div[data-testid="stSelectbox"] svg {
+                overflow: visible !important;
+                flex-shrink: 0 !important;
             }
 
             .st-key-compact_inline_table iframe {
                 min-height: 30px !important;
                 height: 30px !important;
+                margin-top: 0 !important;
+                margin-bottom: 0 !important;
             }
 
             /* A tabela não deve ampliar no hover */
