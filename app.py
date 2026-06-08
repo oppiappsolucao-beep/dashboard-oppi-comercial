@@ -1599,12 +1599,28 @@ def apply_dashboard_css() -> None:
                 margin-bottom: 0 !important;
             }
 
+            .st-key-compact_inline_table div[data-testid="stSelectbox"] > div[data-baseweb="select"] {
+                min-height: 34px !important;
+                height: 34px !important;
+            }
+
             .st-key-compact_inline_table div[data-testid="stSelectbox"] > div[data-baseweb="select"] > div {
-                min-height: 30px !important;
-                height: 30px !important;
+                min-height: 34px !important;
+                height: 34px !important;
                 border-radius: 7px !important;
                 padding-top: 0 !important;
                 padding-bottom: 0 !important;
+                display: flex !important;
+                align-items: center !important;
+                overflow: visible !important;
+            }
+
+            .st-key-compact_inline_table div[data-testid="stSelectbox"] span,
+            .st-key-compact_inline_table div[data-testid="stSelectbox"] p {
+                line-height: 1.15 !important;
+                white-space: nowrap !important;
+                overflow: visible !important;
+                text-overflow: clip !important;
             }
 
             .st-key-compact_inline_table iframe {
