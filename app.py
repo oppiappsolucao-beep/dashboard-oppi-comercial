@@ -2257,6 +2257,34 @@ def apply_registration_css() -> None:
                 z-index: 10 !important;
             }
 
+            /* Mantém Vendedor, Status comercial e Observações escuros sobre o fundo cinza */
+            [data-testid="stForm"] div[data-testid="stSelectbox"] div[data-baseweb="select"],
+            [data-testid="stForm"] div[data-testid="stSelectbox"] div[data-baseweb="select"] > div,
+            [data-testid="stForm"] div[data-testid="stSelectbox"] div[data-baseweb="select"] > div > div,
+            [data-testid="stForm"] div[data-testid="stSelectbox"] [role="button"] {
+                background: rgba(8,7,24,0.96) !important;
+                color: #FFFFFF !important;
+                -webkit-text-fill-color: #FFFFFF !important;
+            }
+
+            [data-testid="stForm"] div[data-testid="stSelectbox"] svg {
+                color: #FFFFFF !important;
+                fill: #FFFFFF !important;
+            }
+
+            [data-testid="stForm"] div[data-testid="stTextArea"] div[data-baseweb="textarea"],
+            [data-testid="stForm"] div[data-testid="stTextArea"] div[data-baseweb="textarea"] > div,
+            [data-testid="stForm"] div[data-testid="stTextArea"] textarea {
+                background: rgba(8,7,24,0.96) !important;
+                color: #FFFFFF !important;
+                -webkit-text-fill-color: #FFFFFF !important;
+            }
+
+            [data-testid="stForm"] div[data-testid="stTextArea"] textarea::placeholder {
+                color: rgba(255,255,255,0.44) !important;
+                -webkit-text-fill-color: rgba(255,255,255,0.44) !important;
+            }
+
             [data-testid="stForm"] input,
             [data-testid="stForm"] textarea,
             [data-testid="stForm"] div[data-baseweb="select"] * {
