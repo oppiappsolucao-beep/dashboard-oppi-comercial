@@ -72,6 +72,9 @@ if "selected_page" not in st.session_state:
 if "selected_cadastro_subpage" not in st.session_state:
     st.session_state.selected_cadastro_subpage = "Novo contrato"
 
+if "selected_contract_sheet_row" not in st.session_state:
+    st.session_state.selected_contract_sheet_row = None
+
 if "navigation_session_token" not in st.session_state:
     st.session_state.navigation_session_token = ""
 
@@ -2569,6 +2572,166 @@ def apply_registration_css() -> None:
                 -webkit-text-fill-color: rgba(255,255,255,0.44) !important;
             }
 
+
+            /* Lista clicável das empresas cadastradas */
+            .st-key-contracts_names_list {
+                margin-top: 10px !important;
+                overflow: hidden !important;
+                border-radius: 18px !important;
+                border: 1px solid rgba(255,75,170,0.44) !important;
+                background:
+                    radial-gradient(circle at 100% 0%, rgba(169,28,255,0.14), transparent 34%),
+                    linear-gradient(145deg, rgba(13,11,31,0.99), rgba(7,6,18,0.99)) !important;
+                box-shadow:
+                    0 20px 46px rgba(0,0,0,0.30),
+                    0 0 0 1px rgba(169,28,255,0.08),
+                    0 0 26px rgba(169,28,255,0.12) !important;
+            }
+
+            .st-key-contracts_names_list div[data-testid="stVerticalBlock"] {
+                gap: 0 !important;
+            }
+
+            .st-key-contracts_names_list div[data-testid="stElementContainer"] {
+                margin: 0 !important;
+                padding: 0 !important;
+            }
+
+            .st-key-contracts_names_list .stButton > button {
+                width: 100% !important;
+                min-height: 45px !important;
+                margin: 0 !important;
+                padding: 11px 18px !important;
+                justify-content: flex-start !important;
+                border: none !important;
+                border-bottom: 1px solid rgba(255,75,170,0.10) !important;
+                border-radius: 0 !important;
+                color: rgba(255,255,255,0.92) !important;
+                background: rgba(11,10,27,0.96) !important;
+                box-shadow: none !important;
+                font-size: 0.90rem !important;
+                font-weight: 650 !important;
+                line-height: 1.25 !important;
+                text-align: left !important;
+                transition:
+                    background 0.18s ease,
+                    color 0.18s ease,
+                    padding-left 0.18s ease,
+                    box-shadow 0.18s ease !important;
+            }
+
+            .st-key-contracts_names_list div[data-testid="stElementContainer"]:nth-child(even) .stButton > button {
+                background: rgba(18,13,38,0.97) !important;
+            }
+
+            .st-key-contracts_names_list .stButton > button:hover {
+                transform: none !important;
+                padding-left: 22px !important;
+                color: #FFFFFF !important;
+                background: linear-gradient(90deg, rgba(255,75,170,0.18), rgba(169,28,255,0.13)) !important;
+                box-shadow: inset 4px 0 0 #FF4BAA !important;
+            }
+
+            .contracts-names-clickable-header {
+                padding: 14px 18px;
+                color: #FFFFFF;
+                font-size: 0.90rem;
+                font-weight: 950;
+                letter-spacing: 0.02em;
+                text-transform: uppercase;
+                background:
+                    linear-gradient(90deg, rgba(255,75,170,0.34), rgba(169,28,255,0.32)),
+                    rgba(12,10,28,0.98);
+                border-bottom: 1px solid rgba(255,75,170,0.34);
+            }
+
+            /* Página de visualização do cadastro preenchido */
+            .contract-detail-shell {
+                padding: 20px !important;
+                border-radius: 24px !important;
+                background:
+                    radial-gradient(circle at top left, rgba(255,255,255,0.92) 0%, rgba(255,255,255,0.00) 32%),
+                    radial-gradient(circle at bottom right, rgba(208,212,223,0.72) 0%, rgba(208,212,223,0.00) 34%),
+                    linear-gradient(180deg, #F7F8FC 0%, #ECEEF4 38%, #DCE0E9 72%, #CED3DE 100%) !important;
+                border: 1px solid rgba(63,53,83,0.14) !important;
+                box-shadow:
+                    0 18px 46px rgba(0,0,0,0.18),
+                    inset 0 1px 0 rgba(255,255,255,0.80) !important;
+            }
+
+            .contract-detail-grid {
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 14px 16px;
+                margin-bottom: 16px;
+            }
+
+            .contract-detail-grid.three-columns {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
+
+            .contract-detail-field {
+                min-width: 0;
+            }
+
+            .contract-detail-field.full-width {
+                grid-column: 1 / -1;
+            }
+
+            .contract-detail-label {
+                margin-bottom: 7px;
+                color: #2A2338;
+                font-size: 0.84rem;
+                font-weight: 780;
+            }
+
+            .contract-detail-value {
+                min-height: 48px;
+                display: flex;
+                align-items: center;
+                padding: 12px 14px;
+                border-radius: 13px;
+                border: 1px solid rgba(255,75,170,0.58);
+                background: rgba(8,7,24,0.94);
+                color: #FFFFFF;
+                font-size: 0.91rem;
+                line-height: 1.35;
+                word-break: break-word;
+                box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+                transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+            }
+
+            .contract-detail-value:hover {
+                transform: scale(1.012);
+                border-color: rgba(255,75,170,0.82);
+                box-shadow:
+                    0 0 0 1px rgba(255,75,170,0.12),
+                    0 0 14px rgba(169,28,255,0.12),
+                    0 8px 18px rgba(169,28,255,0.10),
+                    inset 0 1px 0 rgba(255,255,255,0.03);
+            }
+
+            .contract-detail-value.long-text {
+                min-height: 94px;
+                align-items: flex-start;
+                white-space: pre-wrap;
+            }
+
+            .st-key-contract_detail_back .stButton > button {
+                width: auto !important;
+                min-height: 42px !important;
+                margin-bottom: 14px !important;
+                padding: 0 18px !important;
+                border-radius: 13px !important;
+            }
+
+            @media (max-width: 900px) {
+                .contract-detail-grid,
+                .contract-detail-grid.three-columns {
+                    grid-template-columns: 1fr;
+                }
+            }
+
             [data-testid="stForm"] input,
             [data-testid="stForm"] textarea,
             [data-testid="stForm"] div[data-baseweb="select"] * {
@@ -3984,8 +4147,148 @@ def render_proposals_page(df: pd.DataFrame, columns: dict) -> None:
 # =========================================================
 # PÁGINA: TODOS OS CONTRATOS
 # =========================================================
+def _contract_detail_value(row: pd.Series, columns: dict, key: str) -> str:
+    column_name = columns.get(key)
+
+    if column_name and column_name in row.index:
+        value = normalize_text(row.get(column_name, ""))
+
+        if value:
+            return value
+
+    return "Não informado"
+
+
+def _contract_detail_field(label: str, value: str, full_width: bool = False, long_text: bool = False) -> str:
+    field_classes = ["contract-detail-field"]
+    value_classes = ["contract-detail-value"]
+
+    if full_width:
+        field_classes.append("full-width")
+
+    if long_text:
+        value_classes.append("long-text")
+
+    return (
+        f'<div class="{" ".join(field_classes)}">'
+        f'<div class="contract-detail-label">{html.escape(label)}</div>'
+        f'<div class="{" ".join(value_classes)}">{html.escape(normalize_text(value) or "Não informado")}</div>'
+        f'</div>'
+    )
+
+
+def render_contract_detail_page(df: pd.DataFrame, columns: dict, sheet_row: int) -> None:
+    selected_rows = df[df["_sheet_row"].astype(int) == int(sheet_row)].copy()
+
+    if selected_rows.empty:
+        st.session_state.selected_contract_sheet_row = None
+        st.warning("Não encontrei os dados dessa empresa na planilha.")
+        return
+
+    row = selected_rows.iloc[0]
+    company_name = normalize_text(row.get("_empresa", "")) or "Empresa cadastrada"
+
+    with st.container(key="contract_detail_back"):
+        if st.button("← Voltar para empresas cadastradas", key="back_to_contracts_names"):
+            st.session_state.selected_contract_sheet_row = None
+            st.rerun()
+
+    render_html(
+        f"""
+        <div class="registration-header-card">
+            <div class="registration-kicker">OPPI COMERCIAL • EMPRESA CADASTRADA</div>
+            <div class="registration-title">{html.escape(company_name)}</div>
+            <div class="registration-subtitle">
+                Visualize os dados cadastrados diretamente na planilha comercial.
+            </div>
+        </div>
+        """
+    )
+
+    company_fields = "".join(
+        [
+            _contract_detail_field("Nome da empresa", _contract_detail_value(row, columns, "empresa")),
+            _contract_detail_field("Data de abertura", _contract_detail_value(row, columns, "data_abertura")),
+            _contract_detail_field("CNPJ", _contract_detail_value(row, columns, "cnpj")),
+            _contract_detail_field("Capital social", _contract_detail_value(row, columns, "capital")),
+            _contract_detail_field("Endereço", _contract_detail_value(row, columns, "endereco"), full_width=True),
+            _contract_detail_field("E-mail da empresa", _contract_detail_value(row, columns, "email")),
+            _contract_detail_field("Site da empresa", _contract_detail_value(row, columns, "site")),
+        ]
+    )
+
+    phone_fields = "".join(
+        [
+            _contract_detail_field("Telefone B2B", _contract_detail_value(row, columns, "telefone_b2b")),
+            _contract_detail_field("Telefone fixo", _contract_detail_value(row, columns, "telefone_fixo")),
+            _contract_detail_field("Telefone alternativo", _contract_detail_value(row, columns, "telefone_alternativo")),
+        ]
+    )
+
+    partner_fields = "".join(
+        [
+            _contract_detail_field("Sócio 1", _contract_detail_value(row, columns, "socio_1")),
+            _contract_detail_field("CPF do sócio 1", _contract_detail_value(row, columns, "cpf_socio_1")),
+            _contract_detail_field("E-mail do sócio 1", _contract_detail_value(row, columns, "email_socio_1")),
+            _contract_detail_field("Telefone do sócio 1", _contract_detail_value(row, columns, "telefone_socio_1")),
+            _contract_detail_field("Sócio 2", _contract_detail_value(row, columns, "socio_2")),
+            _contract_detail_field("CPF do sócio 2", _contract_detail_value(row, columns, "cpf_socio_2")),
+            _contract_detail_field("Sócio 3", _contract_detail_value(row, columns, "socio_3")),
+            _contract_detail_field("CPF do sócio 3", _contract_detail_value(row, columns, "cpf_socio_3")),
+        ]
+    )
+
+    tracking_fields = "".join(
+        [
+            _contract_detail_field("Instagram", _contract_detail_value(row, columns, "instagram")),
+            _contract_detail_field("LinkedIn", _contract_detail_value(row, columns, "linkedin")),
+            _contract_detail_field("Vendedor", normalize_text(row.get("_vendedor", "")) or "Não informado"),
+            _contract_detail_field("Status comercial", normalize_text(row.get("_status_grupo", "")) or "Não informado"),
+            _contract_detail_field("Data do chamado", _contract_detail_value(row, columns, "data_chamado")),
+            _contract_detail_field("Última atualização", _contract_detail_value(row, columns, "ultima_atualizacao")),
+            _contract_detail_field("Observações", _contract_detail_value(row, columns, "observacoes"), full_width=True, long_text=True),
+        ]
+    )
+
+    render_html(
+        f"""
+        <div class="contract-detail-shell">
+            <div class="registration-section">
+                <div class="registration-section-title">DADOS DA EMPRESA</div>
+                <div class="registration-section-text">Informações institucionais cadastradas na planilha.</div>
+            </div>
+            <div class="contract-detail-grid">{company_fields}</div>
+
+            <div class="registration-section">
+                <div class="registration-section-title">TELEFONES DA EMPRESA</div>
+                <div class="registration-section-text">Contatos utilizados no acompanhamento comercial.</div>
+            </div>
+            <div class="contract-detail-grid three-columns">{phone_fields}</div>
+
+            <div class="registration-section">
+                <div class="registration-section-title">SÓCIOS E RESPONSÁVEIS</div>
+                <div class="registration-section-text">Responsáveis vinculados à empresa.</div>
+            </div>
+            <div class="contract-detail-grid">{partner_fields}</div>
+
+            <div class="registration-section">
+                <div class="registration-section-title">REDES SOCIAIS E ACOMPANHAMENTO</div>
+                <div class="registration-section-text">Informações comerciais e status atual do atendimento.</div>
+            </div>
+            <div class="contract-detail-grid">{tracking_fields}</div>
+        </div>
+        """
+    )
+
+
 def render_all_contracts_page(df: pd.DataFrame, columns: dict) -> None:
     apply_registration_css()
+
+    selected_sheet_row = st.session_state.get("selected_contract_sheet_row")
+
+    if selected_sheet_row:
+        render_contract_detail_page(df, columns, int(selected_sheet_row))
+        return
 
     render_html(
         """
@@ -4085,13 +4388,8 @@ def render_all_contracts_page(df: pd.DataFrame, columns: dict) -> None:
             )
         ].copy()
 
-    names_df = pd.DataFrame(
-        {
-            "Empresa": filtered_df["_empresa"],
-        }
-    )
-
-    names_df["Empresa"] = names_df["Empresa"].apply(normalize_text)
+    names_df = filtered_df[["_empresa", "_sheet_row"]].copy()
+    names_df["Empresa"] = names_df["_empresa"].apply(normalize_text)
     names_df = names_df[names_df["Empresa"] != ""].copy()
     names_df = names_df.sort_values(
         "Empresa",
@@ -4110,19 +4408,20 @@ def render_all_contracts_page(df: pd.DataFrame, columns: dict) -> None:
         st.info("Nenhuma empresa cadastrada foi encontrada com os filtros informados.")
         return
 
-    names_rows_html = "".join(
-        f'<div class="contracts-names-table-row">{html.escape(company_name)}</div>'
-        for company_name in names_df["Empresa"].tolist()
-    )
+    with st.container(key="contracts_names_list"):
+        render_html('<div class="contracts-names-clickable-header">Empresas cadastradas</div>')
 
-    render_html(
-        f"""
-        <div class="contracts-names-table">
-            <div class="contracts-names-table-header">Empresas cadastradas</div>
-            {names_rows_html}
-        </div>
-        """
-    )
+        for _, company_row in names_df.iterrows():
+            sheet_row = int(company_row["_sheet_row"])
+            company_name = normalize_text(company_row["Empresa"])
+
+            if st.button(
+                company_name,
+                key=f"open_contract_detail_{sheet_row}",
+                use_container_width=True,
+            ):
+                st.session_state.selected_contract_sheet_row = sheet_row
+                st.rerun()
 
 
 # =========================================================
