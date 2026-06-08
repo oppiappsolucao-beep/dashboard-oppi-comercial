@@ -2435,8 +2435,8 @@ def apply_registration_css() -> None:
             }
 
             [data-testid="stForm"] label {
-                color: #FFFFFF !important;
-                -webkit-text-fill-color: #FFFFFF !important;
+                color: #1E1828 !important;
+                -webkit-text-fill-color: #1E1828 !important;
                 font-size: 0.86rem !important;
                 font-weight: 800 !important;
             }
@@ -2547,14 +2547,14 @@ def apply_registration_css() -> None:
                 z-index: 10 !important;
             }
 
-            /* Labels dos seletores em branco, mantendo as caixas internas brancas */
+            /* Labels dos campos em preto para permanecerem legíveis sobre o fundo cinza */
             [data-testid="stForm"] div[data-testid="stSelectbox"] label,
             [data-testid="stForm"] div[data-testid="stSelectbox"] label p,
             [data-testid="stForm"] div[data-testid="stSelectbox"] label span,
             [data-testid="stForm"] div[data-testid="stSelectbox"] [data-testid="stWidgetLabel"],
             [data-testid="stForm"] div[data-testid="stSelectbox"] [data-testid="stWidgetLabel"] p {
-                color: #FFFFFF !important;
-                -webkit-text-fill-color: #FFFFFF !important;
+                color: #1E1828 !important;
+                -webkit-text-fill-color: #1E1828 !important;
             }
 
             /* Campos do formulário: caixas brancas e texto preto sobre o fundo cinza */
@@ -2731,7 +2731,7 @@ def apply_registration_css() -> None:
 
             .contract-detail-label {
                 margin-bottom: 7px;
-                color: #FFFFFF;
+                color: #1E1828;
                 font-size: 0.84rem;
                 font-weight: 780;
             }
