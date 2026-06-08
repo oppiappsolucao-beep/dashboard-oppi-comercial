@@ -1543,11 +1543,11 @@ def apply_dashboard_css() -> None:
                 display: flex;
                 align-items: center;
                 padding: 4px 7px;
-                border-radius: 0;
+                border-radius: 8px;
                 margin-top: 0;
                 margin-bottom: 0;
-                background: rgba(255,255,255,0.97);
-                border: 1px solid rgba(169,28,255,0.08);
+                background: transparent;
+                border: none;
                 color: #261C35;
                 font-size: 0.77rem;
                 line-height: 1.16;
@@ -1584,13 +1584,14 @@ def apply_dashboard_css() -> None:
                 color: #FF79C4;
             }
 
-            /* Linhas compactas: sem espaços exagerados entre empresas */
+            /* Linhas compactas: sem espaços escuros entre uma linha e outra */
             .st-key-compact_inline_table div[data-testid="stHorizontalBlock"] {
                 gap: 0.28rem !important;
                 margin-top: 0 !important;
                 margin-bottom: 0 !important;
                 padding-top: 0 !important;
                 padding-bottom: 0 !important;
+                align-items: center !important;
             }
 
             .st-key-compact_inline_table > div,
@@ -1599,22 +1600,6 @@ def apply_dashboard_css() -> None:
             .st-key-compact_inline_table div[data-testid="stElementContainer"] {
                 gap: 0 !important;
                 row-gap: 0 !important;
-                margin-top: 0 !important;
-                margin-bottom: 0 !important;
-                padding-top: 0 !important;
-                padding-bottom: 0 !important;
-            }
-
-            /* Remove o espaço residual criado entre cada linha da tabela */
-            .st-key-compact_inline_table div[data-testid="stHorizontalBlock"] + div[data-testid="stHorizontalBlock"] {
-                margin-top: -10px !important;
-            }
-
-            .st-key-compact_inline_table div[data-testid="stHorizontalBlock"]:not(:first-of-type) {
-                margin-top: -10px !important;
-            }
-
-            .st-key-compact_inline_table div[data-testid="stElementContainer"] {
                 margin-top: 0 !important;
                 margin-bottom: 0 !important;
                 padding-top: 0 !important;
@@ -1634,7 +1619,7 @@ def apply_dashboard_css() -> None:
             .st-key-compact_inline_table div[data-testid="stSelectbox"] > div[data-baseweb="select"] > div {
                 min-height: 34px !important;
                 height: 34px !important;
-                border-radius: 0 !important;
+                border-radius: 8px !important;
                 padding-top: 0 !important;
                 padding-bottom: 0 !important;
                 display: flex !important;
@@ -1668,6 +1653,33 @@ def apply_dashboard_css() -> None:
                 margin-top: 0 !important;
                 margin-bottom: 0 !important;
                 display: block !important;
+            }
+
+            /* Cada linha vira uma faixa branca contínua */
+            [class*="st-key-inline_row_"] {
+                margin: 0 !important;
+                padding: 0 !important;
+            }
+
+            [class*="st-key-inline_row_"] > div {
+                background: rgba(255,255,255,0.98);
+                border-radius: 0 !important;
+                margin: 0 !important;
+                padding: 2px 0 !important;
+                border-bottom: 1px solid rgba(155, 140, 180, 0.20);
+            }
+
+            [class*="st-key-inline_row_"] div[data-testid="stHorizontalBlock"] {
+                gap: 0.28rem !important;
+                margin: 0 !important;
+                padding: 0 0.15rem !important;
+                align-items: center !important;
+            }
+
+            [class*="st-key-inline_row_"] div[data-testid="stElementContainer"] {
+                margin: 0 !important;
+                padding-top: 0 !important;
+                padding-bottom: 0 !important;
             }
 
             /* A tabela não deve ampliar no hover */
@@ -2369,27 +2381,6 @@ def render_latest_calls_section(
             if original_status not in STATUS_OPTIONS:
                 original_status = "Novo Lead"
 
-            row_columns = st.columns(
-                [3.15, 1.45, 0.92, 1.65, 1.35, 0.90],
-                gap="small",
-            )
-
-            with row_columns[0]:
-                render_html(
-                    f'<div class="premium-inline-cell">{html.escape(normalize_text(row["Empresa"]) or "Sem empresa")}</div>'
-                )
-
-            with row_columns[1]:
-                render_html(
-                    f'<div class="premium-inline-cell phone">{html.escape(normalize_text(row["Telefone"]) or "Sem número")}</div>'
-                )
-
-            with row_columns[2]:
-                render_phone_copy_button(
-                    normalize_text(row["Telefone"]),
-                    row_key=f"phone-{sheet_row}",
-                )
-
             status_widget_key = f"inline_status_{sheet_row}_{normalize_search_text(original_status).replace(' ', '_')}"
 
             def save_inline_status(
@@ -2430,25 +2421,47 @@ def render_latest_calls_section(
                     )
                     st.session_state[widget_key] = previous_status
 
-            with row_columns[3]:
-                st.selectbox(
-                    "Status",
-                    STATUS_OPTIONS,
-                    index=STATUS_OPTIONS.index(original_status),
-                    key=status_widget_key,
-                    label_visibility="collapsed",
-                    on_change=save_inline_status,
+            with st.container(key=f"inline_row_{sheet_row}"):
+                row_columns = st.columns(
+                    [3.15, 1.45, 0.92, 1.65, 1.35, 0.90],
+                    gap="small",
                 )
 
-            with row_columns[4]:
-                render_html(
-                    f'<div class="premium-inline-cell muted">{html.escape(normalize_text(row["Vendedor"]) or "Sem vendedor")}</div>'
-                )
+                with row_columns[0]:
+                    render_html(
+                        f'<div class="premium-inline-cell">{html.escape(normalize_text(row["Empresa"]) or "Sem empresa")}</div>'
+                    )
 
-            with row_columns[5]:
-                render_html(
-                    f'<div class="premium-inline-cell date">{html.escape(normalize_text(row["Data"]))}</div>'
-                )
+                with row_columns[1]:
+                    render_html(
+                        f'<div class="premium-inline-cell phone">{html.escape(normalize_text(row["Telefone"]) or "Sem número")}</div>'
+                    )
+
+                with row_columns[2]:
+                    render_phone_copy_button(
+                        normalize_text(row["Telefone"]),
+                        row_key=f"phone-{sheet_row}",
+                    )
+
+                with row_columns[3]:
+                    st.selectbox(
+                        "Status",
+                        STATUS_OPTIONS,
+                        index=STATUS_OPTIONS.index(original_status),
+                        key=status_widget_key,
+                        label_visibility="collapsed",
+                        on_change=save_inline_status,
+                    )
+
+                with row_columns[4]:
+                    render_html(
+                        f'<div class="premium-inline-cell muted">{html.escape(normalize_text(row["Vendedor"]) or "Sem vendedor")}</div>'
+                    )
+
+                with row_columns[5]:
+                    render_html(
+                        f'<div class="premium-inline-cell date">{html.escape(normalize_text(row["Data"]))}</div>'
+                    )
 
 def prepare_filters(df: pd.DataFrame) -> pd.DataFrame:
     title_column, refresh_column = st.columns([3.8, 1.0], gap="large")
