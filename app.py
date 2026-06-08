@@ -1527,9 +1527,9 @@ def apply_dashboard_css() -> None:
             /* Tabela comercial compacta com botão Copiar */
             .premium-inline-table-header {
                 margin-top: 4px;
-                margin-bottom: 3px;
+                margin-bottom: 2px;
                 padding: 7px 8px;
-                border-radius: 9px;
+                border-radius: 8px 8px 0 0;
                 background: linear-gradient(90deg, rgba(255,75,170,0.15), rgba(169,28,255,0.15));
                 border: 1px solid rgba(255,75,170,0.24);
                 color: rgba(255,255,255,0.94);
@@ -1543,7 +1543,7 @@ def apply_dashboard_css() -> None:
                 display: flex;
                 align-items: center;
                 padding: 4px 7px;
-                border-radius: 5px;
+                border-radius: 0;
                 margin-top: 0;
                 margin-bottom: 0;
                 background: rgba(255,255,255,0.97);
@@ -1594,13 +1594,24 @@ def apply_dashboard_css() -> None:
             }
 
             .st-key-compact_inline_table > div,
-            .st-key-compact_inline_table div[data-testid="stVerticalBlock"] {
+            .st-key-compact_inline_table div[data-testid="stVerticalBlock"],
+            .st-key-compact_inline_table div[data-testid="stVerticalBlockBorderWrapper"],
+            .st-key-compact_inline_table div[data-testid="stElementContainer"] {
                 gap: 0 !important;
                 row-gap: 0 !important;
+                margin-top: 0 !important;
+                margin-bottom: 0 !important;
+                padding-top: 0 !important;
+                padding-bottom: 0 !important;
             }
 
+            /* Remove o espaço residual criado entre cada linha da tabela */
             .st-key-compact_inline_table div[data-testid="stHorizontalBlock"] + div[data-testid="stHorizontalBlock"] {
-                margin-top: 0 !important;
+                margin-top: -10px !important;
+            }
+
+            .st-key-compact_inline_table div[data-testid="stHorizontalBlock"]:not(:first-of-type) {
+                margin-top: -10px !important;
             }
 
             .st-key-compact_inline_table div[data-testid="stElementContainer"] {
@@ -1623,7 +1634,7 @@ def apply_dashboard_css() -> None:
             .st-key-compact_inline_table div[data-testid="stSelectbox"] > div[data-baseweb="select"] > div {
                 min-height: 34px !important;
                 height: 34px !important;
-                border-radius: 7px !important;
+                border-radius: 0 !important;
                 padding-top: 0 !important;
                 padding-bottom: 0 !important;
                 display: flex !important;
@@ -2068,7 +2079,7 @@ def render_phone_copy_button(phone: str, row_key: str) -> None:
                     width: 100%;
                     height: 29px;
                     border: none;
-                    border-radius: 7px;
+                    border-radius: 0;
                     cursor: pointer;
                     color: #FFFFFF;
                     font-size: 11px;
