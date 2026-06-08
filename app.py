@@ -2017,93 +2017,128 @@ def apply_dashboard_css() -> None:
                 will-change: auto !important;
             }
 
-            /* Menu lateral com submenu flutuante do Cadastro */
-            .st-key-sidebar_nav_visao_geral .stButton > button,
-            .st-key-sidebar_nav_pesos_medidas .stButton > button,
-            .st-key-sidebar_nav_cadastro div[data-testid="stPopover"] > button {
-                width: 100% !important;
-                min-height: 42px !important;
-                justify-content: flex-start !important;
-                padding: 0 0 !important;
-                border: none !important;
-                border-radius: 0 !important;
+            /* Menu lateral preservado com submenu flutuante lateral no Cadastro */
+            .oppi-side-nav {
+                display: flex;
+                flex-direction: column;
+                gap: 4px;
+                margin: 2px 0 14px 0;
+                overflow: visible !important;
+            }
+
+            .oppi-nav-link,
+            .oppi-nav-summary {
+                min-height: 38px;
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                width: 100%;
+                padding: 7px 0;
                 color: #241C34 !important;
-                background: transparent !important;
-                box-shadow: none !important;
-                font-weight: 800 !important;
-                text-align: left !important;
-                transition: transform 0.18s ease, color 0.18s ease !important;
+                text-decoration: none !important;
+                font-size: 0.93rem;
+                font-weight: 800;
+                line-height: 1;
+                cursor: pointer;
+                list-style: none;
+                transition: color 0.16s ease, transform 0.16s ease;
             }
 
-            .st-key-sidebar_nav_visao_geral .stButton > button:hover,
-            .st-key-sidebar_nav_pesos_medidas .stButton > button:hover,
-            .st-key-sidebar_nav_cadastro div[data-testid="stPopover"] > button:hover {
-                transform: scale(1.035) !important;
+            .oppi-nav-link:hover,
+            .oppi-nav-summary:hover {
                 color: #7D2DFF !important;
-                background: transparent !important;
-                box-shadow: none !important;
+                transform: translateX(3px);
             }
 
-            /* O popover do Cadastro funciona como um menu flutuante lateral */
-            .st-key-sidebar_nav_cadastro div[data-testid="stPopover"] > button::after {
-                content: "›";
+            .oppi-nav-summary::-webkit-details-marker {
+                display: none;
+            }
+
+            .oppi-nav-dot {
+                width: 16px;
+                height: 16px;
+                min-width: 16px;
+                border-radius: 50%;
+                border: 1px solid rgba(70, 62, 90, 0.34);
+                background: rgba(255,255,255,0.84);
+                box-shadow: inset 0 1px 0 rgba(255,255,255,0.84);
+            }
+
+            .oppi-nav-link.active .oppi-nav-dot,
+            .oppi-cadastro-details.active .oppi-nav-dot {
+                border: 4px solid #FF5C64;
+                background: #FFFFFF;
+                box-shadow: none;
+            }
+
+            .oppi-nav-arrow {
                 margin-left: auto;
-                color: #7D2DFF;
-                font-size: 1.32rem;
+                padding-right: 8px;
+                color: #241C34;
+                font-size: 1.35rem;
                 font-weight: 950;
                 line-height: 1;
             }
 
-            div[data-testid="stPopoverBody"] {
-                min-width: 270px !important;
-                max-width: 290px !important;
-                padding: 0 !important;
-                margin-left: 248px !important;
-                margin-top: -50px !important;
-                border-radius: 0 12px 12px 0 !important;
-                border: 1px solid rgba(255,255,255,0.08) !important;
-                border-left: 4px solid #7D2DFF !important;
-                background: #1D2730 !important;
-                box-shadow: 0 20px 46px rgba(0,0,0,0.34) !important;
-                overflow: hidden !important;
+            .oppi-cadastro-details {
+                position: relative;
+                overflow: visible !important;
             }
 
-            .submenu-popup-title {
-                padding: 16px 18px 12px 18px;
+            .oppi-cadastro-flyout {
+                display: none;
+                position: fixed;
+                left: 304px;
+                top: 222px;
+                width: 275px;
+                z-index: 999999;
+                overflow: hidden;
+                border-radius: 0 12px 12px 0;
+                border: 1px solid rgba(255,255,255,0.08);
+                border-left: 4px solid #7D2DFF;
+                background: #1D2730;
+                box-shadow: 0 22px 48px rgba(0,0,0,0.34);
+            }
+
+            .oppi-cadastro-details[open] .oppi-cadastro-flyout {
+                display: block;
+            }
+
+            .oppi-flyout-title {
+                padding: 16px 18px 13px 18px;
                 color: #FFFFFF;
-                font-size: 1.03rem;
+                font-size: 1rem;
                 font-weight: 900;
                 border-bottom: 1px solid rgba(255,255,255,0.10);
                 background: rgba(255,255,255,0.025);
             }
 
-            .submenu-popup-subtitle {
-                display: none;
-            }
-
-            div[data-testid="stPopoverBody"] .stButton > button {
-                width: 100% !important;
-                min-height: 46px !important;
-                margin: 0 !important;
-                padding: 0 18px !important;
-                justify-content: flex-start !important;
-                border: none !important;
-                border-radius: 0 !important;
-                background: transparent !important;
+            .oppi-flyout-link {
+                display: block;
+                min-height: 46px;
+                padding: 14px 18px 12px 18px;
                 color: rgba(255,255,255,0.92) !important;
-                font-size: 0.88rem !important;
-                font-weight: 650 !important;
-                text-align: left !important;
-                box-shadow: none !important;
-                transition: background 0.16s ease, color 0.16s ease, padding-left 0.16s ease !important;
+                text-decoration: none !important;
+                font-size: 0.88rem;
+                font-weight: 650;
+                background: transparent;
+                transition: background 0.16s ease, padding-left 0.16s ease, color 0.16s ease;
             }
 
-            div[data-testid="stPopoverBody"] .stButton > button:hover {
-                transform: none !important;
-                padding-left: 22px !important;
+            .oppi-flyout-link:hover,
+            .oppi-flyout-link.active {
+                padding-left: 22px;
                 color: #FFFFFF !important;
-                background: rgba(125,45,255,0.28) !important;
-                box-shadow: inset 3px 0 0 #A91CFF !important;
+                background: rgba(125,45,255,0.28);
+                box-shadow: inset 3px 0 0 #A91CFF;
+            }
+
+            @media (max-width: 900px) {
+                .oppi-cadastro-flyout {
+                    left: 286px;
+                    top: 210px;
+                    width: 245px;
+                }
             }
 
             @media (prefers-reduced-motion: reduce) {
@@ -2512,7 +2547,35 @@ def render_login_page() -> None:
 # =========================================================
 # SIDEBAR
 # =========================================================
+def _query_param_value(name: str) -> str:
+    value = st.query_params.get(name, "")
+
+    if isinstance(value, list):
+        return normalize_text(value[-1] if value else "")
+
+    return normalize_text(value)
+
+
+def _sync_navigation_from_query_params() -> None:
+    requested_page = normalize_search_text(_query_param_value("page"))
+    requested_contracts_page = normalize_search_text(_query_param_value("contracts"))
+
+    if requested_page == "visao-geral":
+        st.session_state.selected_page = "Visão Geral"
+    elif requested_page == "pesos-e-medidas":
+        st.session_state.selected_page = "Pesos e Medidas"
+    elif requested_page == "cadastro":
+        st.session_state.selected_page = "Cadastro"
+
+        if requested_contracts_page == "todos":
+            st.session_state.selected_cadastro_subpage = "Todos os contratos"
+        elif requested_contracts_page == "novo":
+            st.session_state.selected_cadastro_subpage = "Novo contrato"
+
+
 def render_sidebar() -> str:
+    _sync_navigation_from_query_params()
+
     with st.sidebar:
         logo_data_uri = get_logo_data_uri()
         logo_html = (
@@ -2539,52 +2602,42 @@ def render_sidebar() -> str:
         if st.session_state.selected_page not in ["Visão Geral", "Cadastro", "Pesos e Medidas"]:
             st.session_state.selected_page = "Visão Geral"
 
-        overview_icon = "🔴" if st.session_state.selected_page == "Visão Geral" else "◯"
-        cadastro_icon = "🔴" if st.session_state.selected_page == "Cadastro" else "◯"
-        score_icon = "🔴" if st.session_state.selected_page == "Pesos e Medidas" else "◯"
+        overview_active = "active" if st.session_state.selected_page == "Visão Geral" else ""
+        cadastro_active = "active" if st.session_state.selected_page == "Cadastro" else ""
+        scores_active = "active" if st.session_state.selected_page == "Pesos e Medidas" else ""
+        details_open = "open" if st.session_state.selected_page == "Cadastro" else ""
+        novo_active = "active" if st.session_state.get("selected_cadastro_subpage", "Novo contrato") == "Novo contrato" else ""
+        todos_active = "active" if st.session_state.get("selected_cadastro_subpage", "Novo contrato") == "Todos os contratos" else ""
 
-        with st.container(key="sidebar_nav_visao_geral"):
-            if st.button(
-                f"{overview_icon}  Visão Geral",
-                use_container_width=True,
-                key="sidebar_go_visao_geral",
-            ):
-                st.session_state.selected_page = "Visão Geral"
-                st.rerun()
+        render_html(
+            f"""
+            <nav class="oppi-side-nav">
+                <a class="oppi-nav-link {overview_active}" href="?page=visao-geral" target="_self">
+                    <span class="oppi-nav-dot"></span>
+                    <span>Visão Geral</span>
+                </a>
 
-        with st.container(key="sidebar_nav_cadastro"):
-            with st.popover(
-                f"{cadastro_icon}  Cadastro",
-                use_container_width=True,
-            ):
-                render_html('<div class="submenu-popup-title">Cadastro</div>')
+                <details class="oppi-cadastro-details {cadastro_active}" {details_open}>
+                    <summary class="oppi-nav-summary">
+                        <span class="oppi-nav-dot"></span>
+                        <span>Cadastro</span>
+                        <span class="oppi-nav-arrow">›</span>
+                    </summary>
 
-                if st.button(
-                    "Novo contrato",
-                    use_container_width=True,
-                    key="submenu_popup_novo_contrato",
-                ):
-                    st.session_state.selected_page = "Cadastro"
-                    st.session_state.selected_cadastro_subpage = "Novo contrato"
-                    st.rerun()
+                    <div class="oppi-cadastro-flyout">
+                        <div class="oppi-flyout-title">Cadastro</div>
+                        <a class="oppi-flyout-link {novo_active}" href="?page=cadastro&contracts=novo" target="_self">Novo contrato</a>
+                        <a class="oppi-flyout-link {todos_active}" href="?page=cadastro&contracts=todos" target="_self">Todos os contratos</a>
+                    </div>
+                </details>
 
-                if st.button(
-                    "Todos os contratos",
-                    use_container_width=True,
-                    key="submenu_popup_todos_contratos",
-                ):
-                    st.session_state.selected_page = "Cadastro"
-                    st.session_state.selected_cadastro_subpage = "Todos os contratos"
-                    st.rerun()
-
-        with st.container(key="sidebar_nav_pesos_medidas"):
-            if st.button(
-                f"{score_icon}  Pesos e Medidas",
-                use_container_width=True,
-                key="sidebar_go_pesos_medidas",
-            ):
-                st.session_state.selected_page = "Pesos e Medidas"
-                st.rerun()
+                <a class="oppi-nav-link {scores_active}" href="?page=pesos-e-medidas" target="_self">
+                    <span class="oppi-nav-dot"></span>
+                    <span>Pesos e Medidas</span>
+                </a>
+            </nav>
+            """
+        )
 
         render_html(
             """
@@ -2598,6 +2651,7 @@ def render_sidebar() -> str:
         if st.button("Sair", use_container_width=True, key="sidebar_logout"):
             st.session_state.authenticated = False
             st.session_state.auth_error = ""
+            st.query_params.clear()
             st.rerun()
 
     return st.session_state.selected_page
