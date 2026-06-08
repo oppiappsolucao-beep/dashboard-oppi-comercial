@@ -2814,6 +2814,55 @@ def apply_registration_css() -> None:
                 color: #FF79C4;
                 font-weight: 900;
             }
+
+            /* CORREÇÃO FINAL: campos do Novo contrato brancos com texto preto.
+               Este bloco fica por último para não ser sobrescrito pelo CSS anterior. */
+            [data-testid="stForm"] label,
+            [data-testid="stForm"] label p,
+            [data-testid="stForm"] label span,
+            [data-testid="stForm"] [data-testid="stWidgetLabel"],
+            [data-testid="stForm"] [data-testid="stWidgetLabel"] p,
+            [data-testid="stForm"] [data-testid="stWidgetLabel"] span {
+                color: #1E1828 !important;
+                -webkit-text-fill-color: #1E1828 !important;
+            }
+
+            [data-testid="stForm"] div[data-baseweb="input"],
+            [data-testid="stForm"] div[data-baseweb="input"] > div,
+            [data-testid="stForm"] div[data-baseweb="base-input"],
+            [data-testid="stForm"] div[data-testid="stDateInput"] div[data-baseweb="input"],
+            [data-testid="stForm"] div[data-testid="stDateInput"] div[data-baseweb="input"] > div,
+            [data-testid="stForm"] div[data-baseweb="select"] > div,
+            [data-testid="stForm"] div[data-baseweb="textarea"],
+            [data-testid="stForm"] div[data-baseweb="textarea"] > div {
+                background: #FFFFFF !important;
+                color: #1E1828 !important;
+                -webkit-text-fill-color: #1E1828 !important;
+            }
+
+            [data-testid="stForm"] input,
+            [data-testid="stForm"] textarea,
+            [data-testid="stForm"] div[data-baseweb="select"] *,
+            [data-testid="stForm"] div[data-baseweb="select"] span,
+            [data-testid="stForm"] div[data-baseweb="select"] div {
+                background: transparent !important;
+                color: #1E1828 !important;
+                -webkit-text-fill-color: #1E1828 !important;
+                caret-color: #1E1828 !important;
+            }
+
+            [data-testid="stForm"] input::placeholder,
+            [data-testid="stForm"] textarea::placeholder {
+                color: rgba(30,24,40,0.52) !important;
+                -webkit-text-fill-color: rgba(30,24,40,0.52) !important;
+            }
+
+            [data-testid="stForm"] div[data-baseweb="input"] > div,
+            [data-testid="stForm"] div[data-baseweb="select"] > div,
+            [data-testid="stForm"] div[data-baseweb="textarea"] > div {
+                border: 1px solid rgba(255,75,170,0.58) !important;
+                box-shadow: inset 0 1px 0 rgba(255,255,255,0.88) !important;
+            }
         </style>
         """
     )
