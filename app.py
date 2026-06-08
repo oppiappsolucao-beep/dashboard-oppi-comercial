@@ -2144,145 +2144,6 @@ def apply_dashboard_css() -> None:
                 }
             }
 
-            /* Navegação funcional sem recarregar a aplicação */
-            section[data-testid="stSidebar"] [class*="st-key-sidebar_menu_"] {
-                margin: 0 !important;
-                padding: 0 !important;
-            }
-
-            section[data-testid="stSidebar"] [class*="st-key-sidebar_menu_"] .stButton,
-            section[data-testid="stSidebar"] [class*="st-key-sidebar_menu_"] div[data-testid="stPopover"] {
-                width: 100% !important;
-            }
-
-            section[data-testid="stSidebar"] [class*="st-key-sidebar_menu_"] .stButton > button,
-            section[data-testid="stSidebar"] [class*="st-key-sidebar_menu_"] div[data-testid="stPopover"] > button {
-                width: 100% !important;
-                min-height: 38px !important;
-                display: flex !important;
-                align-items: center !important;
-                justify-content: flex-start !important;
-                gap: 10px !important;
-                padding: 7px 0 !important;
-                margin: 0 !important;
-                border: none !important;
-                border-radius: 0 !important;
-                background: transparent !important;
-                color: #241C34 !important;
-                box-shadow: none !important;
-                font-size: 0.93rem !important;
-                font-weight: 800 !important;
-                line-height: 1 !important;
-                text-align: left !important;
-                transition: color 0.16s ease, transform 0.16s ease !important;
-            }
-
-            section[data-testid="stSidebar"] [class*="st-key-sidebar_menu_"] .stButton > button:hover,
-            section[data-testid="stSidebar"] [class*="st-key-sidebar_menu_"] div[data-testid="stPopover"] > button:hover {
-                transform: translateX(3px) !important;
-                color: #7D2DFF !important;
-                filter: none !important;
-                box-shadow: none !important;
-            }
-
-            section[data-testid="stSidebar"] [class*="st-key-sidebar_menu_"] .stButton > button::before,
-            section[data-testid="stSidebar"] [class*="st-key-sidebar_menu_"] div[data-testid="stPopover"] > button::before {
-                content: "";
-                width: 16px;
-                height: 16px;
-                min-width: 16px;
-                border-radius: 50%;
-                border: 1px solid rgba(70, 62, 90, 0.34);
-                background: rgba(255,255,255,0.84);
-                box-shadow: inset 0 1px 0 rgba(255,255,255,0.84);
-            }
-
-            section[data-testid="stSidebar"] [class*="st-key-sidebar_menu_"][class*="_active"] .stButton > button::before,
-            section[data-testid="stSidebar"] [class*="st-key-sidebar_menu_"][class*="_active"] div[data-testid="stPopover"] > button::before {
-                border: 4px solid #FF5C64;
-                background: #FFFFFF;
-                box-shadow: none;
-            }
-
-            section[data-testid="stSidebar"] .st-key-sidebar_menu_cadastro div[data-testid="stPopover"] > button::after,
-            section[data-testid="stSidebar"] .st-key-sidebar_menu_cadastro_active div[data-testid="stPopover"] > button::after {
-                content: "›";
-                margin-left: auto;
-                padding-right: 8px;
-                color: #241C34;
-                font-size: 1.35rem;
-                font-weight: 950;
-                line-height: 1;
-            }
-
-            /* Submenu flutuante lateral, cinza como o menu */
-            div[data-testid="stPopoverBody"] {
-                position: fixed !important;
-                left: 304px !important;
-                top: 222px !important;
-                transform: none !important;
-                width: 275px !important;
-                min-width: 275px !important;
-                max-width: 275px !important;
-                padding: 0 !important;
-                overflow: hidden !important;
-                border-radius: 0 12px 12px 0 !important;
-                border: 1px solid rgba(63,53,83,0.16) !important;
-                border-left: 4px solid #A91CFF !important;
-                background:
-                    radial-gradient(circle at top left, rgba(255,255,255,0.96) 0%, rgba(255,255,255,0.00) 34%),
-                    radial-gradient(circle at bottom right, rgba(208,212,223,0.78) 0%, rgba(208,212,223,0.00) 40%),
-                    linear-gradient(180deg, #F7F8FC 0%, #ECEEF4 42%, #DCE0E9 100%) !important;
-                box-shadow: 0 22px 48px rgba(0,0,0,0.22), 0 0 18px rgba(169,28,255,0.10) !important;
-                z-index: 999999 !important;
-            }
-
-            .oppi-native-flyout-title {
-                padding: 16px 18px 13px 18px;
-                color: #241C34;
-                font-size: 1rem;
-                font-weight: 900;
-                border-bottom: 1px solid rgba(63,53,83,0.14);
-                background: rgba(255,255,255,0.46);
-            }
-
-            div[data-testid="stPopoverBody"] .stButton > button {
-                width: 100% !important;
-                min-height: 46px !important;
-                display: flex !important;
-                justify-content: flex-start !important;
-                padding: 14px 18px 12px 18px !important;
-                margin: 0 !important;
-                border: none !important;
-                border-radius: 0 !important;
-                color: #241C34 !important;
-                background: transparent !important;
-                box-shadow: none !important;
-                font-size: 0.88rem !important;
-                font-weight: 700 !important;
-                text-align: left !important;
-                transition: background 0.16s ease, padding-left 0.16s ease, color 0.16s ease !important;
-            }
-
-            div[data-testid="stPopoverBody"] .stButton > button:hover {
-                transform: none !important;
-                padding-left: 22px !important;
-                color: #5F1DB8 !important;
-                background: linear-gradient(90deg, rgba(255,75,170,0.14), rgba(169,28,255,0.13)) !important;
-                box-shadow: inset 3px 0 0 #A91CFF !important;
-                filter: none !important;
-            }
-
-            @media (max-width: 900px) {
-                div[data-testid="stPopoverBody"] {
-                    left: 286px !important;
-                    top: 210px !important;
-                    width: 245px !important;
-                    min-width: 245px !important;
-                    max-width: 245px !important;
-                }
-            }
-
             @media (prefers-reduced-motion: reduce) {
                 .metric-card,
                 .latest-calls-shell,
@@ -2716,6 +2577,8 @@ def _sync_navigation_from_query_params() -> None:
 
 
 def render_sidebar() -> str:
+    _sync_navigation_from_query_params()
+
     with st.sidebar:
         logo_data_uri = get_logo_data_uri()
         logo_html = (
@@ -2742,45 +2605,42 @@ def render_sidebar() -> str:
         if st.session_state.selected_page not in ["Visão Geral", "Cadastro", "Pesos e Medidas"]:
             st.session_state.selected_page = "Visão Geral"
 
-        overview_key = (
-            "sidebar_menu_visao_geral_active"
-            if st.session_state.selected_page == "Visão Geral"
-            else "sidebar_menu_visao_geral"
+        overview_active = "active" if st.session_state.selected_page == "Visão Geral" else ""
+        cadastro_active = "active" if st.session_state.selected_page == "Cadastro" else ""
+        scores_active = "active" if st.session_state.selected_page == "Pesos e Medidas" else ""
+        details_open = "open" if st.session_state.selected_page == "Cadastro" else ""
+        novo_active = "active" if st.session_state.get("selected_cadastro_subpage", "Novo contrato") == "Novo contrato" else ""
+        todos_active = "active" if st.session_state.get("selected_cadastro_subpage", "Novo contrato") == "Todos os contratos" else ""
+
+        render_html(
+            f"""
+            <nav class="oppi-side-nav">
+                <a class="oppi-nav-link {overview_active}" href="?page=visao-geral" target="_self">
+                    <span class="oppi-nav-dot"></span>
+                    <span>Visão Geral</span>
+                </a>
+
+                <details class="oppi-cadastro-details {cadastro_active}" {details_open}>
+                    <summary class="oppi-nav-summary">
+                        <span class="oppi-nav-dot"></span>
+                        <span>Cadastro</span>
+                        <span class="oppi-nav-arrow">›</span>
+                    </summary>
+
+                    <div class="oppi-cadastro-flyout">
+                        <div class="oppi-flyout-title">Cadastro</div>
+                        <a class="oppi-flyout-link {novo_active}" href="?page=cadastro&contracts=novo" target="_self">Novo contrato</a>
+                        <a class="oppi-flyout-link {todos_active}" href="?page=cadastro&contracts=todos" target="_self">Todos os contratos</a>
+                    </div>
+                </details>
+
+                <a class="oppi-nav-link {scores_active}" href="?page=pesos-e-medidas" target="_self">
+                    <span class="oppi-nav-dot"></span>
+                    <span>Pesos e Medidas</span>
+                </a>
+            </nav>
+            """
         )
-        cadastro_key = (
-            "sidebar_menu_cadastro_active"
-            if st.session_state.selected_page == "Cadastro"
-            else "sidebar_menu_cadastro"
-        )
-        scoring_key = (
-            "sidebar_menu_pesos_medidas_active"
-            if st.session_state.selected_page == "Pesos e Medidas"
-            else "sidebar_menu_pesos_medidas"
-        )
-
-        with st.container(key=overview_key):
-            if st.button("Visão Geral", key="sidebar_go_visao_geral", use_container_width=True):
-                st.session_state.selected_page = "Visão Geral"
-                st.rerun()
-
-        with st.container(key=cadastro_key):
-            with st.popover("Cadastro", use_container_width=True):
-                render_html('<div class="oppi-native-flyout-title">Cadastro</div>')
-
-                if st.button("Novo contrato", key="sidebar_go_novo_contrato", use_container_width=True):
-                    st.session_state.selected_page = "Cadastro"
-                    st.session_state.selected_cadastro_subpage = "Novo contrato"
-                    st.rerun()
-
-                if st.button("Todos os contratos", key="sidebar_go_todos_contratos", use_container_width=True):
-                    st.session_state.selected_page = "Cadastro"
-                    st.session_state.selected_cadastro_subpage = "Todos os contratos"
-                    st.rerun()
-
-        with st.container(key=scoring_key):
-            if st.button("Pesos e Medidas", key="sidebar_go_pesos_medidas", use_container_width=True):
-                st.session_state.selected_page = "Pesos e Medidas"
-                st.rerun()
 
         render_html(
             """
@@ -2794,6 +2654,7 @@ def render_sidebar() -> str:
         if st.button("Sair", use_container_width=True, key="sidebar_logout"):
             st.session_state.authenticated = False
             st.session_state.auth_error = ""
+            st.query_params.clear()
             st.rerun()
 
     return st.session_state.selected_page
