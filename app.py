@@ -2578,7 +2578,7 @@ def apply_registration_css() -> None:
                 margin-top: 10px !important;
                 overflow: hidden !important;
                 border-radius: 18px !important;
-                border: 1px solid rgba(169,28,255,0.20) !important;
+                border: 1px solid rgba(79,35,120,0.38) !important;
                 background:
                     radial-gradient(circle at top left, rgba(255,255,255,0.92) 0%, rgba(255,255,255,0.00) 34%),
                     radial-gradient(circle at bottom right, rgba(208,212,223,0.72) 0%, rgba(208,212,223,0.00) 36%),
@@ -2586,7 +2586,7 @@ def apply_registration_css() -> None:
                 box-shadow:
                     0 18px 42px rgba(0,0,0,0.18),
                     0 0 0 1px rgba(255,255,255,0.54),
-                    0 0 22px rgba(169,28,255,0.08) !important;
+                    0 0 18px rgba(79,35,120,0.07) !important;
             }
 
             .st-key-contracts_names_list div[data-testid="stVerticalBlock"] {
@@ -2628,9 +2628,9 @@ def apply_registration_css() -> None:
             .st-key-contracts_names_list .stButton > button:hover {
                 transform: none !important;
                 padding-left: 22px !important;
-                color: #6E26D9 !important;
-                background: linear-gradient(90deg, rgba(255,75,170,0.14), rgba(169,28,255,0.10), rgba(255,255,255,0.70)) !important;
-                box-shadow: inset 4px 0 0 #FF4BAA !important;
+                color: #4A215F !important;
+                background: linear-gradient(90deg, rgba(112,33,86,0.20), rgba(72,34,112,0.17), rgba(255,255,255,0.72)) !important;
+                box-shadow: inset 4px 0 0 #7C2A68 !important;
             }
 
             /* Mantém a lista igual à tabela aprovada: linhas juntas e nomes alinhados à esquerda */
@@ -2671,15 +2671,15 @@ def apply_registration_css() -> None:
 
             .contracts-names-clickable-header {
                 padding: 14px 18px;
-                color: #241C34;
+                color: #FFFFFF;
                 font-size: 0.90rem;
                 font-weight: 950;
                 letter-spacing: 0.02em;
                 text-transform: uppercase;
                 background:
-                    linear-gradient(90deg, rgba(255,75,170,0.16), rgba(169,28,255,0.14)),
-                    rgba(247,248,252,0.96);
-                border-bottom: 1px solid rgba(255,75,170,0.34);
+                    linear-gradient(90deg, rgba(105,30,82,0.98), rgba(68,31,104,0.98)),
+                    rgba(48,27,62,0.98);
+                border-bottom: 1px solid rgba(105,30,82,0.72);
             }
 
             /* Página de visualização do cadastro preenchido */
