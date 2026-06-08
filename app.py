@@ -2017,6 +2017,77 @@ def apply_dashboard_css() -> None:
                 will-change: auto !important;
             }
 
+            /* Menu lateral com submenu flutuante do Cadastro */
+            .st-key-sidebar_nav_visao_geral .stButton > button,
+            .st-key-sidebar_nav_pesos_medidas .stButton > button,
+            .st-key-sidebar_nav_cadastro div[data-testid="stPopover"] > button {
+                width: 100% !important;
+                min-height: 42px !important;
+                justify-content: flex-start !important;
+                padding: 0 0 !important;
+                border: none !important;
+                border-radius: 0 !important;
+                color: #241C34 !important;
+                background: transparent !important;
+                box-shadow: none !important;
+                font-weight: 800 !important;
+                text-align: left !important;
+                transition: transform 0.18s ease, color 0.18s ease !important;
+            }
+
+            .st-key-sidebar_nav_visao_geral .stButton > button:hover,
+            .st-key-sidebar_nav_pesos_medidas .stButton > button:hover,
+            .st-key-sidebar_nav_cadastro div[data-testid="stPopover"] > button:hover {
+                transform: scale(1.035) !important;
+                color: #7D2DFF !important;
+                background: transparent !important;
+                box-shadow: none !important;
+            }
+
+            div[data-testid="stPopoverBody"] {
+                min-width: 260px !important;
+                padding: 14px !important;
+                border-radius: 16px !important;
+                border: 1px solid rgba(255,75,170,0.36) !important;
+                background:
+                    radial-gradient(circle at 100% 0%, rgba(169,28,255,0.18), transparent 36%),
+                    linear-gradient(145deg, rgba(24,22,43,0.99), rgba(13,12,28,0.99)) !important;
+                box-shadow: 0 20px 46px rgba(0,0,0,0.32), 0 0 24px rgba(169,28,255,0.14) !important;
+            }
+
+            .submenu-popup-title {
+                color: #FFFFFF;
+                font-size: 1rem;
+                font-weight: 900;
+                margin-bottom: 2px;
+            }
+
+            .submenu-popup-subtitle {
+                color: rgba(255,255,255,0.62);
+                font-size: 0.78rem;
+                margin-bottom: 10px;
+            }
+
+            div[data-testid="stPopoverBody"] .stButton > button {
+                width: 100% !important;
+                min-height: 42px !important;
+                margin-top: 6px !important;
+                border-radius: 11px !important;
+                border: 1px solid rgba(255,75,170,0.28) !important;
+                background: rgba(255,255,255,0.045) !important;
+                color: #FFFFFF !important;
+                font-weight: 800 !important;
+                box-shadow: none !important;
+                transition: transform 0.18s ease, background 0.18s ease, border-color 0.18s ease !important;
+            }
+
+            div[data-testid="stPopoverBody"] .stButton > button:hover {
+                transform: scale(1.02) !important;
+                border-color: rgba(255,75,170,0.72) !important;
+                background: linear-gradient(90deg, rgba(255,75,170,0.22), rgba(169,28,255,0.22)) !important;
+                box-shadow: 0 8px 20px rgba(169,28,255,0.14) !important;
+            }
+
             @media (prefers-reduced-motion: reduce) {
                 .metric-card,
                 .latest-calls-shell,
@@ -2452,45 +2523,44 @@ def render_sidebar() -> str:
         if st.session_state.selected_page not in navigation_pages:
             st.session_state.selected_page = "Visão Geral"
 
-        page = st.radio(
-            "Navegação",
-            navigation_pages,
-            label_visibility="collapsed",
-            index=navigation_pages.index(st.session_state.selected_page),
-        )
+        # Navegação principal do menu lateral.
+        # O cadastro usa um popover, que abre uma telinha flutuante para a direita.
+        with st.container(key="sidebar_nav_visao_geral"):
+            if st.button("◯  Visão Geral", use_container_width=True, key="sidebar_go_visao_geral"):
+                st.session_state.selected_page = "Visão Geral"
+                st.rerun()
 
-        st.session_state.selected_page = page
+        with st.container(key="sidebar_nav_cadastro"):
+            with st.popover("◉  Cadastro", use_container_width=True):
+                render_html(
+                    """
+                    <div class="submenu-popup-title">Cadastro</div>
+                    <div class="submenu-popup-subtitle">Escolha uma opção</div>
+                    """
+                )
 
-        if page == "Cadastro":
-            render_html(
-                """
-                <div class="side-tip" style="margin-top:10px; margin-bottom:12px; background:rgba(255,255,255,0.52);">
-                    <div class="side-tip-icon">▸</div>
-                    <div class="side-tip-text">Submenu do cadastro</div>
-                </div>
-                """
-            )
-
-            current_subpage = st.session_state.get("selected_cadastro_subpage", "Novo contrato")
-            sub_col_1, sub_col_2 = st.columns(2, gap="small")
-
-            with sub_col_1:
-                if st.button("Novo contrato", key="sidebar_submenu_novo_contrato", use_container_width=True):
+                if st.button(
+                    "Novo contrato",
+                    use_container_width=True,
+                    key="submenu_popup_novo_contrato",
+                ):
+                    st.session_state.selected_page = "Cadastro"
                     st.session_state.selected_cadastro_subpage = "Novo contrato"
                     st.rerun()
 
-            with sub_col_2:
-                if st.button("Todos os contratos", key="sidebar_submenu_todos_contratos", use_container_width=True):
+                if st.button(
+                    "Todos os contratos",
+                    use_container_width=True,
+                    key="submenu_popup_todos_contratos",
+                ):
+                    st.session_state.selected_page = "Cadastro"
                     st.session_state.selected_cadastro_subpage = "Todos os contratos"
                     st.rerun()
 
-            render_html(
-                f"""
-                <div style="margin:6px 0 16px 0; color:rgba(33,26,48,0.78); font-size:0.82rem; font-weight:800;">
-                    Ativo: <span style="color:#7D2DFF;">{html.escape(current_subpage)}</span>
-                </div>
-                """
-            )
+        with st.container(key="sidebar_nav_pesos_medidas"):
+            if st.button("◯  Pesos e Medidas", use_container_width=True, key="sidebar_go_pesos_medidas"):
+                st.session_state.selected_page = "Pesos e Medidas"
+                st.rerun()
 
         render_html(
             """
@@ -2501,12 +2571,12 @@ def render_sidebar() -> str:
             """
         )
 
-        if st.button("Sair", use_container_width=True):
+        if st.button("Sair", use_container_width=True, key="sidebar_logout"):
             st.session_state.authenticated = False
             st.session_state.auth_error = ""
             st.rerun()
 
-    return page
+    return st.session_state.selected_page
 
 
 # =========================================================
