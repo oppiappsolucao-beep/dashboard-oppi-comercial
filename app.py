@@ -68,6 +68,9 @@ if "auth_error" not in st.session_state:
 if "selected_page" not in st.session_state:
     st.session_state.selected_page = "Visão Geral"
 
+if "selected_cadastro_subpage" not in st.session_state:
+    st.session_state.selected_cadastro_subpage = "Novo contrato"
+
 
 # =========================================================
 # UTILITÁRIOS
@@ -673,8 +676,13 @@ def identify_columns(df: pd.DataFrame) -> dict:
         "telefone_fixo": first_existing_column(df, ["Telefone fixo", "Fixo"]),
         "telefone_alternativo": first_existing_column(df, ["Telefone lemitt", "Telefone alternativo", "Outro telefone"]),
         "socio_1": first_existing_column(df, ["Sócio 1", "Socio 1", "Sócio1", "Socio1"]),
+        "cpf_socio_1": first_existing_column(df, ["CPF"]),
+        "email_socio_1": first_existing_column(df, ["E-mail Sócio 1", "Email Sócio 1", "E-mail Socio 1", "Email Socio 1"]),
+        "telefone_socio_1": first_existing_column(df, ["Telefone sócio 1", "Telefone socio 1", "Telefone cliente", "Telefone"]),
         "socio_2": first_existing_column(df, ["Sócio 2", "Socio 2", "Sócio2", "Socio2"]),
+        "cpf_socio_2": first_existing_column(df, ["CPF_2"]),
         "socio_3": first_existing_column(df, ["Sócio 3", "Socio 3", "Sócio3", "Socio3"]),
+        "cpf_socio_3": first_existing_column(df, ["CPF_3"]),
         "instagram": first_existing_column(df, ["Instagram"]),
         "linkedin": first_existing_column(df, ["Linkedin", "LinkedIn"]),
         "vendedor": first_existing_column(df, ["Vendedor", "Responsável", "Responsavel"]),
@@ -2438,8 +2446,6 @@ def render_sidebar() -> str:
 
         navigation_pages = ["Visão Geral", "Cadastro", "Pesos e Medidas"]
 
-        # Compatibilidade com sessões abertas antes da troca de nome da página.
-        # Caso o navegador ainda tenha "Propostas" salvo na sessão, abre "Cadastro".
         if st.session_state.selected_page == "Propostas":
             st.session_state.selected_page = "Cadastro"
 
@@ -2454,6 +2460,37 @@ def render_sidebar() -> str:
         )
 
         st.session_state.selected_page = page
+
+        if page == "Cadastro":
+            render_html(
+                """
+                <div class="side-tip" style="margin-top:10px; margin-bottom:12px; background:rgba(255,255,255,0.52);">
+                    <div class="side-tip-icon">▸</div>
+                    <div class="side-tip-text">Submenu do cadastro</div>
+                </div>
+                """
+            )
+
+            current_subpage = st.session_state.get("selected_cadastro_subpage", "Novo contrato")
+            sub_col_1, sub_col_2 = st.columns(2, gap="small")
+
+            with sub_col_1:
+                if st.button("Novo contrato", key="sidebar_submenu_novo_contrato", use_container_width=True):
+                    st.session_state.selected_cadastro_subpage = "Novo contrato"
+                    st.rerun()
+
+            with sub_col_2:
+                if st.button("Todos os contratos", key="sidebar_submenu_todos_contratos", use_container_width=True):
+                    st.session_state.selected_cadastro_subpage = "Todos os contratos"
+                    st.rerun()
+
+            render_html(
+                f"""
+                <div style="margin:6px 0 16px 0; color:rgba(33,26,48,0.78); font-size:0.82rem; font-weight:800;">
+                    Ativo: <span style="color:#7D2DFF;">{html.escape(current_subpage)}</span>
+                </div>
+                """
+            )
 
         render_html(
             """
@@ -3197,8 +3234,8 @@ def render_proposals_page(df: pd.DataFrame, columns: dict) -> None:
     render_html(
         """
         <div class="registration-header-card">
-            <div class="registration-kicker">OPPI COMERCIAL • CADASTRO</div>
-            <div class="registration-title">Cadastro de empresas</div>
+            <div class="registration-kicker">OPPI COMERCIAL • NOVO CONTRATO</div>
+            <div class="registration-title">Novo contrato</div>
             <div class="registration-subtitle">
                 Registre uma nova empresa e envie os dados diretamente para a planilha comercial.
             </div>
@@ -3517,6 +3554,153 @@ def render_proposals_page(df: pd.DataFrame, columns: dict) -> None:
 
 
 # =========================================================
+# PÁGINA: TODOS OS CONTRATOS
+# =========================================================
+def render_all_contracts_page(df: pd.DataFrame, columns: dict) -> None:
+    apply_registration_css()
+
+    render_html(
+        """
+        <div class="registration-header-card">
+            <div class="registration-kicker">OPPI COMERCIAL • TODOS OS CONTRATOS</div>
+            <div class="registration-title">Todos os contratos</div>
+            <div class="registration-subtitle">
+                Consulte toda a base cadastrada e filtre por empresa, CNPJ, nome do cliente ou número.
+            </div>
+        </div>
+        """
+    )
+
+    filter_col_1, filter_col_2, filter_col_3, filter_col_4 = st.columns(4, gap="medium")
+
+    with filter_col_1:
+        filter_empresa = st.text_input(
+            "Empresa",
+            key="contracts_filter_empresa",
+            placeholder="Digite a empresa",
+        )
+
+    with filter_col_2:
+        filter_cnpj = st.text_input(
+            "CNPJ",
+            key="contracts_filter_cnpj",
+            placeholder="Digite o CNPJ",
+        )
+
+    with filter_col_3:
+        filter_cliente = st.text_input(
+            "Nome do cliente",
+            key="contracts_filter_cliente",
+            placeholder="Digite o nome do cliente",
+        )
+
+    with filter_col_4:
+        filter_numero = st.text_input(
+            "Número",
+            key="contracts_filter_numero",
+            placeholder="Digite o número",
+        )
+
+    contracts_df = pd.DataFrame(
+        {
+            "Empresa": df["_empresa"],
+            "Data de abertura": safe_series(df, columns.get("data_abertura")),
+            "CNPJ": safe_series(df, columns.get("cnpj")),
+            "Capital social": safe_series(df, columns.get("capital")),
+            "Endereço": safe_series(df, columns.get("endereco")),
+            "E-mail empresa": safe_series(df, columns.get("email")),
+            "Site": safe_series(df, columns.get("site")),
+            "Telefone B2B": safe_series(df, columns.get("telefone_b2b")),
+            "Telefone fixo": safe_series(df, columns.get("telefone_fixo")),
+            "Telefone alternativo": safe_series(df, columns.get("telefone_alternativo")),
+            "Nome do cliente": safe_series(df, columns.get("socio_1")),
+            "CPF do cliente": safe_series(df, columns.get("cpf_socio_1")),
+            "E-mail do cliente": safe_series(df, columns.get("email_socio_1")),
+            "Telefone do cliente": safe_series(df, columns.get("telefone_socio_1")),
+            "Sócio 2": safe_series(df, columns.get("socio_2")),
+            "CPF Sócio 2": safe_series(df, columns.get("cpf_socio_2")),
+            "Sócio 3": safe_series(df, columns.get("socio_3")),
+            "CPF Sócio 3": safe_series(df, columns.get("cpf_socio_3")),
+            "Instagram": safe_series(df, columns.get("instagram")),
+            "LinkedIn": safe_series(df, columns.get("linkedin")),
+            "Vendedor": df["_vendedor"],
+            "Status": df["_status_grupo"],
+            "Data do chamado": safe_series(df, columns.get("data_chamado")),
+            "Última atualização": safe_series(df, columns.get("ultima_atualizacao")),
+            "Observações": safe_series(df, columns.get("observacoes")),
+        }
+    )
+
+    filtered_contracts_df = contracts_df.copy()
+
+    if normalize_text(filter_empresa):
+        term = normalize_search_text(filter_empresa)
+        filtered_contracts_df = filtered_contracts_df[
+            filtered_contracts_df["Empresa"].apply(lambda value: term in normalize_search_text(value))
+        ].copy()
+
+    if normalize_text(filter_cnpj):
+        term = normalize_search_text(filter_cnpj)
+        filtered_contracts_df = filtered_contracts_df[
+            filtered_contracts_df["CNPJ"].apply(lambda value: term in normalize_search_text(value))
+        ].copy()
+
+    if normalize_text(filter_cliente):
+        term = normalize_search_text(filter_cliente)
+        filtered_contracts_df = filtered_contracts_df[
+            filtered_contracts_df.apply(
+                lambda row: term in normalize_search_text(
+                    " | ".join(
+                        [
+                            normalize_text(row.get("Nome do cliente", "")),
+                            normalize_text(row.get("Sócio 2", "")),
+                            normalize_text(row.get("Sócio 3", "")),
+                        ]
+                    )
+                ),
+                axis=1,
+            )
+        ].copy()
+
+    if normalize_text(filter_numero):
+        term = normalize_search_text(filter_numero)
+        filtered_contracts_df = filtered_contracts_df[
+            filtered_contracts_df.apply(
+                lambda row: term in normalize_search_text(
+                    " | ".join(
+                        [
+                            normalize_text(row.get("Telefone B2B", "")),
+                            normalize_text(row.get("Telefone fixo", "")),
+                            normalize_text(row.get("Telefone alternativo", "")),
+                            normalize_text(row.get("Telefone do cliente", "")),
+                        ]
+                    )
+                ),
+                axis=1,
+            )
+        ].copy()
+
+    render_html(
+        f"""
+        <div class="registration-note" style="margin-top:14px; margin-bottom:14px;">
+            Exibindo <strong>{len(filtered_contracts_df)}</strong> contrato(s) na tabela abaixo.
+        </div>
+        """
+    )
+
+    if filtered_contracts_df.empty:
+        st.info("Nenhum contrato encontrado com os filtros informados.")
+        return
+
+    st.dataframe(
+        filtered_contracts_df,
+        use_container_width=True,
+        hide_index=True,
+        height=620,
+    )
+
+
+# =========================================================
 # PÁGINA: PESOS E MEDIDAS
 # =========================================================
 def render_scoring_page(df: pd.DataFrame, columns: dict) -> None:
@@ -3638,7 +3822,12 @@ def main() -> None:
     if page == "Visão Geral":
         render_overview_page(prepared_df, columns)
     elif page == "Cadastro":
-        render_proposals_page(prepared_df, columns)
+        cadastro_subpage = st.session_state.get("selected_cadastro_subpage", "Novo contrato")
+
+        if cadastro_subpage == "Todos os contratos":
+            render_all_contracts_page(prepared_df, columns)
+        else:
+            render_proposals_page(prepared_df, columns)
     elif page == "Pesos e Medidas":
         render_scoring_page(prepared_df, columns)
 
