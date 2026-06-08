@@ -1599,28 +1599,12 @@ def apply_dashboard_css() -> None:
                 margin-bottom: 0 !important;
             }
 
-            .st-key-compact_inline_table div[data-testid="stSelectbox"] > div[data-baseweb="select"] {
-                min-height: 34px !important;
-                height: 34px !important;
-            }
-
             .st-key-compact_inline_table div[data-testid="stSelectbox"] > div[data-baseweb="select"] > div {
-                min-height: 34px !important;
-                height: 34px !important;
+                min-height: 30px !important;
+                height: 30px !important;
                 border-radius: 7px !important;
                 padding-top: 0 !important;
                 padding-bottom: 0 !important;
-                display: flex !important;
-                align-items: center !important;
-                overflow: visible !important;
-            }
-
-            .st-key-compact_inline_table div[data-testid="stSelectbox"] span,
-            .st-key-compact_inline_table div[data-testid="stSelectbox"] p {
-                line-height: 1.15 !important;
-                white-space: nowrap !important;
-                overflow: visible !important;
-                text-overflow: clip !important;
             }
 
             .st-key-compact_inline_table iframe {
@@ -1921,13 +1905,19 @@ def render_sidebar() -> str:
             """
         )
 
+        page_options = ["Visão Geral", "Propostas", "Pesos e Medidas"]
+        page_labels = {
+            "Visão Geral": "Visão Geral",
+            "Propostas": "Cadastro",
+            "Pesos e Medidas": "Pesos e Medidas",
+        }
+
         page = st.radio(
             "Navegação",
-            ["Visão Geral", "Propostas", "Pesos e Medidas"],
+            page_options,
             label_visibility="collapsed",
-            index=["Visão Geral", "Propostas", "Pesos e Medidas"].index(
-                st.session_state.selected_page
-            ),
+            index=page_options.index(st.session_state.selected_page),
+            format_func=lambda option: page_labels[option],
         )
 
         st.session_state.selected_page = page
@@ -2247,27 +2237,18 @@ def render_latest_calls_section(
             )
 
     selected_status = st.session_state.get(selected_card_key)
-    search_term = normalize_text(st.session_state.get("dashboard_filter_search", ""))
-    global_search_active = bool(search_term)
 
-    # Quando o campo de busca estiver preenchido, a tabela exibe todos os
-    # registros encontrados na planilha inteira, independentemente do card de
-    # status que estava selecionado anteriormente.
-    if global_search_active:
-        selected_df = filtered_df.copy()
-    else:
-        if not selected_status:
-            render_html(
-                """
-                <div class="latest-placeholder-card">
-                    Selecione um status clicando em “Ver nomes” para visualizar os registros.
-                </div>
-                """
-            )
-            return
+    if not selected_status:
+        render_html(
+            """
+            <div class="latest-placeholder-card">
+                Selecione um status clicando em “Ver nomes” para visualizar os registros.
+            </div>
+            """
+        )
+        return
 
-        selected_df = filtered_df[filtered_df["_status_grupo"] == selected_status].copy()
-
+    selected_df = filtered_df[filtered_df["_status_grupo"] == selected_status].copy()
     selected_df = selected_df.sort_values(
         ["_data_chamado", "_empresa"],
         ascending=[False, True],
@@ -2475,31 +2456,6 @@ def prepare_filters(df: pd.DataFrame) -> pd.DataFrame:
     selected_range = st.session_state.dashboard_filter_period
     search_term = st.session_state.dashboard_filter_search
 
-    # A busca por empresa ou telefone é global: quando o usuário digita algo
-    # nesse campo, pesquisamos a planilha inteira e ignoramos os filtros de
-    # vendedor, status e período. Dessa forma, nenhum registro fica oculto por
-    # um filtro aplicado anteriormente.
-    if normalize_text(search_term):
-        term = normalize_search_text(search_term)
-        global_search_df = df.copy()
-
-        global_search_df = global_search_df[
-            global_search_df.apply(
-                lambda row: term
-                in normalize_search_text(
-                    " | ".join(
-                        [
-                            normalize_text(row.get("_empresa", "")),
-                            normalize_text(row.get("_telefone", "")),
-                        ]
-                    )
-                ),
-                axis=1,
-            )
-        ].copy()
-
-        return global_search_df
-
     filtered_df = df.copy()
 
     if selected_seller != "Todos os vendedores":
@@ -2516,6 +2472,26 @@ def prepare_filters(df: pd.DataFrame) -> pd.DataFrame:
             | (
                 (filtered_df["_data_chamado"].dt.date >= start_date)
                 & (filtered_df["_data_chamado"].dt.date <= end_date)
+            )
+        ].copy()
+
+    if normalize_text(search_term):
+        term = normalize_search_text(search_term)
+
+        filtered_df = filtered_df[
+            filtered_df.apply(
+                lambda row: term
+                in normalize_search_text(
+                    " | ".join(
+                        [
+                            normalize_text(row.get("_empresa", "")),
+                            normalize_text(row.get("_telefone", "")),
+                            normalize_text(row.get("_vendedor", "")),
+                            normalize_text(row.get("_status_grupo", "")),
+                        ]
+                    )
+                ),
+                axis=1,
             )
         ].copy()
 
@@ -2666,7 +2642,7 @@ def render_overview_page(df: pd.DataFrame, columns: dict) -> None:
 def render_proposals_page(df: pd.DataFrame, columns: dict) -> None:
     render_html(
         """
-        <div class="page-title">Propostas</div>
+        <div class="page-title">Cadastro</div>
         <div class="page-subtitle">Acompanhe as empresas com evolução comercial e propostas enviadas.</div>
         """
     )
