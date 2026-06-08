@@ -1581,47 +1581,18 @@ def apply_dashboard_css() -> None:
                 color: #FF79C4;
             }
 
-            /* Linhas compactas: uma empresa imediatamente abaixo da outra */
+            /* Linhas compactas: sem espaços exagerados entre empresas */
             .st-key-compact_inline_table div[data-testid="stHorizontalBlock"] {
                 gap: 0.34rem !important;
-                margin-top: 0 !important;
                 margin-bottom: 0 !important;
-                padding-top: 0 !important;
-                padding-bottom: 0 !important;
-                align-items: center !important;
             }
 
-            .st-key-compact_inline_table div[data-testid="stVerticalBlock"],
-            .st-key-compact_inline_table div[data-testid="stVerticalBlockBorderWrapper"] {
-                gap: 0 !important;
-                row-gap: 0 !important;
-                margin-top: 0 !important;
-                margin-bottom: 0 !important;
-                padding-top: 0 !important;
-                padding-bottom: 0 !important;
+            .st-key-compact_inline_table div[data-testid="stVerticalBlock"] {
+                gap: 0.20rem !important;
             }
 
             .st-key-compact_inline_table div[data-testid="stElementContainer"] {
-                margin-top: 0 !important;
                 margin-bottom: 0 !important;
-                padding-top: 0 !important;
-                padding-bottom: 0 !important;
-            }
-
-            /* Remove o respiro escuro residual criado pelo Streamlit entre as linhas */
-            .st-key-compact_inline_table [class*="st-key-compact_table_row_"] {
-                margin-top: -0.20rem !important;
-                margin-bottom: 0 !important;
-                padding-top: 0 !important;
-                padding-bottom: 0 !important;
-            }
-
-            .st-key-compact_inline_table [class*="st-key-compact_table_row_"] div[data-testid="stHorizontalBlock"],
-            .st-key-compact_inline_table [class*="st-key-compact_table_row_"] div[data-testid="stElementContainer"] {
-                margin-top: 0 !important;
-                margin-bottom: 0 !important;
-                padding-top: 0 !important;
-                padding-bottom: 0 !important;
             }
 
             .st-key-compact_inline_table div[data-testid="stSelectbox"] {
@@ -2340,27 +2311,26 @@ def render_latest_calls_section(
             if original_status not in STATUS_OPTIONS:
                 original_status = "Novo Lead"
 
-            with st.container(key=f"compact_table_row_{sheet_row}"):
-                row_columns = st.columns(
-                    [3.15, 1.45, 0.92, 1.65, 1.35, 0.90],
-                    gap="small",
+            row_columns = st.columns(
+                [3.15, 1.45, 0.92, 1.65, 1.35, 0.90],
+                gap="small",
+            )
+
+            with row_columns[0]:
+                render_html(
+                    f'<div class="premium-inline-cell">{html.escape(normalize_text(row["Empresa"]) or "Sem empresa")}</div>'
                 )
 
-                with row_columns[0]:
-                    render_html(
-                        f'<div class="premium-inline-cell">{html.escape(normalize_text(row["Empresa"]) or "Sem empresa")}</div>'
-                    )
+            with row_columns[1]:
+                render_html(
+                    f'<div class="premium-inline-cell phone">{html.escape(normalize_text(row["Telefone"]) or "Sem número")}</div>'
+                )
 
-                with row_columns[1]:
-                    render_html(
-                        f'<div class="premium-inline-cell phone">{html.escape(normalize_text(row["Telefone"]) or "Sem número")}</div>'
-                    )
-
-                with row_columns[2]:
-                    render_phone_copy_button(
-                        normalize_text(row["Telefone"]),
-                        row_key=f"phone-{sheet_row}",
-                    )
+            with row_columns[2]:
+                render_phone_copy_button(
+                    normalize_text(row["Telefone"]),
+                    row_key=f"phone-{sheet_row}",
+                )
 
             status_widget_key = f"inline_status_{sheet_row}_{normalize_search_text(original_status).replace(' ', '_')}"
 
@@ -2402,25 +2372,25 @@ def render_latest_calls_section(
                     )
                     st.session_state[widget_key] = previous_status
 
-                with row_columns[3]:
-                    st.selectbox(
-                        "Status",
-                        STATUS_OPTIONS,
-                        index=STATUS_OPTIONS.index(original_status),
-                        key=status_widget_key,
-                        label_visibility="collapsed",
-                        on_change=save_inline_status,
-                    )
+            with row_columns[3]:
+                st.selectbox(
+                    "Status",
+                    STATUS_OPTIONS,
+                    index=STATUS_OPTIONS.index(original_status),
+                    key=status_widget_key,
+                    label_visibility="collapsed",
+                    on_change=save_inline_status,
+                )
 
-                with row_columns[4]:
-                    render_html(
-                        f'<div class="premium-inline-cell muted">{html.escape(normalize_text(row["Vendedor"]) or "Sem vendedor")}</div>'
-                    )
+            with row_columns[4]:
+                render_html(
+                    f'<div class="premium-inline-cell muted">{html.escape(normalize_text(row["Vendedor"]) or "Sem vendedor")}</div>'
+                )
 
-                with row_columns[5]:
-                    render_html(
-                        f'<div class="premium-inline-cell date">{html.escape(normalize_text(row["Data"]))}</div>'
-                    )
+            with row_columns[5]:
+                render_html(
+                    f'<div class="premium-inline-cell date">{html.escape(normalize_text(row["Data"]))}</div>'
+                )
 
 def prepare_filters(df: pd.DataFrame) -> pd.DataFrame:
     title_column, refresh_column = st.columns([3.8, 1.0], gap="large")
