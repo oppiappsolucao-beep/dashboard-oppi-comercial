@@ -2119,6 +2119,26 @@ def apply_registration_css() -> None:
                     linear-gradient(145deg, rgba(22,20,42,0.99), rgba(10,9,25,0.99)) !important;
                 border: 1px solid rgba(255,75,170,0.24) !important;
                 box-shadow: 0 18px 46px rgba(0,0,0,0.22) !important;
+                overflow: visible !important;
+            }
+
+            [data-testid="stForm"] form,
+            [data-testid="stForm"] div[data-testid="stVerticalBlock"],
+            [data-testid="stForm"] div[data-testid="column"],
+            [data-testid="stForm"] div[data-testid="stElementContainer"],
+            [data-testid="stForm"] div[data-testid="stTextInput"],
+            [data-testid="stForm"] div[data-testid="stTextArea"],
+            [data-testid="stForm"] div[data-testid="stSelectbox"],
+            [data-testid="stForm"] div[data-testid="stDateInput"] {
+                overflow: visible !important;
+            }
+
+            [data-testid="stForm"] div[data-testid="stTextInput"],
+            [data-testid="stForm"] div[data-testid="stTextArea"],
+            [data-testid="stForm"] div[data-testid="stSelectbox"],
+            [data-testid="stForm"] div[data-testid="stDateInput"] {
+                padding: 4px 0 !important;
+                position: relative !important;
             }
 
             [data-testid="stForm"] label {
@@ -2140,6 +2160,8 @@ def apply_registration_css() -> None:
                     box-shadow 0.20s ease,
                     border-color 0.20s ease !important;
                 transform-origin: center center;
+                position: relative !important;
+                z-index: 1 !important;
             }
 
             [data-testid="stForm"] div[data-baseweb="input"] > div:hover,
@@ -2147,8 +2169,17 @@ def apply_registration_css() -> None:
                 transform: scale(1.018) !important;
                 border-color: rgba(255,75,170,0.90) !important;
                 box-shadow:
-                    inset 0 1px 0 rgba(255,255,255,0.03),
-                    0 10px 22px rgba(169,28,255,0.18) !important;
+                    0 0 0 1px rgba(255,75,170,0.20),
+                    0 0 22px rgba(169,28,255,0.22),
+                    0 10px 22px rgba(169,28,255,0.18),
+                    inset 0 1px 0 rgba(255,255,255,0.03) !important;
+                z-index: 8 !important;
+            }
+
+            [data-testid="stForm"] div[data-testid="stTextInput"]:hover,
+            [data-testid="stForm"] div[data-testid="stSelectbox"]:hover,
+            [data-testid="stForm"] div[data-testid="stDateInput"]:hover {
+                z-index: 15 !important;
             }
 
             [data-testid="stForm"] div[data-baseweb="textarea"] {
@@ -2168,14 +2199,23 @@ def apply_registration_css() -> None:
                     box-shadow 0.20s ease,
                     border-color 0.20s ease !important;
                 transform-origin: center center;
+                position: relative !important;
+                z-index: 1 !important;
             }
 
             [data-testid="stForm"] div[data-baseweb="textarea"] > div:hover {
                 transform: scale(1.018) !important;
                 border-color: rgba(255,75,170,0.90) !important;
                 box-shadow:
-                    inset 0 1px 0 rgba(255,255,255,0.03),
-                    0 10px 22px rgba(169,28,255,0.18) !important;
+                    0 0 0 1px rgba(255,75,170,0.20),
+                    0 0 22px rgba(169,28,255,0.22),
+                    0 10px 22px rgba(169,28,255,0.18),
+                    inset 0 1px 0 rgba(255,255,255,0.03) !important;
+                z-index: 8 !important;
+            }
+
+            [data-testid="stForm"] div[data-testid="stTextArea"]:hover {
+                z-index: 15 !important;
             }
 
             [data-testid="stForm"] div[data-baseweb="textarea"] textarea {
@@ -2186,9 +2226,14 @@ def apply_registration_css() -> None:
                 color: #FFFFFF !important;
             }
 
-            [data-testid="stForm"] div[data-baseweb="textarea"] > div:focus-within {
+            [data-testid="stForm"] div[data-baseweb="textarea"] > div:focus-within,
+            [data-testid="stForm"] div[data-baseweb="input"] > div:focus-within,
+            [data-testid="stForm"] div[data-baseweb="select"] > div:focus-within {
                 border: 1px solid rgba(255,75,170,0.95) !important;
-                box-shadow: 0 0 0 1px rgba(255,75,170,0.18) !important;
+                box-shadow:
+                    0 0 0 1px rgba(255,75,170,0.22),
+                    0 0 24px rgba(169,28,255,0.20) !important;
+                z-index: 10 !important;
             }
 
             [data-testid="stForm"] input,
