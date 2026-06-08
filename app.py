@@ -1524,84 +1524,81 @@ def apply_dashboard_css() -> None:
                 box-shadow: 0 0 12px currentColor;
             }
 
-            /* Tabela comercial no estilo visual aprovado */
+            /* Tabela comercial compacta com botão Copiar */
             .premium-inline-table-header {
-                min-height: 62px;
-                display: flex;
-                align-items: center;
                 margin-top: 4px;
-                margin-bottom: 2px;
-                padding: 0 20px;
-                border-radius: 7px;
-                background:
-                    radial-gradient(circle at 100% 0%, rgba(169,28,255,0.18), transparent 42%),
-                    linear-gradient(90deg, rgba(255,75,170,0.14), rgba(169,28,255,0.14));
-                border: 1px solid rgba(255,75,170,0.34);
-                color: rgba(255,255,255,0.97);
-                font-size: 1.04rem;
-                font-weight: 900;
-                letter-spacing: 0.01em;
+                margin-bottom: 3px;
+                padding: 7px 8px;
+                border-radius: 9px;
+                background: linear-gradient(90deg, rgba(255,75,170,0.15), rgba(169,28,255,0.15));
+                border: 1px solid rgba(255,75,170,0.24);
+                color: rgba(255,255,255,0.94);
+                font-size: 0.73rem;
+                font-weight: 850;
             }
 
             .premium-inline-cell {
-                min-height: 66px;
-                height: 66px;
+                min-height: 30px;
                 display: flex;
                 align-items: center;
-                padding: 0 22px;
-                border-radius: 6px;
-                background: rgba(255,255,255,0.98);
+                padding: 4px 7px;
+                border-radius: 7px;
+                background: rgba(255,255,255,0.97);
                 border: 1px solid rgba(169,28,255,0.08);
-                color: #251D31;
-                font-size: 1.08rem;
-                line-height: 1.18;
+                color: #261C35;
+                font-size: 0.77rem;
+                line-height: 1.16;
                 word-break: break-word;
-                box-sizing: border-box;
             }
 
             .premium-inline-cell.phone {
-                color: #6220C7;
-                font-weight: 900;
-                letter-spacing: 0.01em;
+                color: #5C2A83;
+                font-weight: 850;
             }
 
             .premium-inline-cell.date {
                 justify-content: center;
-                color: #5C5270;
-                font-size: 1rem;
+                color: #5B5369;
+                font-size: 0.73rem;
             }
 
             .premium-inline-cell.muted {
-                color: #5E5471;
+                color: #6E667A;
             }
 
             .premium-inline-hint {
-                margin: 4px 0 14px 0;
-                padding: 20px 22px;
-                border-radius: 12px;
-                background:
-                    radial-gradient(circle at 48% 50%, rgba(169,28,255,0.16), transparent 38%),
-                    linear-gradient(90deg, rgba(255,75,170,0.055), rgba(169,28,255,0.055));
-                border: 1px solid rgba(255,75,170,0.22);
-                color: rgba(255,255,255,0.88);
-                font-size: 1.02rem;
-                line-height: 1.35;
+                margin: 5px 0 7px 0;
+                padding: 8px 11px;
+                border-radius: 10px;
+                background: linear-gradient(90deg, rgba(255,75,170,0.07), rgba(169,28,255,0.07));
+                border: 1px solid rgba(255,75,170,0.17);
+                color: rgba(255,255,255,0.72);
+                font-size: 0.74rem;
+                line-height: 1.30;
             }
 
             .premium-inline-hint strong {
-                color: #FF5CB7;
+                color: #FF79C4;
             }
 
-            /* Colunas próximas e linhas organizadas, como uma planilha visual */
+            /* Linhas compactas: uma empresa imediatamente abaixo da outra */
             .st-key-compact_inline_table div[data-testid="stHorizontalBlock"] {
-                gap: 0.12rem !important;
+                gap: 0.34rem !important;
                 margin-top: 0 !important;
-                margin-bottom: 0.12rem !important;
+                margin-bottom: 0 !important;
+                padding-top: 0 !important;
+                padding-bottom: 0 !important;
                 align-items: center !important;
             }
 
-            .st-key-compact_inline_table div[data-testid="stVerticalBlock"] {
-                gap: 0.12rem !important;
+            .st-key-compact_inline_table div[data-testid="stVerticalBlock"],
+            .st-key-compact_inline_table div[data-testid="stVerticalBlockBorderWrapper"] {
+                gap: 0 !important;
+                row-gap: 0 !important;
+                margin-top: 0 !important;
+                margin-bottom: 0 !important;
+                padding-top: 0 !important;
+                padding-bottom: 0 !important;
             }
 
             .st-key-compact_inline_table div[data-testid="stElementContainer"] {
@@ -1611,45 +1608,37 @@ def apply_dashboard_css() -> None:
                 padding-bottom: 0 !important;
             }
 
-            .st-key-compact_inline_table div[data-testid="stSelectbox"] {
+            /* Remove o respiro escuro residual criado pelo Streamlit entre as linhas */
+            .st-key-compact_inline_table [class*="st-key-compact_table_row_"] {
+                margin-top: -0.20rem !important;
+                margin-bottom: 0 !important;
+                padding-top: 0 !important;
+                padding-bottom: 0 !important;
+            }
+
+            .st-key-compact_inline_table [class*="st-key-compact_table_row_"] div[data-testid="stHorizontalBlock"],
+            .st-key-compact_inline_table [class*="st-key-compact_table_row_"] div[data-testid="stElementContainer"] {
                 margin-top: 0 !important;
+                margin-bottom: 0 !important;
+                padding-top: 0 !important;
+                padding-bottom: 0 !important;
+            }
+
+            .st-key-compact_inline_table div[data-testid="stSelectbox"] {
                 margin-bottom: 0 !important;
             }
 
             .st-key-compact_inline_table div[data-testid="stSelectbox"] > div[data-baseweb="select"] > div {
-                min-height: 66px !important;
-                height: 66px !important;
-                border-radius: 6px !important;
-                border: 1px solid rgba(255,75,170,0.88) !important;
-                padding: 0 18px !important;
-                background: rgba(7, 7, 20, 0.98) !important;
-                display: flex !important;
-                align-items: center !important;
-                box-sizing: border-box !important;
-                overflow: visible !important;
-            }
-
-            .st-key-compact_inline_table div[data-testid="stSelectbox"] div[data-baseweb="select"] span,
-            .st-key-compact_inline_table div[data-testid="stSelectbox"] div[data-baseweb="select"] div {
-                color: #FFFFFF !important;
-                font-size: 1.08rem !important;
-                line-height: 1.15 !important;
-                white-space: nowrap !important;
-                text-overflow: clip !important;
-            }
-
-            .st-key-compact_inline_table div[data-testid="stSelectbox"] svg {
-                color: #FFFFFF !important;
-                fill: #FFFFFF !important;
-                width: 22px !important;
-                height: 22px !important;
-                flex-shrink: 0 !important;
+                min-height: 30px !important;
+                height: 30px !important;
+                border-radius: 7px !important;
+                padding-top: 0 !important;
+                padding-bottom: 0 !important;
             }
 
             .st-key-compact_inline_table iframe {
-                min-height: 66px !important;
-                height: 66px !important;
-                display: block !important;
+                min-height: 30px !important;
+                height: 30px !important;
             }
 
             /* A tabela não deve ampliar no hover */
@@ -2051,7 +2040,7 @@ def render_phone_copy_button(phone: str, row_key: str) -> None:
                     margin: 0;
                     padding: 0;
                     width: 100%;
-                    height: 66px;
+                    height: 30px;
                     overflow: hidden;
                     background: transparent;
                     font-family: Arial, sans-serif;
@@ -2059,12 +2048,12 @@ def render_phone_copy_button(phone: str, row_key: str) -> None:
 
                 button {{
                     width: 100%;
-                    height: 66px;
+                    height: 29px;
                     border: none;
-                    border-radius: 6px;
+                    border-radius: 7px;
                     cursor: pointer;
                     color: #FFFFFF;
-                    font-size: 1.08rem;
+                    font-size: 11px;
                     font-weight: 800;
                     letter-spacing: 0.01em;
                     background: linear-gradient(90deg, #FF4BAA 0%, #A91CFF 100%);
@@ -2146,7 +2135,7 @@ def render_phone_copy_button(phone: str, row_key: str) -> None:
         </body>
         </html>
         """,
-        height=66,
+        height=30,
         scrolling=False,
     )
 
@@ -2325,7 +2314,7 @@ def render_latest_calls_section(
 
     with st.container(key="compact_inline_table"):
         header_columns = st.columns(
-            [3.10, 1.95, 1.12, 2.35, 1.75, 1.18],
+            [3.15, 1.45, 0.92, 1.65, 1.35, 0.90],
             gap="small",
         )
 
@@ -2351,26 +2340,27 @@ def render_latest_calls_section(
             if original_status not in STATUS_OPTIONS:
                 original_status = "Novo Lead"
 
-            row_columns = st.columns(
-                [3.10, 1.95, 1.12, 2.35, 1.75, 1.18],
-                gap="small",
-            )
-
-            with row_columns[0]:
-                render_html(
-                    f'<div class="premium-inline-cell">{html.escape(normalize_text(row["Empresa"]) or "Sem empresa")}</div>'
+            with st.container(key=f"compact_table_row_{sheet_row}"):
+                row_columns = st.columns(
+                    [3.15, 1.45, 0.92, 1.65, 1.35, 0.90],
+                    gap="small",
                 )
 
-            with row_columns[1]:
-                render_html(
-                    f'<div class="premium-inline-cell phone">{html.escape(normalize_text(row["Telefone"]) or "Sem número")}</div>'
-                )
+                with row_columns[0]:
+                    render_html(
+                        f'<div class="premium-inline-cell">{html.escape(normalize_text(row["Empresa"]) or "Sem empresa")}</div>'
+                    )
 
-            with row_columns[2]:
-                render_phone_copy_button(
-                    normalize_text(row["Telefone"]),
-                    row_key=f"phone-{sheet_row}",
-                )
+                with row_columns[1]:
+                    render_html(
+                        f'<div class="premium-inline-cell phone">{html.escape(normalize_text(row["Telefone"]) or "Sem número")}</div>'
+                    )
+
+                with row_columns[2]:
+                    render_phone_copy_button(
+                        normalize_text(row["Telefone"]),
+                        row_key=f"phone-{sheet_row}",
+                    )
 
             status_widget_key = f"inline_status_{sheet_row}_{normalize_search_text(original_status).replace(' ', '_')}"
 
@@ -2412,25 +2402,25 @@ def render_latest_calls_section(
                     )
                     st.session_state[widget_key] = previous_status
 
-            with row_columns[3]:
-                st.selectbox(
-                    "Status",
-                    STATUS_OPTIONS,
-                    index=STATUS_OPTIONS.index(original_status),
-                    key=status_widget_key,
-                    label_visibility="collapsed",
-                    on_change=save_inline_status,
-                )
+                with row_columns[3]:
+                    st.selectbox(
+                        "Status",
+                        STATUS_OPTIONS,
+                        index=STATUS_OPTIONS.index(original_status),
+                        key=status_widget_key,
+                        label_visibility="collapsed",
+                        on_change=save_inline_status,
+                    )
 
-            with row_columns[4]:
-                render_html(
-                    f'<div class="premium-inline-cell muted">{html.escape(normalize_text(row["Vendedor"]) or "Sem vendedor")}</div>'
-                )
+                with row_columns[4]:
+                    render_html(
+                        f'<div class="premium-inline-cell muted">{html.escape(normalize_text(row["Vendedor"]) or "Sem vendedor")}</div>'
+                    )
 
-            with row_columns[5]:
-                render_html(
-                    f'<div class="premium-inline-cell date">{html.escape(normalize_text(row["Data"]))}</div>'
-                )
+                with row_columns[5]:
+                    render_html(
+                        f'<div class="premium-inline-cell date">{html.escape(normalize_text(row["Data"]))}</div>'
+                    )
 
 def prepare_filters(df: pd.DataFrame) -> pd.DataFrame:
     title_column, refresh_column = st.columns([3.8, 1.0], gap="large")
