@@ -431,6 +431,79 @@ def update_statuses_in_sheet(
     st.cache_data.clear()
 
 
+def _set_sheet_value_by_header(
+    row_values: list[str],
+    headers: list[str],
+    aliases: list[str],
+    value,
+    occurrence: int = 1,
+) -> bool:
+    """Preenche uma coluna da planilha procurando pelo nome do cabeçalho."""
+    normalized_aliases = {normalize_search_text(alias) for alias in aliases}
+    found = 0
+
+    for index, header in enumerate(headers):
+        if normalize_search_text(header) in normalized_aliases:
+            found += 1
+
+            if found == occurrence:
+                row_values[index] = normalize_text(value)
+                return True
+
+    return False
+
+
+def append_company_to_sheet(payload: dict) -> None:
+    """Adiciona uma nova empresa na aba principal respeitando a estrutura atual da planilha."""
+    client = get_gsheet_client()
+    spreadsheet = client.open_by_key(SHEET_ID)
+    worksheet = spreadsheet.worksheet(WORKSHEET_NAME)
+    headers = worksheet.row_values(1)
+
+    if not headers:
+        raise RuntimeError("A primeira linha da planilha precisa conter os cabeçalhos.")
+
+    row_values = [""] * len(headers)
+
+    _set_sheet_value_by_header(row_values, headers, ["Nome da empresa", "Empresa", "Nome Empresa"], payload.get("empresa"))
+    _set_sheet_value_by_header(row_values, headers, ["Data de abertura", "Data abertura"], payload.get("data_abertura"))
+    _set_sheet_value_by_header(row_values, headers, ["Capital", "Capital social"], payload.get("capital"))
+    _set_sheet_value_by_header(row_values, headers, ["CNPJ"], payload.get("cnpj"))
+    _set_sheet_value_by_header(row_values, headers, ["Endereço", "Endereco"], payload.get("endereco"))
+    _set_sheet_value_by_header(row_values, headers, ["Email", "E-mail"], payload.get("email_empresa"))
+    _set_sheet_value_by_header(row_values, headers, ["Site empresa", "Site", "Website"], payload.get("site"))
+
+    _set_sheet_value_by_header(row_values, headers, ["Telefone (b2b)", "Telefone b2b"], payload.get("telefone_b2b"))
+    _set_sheet_value_by_header(row_values, headers, ["Telefone fixo", "Fixo"], payload.get("telefone_fixo"))
+    _set_sheet_value_by_header(row_values, headers, ["Telefone lemitt", "Telefone alternativo", "Outro telefone"], payload.get("telefone_alternativo"))
+
+    _set_sheet_value_by_header(row_values, headers, ["Sócio 1", "Socio 1", "Sócio1", "Socio1"], payload.get("socio_1"))
+    _set_sheet_value_by_header(row_values, headers, ["CPF"], payload.get("cpf_socio_1"), occurrence=1)
+    _set_sheet_value_by_header(row_values, headers, ["E-mail Sócio 1", "Email Sócio 1", "E-mail Socio 1", "Email Socio 1"], payload.get("email_socio_1"))
+    _set_sheet_value_by_header(row_values, headers, ["Telefone"], payload.get("telefone_socio_1"), occurrence=1)
+
+    _set_sheet_value_by_header(row_values, headers, ["Sócio 2", "Socio 2", "Sócio2", "Socio2"], payload.get("socio_2"))
+    _set_sheet_value_by_header(row_values, headers, ["CPF"], payload.get("cpf_socio_2"), occurrence=2)
+
+    _set_sheet_value_by_header(row_values, headers, ["Sócio 3", "Socio 3", "Sócio3", "Socio3"], payload.get("socio_3"))
+    _set_sheet_value_by_header(row_values, headers, ["CPF"], payload.get("cpf_socio_3"), occurrence=3)
+
+    _set_sheet_value_by_header(row_values, headers, ["Instagram"], payload.get("instagram"))
+    _set_sheet_value_by_header(row_values, headers, ["Linkedin", "LinkedIn"], payload.get("linkedin"))
+    _set_sheet_value_by_header(row_values, headers, ["Vendedor", "Responsável", "Responsavel"], payload.get("vendedor"))
+    _set_sheet_value_by_header(row_values, headers, ["Status", "Etapa"], payload.get("status"))
+    _set_sheet_value_by_header(row_values, headers, ["Data do chamado", "Data chamado"], payload.get("data_chamado"))
+    _set_sheet_value_by_header(row_values, headers, ["Última atualização", "Ultima atualização", "Ultima atualizacao"], payload.get("ultima_atualizacao"))
+
+    worksheet.append_row(
+        row_values,
+        value_input_option="USER_ENTERED",
+        insert_data_option="INSERT_ROWS",
+    )
+
+    st.cache_data.clear()
+
+
 # =========================================================
 # IDENTIFICAÇÃO DAS COLUNAS
 # =========================================================
@@ -1599,12 +1672,28 @@ def apply_dashboard_css() -> None:
                 margin-bottom: 0 !important;
             }
 
+            .st-key-compact_inline_table div[data-testid="stSelectbox"] > div[data-baseweb="select"] {
+                min-height: 34px !important;
+                height: 34px !important;
+            }
+
             .st-key-compact_inline_table div[data-testid="stSelectbox"] > div[data-baseweb="select"] > div {
-                min-height: 30px !important;
-                height: 30px !important;
+                min-height: 34px !important;
+                height: 34px !important;
                 border-radius: 7px !important;
                 padding-top: 0 !important;
                 padding-bottom: 0 !important;
+                display: flex !important;
+                align-items: center !important;
+                overflow: visible !important;
+            }
+
+            .st-key-compact_inline_table div[data-testid="stSelectbox"] span,
+            .st-key-compact_inline_table div[data-testid="stSelectbox"] p {
+                line-height: 1.15 !important;
+                white-space: nowrap !important;
+                overflow: visible !important;
+                text-overflow: clip !important;
             }
 
             .st-key-compact_inline_table iframe {
@@ -1788,6 +1877,149 @@ def apply_dashboard_css() -> None:
     )
 
 
+def apply_registration_css() -> None:
+    render_html(
+        """
+        <style>
+            .registration-header-card {
+                margin-bottom: 18px;
+                padding: 24px 26px 22px 26px;
+                border-radius: 24px;
+                background:
+                    radial-gradient(circle at 100% 0%, rgba(169,28,255,0.20), transparent 32%),
+                    radial-gradient(circle at 0% 100%, rgba(255,75,170,0.12), transparent 34%),
+                    linear-gradient(145deg, rgba(22,20,42,0.99), rgba(10,9,25,0.99));
+                border: 1px solid rgba(255,75,170,0.32);
+                box-shadow: 0 18px 46px rgba(0,0,0,0.22), 0 0 26px rgba(169,28,255,0.10);
+            }
+
+            .registration-kicker {
+                color: #FF79C4;
+                font-size: 0.76rem;
+                font-weight: 900;
+                letter-spacing: 0.16em;
+                text-transform: uppercase;
+                margin-bottom: 10px;
+            }
+
+            .registration-title {
+                color: #FFFFFF;
+                font-size: 2rem;
+                font-weight: 950;
+                letter-spacing: -0.035em;
+                line-height: 1.05;
+            }
+
+            .registration-subtitle {
+                margin-top: 9px;
+                color: rgba(255,255,255,0.68);
+                font-size: 0.94rem;
+                line-height: 1.45;
+            }
+
+            .registration-section {
+                margin: 8px 0 14px 0;
+                padding: 14px 16px;
+                border-radius: 16px;
+                background:
+                    linear-gradient(90deg, rgba(255,75,170,0.08), rgba(169,28,255,0.08)),
+                    rgba(13,11,31,0.94);
+                border: 1px solid rgba(255,75,170,0.25);
+                box-shadow: inset 0 1px 0 rgba(255,255,255,0.025);
+            }
+
+            .registration-section-title {
+                color: #FFFFFF;
+                font-size: 0.95rem;
+                font-weight: 900;
+                letter-spacing: 0.015em;
+            }
+
+            .registration-section-text {
+                margin-top: 4px;
+                color: rgba(255,255,255,0.62);
+                font-size: 0.80rem;
+                line-height: 1.4;
+            }
+
+            .registration-note {
+                margin: 0 0 14px 0;
+                padding: 12px 14px;
+                border-radius: 14px;
+                color: rgba(255,255,255,0.72);
+                background: rgba(255,255,255,0.035);
+                border: 1px solid rgba(255,255,255,0.07);
+                font-size: 0.83rem;
+                line-height: 1.45;
+            }
+
+            .registration-note strong {
+                color: #FF79C4;
+            }
+
+            [data-testid="stForm"] {
+                padding: 20px !important;
+                border-radius: 24px !important;
+                background:
+                    radial-gradient(circle at 100% 0%, rgba(169,28,255,0.12), transparent 28%),
+                    linear-gradient(145deg, rgba(22,20,42,0.99), rgba(10,9,25,0.99)) !important;
+                border: 1px solid rgba(255,75,170,0.24) !important;
+                box-shadow: 0 18px 46px rgba(0,0,0,0.22) !important;
+            }
+
+            [data-testid="stForm"] label {
+                color: rgba(255,255,255,0.86) !important;
+                font-size: 0.86rem !important;
+                font-weight: 760 !important;
+            }
+
+            [data-testid="stForm"] div[data-baseweb="input"] > div,
+            [data-testid="stForm"] div[data-baseweb="select"] > div,
+            [data-testid="stForm"] textarea {
+                min-height: 48px !important;
+                border-radius: 13px !important;
+                border: 1px solid rgba(255,75,170,0.58) !important;
+                background: rgba(8,7,24,0.92) !important;
+                box-shadow: inset 0 1px 0 rgba(255,255,255,0.03) !important;
+                color: #FFFFFF !important;
+            }
+
+            [data-testid="stForm"] input,
+            [data-testid="stForm"] textarea,
+            [data-testid="stForm"] div[data-baseweb="select"] * {
+                color: #FFFFFF !important;
+                -webkit-text-fill-color: #FFFFFF !important;
+            }
+
+            [data-testid="stForm"] input::placeholder,
+            [data-testid="stForm"] textarea::placeholder {
+                color: rgba(255,255,255,0.44) !important;
+                -webkit-text-fill-color: rgba(255,255,255,0.44) !important;
+            }
+
+            [data-testid="stForm"] .stButton > button,
+            [data-testid="stForm"] button[kind="secondaryFormSubmit"] {
+                width: 100% !important;
+                min-height: 52px !important;
+                margin-top: 10px !important;
+                border: none !important;
+                border-radius: 14px !important;
+                color: #FFFFFF !important;
+                font-size: 0.96rem !important;
+                font-weight: 900 !important;
+                background: linear-gradient(90deg, #FF4BAA 0%, #D73AFF 54%, #8C2BFF 100%) !important;
+                box-shadow: 0 14px 30px rgba(169,28,255,0.26) !important;
+            }
+
+            .registration-required {
+                color: #FF79C4;
+                font-weight: 900;
+            }
+        </style>
+        """
+    )
+
+
 # =========================================================
 # LOGIN
 # =========================================================
@@ -1905,19 +2137,13 @@ def render_sidebar() -> str:
             """
         )
 
-        page_options = ["Visão Geral", "Propostas", "Pesos e Medidas"]
-        page_labels = {
-            "Visão Geral": "Visão Geral",
-            "Propostas": "Cadastro",
-            "Pesos e Medidas": "Pesos e Medidas",
-        }
-
         page = st.radio(
             "Navegação",
-            page_options,
+            ["Visão Geral", "Cadastro", "Pesos e Medidas"],
             label_visibility="collapsed",
-            index=page_options.index(st.session_state.selected_page),
-            format_func=lambda option: page_labels[option],
+            index=["Visão Geral", "Cadastro", "Pesos e Medidas"].index(
+                st.session_state.selected_page
+            ),
         )
 
         st.session_state.selected_page = page
@@ -2237,18 +2463,27 @@ def render_latest_calls_section(
             )
 
     selected_status = st.session_state.get(selected_card_key)
+    search_term = normalize_text(st.session_state.get("dashboard_filter_search", ""))
+    global_search_active = bool(search_term)
 
-    if not selected_status:
-        render_html(
-            """
-            <div class="latest-placeholder-card">
-                Selecione um status clicando em “Ver nomes” para visualizar os registros.
-            </div>
-            """
-        )
-        return
+    # Quando o campo de busca estiver preenchido, a tabela exibe todos os
+    # registros encontrados na planilha inteira, independentemente do card de
+    # status que estava selecionado anteriormente.
+    if global_search_active:
+        selected_df = filtered_df.copy()
+    else:
+        if not selected_status:
+            render_html(
+                """
+                <div class="latest-placeholder-card">
+                    Selecione um status clicando em “Ver nomes” para visualizar os registros.
+                </div>
+                """
+            )
+            return
 
-    selected_df = filtered_df[filtered_df["_status_grupo"] == selected_status].copy()
+        selected_df = filtered_df[filtered_df["_status_grupo"] == selected_status].copy()
+
     selected_df = selected_df.sort_values(
         ["_data_chamado", "_empresa"],
         ascending=[False, True],
@@ -2456,6 +2691,31 @@ def prepare_filters(df: pd.DataFrame) -> pd.DataFrame:
     selected_range = st.session_state.dashboard_filter_period
     search_term = st.session_state.dashboard_filter_search
 
+    # A busca por empresa ou telefone é global: quando o usuário digita algo
+    # nesse campo, pesquisamos a planilha inteira e ignoramos os filtros de
+    # vendedor, status e período. Dessa forma, nenhum registro fica oculto por
+    # um filtro aplicado anteriormente.
+    if normalize_text(search_term):
+        term = normalize_search_text(search_term)
+        global_search_df = df.copy()
+
+        global_search_df = global_search_df[
+            global_search_df.apply(
+                lambda row: term
+                in normalize_search_text(
+                    " | ".join(
+                        [
+                            normalize_text(row.get("_empresa", "")),
+                            normalize_text(row.get("_telefone", "")),
+                        ]
+                    )
+                ),
+                axis=1,
+            )
+        ].copy()
+
+        return global_search_df
+
     filtered_df = df.copy()
 
     if selected_seller != "Todos os vendedores":
@@ -2472,26 +2732,6 @@ def prepare_filters(df: pd.DataFrame) -> pd.DataFrame:
             | (
                 (filtered_df["_data_chamado"].dt.date >= start_date)
                 & (filtered_df["_data_chamado"].dt.date <= end_date)
-            )
-        ].copy()
-
-    if normalize_text(search_term):
-        term = normalize_search_text(search_term)
-
-        filtered_df = filtered_df[
-            filtered_df.apply(
-                lambda row: term
-                in normalize_search_text(
-                    " | ".join(
-                        [
-                            normalize_text(row.get("_empresa", "")),
-                            normalize_text(row.get("_telefone", "")),
-                            normalize_text(row.get("_vendedor", "")),
-                            normalize_text(row.get("_status_grupo", "")),
-                        ]
-                    )
-                ),
-                axis=1,
             )
         ].copy()
 
@@ -2637,44 +2877,285 @@ def render_overview_page(df: pd.DataFrame, columns: dict) -> None:
 
 
 # =========================================================
-# PÁGINA: PROPOSTAS
+# PÁGINA: CADASTRO
 # =========================================================
 def render_proposals_page(df: pd.DataFrame, columns: dict) -> None:
-    render_html(
-        """
-        <div class="page-title">Cadastro</div>
-        <div class="page-subtitle">Acompanhe as empresas com evolução comercial e propostas enviadas.</div>
-        """
-    )
-
-    local_df = df.copy()
+    apply_registration_css()
 
     render_html(
         """
-        <div class="section-heading">Tabela de propostas</div>
-        <div class="section-subtitle">Informações principais do pipeline comercial.</div>
+        <div class="registration-header-card">
+            <div class="registration-kicker">OPPI COMERCIAL • CADASTRO</div>
+            <div class="registration-title">Cadastro de empresas</div>
+            <div class="registration-subtitle">
+                Registre uma nova empresa e envie os dados diretamente para a planilha comercial.
+            </div>
+        </div>
         """
     )
 
-    display_df = pd.DataFrame(
+    seller_options = sorted(
         {
-            "Empresa": local_df["_empresa"],
-            "CNPJ": safe_series(local_df, columns.get("cnpj")),
-            "Telefone": local_df["_telefone"],
-            "Email": safe_series(local_df, columns.get("email")),
-            "Instagram": safe_series(local_df, columns.get("instagram")),
-            "Vendedor": local_df["_vendedor"],
-            "Status": local_df["_status_grupo"],
-            "Última atualização": local_df["_ultima_atualizacao"].dt.strftime("%d/%m/%Y").fillna(""),
+            normalize_text(value)
+            for value in df["_vendedor"].tolist()
+            if normalize_text(value) and normalize_text(value) != "Sem vendedor"
         }
     )
 
-    st.dataframe(
-        display_df,
-        use_container_width=True,
-        hide_index=True,
-        height=560,
-    )
+    if not seller_options:
+        seller_options = ["Sem vendedor"]
+
+    with st.form("company_registration_form", clear_on_submit=True):
+        render_html(
+            """
+            <div class="registration-note">
+                Preencha os dados abaixo. Os campos com <strong>*</strong> são obrigatórios.
+                Ao finalizar, a empresa será adicionada automaticamente à aba Folha1.
+            </div>
+            <div class="registration-section">
+                <div class="registration-section-title">DADOS DA EMPRESA</div>
+                <div class="registration-section-text">Informações principais da empresa e dados institucionais.</div>
+            </div>
+            """
+        )
+
+        company_col, opening_col = st.columns([1.65, 0.75], gap="medium")
+
+        with company_col:
+            empresa = st.text_input(
+                "Nome da empresa *",
+                placeholder="Digite o nome da empresa",
+            )
+
+        with opening_col:
+            data_abertura = st.text_input(
+                "Data de abertura",
+                placeholder="DD/MM/AAAA",
+            )
+
+        cnpj_col, capital_col = st.columns(2, gap="medium")
+
+        with cnpj_col:
+            cnpj = st.text_input(
+                "CNPJ",
+                placeholder="00.000.000/0000-00",
+            )
+
+        with capital_col:
+            capital = st.text_input(
+                "Capital social",
+                placeholder="R$ 0,00",
+            )
+
+        endereco = st.text_input(
+            "Endereço",
+            placeholder="Rua, avenida, número, bairro, cidade, estado e CEP",
+        )
+
+        email_col, site_col = st.columns(2, gap="medium")
+
+        with email_col:
+            email_empresa = st.text_input(
+                "E-mail da empresa",
+                placeholder="contato@empresa.com.br",
+            )
+
+        with site_col:
+            site = st.text_input(
+                "Site da empresa",
+                placeholder="www.empresa.com.br",
+            )
+
+        render_html(
+            """
+            <div class="registration-section">
+                <div class="registration-section-title">TELEFONES DA EMPRESA</div>
+                <div class="registration-section-text">Contatos principais utilizados no acompanhamento comercial.</div>
+            </div>
+            """
+        )
+
+        phone_1, phone_2, phone_3 = st.columns(3, gap="medium")
+
+        with phone_1:
+            telefone_b2b = st.text_input(
+                "Telefone B2B *",
+                placeholder="(00) 00000-0000",
+            )
+
+        with phone_2:
+            telefone_fixo = st.text_input(
+                "Telefone fixo",
+                placeholder="(00) 0000-0000",
+            )
+
+        with phone_3:
+            telefone_alternativo = st.text_input(
+                "Telefone alternativo",
+                placeholder="(00) 00000-0000",
+            )
+
+        render_html(
+            """
+            <div class="registration-section">
+                <div class="registration-section-title">SÓCIOS E RESPONSÁVEIS</div>
+                <div class="registration-section-text">Cadastre os principais responsáveis vinculados à empresa.</div>
+            </div>
+            """
+        )
+
+        socio_1_col, cpf_1_col = st.columns([1.55, 0.85], gap="medium")
+
+        with socio_1_col:
+            socio_1 = st.text_input(
+                "Sócio 1",
+                placeholder="Nome completo do primeiro sócio",
+            )
+
+        with cpf_1_col:
+            cpf_socio_1 = st.text_input(
+                "CPF do sócio 1",
+                placeholder="000.000.000-00",
+            )
+
+        email_socio_col, telefone_socio_col = st.columns(2, gap="medium")
+
+        with email_socio_col:
+            email_socio_1 = st.text_input(
+                "E-mail do sócio 1",
+                placeholder="socio@empresa.com.br",
+            )
+
+        with telefone_socio_col:
+            telefone_socio_1 = st.text_input(
+                "Telefone do sócio 1",
+                placeholder="(00) 00000-0000",
+            )
+
+        socio_2_col, cpf_2_col = st.columns([1.55, 0.85], gap="medium")
+
+        with socio_2_col:
+            socio_2 = st.text_input(
+                "Sócio 2",
+                placeholder="Nome completo do segundo sócio",
+            )
+
+        with cpf_2_col:
+            cpf_socio_2 = st.text_input(
+                "CPF do sócio 2",
+                placeholder="000.000.000-00",
+            )
+
+        socio_3_col, cpf_3_col = st.columns([1.55, 0.85], gap="medium")
+
+        with socio_3_col:
+            socio_3 = st.text_input(
+                "Sócio 3",
+                placeholder="Nome completo do terceiro sócio",
+            )
+
+        with cpf_3_col:
+            cpf_socio_3 = st.text_input(
+                "CPF do sócio 3",
+                placeholder="000.000.000-00",
+            )
+
+        render_html(
+            """
+            <div class="registration-section">
+                <div class="registration-section-title">REDES SOCIAIS E ACOMPANHAMENTO</div>
+                <div class="registration-section-text">Complete os dados comerciais e defina o status inicial do atendimento.</div>
+            </div>
+            """
+        )
+
+        social_1, social_2 = st.columns(2, gap="medium")
+
+        with social_1:
+            instagram = st.text_input(
+                "Instagram",
+                placeholder="@empresa",
+            )
+
+        with social_2:
+            linkedin = st.text_input(
+                "LinkedIn",
+                placeholder="Link ou usuário do perfil",
+            )
+
+        vendedor_col, status_col, called_at_col = st.columns([1.15, 1.15, 0.85], gap="medium")
+
+        with vendedor_col:
+            vendedor = st.selectbox(
+                "Vendedor *",
+                seller_options,
+            )
+
+        with status_col:
+            status = st.selectbox(
+                "Status comercial *",
+                STATUS_OPTIONS,
+                index=0,
+            )
+
+        with called_at_col:
+            data_chamado = st.date_input(
+                "Data do chamado *",
+                value=date.today(),
+                format="DD/MM/YYYY",
+            )
+
+        submitted = st.form_submit_button(
+            "Cadastrar empresa",
+            use_container_width=True,
+        )
+
+    if submitted:
+        if not normalize_text(empresa):
+            st.error("Preencha o nome da empresa para concluir o cadastro.")
+            return
+
+        if not normalize_text(telefone_b2b):
+            st.error("Preencha o telefone B2B para concluir o cadastro.")
+            return
+
+        now_text = pd.Timestamp.now(tz="America/Sao_Paulo").strftime("%d/%m/%Y %H:%M")
+
+        try:
+            append_company_to_sheet(
+                {
+                    "empresa": empresa,
+                    "data_abertura": data_abertura,
+                    "capital": capital,
+                    "cnpj": cnpj,
+                    "endereco": endereco,
+                    "email_empresa": email_empresa,
+                    "site": site,
+                    "telefone_b2b": telefone_b2b,
+                    "telefone_fixo": telefone_fixo,
+                    "telefone_alternativo": telefone_alternativo,
+                    "socio_1": socio_1,
+                    "cpf_socio_1": cpf_socio_1,
+                    "email_socio_1": email_socio_1,
+                    "telefone_socio_1": telefone_socio_1,
+                    "socio_2": socio_2,
+                    "cpf_socio_2": cpf_socio_2,
+                    "socio_3": socio_3,
+                    "cpf_socio_3": cpf_socio_3,
+                    "instagram": instagram,
+                    "linkedin": linkedin,
+                    "vendedor": vendedor,
+                    "status": status,
+                    "data_chamado": data_chamado.strftime("%d/%m/%Y"),
+                    "ultima_atualizacao": now_text,
+                }
+            )
+        except Exception as error:
+            st.error("Não consegui cadastrar a empresa na planilha.")
+            st.code(str(error))
+            return
+
+        st.success("Empresa cadastrada com sucesso na planilha comercial.")
 
 
 # =========================================================
@@ -2798,7 +3279,7 @@ def main() -> None:
 
     if page == "Visão Geral":
         render_overview_page(prepared_df, columns)
-    elif page == "Propostas":
+    elif page == "Cadastro":
         render_proposals_page(prepared_df, columns)
     elif page == "Pesos e Medidas":
         render_scoring_page(prepared_df, columns)
