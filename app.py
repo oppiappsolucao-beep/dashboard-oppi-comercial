@@ -2863,6 +2863,77 @@ def apply_registration_css() -> None:
                 border: 1px solid rgba(255,75,170,0.58) !important;
                 box-shadow: inset 0 1px 0 rgba(255,255,255,0.88) !important;
             }
+
+            /* CORREÇÃO DEFINITIVA DOS CAMPOS DO FORMULÁRIO:
+               caixas totalmente brancas e conteúdo em preto. */
+            [data-testid="stForm"] div[data-testid="stTextInput"],
+            [data-testid="stForm"] div[data-testid="stDateInput"],
+            [data-testid="stForm"] div[data-testid="stSelectbox"],
+            [data-testid="stForm"] div[data-testid="stTextArea"] {
+                color-scheme: light !important;
+            }
+
+            [data-testid="stForm"] div[data-testid="stTextInput"] div[data-baseweb="input"],
+            [data-testid="stForm"] div[data-testid="stTextInput"] div[data-baseweb="input"] > div,
+            [data-testid="stForm"] div[data-testid="stTextInput"] div[data-baseweb="base-input"],
+            [data-testid="stForm"] div[data-testid="stDateInput"] div[data-baseweb="input"],
+            [data-testid="stForm"] div[data-testid="stDateInput"] div[data-baseweb="input"] > div,
+            [data-testid="stForm"] div[data-testid="stDateInput"] div[data-baseweb="base-input"],
+            [data-testid="stForm"] div[data-testid="stSelectbox"] div[data-baseweb="select"] > div,
+            [data-testid="stForm"] div[data-testid="stTextArea"] div[data-baseweb="textarea"],
+            [data-testid="stForm"] div[data-testid="stTextArea"] div[data-baseweb="textarea"] > div {
+                background: #FFFFFF !important;
+                background-color: #FFFFFF !important;
+                color: #111111 !important;
+                -webkit-text-fill-color: #111111 !important;
+            }
+
+            [data-testid="stForm"] div[data-testid="stTextInput"] input,
+            [data-testid="stForm"] div[data-testid="stDateInput"] input,
+            [data-testid="stForm"] div[data-testid="stTextArea"] textarea {
+                background: #FFFFFF !important;
+                background-color: #FFFFFF !important;
+                color: #111111 !important;
+                -webkit-text-fill-color: #111111 !important;
+                caret-color: #111111 !important;
+            }
+
+            [data-testid="stForm"] div[data-testid="stSelectbox"] div[role="combobox"],
+            [data-testid="stForm"] div[data-testid="stSelectbox"] div[role="combobox"] *,
+            [data-testid="stForm"] div[data-testid="stSelectbox"] span,
+            [data-testid="stForm"] div[data-testid="stSelectbox"] svg,
+            [data-testid="stForm"] div[data-testid="stDateInput"] svg {
+                color: #111111 !important;
+                fill: #111111 !important;
+                -webkit-text-fill-color: #111111 !important;
+            }
+
+            [data-testid="stForm"] div[data-testid="stTextInput"] input::placeholder,
+            [data-testid="stForm"] div[data-testid="stDateInput"] input::placeholder,
+            [data-testid="stForm"] div[data-testid="stTextArea"] textarea::placeholder {
+                color: rgba(17,17,17,0.48) !important;
+                -webkit-text-fill-color: rgba(17,17,17,0.48) !important;
+                opacity: 1 !important;
+            }
+
+            [data-testid="stForm"] div[data-testid="stTextInput"] input:-webkit-autofill,
+            [data-testid="stForm"] div[data-testid="stTextInput"] input:-webkit-autofill:hover,
+            [data-testid="stForm"] div[data-testid="stTextInput"] input:-webkit-autofill:focus,
+            [data-testid="stForm"] div[data-testid="stDateInput"] input:-webkit-autofill,
+            [data-testid="stForm"] div[data-testid="stDateInput"] input:-webkit-autofill:hover,
+            [data-testid="stForm"] div[data-testid="stDateInput"] input:-webkit-autofill:focus {
+                -webkit-box-shadow: 0 0 0 1000px #FFFFFF inset !important;
+                -webkit-text-fill-color: #111111 !important;
+                caret-color: #111111 !important;
+            }
+
+            [data-testid="stForm"] div[data-testid="stTextInput"] div[data-baseweb="input"] > div,
+            [data-testid="stForm"] div[data-testid="stDateInput"] div[data-baseweb="input"] > div,
+            [data-testid="stForm"] div[data-testid="stSelectbox"] div[data-baseweb="select"] > div,
+            [data-testid="stForm"] div[data-testid="stTextArea"] div[data-baseweb="textarea"] > div {
+                border: 1px solid rgba(255,75,170,0.72) !important;
+                box-shadow: inset 0 1px 0 rgba(255,255,255,0.96) !important;
+            }
         </style>
         """
     )
