@@ -2218,6 +2218,58 @@ def apply_registration_css() -> None:
                 z-index: 15 !important;
             }
 
+            [data-testid="stForm"] div[data-testid="stTextArea"] > div,
+            [data-testid="stForm"] div[data-testid="stTextArea"] > div > div {
+                overflow: visible !important;
+                border-radius: 13px !important;
+                background: transparent !important;
+                box-shadow: none !important;
+            }
+
+            [data-testid="stForm"] div[data-testid="stTextArea"] textarea,
+            [data-testid="stForm"] div[data-baseweb="textarea"] textarea {
+                min-height: 124px !important;
+                border: 1px solid rgba(255,75,170,0.58) !important;
+                border-radius: 13px !important;
+                outline: none !important;
+                background: rgba(8,7,24,0.92) !important;
+                box-shadow: inset 0 1px 0 rgba(255,255,255,0.03) !important;
+                color: #FFFFFF !important;
+                transition:
+                    transform 0.20s ease,
+                    box-shadow 0.20s ease,
+                    border-color 0.20s ease !important;
+                transform-origin: center center;
+                position: relative !important;
+                z-index: 1 !important;
+            }
+
+            [data-testid="stForm"] div[data-testid="stTextArea"] textarea:hover,
+            [data-testid="stForm"] div[data-baseweb="textarea"] textarea:hover {
+                transform: scale(1.018) !important;
+                border-color: rgba(255,75,170,0.90) !important;
+                box-shadow:
+                    0 0 0 1px rgba(255,75,170,0.20),
+                    0 0 22px rgba(169,28,255,0.22),
+                    0 10px 22px rgba(169,28,255,0.18),
+                    inset 0 1px 0 rgba(255,255,255,0.03) !important;
+                z-index: 8 !important;
+            }
+
+            [data-testid="stForm"] div[data-testid="stTextArea"] textarea:focus,
+            [data-testid="stForm"] div[data-testid="stTextArea"] textarea:focus-visible,
+            [data-testid="stForm"] div[data-baseweb="textarea"] textarea:focus,
+            [data-testid="stForm"] div[data-baseweb="textarea"] textarea:focus-visible {
+                transform: scale(1.018) !important;
+                border-color: rgba(255,75,170,0.95) !important;
+                box-shadow:
+                    0 0 0 1px rgba(255,75,170,0.22),
+                    0 0 24px rgba(169,28,255,0.20),
+                    0 10px 22px rgba(169,28,255,0.18),
+                    inset 0 1px 0 rgba(255,255,255,0.03) !important;
+                z-index: 10 !important;
+            }
+
             [data-testid="stForm"] div[data-baseweb="textarea"] textarea {
                 border: none !important;
                 outline: none !important;
