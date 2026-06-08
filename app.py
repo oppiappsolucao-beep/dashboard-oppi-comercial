@@ -2100,9 +2100,10 @@ def apply_registration_css() -> None:
                 margin: 0 0 14px 0;
                 padding: 12px 14px;
                 border-radius: 14px;
-                color: rgba(255,255,255,0.72);
-                background: rgba(255,255,255,0.035);
-                border: 1px solid rgba(255,255,255,0.07);
+                color: rgba(38,31,53,0.78);
+                background: rgba(255,255,255,0.48);
+                border: 1px solid rgba(90,76,118,0.12);
+                box-shadow: inset 0 1px 0 rgba(255,255,255,0.68);
                 font-size: 0.83rem;
                 line-height: 1.45;
             }
@@ -2115,10 +2116,13 @@ def apply_registration_css() -> None:
                 padding: 20px !important;
                 border-radius: 24px !important;
                 background:
-                    radial-gradient(circle at 100% 0%, rgba(169,28,255,0.12), transparent 28%),
-                    linear-gradient(145deg, rgba(22,20,42,0.99), rgba(10,9,25,0.99)) !important;
-                border: 1px solid rgba(255,75,170,0.24) !important;
-                box-shadow: 0 18px 46px rgba(0,0,0,0.22) !important;
+                    radial-gradient(circle at top left, rgba(255,255,255,0.92) 0%, rgba(255,255,255,0.00) 32%),
+                    radial-gradient(circle at bottom right, rgba(208,212,223,0.72) 0%, rgba(208,212,223,0.00) 34%),
+                    linear-gradient(180deg, #F7F8FC 0%, #ECEEF4 38%, #DCE0E9 72%, #CED3DE 100%) !important;
+                border: 1px solid rgba(63,53,83,0.14) !important;
+                box-shadow:
+                    0 18px 46px rgba(0,0,0,0.18),
+                    inset 0 1px 0 rgba(255,255,255,0.80) !important;
                 overflow: visible !important;
             }
 
@@ -2142,9 +2146,9 @@ def apply_registration_css() -> None:
             }
 
             [data-testid="stForm"] label {
-                color: rgba(255,255,255,0.86) !important;
+                color: #2A2338 !important;
                 font-size: 0.86rem !important;
-                font-weight: 760 !important;
+                font-weight: 800 !important;
             }
 
             [data-testid="stForm"] div[data-baseweb="input"] > div,
