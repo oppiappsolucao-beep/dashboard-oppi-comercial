@@ -2932,7 +2932,26 @@ def apply_registration_css() -> None:
             [data-testid="stForm"] div[data-testid="stSelectbox"] div[data-baseweb="select"] > div,
             [data-testid="stForm"] div[data-testid="stTextArea"] div[data-baseweb="textarea"] > div {
                 border: 1px solid rgba(255,75,170,0.72) !important;
+                border-radius: 20px !important;
                 box-shadow: inset 0 1px 0 rgba(255,255,255,0.96) !important;
+                overflow: hidden !important;
+            }
+
+            [data-testid="stForm"] div[data-testid="stTextInput"] div[data-baseweb="input"],
+            [data-testid="stForm"] div[data-testid="stDateInput"] div[data-baseweb="input"],
+            [data-testid="stForm"] div[data-testid="stSelectbox"] div[data-baseweb="select"],
+            [data-testid="stForm"] div[data-testid="stTextArea"] div[data-baseweb="textarea"],
+            [data-testid="stForm"] div[data-testid="stTextInput"] div[data-baseweb="base-input"],
+            [data-testid="stForm"] div[data-testid="stDateInput"] div[data-baseweb="base-input"] {
+                border-radius: 20px !important;
+                overflow: hidden !important;
+            }
+
+            [data-testid="stForm"] div[data-testid="stTextInput"] input,
+            [data-testid="stForm"] div[data-testid="stDateInput"] input,
+            [data-testid="stForm"] div[data-testid="stTextArea"] textarea,
+            [data-testid="stForm"] div[data-testid="stSelectbox"] div[role="combobox"] {
+                border-radius: 20px !important;
             }
         </style>
         """
