@@ -2135,6 +2135,20 @@ def apply_registration_css() -> None:
                 background: rgba(8,7,24,0.92) !important;
                 box-shadow: inset 0 1px 0 rgba(255,255,255,0.03) !important;
                 color: #FFFFFF !important;
+                transition:
+                    transform 0.20s ease,
+                    box-shadow 0.20s ease,
+                    border-color 0.20s ease !important;
+                transform-origin: center center;
+            }
+
+            [data-testid="stForm"] div[data-baseweb="input"] > div:hover,
+            [data-testid="stForm"] div[data-baseweb="select"] > div:hover {
+                transform: scale(1.018) !important;
+                border-color: rgba(255,75,170,0.90) !important;
+                box-shadow:
+                    inset 0 1px 0 rgba(255,255,255,0.03),
+                    0 10px 22px rgba(169,28,255,0.18) !important;
             }
 
             [data-testid="stForm"] div[data-baseweb="textarea"] {
@@ -2149,6 +2163,19 @@ def apply_registration_css() -> None:
                 border: 1px solid rgba(255,75,170,0.58) !important;
                 background: rgba(8,7,24,0.92) !important;
                 box-shadow: inset 0 1px 0 rgba(255,255,255,0.03) !important;
+                transition:
+                    transform 0.20s ease,
+                    box-shadow 0.20s ease,
+                    border-color 0.20s ease !important;
+                transform-origin: center center;
+            }
+
+            [data-testid="stForm"] div[data-baseweb="textarea"] > div:hover {
+                transform: scale(1.018) !important;
+                border-color: rgba(255,75,170,0.90) !important;
+                box-shadow:
+                    inset 0 1px 0 rgba(255,255,255,0.03),
+                    0 10px 22px rgba(169,28,255,0.18) !important;
             }
 
             [data-testid="stForm"] div[data-baseweb="textarea"] textarea {
