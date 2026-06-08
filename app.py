@@ -2088,6 +2088,54 @@ def apply_dashboard_css() -> None:
                 box-shadow: 0 8px 20px rgba(169,28,255,0.14) !important;
             }
 
+            /* Submenu simples do Cadastro: preserva o visual original do menu lateral */
+            .sidebar-cadastro-submenu-line {
+                width: 2px;
+                height: 10px;
+                margin: 0 0 0 17px;
+                background: linear-gradient(180deg, rgba(255,75,170,0.66), rgba(169,28,255,0.24));
+                border-radius: 999px;
+            }
+
+            .st-key-sidebar_cadastro_submenu {
+                margin: -2px 0 8px 18px !important;
+                padding-left: 12px !important;
+                border-left: 1px solid rgba(169,28,255,0.24);
+            }
+
+            .st-key-sidebar_cadastro_submenu .stButton > button {
+                width: 100% !important;
+                min-height: 34px !important;
+                margin: 2px 0 !important;
+                padding: 0 10px !important;
+                justify-content: flex-start !important;
+                border: none !important;
+                border-radius: 9px !important;
+                background: transparent !important;
+                color: #241C34 !important;
+                box-shadow: none !important;
+                font-size: 0.83rem !important;
+                font-weight: 800 !important;
+                text-align: left !important;
+                transition: background 0.18s ease, color 0.18s ease, transform 0.18s ease !important;
+            }
+
+            .st-key-sidebar_cadastro_submenu .stButton > button::before {
+                content: "›";
+                display: inline-block;
+                margin-right: 8px;
+                color: #A91CFF;
+                font-size: 1rem;
+                font-weight: 900;
+            }
+
+            .st-key-sidebar_cadastro_submenu .stButton > button:hover {
+                transform: translateX(4px) !important;
+                color: #7D2DFF !important;
+                background: rgba(169,28,255,0.08) !important;
+                box-shadow: none !important;
+            }
+
             @media (prefers-reduced-motion: reduce) {
                 .metric-card,
                 .latest-calls-shell,
@@ -2515,52 +2563,55 @@ def render_sidebar() -> str:
             """
         )
 
-        navigation_pages = ["Visão Geral", "Cadastro", "Pesos e Medidas"]
+        # Mantém o visual original do menu: os mesmos itens, marcadores e espaçamento.
+        # Cadastro recebe apenas a seta lateral e, ao ser selecionado, mostra o submenu.
+        navigation_labels = ["Visão Geral", "Cadastro  >", "Pesos e Medidas"]
+        page_to_label = {
+            "Visão Geral": "Visão Geral",
+            "Cadastro": "Cadastro  >",
+            "Pesos e Medidas": "Pesos e Medidas",
+        }
+        label_to_page = {label: page for page, label in page_to_label.items()}
 
         if st.session_state.selected_page == "Propostas":
             st.session_state.selected_page = "Cadastro"
 
-        if st.session_state.selected_page not in navigation_pages:
+        if st.session_state.selected_page not in page_to_label:
             st.session_state.selected_page = "Visão Geral"
 
-        # Navegação principal do menu lateral.
-        # O cadastro usa um popover, que abre uma telinha flutuante para a direita.
-        with st.container(key="sidebar_nav_visao_geral"):
-            if st.button("◯  Visão Geral", use_container_width=True, key="sidebar_go_visao_geral"):
-                st.session_state.selected_page = "Visão Geral"
-                st.rerun()
+        selected_label = st.radio(
+            "Navegação",
+            navigation_labels,
+            label_visibility="collapsed",
+            index=navigation_labels.index(page_to_label[st.session_state.selected_page]),
+            key="sidebar_navigation_radio",
+        )
 
-        with st.container(key="sidebar_nav_cadastro"):
-            with st.popover("◉  Cadastro", use_container_width=True):
-                render_html(
-                    """
-                    <div class="submenu-popup-title">Cadastro</div>
-                    <div class="submenu-popup-subtitle">Escolha uma opção</div>
-                    """
-                )
+        page = label_to_page[selected_label]
+        st.session_state.selected_page = page
 
+        if page == "Cadastro":
+            if "selected_cadastro_subpage" not in st.session_state:
+                st.session_state.selected_cadastro_subpage = "Novo contrato"
+
+            render_html('<div class="sidebar-cadastro-submenu-line"></div>')
+
+            with st.container(key="sidebar_cadastro_submenu"):
                 if st.button(
                     "Novo contrato",
+                    key="sidebar_submenu_novo_contrato",
                     use_container_width=True,
-                    key="submenu_popup_novo_contrato",
                 ):
-                    st.session_state.selected_page = "Cadastro"
                     st.session_state.selected_cadastro_subpage = "Novo contrato"
                     st.rerun()
 
                 if st.button(
                     "Todos os contratos",
+                    key="sidebar_submenu_todos_contratos",
                     use_container_width=True,
-                    key="submenu_popup_todos_contratos",
                 ):
-                    st.session_state.selected_page = "Cadastro"
                     st.session_state.selected_cadastro_subpage = "Todos os contratos"
                     st.rerun()
-
-        with st.container(key="sidebar_nav_pesos_medidas"):
-            if st.button("◯  Pesos e Medidas", use_container_width=True, key="sidebar_go_pesos_medidas"):
-                st.session_state.selected_page = "Pesos e Medidas"
-                st.rerun()
 
         render_html(
             """
@@ -2576,7 +2627,7 @@ def render_sidebar() -> str:
             st.session_state.auth_error = ""
             st.rerun()
 
-    return st.session_state.selected_page
+    return page
 
 
 # =========================================================
