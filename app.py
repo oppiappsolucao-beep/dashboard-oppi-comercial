@@ -2128,14 +2128,40 @@ def apply_registration_css() -> None:
             }
 
             [data-testid="stForm"] div[data-baseweb="input"] > div,
-            [data-testid="stForm"] div[data-baseweb="select"] > div,
-            [data-testid="stForm"] textarea {
+            [data-testid="stForm"] div[data-baseweb="select"] > div {
                 min-height: 48px !important;
                 border-radius: 13px !important;
                 border: 1px solid rgba(255,75,170,0.58) !important;
                 background: rgba(8,7,24,0.92) !important;
                 box-shadow: inset 0 1px 0 rgba(255,255,255,0.03) !important;
                 color: #FFFFFF !important;
+            }
+
+            [data-testid="stForm"] div[data-baseweb="textarea"] {
+                border: none !important;
+                background: transparent !important;
+                box-shadow: none !important;
+            }
+
+            [data-testid="stForm"] div[data-baseweb="textarea"] > div {
+                min-height: 48px !important;
+                border-radius: 13px !important;
+                border: 1px solid rgba(255,75,170,0.58) !important;
+                background: rgba(8,7,24,0.92) !important;
+                box-shadow: inset 0 1px 0 rgba(255,255,255,0.03) !important;
+            }
+
+            [data-testid="stForm"] div[data-baseweb="textarea"] textarea {
+                border: none !important;
+                outline: none !important;
+                background: transparent !important;
+                box-shadow: none !important;
+                color: #FFFFFF !important;
+            }
+
+            [data-testid="stForm"] div[data-baseweb="textarea"] > div:focus-within {
+                border: 1px solid rgba(255,75,170,0.95) !important;
+                box-shadow: 0 0 0 1px rgba(255,75,170,0.18) !important;
             }
 
             [data-testid="stForm"] input,
