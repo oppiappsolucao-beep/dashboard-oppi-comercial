@@ -454,7 +454,7 @@ def _set_sheet_value_by_header(
 
 
 class DuplicateRegistrationError(RuntimeError):
-    """Impede o cadastro quando telefone ou CPF já existe na planilha."""
+    """Impede o cadastro quando telefone, CPF ou CNPJ já existe na planilha."""
 
 
 def normalize_digits(value) -> str:
@@ -478,6 +478,12 @@ def normalize_cpf_for_duplicate(value) -> str:
     return digits if len(digits) == 11 else ""
 
 
+def normalize_cnpj_for_duplicate(value) -> str:
+    """Normaliza CNPJ para comparação, ignorando campos vazios ou incompletos."""
+    digits = normalize_digits(value)
+    return digits if len(digits) == 14 else ""
+
+
 def _header_matches_any(header: str, aliases: list[str]) -> bool:
     normalized_header = normalize_search_text(header)
     return any(alias in normalized_header for alias in aliases)
@@ -485,7 +491,7 @@ def _header_matches_any(header: str, aliases: list[str]) -> bool:
 
 def validate_unique_company_registration(payload: dict, worksheet) -> None:
     """
-    Bloqueia novo cadastro quando qualquer telefone ou CPF informado já existe
+    Bloqueia novo cadastro quando qualquer telefone, CPF ou CNPJ informado já existe
     em qualquer coluna correspondente da planilha. A leitura é feita diretamente
     da aba para evitar duplicidade mesmo quando o cache ainda não atualizou.
     """
@@ -510,6 +516,13 @@ def validate_unique_company_registration(payload: dict, worksheet) -> None:
         or _header_matches_any(header, ["cpf do", "cpf socio", "cpf sócio"])
     ]
 
+    cnpj_column_indexes = [
+        index
+        for index, header in enumerate(headers)
+        if normalize_search_text(header) == "cnpj"
+        or _header_matches_any(header, ["cnpj da empresa", "cnpj empresa"])
+    ]
+
     submitted_phones = {
         normalize_phone_for_duplicate(payload.get(field))
         for field in [
@@ -531,8 +544,14 @@ def validate_unique_company_registration(payload: dict, worksheet) -> None:
     }
     submitted_cpfs.discard("")
 
+    submitted_cnpjs = {
+        normalize_cnpj_for_duplicate(payload.get("cnpj"))
+    }
+    submitted_cnpjs.discard("")
+
     duplicate_phones = set()
     duplicate_cpfs = set()
+    duplicate_cnpjs = set()
 
     for row in rows:
         for index in phone_column_indexes:
@@ -553,7 +572,16 @@ def validate_unique_company_registration(payload: dict, worksheet) -> None:
             if existing_cpf and existing_cpf in submitted_cpfs:
                 duplicate_cpfs.add(existing_cpf)
 
-    if not duplicate_phones and not duplicate_cpfs:
+        for index in cnpj_column_indexes:
+            if index >= len(row):
+                continue
+
+            existing_cnpj = normalize_cnpj_for_duplicate(row[index])
+
+            if existing_cnpj and existing_cnpj in submitted_cnpjs:
+                duplicate_cnpjs.add(existing_cnpj)
+
+    if not duplicate_phones and not duplicate_cpfs and not duplicate_cnpjs:
         return
 
     messages = []
@@ -565,6 +593,10 @@ def validate_unique_company_registration(payload: dict, worksheet) -> None:
     if duplicate_cpfs:
         cpfs_text = ", ".join(sorted(duplicate_cpfs))
         messages.append(f"CPF já cadastrado: {cpfs_text}")
+
+    if duplicate_cnpjs:
+        cnpjs_text = ", ".join(sorted(duplicate_cnpjs))
+        messages.append(f"CNPJ já cadastrado: {cnpjs_text}")
 
     raise DuplicateRegistrationError(
         "Não foi possível cadastrar novamente. " + " | ".join(messages)
@@ -614,6 +646,7 @@ def append_company_to_sheet(payload: dict) -> None:
     _set_sheet_value_by_header(row_values, headers, ["Status", "Etapa"], payload.get("status"))
     _set_sheet_value_by_header(row_values, headers, ["Data do chamado", "Data chamado"], payload.get("data_chamado"))
     _set_sheet_value_by_header(row_values, headers, ["Última atualização", "Ultima atualização", "Ultima atualizacao"], payload.get("ultima_atualizacao"))
+    _set_sheet_value_by_header(row_values, headers, ["Observações", "Observacoes", "Observação", "Observacao"], payload.get("observacoes"))
 
     worksheet.append_row(
         row_values,
@@ -648,6 +681,7 @@ def identify_columns(df: pd.DataFrame) -> dict:
         "status": first_existing_column(df, ["Status", "Etapa"]),
         "data_chamado": first_existing_column(df, ["Data do chamado", "Data chamado"]),
         "ultima_atualizacao": first_existing_column(df, ["Última atualização", "Ultima atualização", "Ultima atualizacao"]),
+        "observacoes": first_existing_column(df, ["Observações", "Observacoes", "Observação", "Observacao"]),
     }
 
 
@@ -3070,7 +3104,7 @@ def render_proposals_page(df: pd.DataFrame, columns: dict) -> None:
 
         with cnpj_col:
             cnpj = st.text_input(
-                "CNPJ",
+                "CNPJ *",
                 placeholder="00.000.000/0000-00",
             )
 
@@ -3118,13 +3152,13 @@ def render_proposals_page(df: pd.DataFrame, columns: dict) -> None:
 
         with phone_2:
             telefone_fixo = st.text_input(
-                "Telefone fixo",
+                "Telefone fixo *",
                 placeholder="(00) 0000-0000",
             )
 
         with phone_3:
             telefone_alternativo = st.text_input(
-                "Telefone alternativo",
+                "Telefone alternativo *",
                 placeholder="(00) 00000-0000",
             )
 
@@ -3238,6 +3272,12 @@ def render_proposals_page(df: pd.DataFrame, columns: dict) -> None:
                 format="DD/MM/YYYY",
             )
 
+        observacoes = st.text_area(
+            "Observações",
+            placeholder="Digite informações adicionais importantes sobre a empresa ou o atendimento comercial.",
+            height=120,
+        )
+
         submitted = st.form_submit_button(
             "Cadastrar empresa",
             use_container_width=True,
@@ -3248,9 +3288,34 @@ def render_proposals_page(df: pd.DataFrame, columns: dict) -> None:
             st.error("Preencha o nome da empresa para concluir o cadastro.")
             return
 
+        if not normalize_text(cnpj):
+            st.error("Preencha o CNPJ para concluir o cadastro.")
+            return
+
+        if not normalize_cnpj_for_duplicate(cnpj):
+            st.error("Digite um CNPJ válido com 14 números.")
+            return
+
         if not normalize_text(telefone_b2b):
             st.error("Preencha o telefone B2B para concluir o cadastro.")
             return
+
+        if not normalize_text(telefone_fixo):
+            st.error("Preencha o telefone fixo para concluir o cadastro.")
+            return
+
+        if not normalize_text(telefone_alternativo):
+            st.error("Preencha o telefone alternativo para concluir o cadastro.")
+            return
+
+        for phone_label, phone_value in [
+            ("Telefone B2B", telefone_b2b),
+            ("Telefone fixo", telefone_fixo),
+            ("Telefone alternativo", telefone_alternativo),
+        ]:
+            if not normalize_phone_for_duplicate(phone_value):
+                st.error(f"Digite um número válido no campo {phone_label}.")
+                return
 
         now_text = pd.Timestamp.now(tz="America/Sao_Paulo").strftime("%d/%m/%Y %H:%M")
 
@@ -3281,6 +3346,7 @@ def render_proposals_page(df: pd.DataFrame, columns: dict) -> None:
                     "status": status,
                     "data_chamado": data_chamado.strftime("%d/%m/%Y"),
                     "ultima_atualizacao": now_text,
+                    "observacoes": observacoes,
                 }
             )
         except DuplicateRegistrationError as error:
