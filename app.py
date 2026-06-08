@@ -2044,96 +2044,66 @@ def apply_dashboard_css() -> None:
                 box-shadow: none !important;
             }
 
+            /* O popover do Cadastro funciona como um menu flutuante lateral */
+            .st-key-sidebar_nav_cadastro div[data-testid="stPopover"] > button::after {
+                content: "›";
+                margin-left: auto;
+                color: #7D2DFF;
+                font-size: 1.32rem;
+                font-weight: 950;
+                line-height: 1;
+            }
+
             div[data-testid="stPopoverBody"] {
-                min-width: 260px !important;
-                padding: 14px !important;
-                border-radius: 16px !important;
-                border: 1px solid rgba(255,75,170,0.36) !important;
-                background:
-                    radial-gradient(circle at 100% 0%, rgba(169,28,255,0.18), transparent 36%),
-                    linear-gradient(145deg, rgba(24,22,43,0.99), rgba(13,12,28,0.99)) !important;
-                box-shadow: 0 20px 46px rgba(0,0,0,0.32), 0 0 24px rgba(169,28,255,0.14) !important;
+                min-width: 270px !important;
+                max-width: 290px !important;
+                padding: 0 !important;
+                margin-left: 248px !important;
+                margin-top: -50px !important;
+                border-radius: 0 12px 12px 0 !important;
+                border: 1px solid rgba(255,255,255,0.08) !important;
+                border-left: 4px solid #7D2DFF !important;
+                background: #1D2730 !important;
+                box-shadow: 0 20px 46px rgba(0,0,0,0.34) !important;
+                overflow: hidden !important;
             }
 
             .submenu-popup-title {
+                padding: 16px 18px 12px 18px;
                 color: #FFFFFF;
-                font-size: 1rem;
+                font-size: 1.03rem;
                 font-weight: 900;
-                margin-bottom: 2px;
+                border-bottom: 1px solid rgba(255,255,255,0.10);
+                background: rgba(255,255,255,0.025);
             }
 
             .submenu-popup-subtitle {
-                color: rgba(255,255,255,0.62);
-                font-size: 0.78rem;
-                margin-bottom: 10px;
+                display: none;
             }
 
             div[data-testid="stPopoverBody"] .stButton > button {
                 width: 100% !important;
-                min-height: 42px !important;
-                margin-top: 6px !important;
-                border-radius: 11px !important;
-                border: 1px solid rgba(255,75,170,0.28) !important;
-                background: rgba(255,255,255,0.045) !important;
-                color: #FFFFFF !important;
-                font-weight: 800 !important;
+                min-height: 46px !important;
+                margin: 0 !important;
+                padding: 0 18px !important;
+                justify-content: flex-start !important;
+                border: none !important;
+                border-radius: 0 !important;
+                background: transparent !important;
+                color: rgba(255,255,255,0.92) !important;
+                font-size: 0.88rem !important;
+                font-weight: 650 !important;
+                text-align: left !important;
                 box-shadow: none !important;
-                transition: transform 0.18s ease, background 0.18s ease, border-color 0.18s ease !important;
+                transition: background 0.16s ease, color 0.16s ease, padding-left 0.16s ease !important;
             }
 
             div[data-testid="stPopoverBody"] .stButton > button:hover {
-                transform: scale(1.02) !important;
-                border-color: rgba(255,75,170,0.72) !important;
-                background: linear-gradient(90deg, rgba(255,75,170,0.22), rgba(169,28,255,0.22)) !important;
-                box-shadow: 0 8px 20px rgba(169,28,255,0.14) !important;
-            }
-
-            /* Submenu simples do Cadastro: preserva o visual original do menu lateral */
-            .sidebar-cadastro-submenu-line {
-                width: 2px;
-                height: 10px;
-                margin: 0 0 0 17px;
-                background: linear-gradient(180deg, rgba(255,75,170,0.66), rgba(169,28,255,0.24));
-                border-radius: 999px;
-            }
-
-            .st-key-sidebar_cadastro_submenu {
-                margin: -2px 0 8px 18px !important;
-                padding-left: 12px !important;
-                border-left: 1px solid rgba(169,28,255,0.24);
-            }
-
-            .st-key-sidebar_cadastro_submenu .stButton > button {
-                width: 100% !important;
-                min-height: 34px !important;
-                margin: 2px 0 !important;
-                padding: 0 10px !important;
-                justify-content: flex-start !important;
-                border: none !important;
-                border-radius: 9px !important;
-                background: transparent !important;
-                color: #241C34 !important;
-                box-shadow: none !important;
-                font-size: 0.83rem !important;
-                font-weight: 800 !important;
-                text-align: left !important;
-                transition: background 0.18s ease, color 0.18s ease, transform 0.18s ease !important;
-            }
-
-            .st-key-sidebar_cadastro_submenu .stButton > button::before {
-                content: "›";
-                display: inline-block;
-                margin-right: 8px;
-                color: #A91CFF;
-                font-size: 1rem;
-                font-weight: 900;
-            }
-
-            .st-key-sidebar_cadastro_submenu .stButton > button:hover {
-                transform: translateX(4px) !important;
-                color: #7D2DFF !important;
-                background: rgba(169,28,255,0.08) !important;
-                box-shadow: none !important;
+                transform: none !important;
+                padding-left: 22px !important;
+                color: #FFFFFF !important;
+                background: rgba(125,45,255,0.28) !important;
+                box-shadow: inset 3px 0 0 #A91CFF !important;
             }
 
             @media (prefers-reduced-motion: reduce) {
@@ -2563,55 +2533,58 @@ def render_sidebar() -> str:
             """
         )
 
-        # Mantém o visual original do menu: os mesmos itens, marcadores e espaçamento.
-        # Cadastro recebe apenas a seta lateral e, ao ser selecionado, mostra o submenu.
-        navigation_labels = ["Visão Geral", "Cadastro  >", "Pesos e Medidas"]
-        page_to_label = {
-            "Visão Geral": "Visão Geral",
-            "Cadastro": "Cadastro  >",
-            "Pesos e Medidas": "Pesos e Medidas",
-        }
-        label_to_page = {label: page for page, label in page_to_label.items()}
-
         if st.session_state.selected_page == "Propostas":
             st.session_state.selected_page = "Cadastro"
 
-        if st.session_state.selected_page not in page_to_label:
+        if st.session_state.selected_page not in ["Visão Geral", "Cadastro", "Pesos e Medidas"]:
             st.session_state.selected_page = "Visão Geral"
 
-        selected_label = st.radio(
-            "Navegação",
-            navigation_labels,
-            label_visibility="collapsed",
-            index=navigation_labels.index(page_to_label[st.session_state.selected_page]),
-            key="sidebar_navigation_radio",
-        )
+        overview_icon = "🔴" if st.session_state.selected_page == "Visão Geral" else "◯"
+        cadastro_icon = "🔴" if st.session_state.selected_page == "Cadastro" else "◯"
+        score_icon = "🔴" if st.session_state.selected_page == "Pesos e Medidas" else "◯"
 
-        page = label_to_page[selected_label]
-        st.session_state.selected_page = page
+        with st.container(key="sidebar_nav_visao_geral"):
+            if st.button(
+                f"{overview_icon}  Visão Geral",
+                use_container_width=True,
+                key="sidebar_go_visao_geral",
+            ):
+                st.session_state.selected_page = "Visão Geral"
+                st.rerun()
 
-        if page == "Cadastro":
-            if "selected_cadastro_subpage" not in st.session_state:
-                st.session_state.selected_cadastro_subpage = "Novo contrato"
+        with st.container(key="sidebar_nav_cadastro"):
+            with st.popover(
+                f"{cadastro_icon}  Cadastro",
+                use_container_width=True,
+            ):
+                render_html('<div class="submenu-popup-title">Cadastro</div>')
 
-            render_html('<div class="sidebar-cadastro-submenu-line"></div>')
-
-            with st.container(key="sidebar_cadastro_submenu"):
                 if st.button(
                     "Novo contrato",
-                    key="sidebar_submenu_novo_contrato",
                     use_container_width=True,
+                    key="submenu_popup_novo_contrato",
                 ):
+                    st.session_state.selected_page = "Cadastro"
                     st.session_state.selected_cadastro_subpage = "Novo contrato"
                     st.rerun()
 
                 if st.button(
                     "Todos os contratos",
-                    key="sidebar_submenu_todos_contratos",
                     use_container_width=True,
+                    key="submenu_popup_todos_contratos",
                 ):
+                    st.session_state.selected_page = "Cadastro"
                     st.session_state.selected_cadastro_subpage = "Todos os contratos"
                     st.rerun()
+
+        with st.container(key="sidebar_nav_pesos_medidas"):
+            if st.button(
+                f"{score_icon}  Pesos e Medidas",
+                use_container_width=True,
+                key="sidebar_go_pesos_medidas",
+            ):
+                st.session_state.selected_page = "Pesos e Medidas"
+                st.rerun()
 
         render_html(
             """
@@ -2627,7 +2600,7 @@ def render_sidebar() -> str:
             st.session_state.auth_error = ""
             st.rerun()
 
-    return page
+    return st.session_state.selected_page
 
 
 # =========================================================
