@@ -1527,9 +1527,9 @@ def apply_dashboard_css() -> None:
             /* Tabela comercial compacta com botão Copiar */
             .premium-inline-table-header {
                 margin-top: 4px;
-                margin-bottom: 2px;
+                margin-bottom: 3px;
                 padding: 7px 8px;
-                border-radius: 8px 8px 0 0;
+                border-radius: 9px;
                 background: linear-gradient(90deg, rgba(255,75,170,0.15), rgba(169,28,255,0.15));
                 border: 1px solid rgba(255,75,170,0.24);
                 color: rgba(255,255,255,0.94);
@@ -1538,16 +1538,13 @@ def apply_dashboard_css() -> None:
             }
 
             .premium-inline-cell {
-                min-height: 34px;
-                height: 34px;
+                min-height: 30px;
                 display: flex;
                 align-items: center;
                 padding: 4px 7px;
-                border-radius: 8px;
-                margin-top: 0;
-                margin-bottom: 0;
-                background: transparent;
-                border: none;
+                border-radius: 7px;
+                background: rgba(255,255,255,0.97);
+                border: 1px solid rgba(169,28,255,0.08);
                 color: #261C35;
                 font-size: 0.77rem;
                 line-height: 1.16;
@@ -1584,9 +1581,9 @@ def apply_dashboard_css() -> None:
                 color: #FF79C4;
             }
 
-            /* Linhas compactas: sem espaços escuros entre uma linha e outra */
+            /* Linhas contínuas: cada empresa fica imediatamente abaixo da anterior */
             .st-key-compact_inline_table div[data-testid="stHorizontalBlock"] {
-                gap: 0.28rem !important;
+                gap: 0.34rem !important;
                 margin-top: 0 !important;
                 margin-bottom: 0 !important;
                 padding-top: 0 !important;
@@ -1606,80 +1603,56 @@ def apply_dashboard_css() -> None:
                 padding-bottom: 0 !important;
             }
 
-            .st-key-compact_inline_table div[data-testid="stSelectbox"] {
-                margin-top: 0 !important;
-                margin-bottom: 0 !important;
-            }
-
-            .st-key-compact_inline_table div[data-testid="stSelectbox"] > div[data-baseweb="select"] {
-                min-height: 34px !important;
-                height: 34px !important;
-            }
-
-            .st-key-compact_inline_table div[data-testid="stSelectbox"] > div[data-baseweb="select"] > div {
-                min-height: 34px !important;
-                height: 34px !important;
-                border-radius: 8px !important;
-                padding-top: 0 !important;
-                padding-bottom: 0 !important;
-                display: flex !important;
-                align-items: center !important;
-                overflow: visible !important;
-            }
-
-            .st-key-compact_inline_table div[data-testid="stSelectbox"] [role="button"] {
-                min-height: 34px !important;
-                height: 34px !important;
-                display: flex !important;
-                align-items: center !important;
-                overflow: visible !important;
-            }
-
-            .st-key-compact_inline_table div[data-testid="stSelectbox"] [role="button"] > div {
-                min-height: 34px !important;
-                display: flex !important;
-                align-items: center !important;
-                overflow: visible !important;
-            }
-
-            .st-key-compact_inline_table div[data-testid="stSelectbox"] svg {
-                overflow: visible !important;
-                flex-shrink: 0 !important;
-            }
-
-            .st-key-compact_inline_table iframe {
-                min-height: 34px !important;
-                height: 34px !important;
-                margin-top: 0 !important;
-                margin-bottom: 0 !important;
-                display: block !important;
-            }
-
-            /* Cada linha vira uma faixa branca contínua */
+            /* Faixa branca contínua por empresa, sem fundo preto entre as linhas */
             [class*="st-key-inline_row_"] {
-                margin: 0 !important;
+                margin-top: -8px !important;
+                margin-bottom: 0 !important;
                 padding: 0 !important;
             }
 
             [class*="st-key-inline_row_"] > div {
-                background: rgba(255,255,255,0.98);
-                border-radius: 0 !important;
                 margin: 0 !important;
-                padding: 2px 0 !important;
-                border-bottom: 1px solid rgba(155, 140, 180, 0.20);
+                padding: 0 !important;
+                background: rgba(255,255,255,0.98) !important;
+                border-bottom: 1px solid rgba(116, 91, 145, 0.14) !important;
             }
 
             [class*="st-key-inline_row_"] div[data-testid="stHorizontalBlock"] {
-                gap: 0.28rem !important;
                 margin: 0 !important;
-                padding: 0 0.15rem !important;
+                padding: 0 !important;
+                gap: 0.34rem !important;
                 align-items: center !important;
             }
 
             [class*="st-key-inline_row_"] div[data-testid="stElementContainer"] {
                 margin: 0 !important;
+                padding: 0 !important;
+            }
+
+            [class*="st-key-inline_row_"] .premium-inline-cell {
+                background: transparent !important;
+                border-color: transparent !important;
+            }
+
+            .st-key-compact_inline_table div[data-testid="stSelectbox"] {
+                margin-top: 0 !important;
+                margin-bottom: 0 !important;
+            }
+
+            .st-key-compact_inline_table div[data-testid="stSelectbox"] > div[data-baseweb="select"] > div {
+                min-height: 30px !important;
+                height: 30px !important;
+                border-radius: 7px !important;
                 padding-top: 0 !important;
                 padding-bottom: 0 !important;
+            }
+
+            .st-key-compact_inline_table iframe {
+                min-height: 30px !important;
+                height: 30px !important;
+                margin-top: 0 !important;
+                margin-bottom: 0 !important;
+                display: block !important;
             }
 
             /* A tabela não deve ampliar no hover */
@@ -2081,7 +2054,7 @@ def render_phone_copy_button(phone: str, row_key: str) -> None:
                     margin: 0;
                     padding: 0;
                     width: 100%;
-                    height: 34px;
+                    height: 30px;
                     overflow: hidden;
                     background: transparent;
                     font-family: Arial, sans-serif;
@@ -2091,7 +2064,7 @@ def render_phone_copy_button(phone: str, row_key: str) -> None:
                     width: 100%;
                     height: 29px;
                     border: none;
-                    border-radius: 0;
+                    border-radius: 7px;
                     cursor: pointer;
                     color: #FFFFFF;
                     font-size: 11px;
@@ -2176,7 +2149,7 @@ def render_phone_copy_button(phone: str, row_key: str) -> None:
         </body>
         </html>
         """,
-        height=34,
+        height=30,
         scrolling=False,
     )
 
@@ -2462,6 +2435,7 @@ def render_latest_calls_section(
                     render_html(
                         f'<div class="premium-inline-cell date">{html.escape(normalize_text(row["Data"]))}</div>'
                     )
+
 
 def prepare_filters(df: pd.DataFrame) -> pd.DataFrame:
     title_column, refresh_column = st.columns([3.8, 1.0], gap="large")
