@@ -2573,20 +2573,20 @@ def apply_registration_css() -> None:
             }
 
 
-            /* Lista clicável das empresas cadastradas */
+            /* Lista clicável das empresas cadastradas na paleta do dashboard */
             .st-key-contracts_names_list {
                 margin-top: 10px !important;
                 overflow: hidden !important;
                 border-radius: 18px !important;
-                border: 1px solid rgba(79,35,120,0.38) !important;
+                border: 1px solid rgba(255,75,170,0.34) !important;
                 background:
-                    radial-gradient(circle at top left, rgba(255,255,255,0.92) 0%, rgba(255,255,255,0.00) 34%),
-                    radial-gradient(circle at bottom right, rgba(208,212,223,0.72) 0%, rgba(208,212,223,0.00) 36%),
-                    linear-gradient(180deg, #F7F8FC 0%, #ECEEF4 42%, #DCE0E9 76%, #CED3DE 100%) !important;
+                    radial-gradient(circle at top left, rgba(169,28,255,0.15) 0%, rgba(169,28,255,0.00) 34%),
+                    radial-gradient(circle at bottom right, rgba(255,75,170,0.10) 0%, rgba(255,75,170,0.00) 36%),
+                    linear-gradient(180deg, #100D21 0%, #0C0A19 48%, #090812 100%) !important;
                 box-shadow:
-                    0 18px 42px rgba(0,0,0,0.18),
-                    0 0 0 1px rgba(255,255,255,0.54),
-                    0 0 18px rgba(79,35,120,0.07) !important;
+                    0 18px 42px rgba(0,0,0,0.28),
+                    0 0 0 1px rgba(169,28,255,0.10),
+                    0 0 22px rgba(169,28,255,0.10) !important;
             }
 
             .st-key-contracts_names_list div[data-testid="stVerticalBlock"] {
@@ -2605,10 +2605,10 @@ def apply_registration_css() -> None:
                 padding: 11px 18px !important;
                 justify-content: flex-start !important;
                 border: none !important;
-                border-bottom: 1px solid rgba(84,72,107,0.10) !important;
+                border-bottom: 1px solid rgba(255,75,170,0.10) !important;
                 border-radius: 0 !important;
-                color: #241C34 !important;
-                background: rgba(247,248,252,0.92) !important;
+                color: rgba(255,255,255,0.92) !important;
+                background: rgba(13,11,31,0.96) !important;
                 box-shadow: none !important;
                 font-size: 0.90rem !important;
                 font-weight: 700 !important;
@@ -2622,15 +2622,15 @@ def apply_registration_css() -> None:
             }
 
             .st-key-contracts_names_list div[data-testid="stElementContainer"]:nth-child(even) .stButton > button {
-                background: rgba(231,234,241,0.94) !important;
+                background: rgba(20,15,43,0.98) !important;
             }
 
             .st-key-contracts_names_list .stButton > button:hover {
                 transform: none !important;
                 padding-left: 22px !important;
-                color: #4A215F !important;
-                background: linear-gradient(90deg, rgba(112,33,86,0.20), rgba(72,34,112,0.17), rgba(255,255,255,0.72)) !important;
-                box-shadow: inset 4px 0 0 #7C2A68 !important;
+                color: #FFFFFF !important;
+                background: linear-gradient(90deg, rgba(255,75,170,0.18), rgba(169,28,255,0.20), rgba(13,11,31,0.98)) !important;
+                box-shadow: inset 4px 0 0 #FF4BAA, 0 0 20px rgba(169,28,255,0.12) !important;
             }
 
             /* Mantém a lista igual à tabela aprovada: linhas juntas e nomes alinhados à esquerda */
@@ -2677,9 +2677,9 @@ def apply_registration_css() -> None:
                 letter-spacing: 0.02em;
                 text-transform: uppercase;
                 background:
-                    linear-gradient(90deg, rgba(105,30,82,0.98), rgba(68,31,104,0.98)),
-                    rgba(48,27,62,0.98);
-                border-bottom: 1px solid rgba(105,30,82,0.72);
+                    linear-gradient(90deg, rgba(255,75,170,0.42), rgba(169,28,255,0.42)),
+                    rgba(20,15,43,0.98);
+                border-bottom: 1px solid rgba(255,75,170,0.30);
             }
 
             /* Página de visualização do cadastro preenchido */
