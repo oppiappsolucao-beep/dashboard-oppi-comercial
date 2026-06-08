@@ -2750,6 +2750,11 @@ def prepare_filters(df: pd.DataFrame) -> pd.DataFrame:
 # PÁGINA: VISÃO GERAL
 # =========================================================
 def render_overview_page(df: pd.DataFrame, columns: dict) -> None:
+    registration_success = st.session_state.pop("company_registration_success", None)
+
+    if registration_success:
+        st.success(registration_success)
+
     filtered_df = prepare_filters(df)
 
     today = date.today()
@@ -3163,7 +3168,18 @@ def render_proposals_page(df: pd.DataFrame, columns: dict) -> None:
             st.code(str(error))
             return
 
-        st.success("Empresa cadastrada com sucesso na planilha comercial.")
+        # Após o cadastro, abre a Visão Geral já com os dados atualizados.
+        # Também limpa filtros antigos que poderiam esconder a nova empresa.
+        st.session_state.selected_page = "Visão Geral"
+        st.session_state.dashboard_filter_seller = "Todos os vendedores"
+        st.session_state.dashboard_filter_status = "Todos os status"
+        st.session_state.dashboard_filter_search = ""
+        st.session_state.pop("dashboard_filter_period", None)
+        st.session_state["ultimos_chamados_status_selecionado"] = status
+        st.session_state["company_registration_success"] = (
+            f"Empresa “{normalize_text(empresa)}” cadastrada com sucesso na planilha e adicionada à Visão Geral com o status “{normalize_text(status)}”."
+        )
+        st.rerun()
 
 
 # =========================================================
