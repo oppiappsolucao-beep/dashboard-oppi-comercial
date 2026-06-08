@@ -2632,6 +2632,42 @@ def apply_registration_css() -> None:
                 box-shadow: inset 4px 0 0 #FF4BAA !important;
             }
 
+            /* Mantém a lista igual à tabela aprovada: linhas juntas e nomes alinhados à esquerda */
+            .st-key-contracts_names_list,
+            .st-key-contracts_names_list > div,
+            .st-key-contracts_names_list div[data-testid="stVerticalBlock"],
+            .st-key-contracts_names_list div[data-testid="stElementContainer"],
+            .st-key-contracts_names_list .stButton {
+                margin-top: 0 !important;
+                margin-bottom: 0 !important;
+                padding-top: 0 !important;
+                padding-bottom: 0 !important;
+                gap: 0 !important;
+                row-gap: 0 !important;
+            }
+
+            .st-key-contracts_names_list .stButton > button {
+                min-height: 45px !important;
+                height: 45px !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: flex-start !important;
+                padding: 0 18px !important;
+                margin: 0 !important;
+                border-radius: 0 !important;
+            }
+
+            .st-key-contracts_names_list .stButton > button p,
+            .st-key-contracts_names_list .stButton > button span,
+            .st-key-contracts_names_list .stButton > button div {
+                width: 100% !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                text-align: left !important;
+                justify-content: flex-start !important;
+                line-height: 1.15 !important;
+            }
+
             .contracts-names-clickable-header {
                 padding: 14px 18px;
                 color: #FFFFFF;
