@@ -1524,76 +1524,84 @@ def apply_dashboard_css() -> None:
                 box-shadow: 0 0 12px currentColor;
             }
 
-            /* Tabela comercial compacta com botão Copiar */
+            /* Tabela comercial no estilo visual aprovado */
             .premium-inline-table-header {
+                min-height: 62px;
+                display: flex;
+                align-items: center;
                 margin-top: 4px;
-                margin-bottom: 3px;
-                padding: 7px 8px;
-                border-radius: 9px;
-                background: linear-gradient(90deg, rgba(255,75,170,0.15), rgba(169,28,255,0.15));
-                border: 1px solid rgba(255,75,170,0.24);
-                color: rgba(255,255,255,0.94);
-                font-size: 0.73rem;
-                font-weight: 850;
+                margin-bottom: 2px;
+                padding: 0 20px;
+                border-radius: 7px;
+                background:
+                    radial-gradient(circle at 100% 0%, rgba(169,28,255,0.18), transparent 42%),
+                    linear-gradient(90deg, rgba(255,75,170,0.14), rgba(169,28,255,0.14));
+                border: 1px solid rgba(255,75,170,0.34);
+                color: rgba(255,255,255,0.97);
+                font-size: 1.04rem;
+                font-weight: 900;
+                letter-spacing: 0.01em;
             }
 
             .premium-inline-cell {
-                min-height: 30px;
+                min-height: 66px;
+                height: 66px;
                 display: flex;
                 align-items: center;
-                padding: 4px 7px;
-                border-radius: 7px;
-                margin-top: 0;
-                margin-bottom: 0;
-                background: rgba(255,255,255,0.97);
+                padding: 0 22px;
+                border-radius: 6px;
+                background: rgba(255,255,255,0.98);
                 border: 1px solid rgba(169,28,255,0.08);
-                color: #261C35;
-                font-size: 0.77rem;
-                line-height: 1.16;
+                color: #251D31;
+                font-size: 1.08rem;
+                line-height: 1.18;
                 word-break: break-word;
+                box-sizing: border-box;
             }
 
             .premium-inline-cell.phone {
-                color: #5C2A83;
-                font-weight: 850;
+                color: #6220C7;
+                font-weight: 900;
+                letter-spacing: 0.01em;
             }
 
             .premium-inline-cell.date {
                 justify-content: center;
-                color: #5B5369;
-                font-size: 0.73rem;
+                color: #5C5270;
+                font-size: 1rem;
             }
 
             .premium-inline-cell.muted {
-                color: #6E667A;
+                color: #5E5471;
             }
 
             .premium-inline-hint {
-                margin: 5px 0 7px 0;
-                padding: 8px 11px;
-                border-radius: 10px;
-                background: linear-gradient(90deg, rgba(255,75,170,0.07), rgba(169,28,255,0.07));
-                border: 1px solid rgba(255,75,170,0.17);
-                color: rgba(255,255,255,0.72);
-                font-size: 0.74rem;
-                line-height: 1.30;
+                margin: 4px 0 14px 0;
+                padding: 20px 22px;
+                border-radius: 12px;
+                background:
+                    radial-gradient(circle at 48% 50%, rgba(169,28,255,0.16), transparent 38%),
+                    linear-gradient(90deg, rgba(255,75,170,0.055), rgba(169,28,255,0.055));
+                border: 1px solid rgba(255,75,170,0.22);
+                color: rgba(255,255,255,0.88);
+                font-size: 1.02rem;
+                line-height: 1.35;
             }
 
             .premium-inline-hint strong {
-                color: #FF79C4;
+                color: #FF5CB7;
             }
 
-            /* Linhas compactas: sem espaços exagerados entre empresas */
+            /* Colunas próximas e linhas organizadas, como uma planilha visual */
             .st-key-compact_inline_table div[data-testid="stHorizontalBlock"] {
-                gap: 0.28rem !important;
+                gap: 0.12rem !important;
                 margin-top: 0 !important;
-                margin-bottom: 0 !important;
+                margin-bottom: 0.12rem !important;
+                align-items: center !important;
             }
 
-            .st-key-compact_inline_table > div,
             .st-key-compact_inline_table div[data-testid="stVerticalBlock"] {
-                gap: 0.02rem !important;
-                row-gap: 0.02rem !important;
+                gap: 0.12rem !important;
             }
 
             .st-key-compact_inline_table div[data-testid="stElementContainer"] {
@@ -1608,47 +1616,40 @@ def apply_dashboard_css() -> None:
                 margin-bottom: 0 !important;
             }
 
-            .st-key-compact_inline_table div[data-testid="stSelectbox"] > div[data-baseweb="select"] {
-                min-height: 34px !important;
-                height: 34px !important;
-            }
-
             .st-key-compact_inline_table div[data-testid="stSelectbox"] > div[data-baseweb="select"] > div {
-                min-height: 34px !important;
-                height: 34px !important;
-                border-radius: 7px !important;
-                padding-top: 0 !important;
-                padding-bottom: 0 !important;
+                min-height: 66px !important;
+                height: 66px !important;
+                border-radius: 6px !important;
+                border: 1px solid rgba(255,75,170,0.88) !important;
+                padding: 0 18px !important;
+                background: rgba(7, 7, 20, 0.98) !important;
                 display: flex !important;
                 align-items: center !important;
+                box-sizing: border-box !important;
                 overflow: visible !important;
             }
 
-            .st-key-compact_inline_table div[data-testid="stSelectbox"] [role="button"] {
-                min-height: 34px !important;
-                height: 34px !important;
-                display: flex !important;
-                align-items: center !important;
-                overflow: visible !important;
-            }
-
-            .st-key-compact_inline_table div[data-testid="stSelectbox"] [role="button"] > div {
-                min-height: 34px !important;
-                display: flex !important;
-                align-items: center !important;
-                overflow: visible !important;
+            .st-key-compact_inline_table div[data-testid="stSelectbox"] div[data-baseweb="select"] span,
+            .st-key-compact_inline_table div[data-testid="stSelectbox"] div[data-baseweb="select"] div {
+                color: #FFFFFF !important;
+                font-size: 1.08rem !important;
+                line-height: 1.15 !important;
+                white-space: nowrap !important;
+                text-overflow: clip !important;
             }
 
             .st-key-compact_inline_table div[data-testid="stSelectbox"] svg {
-                overflow: visible !important;
+                color: #FFFFFF !important;
+                fill: #FFFFFF !important;
+                width: 22px !important;
+                height: 22px !important;
                 flex-shrink: 0 !important;
             }
 
             .st-key-compact_inline_table iframe {
-                min-height: 30px !important;
-                height: 30px !important;
-                margin-top: 0 !important;
-                margin-bottom: 0 !important;
+                min-height: 66px !important;
+                height: 66px !important;
+                display: block !important;
             }
 
             /* A tabela não deve ampliar no hover */
@@ -2050,7 +2051,7 @@ def render_phone_copy_button(phone: str, row_key: str) -> None:
                     margin: 0;
                     padding: 0;
                     width: 100%;
-                    height: 30px;
+                    height: 66px;
                     overflow: hidden;
                     background: transparent;
                     font-family: Arial, sans-serif;
@@ -2058,12 +2059,12 @@ def render_phone_copy_button(phone: str, row_key: str) -> None:
 
                 button {{
                     width: 100%;
-                    height: 29px;
+                    height: 66px;
                     border: none;
-                    border-radius: 7px;
+                    border-radius: 6px;
                     cursor: pointer;
                     color: #FFFFFF;
-                    font-size: 11px;
+                    font-size: 1.08rem;
                     font-weight: 800;
                     letter-spacing: 0.01em;
                     background: linear-gradient(90deg, #FF4BAA 0%, #A91CFF 100%);
@@ -2145,7 +2146,7 @@ def render_phone_copy_button(phone: str, row_key: str) -> None:
         </body>
         </html>
         """,
-        height=30,
+        height=66,
         scrolling=False,
     )
 
@@ -2324,7 +2325,7 @@ def render_latest_calls_section(
 
     with st.container(key="compact_inline_table"):
         header_columns = st.columns(
-            [3.15, 1.45, 0.92, 1.65, 1.35, 0.90],
+            [3.10, 1.95, 1.12, 2.35, 1.75, 1.18],
             gap="small",
         )
 
@@ -2351,7 +2352,7 @@ def render_latest_calls_section(
                 original_status = "Novo Lead"
 
             row_columns = st.columns(
-                [3.15, 1.45, 0.92, 1.65, 1.35, 0.90],
+                [3.10, 1.95, 1.12, 2.35, 1.75, 1.18],
                 gap="small",
             )
 
