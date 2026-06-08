@@ -2688,6 +2688,89 @@ def render_sidebar() -> str:
             """
         )
 
+        # Fecha somente a caixinha lateral do Cadastro ao clicar fora dela.
+        # O design aprovado do menu e do submenu permanece intacto.
+        components.html(
+            """
+            <script>
+                (function () {
+                    function getParentDocument() {
+                        try {
+                            if (window.frameElement && window.frameElement.ownerDocument) {
+                                return window.frameElement.ownerDocument;
+                            }
+                        } catch (error) {}
+
+                        try {
+                            return window.parent.document;
+                        } catch (error) {
+                            return null;
+                        }
+                    }
+
+                    function installOutsideClickHandler() {
+                        const parentDocument = getParentDocument();
+
+                        if (!parentDocument) {
+                            window.setTimeout(installOutsideClickHandler, 250);
+                            return;
+                        }
+
+                        const handlerKey = "__oppiCadastroFlyoutOutsideClickHandler__";
+
+                        if (window.parent[handlerKey]) {
+                            return;
+                        }
+
+                        window.parent[handlerKey] = true;
+
+                        parentDocument.addEventListener(
+                            "pointerdown",
+                            function (event) {
+                                const openDetails = parentDocument.querySelector(
+                                    ".oppi-cadastro-details[open]"
+                                );
+
+                                if (!openDetails) {
+                                    return;
+                                }
+
+                                if (openDetails.contains(event.target)) {
+                                    return;
+                                }
+
+                                openDetails.removeAttribute("open");
+                            },
+                            true
+                        );
+
+                        parentDocument.addEventListener(
+                            "keydown",
+                            function (event) {
+                                if (event.key !== "Escape") {
+                                    return;
+                                }
+
+                                const openDetails = parentDocument.querySelector(
+                                    ".oppi-cadastro-details[open]"
+                                );
+
+                                if (openDetails) {
+                                    openDetails.removeAttribute("open");
+                                }
+                            },
+                            true
+                        );
+                    }
+
+                    installOutsideClickHandler();
+                })();
+            </script>
+            """,
+            height=0,
+            scrolling=False,
+        )
+
         render_html(
             """
             <div class="side-tip">
