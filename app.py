@@ -2137,13 +2137,21 @@ def render_sidebar() -> str:
             """
         )
 
+        navigation_pages = ["Visão Geral", "Cadastro", "Pesos e Medidas"]
+
+        # Compatibilidade com sessões abertas antes da troca de nome da página.
+        # Caso o navegador ainda tenha "Propostas" salvo na sessão, abre "Cadastro".
+        if st.session_state.selected_page == "Propostas":
+            st.session_state.selected_page = "Cadastro"
+
+        if st.session_state.selected_page not in navigation_pages:
+            st.session_state.selected_page = "Visão Geral"
+
         page = st.radio(
             "Navegação",
-            ["Visão Geral", "Cadastro", "Pesos e Medidas"],
+            navigation_pages,
             label_visibility="collapsed",
-            index=["Visão Geral", "Cadastro", "Pesos e Medidas"].index(
-                st.session_state.selected_page
-            ),
+            index=navigation_pages.index(st.session_state.selected_page),
         )
 
         st.session_state.selected_page = page
