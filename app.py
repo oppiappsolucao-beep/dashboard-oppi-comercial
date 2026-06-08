@@ -2094,10 +2094,13 @@ def apply_dashboard_css() -> None:
                 z-index: 999999;
                 overflow: hidden;
                 border-radius: 0 12px 12px 0;
-                border: 1px solid rgba(255,255,255,0.08);
-                border-left: 4px solid #7D2DFF;
-                background: #1D2730;
-                box-shadow: 0 22px 48px rgba(0,0,0,0.34);
+                border: 1px solid rgba(63,53,83,0.16);
+                border-left: 4px solid #A91CFF;
+                background:
+                    radial-gradient(circle at top left, rgba(255,255,255,0.96) 0%, rgba(255,255,255,0.00) 34%),
+                    radial-gradient(circle at bottom right, rgba(208,212,223,0.78) 0%, rgba(208,212,223,0.00) 40%),
+                    linear-gradient(180deg, #F7F8FC 0%, #ECEEF4 42%, #DCE0E9 100%);
+                box-shadow: 0 22px 48px rgba(0,0,0,0.22), 0 0 18px rgba(169,28,255,0.10);
             }
 
             .oppi-cadastro-details[open] .oppi-cadastro-flyout {
@@ -2106,21 +2109,21 @@ def apply_dashboard_css() -> None:
 
             .oppi-flyout-title {
                 padding: 16px 18px 13px 18px;
-                color: #FFFFFF;
+                color: #241C34;
                 font-size: 1rem;
                 font-weight: 900;
-                border-bottom: 1px solid rgba(255,255,255,0.10);
-                background: rgba(255,255,255,0.025);
+                border-bottom: 1px solid rgba(63,53,83,0.14);
+                background: rgba(255,255,255,0.46);
             }
 
             .oppi-flyout-link {
                 display: block;
                 min-height: 46px;
                 padding: 14px 18px 12px 18px;
-                color: rgba(255,255,255,0.92) !important;
+                color: #241C34 !important;
                 text-decoration: none !important;
                 font-size: 0.88rem;
-                font-weight: 650;
+                font-weight: 700;
                 background: transparent;
                 transition: background 0.16s ease, padding-left 0.16s ease, color 0.16s ease;
             }
@@ -2128,8 +2131,8 @@ def apply_dashboard_css() -> None:
             .oppi-flyout-link:hover,
             .oppi-flyout-link.active {
                 padding-left: 22px;
-                color: #FFFFFF !important;
-                background: rgba(125,45,255,0.28);
+                color: #5F1DB8 !important;
+                background: linear-gradient(90deg, rgba(255,75,170,0.14), rgba(169,28,255,0.13));
                 box-shadow: inset 3px 0 0 #A91CFF;
             }
 
