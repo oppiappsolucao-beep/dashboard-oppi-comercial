@@ -1956,33 +1956,70 @@ def apply_dashboard_css() -> None:
                 box-shadow: 0 8px 18px rgba(14, 13, 27, 0.04);
             }
 
-            /* Tabela simples de nomes em Todos os contratos */
+            /* Lista de nomes em Todos os contratos: visual preto, rosa e roxo */
+            .contracts-names-count-card {
+                margin: 14px 0 14px 0;
+                padding: 13px 16px;
+                border-radius: 14px;
+                color: rgba(255,255,255,0.78);
+                font-size: 0.86rem;
+                line-height: 1.4;
+                background:
+                    radial-gradient(circle at 100% 0%, rgba(169,28,255,0.18), transparent 35%),
+                    linear-gradient(90deg, rgba(15,13,34,0.98), rgba(21,13,45,0.98));
+                border: 1px solid rgba(255,75,170,0.30);
+                box-shadow: 0 12px 30px rgba(0,0,0,0.18), 0 0 18px rgba(169,28,255,0.08);
+            }
+
+            .contracts-names-count-card strong {
+                color: #FF79C4;
+                font-weight: 950;
+            }
+
             .contracts-names-table {
                 margin-top: 10px;
                 overflow: hidden;
-                border-radius: 16px;
-                border: 1px solid rgba(255,75,170,0.34);
-                background: rgba(10,9,25,0.72);
-                box-shadow: 0 18px 42px rgba(0,0,0,0.20), 0 0 22px rgba(169,28,255,0.08);
+                border-radius: 18px;
+                border: 1px solid rgba(255,75,170,0.44);
+                background:
+                    radial-gradient(circle at 100% 0%, rgba(169,28,255,0.14), transparent 34%),
+                    linear-gradient(145deg, rgba(13,11,31,0.99), rgba(7,6,18,0.99));
+                box-shadow:
+                    0 20px 46px rgba(0,0,0,0.30),
+                    0 0 0 1px rgba(169,28,255,0.08),
+                    0 0 26px rgba(169,28,255,0.12);
             }
 
             .contracts-names-table-header {
-                padding: 12px 16px;
+                padding: 14px 18px;
                 color: #FFFFFF;
-                font-size: 0.88rem;
-                font-weight: 900;
-                letter-spacing: 0.01em;
-                background: linear-gradient(90deg, rgba(255,75,170,0.20), rgba(169,28,255,0.20));
-                border-bottom: 1px solid rgba(255,75,170,0.24);
+                font-size: 0.90rem;
+                font-weight: 950;
+                letter-spacing: 0.02em;
+                text-transform: uppercase;
+                background:
+                    linear-gradient(90deg, rgba(255,75,170,0.34), rgba(169,28,255,0.32)),
+                    rgba(12,10,28,0.98);
+                border-bottom: 1px solid rgba(255,75,170,0.34);
             }
 
             .contracts-names-table-row {
-                padding: 11px 16px;
-                color: #2A2035;
+                padding: 12px 18px;
+                color: rgba(255,255,255,0.90);
                 font-size: 0.90rem;
+                font-weight: 650;
                 line-height: 1.25;
-                background: rgba(255,255,255,0.98);
-                border-bottom: 1px solid rgba(169,28,255,0.10);
+                background: rgba(11,10,27,0.96);
+                border-bottom: 1px solid rgba(255,75,170,0.10);
+                transition:
+                    background 0.18s ease,
+                    color 0.18s ease,
+                    padding-left 0.18s ease,
+                    box-shadow 0.18s ease !important;
+            }
+
+            .contracts-names-table-row:nth-child(odd) {
+                background: rgba(18,13,38,0.97);
             }
 
             .contracts-names-table-row:last-child {
@@ -1990,7 +2027,10 @@ def apply_dashboard_css() -> None:
             }
 
             .contracts-names-table-row:hover {
-                background: linear-gradient(90deg, rgba(255,255,255,0.99), rgba(249,241,255,0.99));
+                padding-left: 22px;
+                color: #FFFFFF;
+                background: linear-gradient(90deg, rgba(255,75,170,0.18), rgba(169,28,255,0.13));
+                box-shadow: inset 4px 0 0 #FF4BAA;
             }
 
             /* Animações suaves de zoom ao passar o mouse */
@@ -3883,136 +3923,35 @@ def render_all_contracts_page(df: pd.DataFrame, columns: dict) -> None:
             <div class="registration-kicker">OPPI COMERCIAL • TODOS OS CONTRATOS</div>
             <div class="registration-title">Todos os contratos</div>
             <div class="registration-subtitle">
-                Consulte toda a base cadastrada e filtre por empresa, CNPJ, nome do cliente ou número.
+                Consulte os nomes de todas as empresas cadastradas na planilha comercial.
             </div>
         </div>
         """
     )
 
-    filter_col_1, filter_col_2, filter_col_3, filter_col_4 = st.columns(4, gap="medium")
-
-    with filter_col_1:
-        filter_empresa = st.text_input(
-            "Empresa",
-            key="contracts_filter_empresa",
-            placeholder="Digite a empresa",
-        )
-
-    with filter_col_2:
-        filter_cnpj = st.text_input(
-            "CNPJ",
-            key="contracts_filter_cnpj",
-            placeholder="Digite o CNPJ",
-        )
-
-    with filter_col_3:
-        filter_cliente = st.text_input(
-            "Nome do cliente",
-            key="contracts_filter_cliente",
-            placeholder="Digite o nome do cliente",
-        )
-
-    with filter_col_4:
-        filter_numero = st.text_input(
-            "Número",
-            key="contracts_filter_numero",
-            placeholder="Digite o número",
-        )
-
-    contracts_df = pd.DataFrame(
+    names_df = pd.DataFrame(
         {
             "Empresa": df["_empresa"],
-            "Data de abertura": safe_series(df, columns.get("data_abertura")),
-            "CNPJ": safe_series(df, columns.get("cnpj")),
-            "Capital social": safe_series(df, columns.get("capital")),
-            "Endereço": safe_series(df, columns.get("endereco")),
-            "E-mail empresa": safe_series(df, columns.get("email")),
-            "Site": safe_series(df, columns.get("site")),
-            "Telefone B2B": safe_series(df, columns.get("telefone_b2b")),
-            "Telefone fixo": safe_series(df, columns.get("telefone_fixo")),
-            "Telefone alternativo": safe_series(df, columns.get("telefone_alternativo")),
-            "Nome do cliente": safe_series(df, columns.get("socio_1")),
-            "CPF do cliente": safe_series(df, columns.get("cpf_socio_1")),
-            "E-mail do cliente": safe_series(df, columns.get("email_socio_1")),
-            "Telefone do cliente": safe_series(df, columns.get("telefone_socio_1")),
-            "Sócio 2": safe_series(df, columns.get("socio_2")),
-            "CPF Sócio 2": safe_series(df, columns.get("cpf_socio_2")),
-            "Sócio 3": safe_series(df, columns.get("socio_3")),
-            "CPF Sócio 3": safe_series(df, columns.get("cpf_socio_3")),
-            "Instagram": safe_series(df, columns.get("instagram")),
-            "LinkedIn": safe_series(df, columns.get("linkedin")),
-            "Vendedor": df["_vendedor"],
-            "Status": df["_status_grupo"],
-            "Data do chamado": safe_series(df, columns.get("data_chamado")),
-            "Última atualização": safe_series(df, columns.get("ultima_atualizacao")),
-            "Observações": safe_series(df, columns.get("observacoes")),
         }
     )
 
-    filtered_contracts_df = contracts_df.copy()
-
-    if normalize_text(filter_empresa):
-        term = normalize_search_text(filter_empresa)
-        filtered_contracts_df = filtered_contracts_df[
-            filtered_contracts_df["Empresa"].apply(lambda value: term in normalize_search_text(value))
-        ].copy()
-
-    if normalize_text(filter_cnpj):
-        term = normalize_search_text(filter_cnpj)
-        filtered_contracts_df = filtered_contracts_df[
-            filtered_contracts_df["CNPJ"].apply(lambda value: term in normalize_search_text(value))
-        ].copy()
-
-    if normalize_text(filter_cliente):
-        term = normalize_search_text(filter_cliente)
-        filtered_contracts_df = filtered_contracts_df[
-            filtered_contracts_df.apply(
-                lambda row: term in normalize_search_text(
-                    " | ".join(
-                        [
-                            normalize_text(row.get("Nome do cliente", "")),
-                            normalize_text(row.get("Sócio 2", "")),
-                            normalize_text(row.get("Sócio 3", "")),
-                        ]
-                    )
-                ),
-                axis=1,
-            )
-        ].copy()
-
-    if normalize_text(filter_numero):
-        term = normalize_search_text(filter_numero)
-        filtered_contracts_df = filtered_contracts_df[
-            filtered_contracts_df.apply(
-                lambda row: term in normalize_search_text(
-                    " | ".join(
-                        [
-                            normalize_text(row.get("Telefone B2B", "")),
-                            normalize_text(row.get("Telefone fixo", "")),
-                            normalize_text(row.get("Telefone alternativo", "")),
-                            normalize_text(row.get("Telefone do cliente", "")),
-                        ]
-                    )
-                ),
-                axis=1,
-            )
-        ].copy()
-
-    names_df = filtered_contracts_df[["Empresa"]].copy()
     names_df["Empresa"] = names_df["Empresa"].apply(normalize_text)
     names_df = names_df[names_df["Empresa"] != ""].copy()
-    names_df = names_df.sort_values("Empresa", key=lambda series: series.map(normalize_search_text))
+    names_df = names_df.sort_values(
+        "Empresa",
+        key=lambda series: series.map(normalize_search_text),
+    )
 
     render_html(
         f"""
-        <div class="registration-note" style="margin-top:14px; margin-bottom:14px;">
+        <div class="contracts-names-count-card">
             Exibindo <strong>{len(names_df)}</strong> nome(s) cadastrado(s) na planilha.
         </div>
         """
     )
 
     if names_df.empty:
-        st.info("Nenhum nome encontrado com os filtros informados.")
+        st.info("Nenhum nome cadastrado foi encontrado na planilha.")
         return
 
     names_rows_html = "".join(
