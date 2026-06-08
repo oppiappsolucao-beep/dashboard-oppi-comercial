@@ -1,6 +1,5 @@
 import base64
 import html
-import json
 import re
 import unicodedata
 from datetime import date, timedelta
@@ -11,7 +10,6 @@ import gspread
 import pandas as pd
 import plotly.express as px
 import streamlit as st
-import streamlit.components.v1 as components
 from google.oauth2.service_account import Credentials
 from gspread.exceptions import SpreadsheetNotFound, WorksheetNotFound
 
@@ -34,26 +32,6 @@ SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive",
 ]
-
-STATUS_OPTIONS = [
-    "Novo Lead",
-    "Conversando",
-    "Sem interesse",
-    "Não responde",
-    "Proposta",
-    "Reunião",
-    "Fechado",
-]
-
-STATUS_COLORS = {
-    "Novo Lead": ("#E8F0FF", "#5C8BFF"),
-    "Conversando": ("#F8EFE6", "#B37A2A"),
-    "Sem interesse": ("#E9F8FA", "#2F9FB3"),
-    "Não responde": ("#FBECEF", "#DA5C78"),
-    "Fechado": ("#EAF8EF", "#58B97A"),
-    "Proposta": ("#EAF2FF", "#5C9DFF"),
-    "Reunião": ("#F3EAFE", "#A65BDB"),
-}
 
 
 # =========================================================
@@ -207,23 +185,20 @@ def status_group(value: str) -> str:
     if not status:
         return "Novo Lead"
 
-    if "reuniao" in status:
-        return "Reunião"
-
-    if "proposta" in status:
-        return "Proposta"
-
     if any(word in status for word in ["fechado", "ganho", "cliente"]):
         return "Fechado"
 
     if any(word in status for word in ["nao responde", "sem resposta"]):
-        return "Não responde"
+        return "Não Responde"
 
     if any(word in status for word in ["sem interesse", "nao tem interesse"]):
-        return "Sem interesse"
+        return "Sem Interesse"
 
-    if any(word in status for word in ["chamando", "conversando", "contato", "negoci", "andamento"]):
-        return "Conversando"
+    if "proposta" in status:
+        return "Proposta"
+
+    if any(word in status for word in ["chamando", "contato", "negoci", "andamento"]):
+        return "Chamando"
 
     if any(word in status for word in ["novo", "lead"]):
         return "Novo Lead"
@@ -267,9 +242,7 @@ def calculate_score(row: pd.Series, columns: dict) -> int:
         score += 20
     elif grouped_status == "Proposta":
         score += 16
-    elif grouped_status == "Reunião":
-        score += 14
-    elif grouped_status == "Conversando":
+    elif grouped_status == "Chamando":
         score += 12
     elif grouped_status == "Novo Lead":
         score += 6
@@ -370,65 +343,18 @@ def load_sheet_data() -> pd.DataFrame:
     rows = values[1:]
 
     df = pd.DataFrame(rows, columns=headers)
-    df["_sheet_row"] = list(range(2, len(rows) + 2))
 
     for column in df.columns:
-        if column != "_sheet_row":
-            df[column] = df[column].astype(str).str.strip()
+        df[column] = df[column].astype(str).str.strip()
 
-    data_columns = [column for column in df.columns if column != "_sheet_row"]
     df = df[
-        df[data_columns].apply(
+        df.apply(
             lambda row: any(normalize_text(value) for value in row),
             axis=1,
         )
     ].copy()
 
     return df.reset_index(drop=True)
-
-
-def update_statuses_in_sheet(
-    changes: list[dict],
-    status_column_name: str,
-    updated_at_column_name: Optional[str] = None,
-) -> None:
-    """Atualiza os status editados diretamente na planilha do Google Sheets."""
-    if not changes:
-        return
-
-    client = get_gsheet_client()
-    spreadsheet = client.open_by_key(SHEET_ID)
-    worksheet = spreadsheet.worksheet(WORKSHEET_NAME)
-    headers = worksheet.row_values(1)
-
-    if status_column_name not in headers:
-        raise RuntimeError(
-            f"Não encontrei a coluna '{status_column_name}' na planilha."
-        )
-
-    status_column_index = headers.index(status_column_name) + 1
-    updated_at_column_index = None
-
-    if updated_at_column_name and updated_at_column_name in headers:
-        updated_at_column_index = headers.index(updated_at_column_name) + 1
-
-    cells = []
-    now_text = pd.Timestamp.now(tz="America/Sao_Paulo").strftime("%d/%m/%Y %H:%M")
-
-    for change in changes:
-        sheet_row = int(change["sheet_row"])
-        new_status = normalize_text(change["status"])
-
-        if new_status not in STATUS_OPTIONS:
-            raise RuntimeError(f"Status inválido: {new_status}")
-
-        cells.append(gspread.Cell(sheet_row, status_column_index, new_status))
-
-        if updated_at_column_index:
-            cells.append(gspread.Cell(sheet_row, updated_at_column_index, now_text))
-
-    worksheet.update_cells(cells, value_input_option="USER_ENTERED")
-    st.cache_data.clear()
 
 
 # =========================================================
@@ -1000,16 +926,12 @@ def apply_dashboard_css() -> None:
             }
 
             .metric-card {
-                height: 188px;
-                min-height: 188px;
+                min-height: 132px;
                 padding: 17px;
                 border-radius: 20px;
                 border: 1px solid rgba(255,255,255,0.06);
                 background: linear-gradient(145deg, rgba(22,20,42,0.98), rgba(10,9,25,0.98));
                 box-shadow: 0 18px 46px rgba(0,0,0,0.22);
-                box-sizing: border-box;
-                display: flex;
-                flex-direction: column;
             }
 
             .metric-icon {
@@ -1025,13 +947,9 @@ def apply_dashboard_css() -> None:
             }
 
             .metric-label {
-                min-height: 38px;
                 color: rgba(255,255,255,0.78);
                 font-size: 0.94rem;
                 font-weight: 750;
-                line-height: 1.18;
-                display: flex;
-                align-items: flex-end;
             }
 
             .metric-value {
@@ -1222,30 +1140,12 @@ def apply_dashboard_css() -> None:
 
             .latest-calls-shell {
                 margin-top: 18px;
-                margin-bottom: 14px;
-                padding: 22px 24px 18px 24px;
+                margin-bottom: 18px;
+                padding: 20px 22px;
                 border-radius: 26px;
-                background: linear-gradient(145deg, rgba(22,20,42,0.98), rgba(10,9,25,0.98));
-                border: 1px solid rgba(255,255,255,0.06);
-                box-shadow: 0 18px 46px rgba(0,0,0,0.22);
-            }
-
-            .latest-filter-title {
-                color: #FFFFFF;
-                font-size: 1.08rem;
-                font-weight: 900;
-                line-height: 1.2;
-                margin-bottom: 4px;
-            }
-
-            .latest-filter-subtitle {
-                color: rgba(255,255,255,0.68);
-                font-size: 0.88rem;
-                line-height: 1.45;
-            }
-
-            .latest-filter-spacer {
-                height: 2px;
+                background: #F5F5F8;
+                border: 1px solid rgba(28, 20, 46, 0.08);
+                box-shadow: 0 18px 48px rgba(0,0,0,0.18);
             }
 
             .latest-calls-head {
@@ -1257,7 +1157,7 @@ def apply_dashboard_css() -> None:
             }
 
             .latest-calls-title {
-                color: #FFFFFF;
+                color: #12101C;
                 font-size: 1.05rem;
                 font-weight: 900;
                 line-height: 1.2;
@@ -1265,7 +1165,7 @@ def apply_dashboard_css() -> None:
             }
 
             .latest-calls-subtitle {
-                color: rgba(255,255,255,0.68);
+                color: #7C7891;
                 font-size: 0.88rem;
                 line-height: 1.45;
             }
@@ -1277,9 +1177,9 @@ def apply_dashboard_css() -> None:
                 padding: 8px 14px;
                 min-width: 88px;
                 border-radius: 999px;
-                background: rgba(255, 246, 217, 0.08);
+                background: #FFF6D9;
                 border: 1px solid rgba(232, 194, 67, 0.92);
-                color: #E8C243;
+                color: #9A7400;
                 font-size: 0.78rem;
                 font-weight: 900;
                 letter-spacing: 0.04em;
@@ -1287,9 +1187,8 @@ def apply_dashboard_css() -> None:
             }
 
             .latest-status-card {
-                min-height: 132px;
-                height: 132px;
-                padding: 14px 12px 12px 12px;
+                min-height: 118px;
+                padding: 16px 15px 14px 15px;
                 border-radius: 20px;
                 background: linear-gradient(145deg, rgba(22,20,42,0.98), rgba(10,9,25,0.98));
                 border: 1px solid rgba(255,255,255,0.06);
@@ -1318,7 +1217,7 @@ def apply_dashboard_css() -> None:
 
             .latest-status-name {
                 color: #FFFFFF;
-                font-size: 0.82rem;
+                font-size: 0.90rem;
                 font-weight: 850;
                 line-height: 1.2;
             }
@@ -1333,30 +1232,30 @@ def apply_dashboard_css() -> None:
 
             .latest-status-caption {
                 color: #55DF7D;
-                font-size: 0.72rem;
+                font-size: 0.77rem;
                 font-weight: 700;
                 margin-top: 6px;
             }
 
             .latest-table-card {
-                margin-top: 30px;
-                padding: 0;
-                border-radius: 26px;
-                background: linear-gradient(135deg, rgba(255,75,170,0.96), rgba(169,28,255,0.96));
-                box-shadow:
-                    0 20px 52px rgba(0,0,0,0.26),
-                    0 0 34px rgba(169,28,255,0.18);
+                margin-top: 28px;
+                padding: 18px 18px 14px 18px;
+                border-radius: 22px;
+                background: #FFFFFF;
+                border: 1px solid #E7E8EF;
+                box-shadow: 0 10px 26px rgba(14, 13, 27, 0.05);
             }
 
-            .latest-table-card-inner {
-                margin: 1px;
-                padding: 18px 18px 16px 18px;
-                border-radius: 25px;
-                background:
-                    radial-gradient(circle at 100% 0%, rgba(169,28,255,0.16), transparent 28%),
-                    radial-gradient(circle at 0% 100%, rgba(255,75,170,0.12), transparent 30%),
-                    linear-gradient(145deg, rgba(22,20,42,0.99), rgba(10,9,25,0.99));
-                border: 1px solid rgba(255,255,255,0.06);
+            .latest-placeholder-card {
+                margin-top: 26px;
+                padding: 22px 24px;
+                border-radius: 22px;
+                background: rgba(255,255,255,0.92);
+                border: 1px dashed rgba(169, 28, 255, 0.28);
+                color: #6F6980;
+                font-size: 0.92rem;
+                font-weight: 700;
+                text-align: center;
             }
 
             .latest-table-head {
@@ -1364,334 +1263,35 @@ def apply_dashboard_css() -> None:
                 align-items: flex-start;
                 justify-content: space-between;
                 gap: 14px;
-                margin-bottom: 12px;
-            }
-
-            .latest-table-title-wrap {
-                display: flex;
-                align-items: center;
-                gap: 12px;
-            }
-
-            .latest-table-icon {
-                width: 42px;
-                height: 42px;
-                min-width: 42px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                border-radius: 14px;
-                background: linear-gradient(135deg, rgba(255,75,170,0.22), rgba(169,28,255,0.24));
-                border: 1px solid rgba(255,75,170,0.34);
-                color: #FF8CCC;
-                font-size: 1.05rem;
-                box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
+                margin-bottom: 8px;
             }
 
             .latest-table-title {
-                color: #FFFFFF;
-                font-size: 1.04rem;
+                color: #12101C;
+                font-size: 1rem;
                 font-weight: 900;
                 line-height: 1.2;
                 margin-bottom: 4px;
             }
 
             .latest-table-subtitle {
-                color: rgba(255,255,255,0.66);
+                color: #7C7891;
                 font-size: 0.84rem;
                 line-height: 1.45;
             }
 
-            .latest-table-badges {
-                display: flex;
-                flex-wrap: wrap;
-                align-items: center;
-                justify-content: flex-end;
-                gap: 8px;
-            }
-
-            .latest-table-badge,
-            .latest-table-status-badge {
+            .latest-table-badge {
                 display: inline-flex;
                 align-items: center;
                 justify-content: center;
                 padding: 7px 12px;
                 border-radius: 999px;
+                background: #FFF6D9;
+                border: 1px solid rgba(232, 194, 67, 0.92);
+                color: #2E2500;
                 font-size: 0.76rem;
                 font-weight: 900;
                 white-space: nowrap;
-            }
-
-            /* Ao clicar em “Ver nomes”, exibe somente a planilha editável. */
-            div[data-testid="stDataEditor"] {
-                margin-top: 24px !important;
-            }
-
-            .latest-table-badge {
-                background: rgba(255, 246, 217, 0.08);
-                border: 1px solid rgba(232, 194, 67, 0.92);
-                color: #E8C243;
-            }
-
-            .latest-table-status-badge {
-                background: rgba(255,75,170,0.10);
-                border: 1px solid rgba(255,75,170,0.44);
-                color: #FF8CCC;
-            }
-
-            .latest-company-fields {
-                display: flex;
-                flex-wrap: wrap;
-                gap: 8px;
-                margin-top: 10px;
-            }
-
-            .latest-company-field {
-                display: inline-flex;
-                align-items: center;
-                gap: 6px;
-                padding: 6px 9px;
-                border-radius: 999px;
-                background: rgba(255,255,255,0.045);
-                border: 1px solid rgba(255,255,255,0.07);
-                color: rgba(255,255,255,0.72);
-                font-size: 0.72rem;
-                font-weight: 750;
-            }
-
-            .latest-editor-help {
-                display: flex;
-                align-items: center;
-                justify-content: space-between;
-                gap: 16px;
-                margin: 14px 0 12px 0;
-                padding: 14px 16px;
-                border-radius: 16px;
-                background:
-                    linear-gradient(90deg, rgba(255,75,170,0.10), rgba(169,28,255,0.10)),
-                    rgba(13,11,31,0.94);
-                border: 1px solid rgba(255,75,170,0.30);
-                color: rgba(255,255,255,0.76);
-                font-size: 0.84rem;
-                line-height: 1.45;
-                box-shadow: 0 12px 30px rgba(0,0,0,0.16);
-            }
-
-            .latest-editor-help strong {
-                color: #FF8CCC;
-            }
-
-            .latest-sync-badge {
-                display: inline-flex;
-                align-items: center;
-                gap: 7px;
-                flex-shrink: 0;
-                padding: 7px 11px;
-                border-radius: 999px;
-                background: rgba(85,223,125,0.10);
-                border: 1px solid rgba(85,223,125,0.38);
-                color: #55DF7D;
-                font-size: 0.74rem;
-                font-weight: 900;
-                letter-spacing: 0.02em;
-            }
-
-            .latest-status-legend {
-                display: flex;
-                flex-wrap: wrap;
-                gap: 8px;
-                margin: 10px 0 14px 0;
-            }
-
-            .latest-status-pill {
-                display: inline-flex;
-                align-items: center;
-                gap: 7px;
-                padding: 6px 10px;
-                border-radius: 999px;
-                background: rgba(255,255,255,0.045);
-                border: 1px solid rgba(255,255,255,0.08);
-                color: rgba(255,255,255,0.86);
-                font-size: 0.73rem;
-                font-weight: 800;
-            }
-
-            .latest-status-dot {
-                width: 8px;
-                height: 8px;
-                border-radius: 50%;
-                display: inline-block;
-                box-shadow: 0 0 12px currentColor;
-            }
-
-            /* Tabela comercial compacta com botão Copiar */
-            .premium-inline-table-header {
-                margin-top: 4px;
-                margin-bottom: 3px;
-                padding: 7px 8px;
-                border-radius: 9px;
-                background: linear-gradient(90deg, rgba(255,75,170,0.15), rgba(169,28,255,0.15));
-                border: 1px solid rgba(255,75,170,0.24);
-                color: rgba(255,255,255,0.94);
-                font-size: 0.73rem;
-                font-weight: 850;
-            }
-
-            .premium-inline-cell {
-                min-height: 30px;
-                display: flex;
-                align-items: center;
-                padding: 4px 7px;
-                border-radius: 7px;
-                background: rgba(255,255,255,0.97);
-                border: 1px solid rgba(169,28,255,0.08);
-                color: #261C35;
-                font-size: 0.77rem;
-                line-height: 1.16;
-                word-break: break-word;
-            }
-
-            .premium-inline-cell.phone {
-                color: #5C2A83;
-                font-weight: 850;
-            }
-
-            .premium-inline-cell.date {
-                justify-content: center;
-                color: #5B5369;
-                font-size: 0.73rem;
-            }
-
-            .premium-inline-cell.muted {
-                color: #6E667A;
-            }
-
-            .premium-inline-hint {
-                margin: 5px 0 7px 0;
-                padding: 8px 11px;
-                border-radius: 10px;
-                background: linear-gradient(90deg, rgba(255,75,170,0.07), rgba(169,28,255,0.07));
-                border: 1px solid rgba(255,75,170,0.17);
-                color: rgba(255,255,255,0.72);
-                font-size: 0.74rem;
-                line-height: 1.30;
-            }
-
-            .premium-inline-hint strong {
-                color: #FF79C4;
-            }
-
-            /* Linhas compactas: sem espaços exagerados entre empresas */
-            .st-key-compact_inline_table div[data-testid="stHorizontalBlock"] {
-                gap: 0.34rem !important;
-                margin-bottom: 0 !important;
-            }
-
-            .st-key-compact_inline_table div[data-testid="stVerticalBlock"] {
-                gap: 0.20rem !important;
-            }
-
-            .st-key-compact_inline_table div[data-testid="stElementContainer"] {
-                margin-bottom: 0 !important;
-            }
-
-            .st-key-compact_inline_table div[data-testid="stSelectbox"] {
-                margin-bottom: 0 !important;
-            }
-
-            .st-key-compact_inline_table div[data-testid="stSelectbox"] > div[data-baseweb="select"] > div {
-                min-height: 30px !important;
-                height: 30px !important;
-                border-radius: 7px !important;
-                padding-top: 0 !important;
-                padding-bottom: 0 !important;
-            }
-
-            .st-key-compact_inline_table iframe {
-                min-height: 30px !important;
-                height: 30px !important;
-            }
-
-            /* A tabela não deve ampliar no hover */
-            .premium-inline-table-header,
-            .premium-inline-table-header:hover,
-            .premium-inline-cell,
-            .premium-inline-cell:hover,
-            .st-key-compact_inline_table,
-            .st-key-compact_inline_table * {
-                transform: none !important;
-                transition:
-                    border-color 0.16s ease,
-                    background 0.16s ease !important;
-            }
-
-            /* Planilha editável: detalhes em rosa e roxo, sem zoom */
-            div[data-testid="stDataEditor"] {
-                overflow: hidden;
-                border-radius: 20px;
-                border: 1px solid rgba(255,75,170,0.52);
-                background: linear-gradient(180deg, rgba(255,255,255,0.995), rgba(249,247,255,0.995));
-                box-shadow:
-                    0 18px 44px rgba(0,0,0,0.24),
-                    0 0 0 1px rgba(169,28,255,0.10),
-                    0 0 32px rgba(169,28,255,0.14);
-                transform: none !important;
-                transition:
-                    border-color 0.22s ease,
-                    box-shadow 0.22s ease !important;
-            }
-
-            div[data-testid="stDataEditor"] [role="grid"] {
-                border-radius: 20px;
-                overflow: hidden;
-                transform: none !important;
-            }
-
-            div[data-testid="stDataEditor"]:hover {
-                transform: none !important;
-                border-color: rgba(255,75,170,0.80);
-                box-shadow:
-                    0 20px 48px rgba(0,0,0,0.25),
-                    0 0 0 1px rgba(169,28,255,0.22),
-                    0 0 36px rgba(255,75,170,0.16) !important;
-            }
-
-            div[data-testid="stDataEditor"] * {
-                transform: none !important;
-            }
-
-            div[data-testid="stDataEditor"] [role="columnheader"] {
-                background: linear-gradient(90deg, rgba(255,75,170,0.22), rgba(169,28,255,0.22)) !important;
-                border-bottom: 1px solid rgba(169,28,255,0.24) !important;
-                color: #2A183E !important;
-                font-weight: 900 !important;
-                letter-spacing: 0.01em !important;
-            }
-
-            div[data-testid="stDataEditor"] [role="gridcell"] {
-                border-color: rgba(169,28,255,0.10) !important;
-                color: #261C35 !important;
-                background: rgba(255,255,255,0.99) !important;
-            }
-
-            div[data-testid="stDataEditor"] [role="row"]:nth-child(even) [role="gridcell"] {
-                background: rgba(169,28,255,0.045) !important;
-            }
-
-            div[data-testid="stDataEditor"] [role="row"]:hover [role="gridcell"] {
-                background: linear-gradient(90deg, rgba(255,75,170,0.095), rgba(169,28,255,0.065)) !important;
-            }
-
-            div[data-testid="stDataEditor"] [role="gridcell"]:focus,
-            div[data-testid="stDataEditor"] [role="gridcell"]:focus-within {
-                outline: 2px solid rgba(255,75,170,0.82) !important;
-                outline-offset: -2px !important;
-                background: rgba(255,75,170,0.10) !important;
-            }
-
-            div[data-testid="stDataEditor"] button,
-            div[data-testid="stDataEditor"] svg {
-                color: #A91CFF !important;
             }
 
             div[data-testid="stDataFrame"] {
@@ -1699,89 +1299,6 @@ def apply_dashboard_css() -> None:
                 border-radius: 16px;
                 border: 1px solid rgba(20,16,36,0.10);
                 box-shadow: 0 8px 18px rgba(14, 13, 27, 0.04);
-            }
-
-            /* Animações suaves de zoom ao passar o mouse */
-            .metric-card,
-            .latest-calls-shell,
-            .latest-status-card,
-            .latest-table-card,
-            .latest-placeholder-card,
-            .status-row,
-            .side-tip,
-            section[data-testid="stSidebar"] div[role="radiogroup"] > label,
-            .stButton > button,
-            div[data-testid="stSelectbox"] > div[data-baseweb="select"] > div,
-            div[data-testid="stTextInput"] div[data-baseweb="input"] > div,
-            div[data-testid="stDateInput"] div[data-baseweb="input"] > div {
-                transition:
-                    transform 0.22s ease,
-                    box-shadow 0.22s ease,
-                    border-color 0.22s ease,
-                    filter 0.22s ease,
-                    background 0.22s ease !important;
-                transform-origin: center center;
-                will-change: transform;
-            }
-
-            .metric-card:hover,
-            .latest-calls-shell:hover,
-            .latest-status-card:hover,
-            .latest-table-card:hover,
-            .latest-placeholder-card:hover,
-            .status-row:hover,
-            .side-tip:hover {
-                transform: scale(1.025);
-                box-shadow: 0 22px 54px rgba(0,0,0,0.28), 0 0 24px rgba(169, 28, 255, 0.12) !important;
-                border-color: rgba(255, 75, 170, 0.34) !important;
-                z-index: 3;
-            }
-
-            section[data-testid="stSidebar"] div[role="radiogroup"] > label:hover {
-                transform: scale(1.035);
-            }
-
-            .stButton > button:hover {
-                transform: scale(1.035);
-                filter: brightness(1.06);
-                box-shadow: 0 14px 30px rgba(169, 28, 255, 0.28) !important;
-            }
-
-            div[data-testid="stSelectbox"] > div[data-baseweb="select"] > div:hover,
-            div[data-testid="stTextInput"] div[data-baseweb="input"] > div:hover,
-            div[data-testid="stDateInput"] div[data-baseweb="input"] > div:hover {
-                transform: scale(1.018);
-            }
-
-            /* A tabela é a única área sem animação de zoom */
-            div[data-testid="stDataEditor"],
-            div[data-testid="stDataEditor"]:hover,
-            div[data-testid="stDataEditor"] *,
-            div[data-testid="stDataEditor"] *:hover,
-            div[data-testid="stDataFrame"],
-            div[data-testid="stDataFrame"]:hover,
-            div[data-testid="stDataFrame"] *,
-            div[data-testid="stDataFrame"] *:hover {
-                transform: none !important;
-                will-change: auto !important;
-            }
-
-            @media (prefers-reduced-motion: reduce) {
-                .metric-card,
-                .latest-calls-shell,
-                .latest-status-card,
-                .latest-table-card,
-                .latest-placeholder-card,
-                .status-row,
-                .side-tip,
-                section[data-testid="stSidebar"] div[role="radiogroup"] > label,
-                .stButton > button,
-                div[data-testid="stSelectbox"] > div[data-baseweb="select"] > div,
-                div[data-testid="stTextInput"] div[data-baseweb="input"] > div,
-                div[data-testid="stDateInput"] div[data-baseweb="input"] > div {
-                    transition: none !important;
-                    transform: none !important;
-                }
             }
         </style>
         """
@@ -1958,11 +1475,9 @@ def render_metric_card(
 def render_status_summary(filtered_df: pd.DataFrame) -> None:
     statuses = [
         ("Novo Lead", "#697BFF"),
-        ("Conversando", "#C67A25"),
-        ("Sem interesse", "#45B6C6"),
-        ("Não responde", "#DF5578"),
-        ("Proposta", "#5C9DFF"),
-        ("Reunião", "#A65BDB"),
+        ("Chamando", "#C67A25"),
+        ("Sem Interesse", "#45B6C6"),
+        ("Não Responde", "#DF5578"),
         ("Fechado", "#70C854"),
     ]
 
@@ -1990,216 +1505,37 @@ def render_status_summary(filtered_df: pd.DataFrame) -> None:
     )
 
 
-
-def render_phone_copy_button(phone: str, row_key: str) -> None:
-    """Renderiza um botão gradiente que copia o telefone no navegador."""
-    safe_phone = normalize_text(phone)
-    phone_json = json.dumps(safe_phone, ensure_ascii=False)
-
-    components.html(
-        f"""
-        <!DOCTYPE html>
-        <html lang="pt-BR">
-        <head>
-            <meta charset="UTF-8" />
-            <style>
-                * {{
-                    box-sizing: border-box;
-                }}
-
-                html, body {{
-                    margin: 0;
-                    padding: 0;
-                    width: 100%;
-                    height: 30px;
-                    overflow: hidden;
-                    background: transparent;
-                    font-family: Arial, sans-serif;
-                }}
-
-                button {{
-                    width: 100%;
-                    height: 29px;
-                    border: none;
-                    border-radius: 7px;
-                    cursor: pointer;
-                    color: #FFFFFF;
-                    font-size: 11px;
-                    font-weight: 800;
-                    letter-spacing: 0.01em;
-                    background: linear-gradient(90deg, #FF4BAA 0%, #A91CFF 100%);
-                    box-shadow: 0 8px 18px rgba(169, 28, 255, 0.22);
-                    transition:
-                        filter 0.16s ease,
-                        box-shadow 0.16s ease;
-                }}
-
-                button:hover {{
-                    filter: brightness(1.08);
-                    box-shadow: 0 10px 20px rgba(169, 28, 255, 0.30);
-                }}
-
-                button:active {{
-                    filter: brightness(0.96);
-                }}
-
-                button.copied {{
-                    background: linear-gradient(90deg, #20B56B 0%, #55DF7D 100%);
-                    box-shadow: 0 8px 18px rgba(32, 181, 107, 0.20);
-                }}
-            </style>
-        </head>
-        <body>
-            <button id="copy-{html.escape(row_key)}" type="button" onclick="copyPhone()">
-                Copiar
-            </button>
-
-            <script>
-                const phoneValue = {phone_json};
-                const button = document.getElementById("copy-{html.escape(row_key)}");
-
-                function showCopied() {{
-                    button.textContent = "Copiado!";
-                    button.classList.add("copied");
-
-                    setTimeout(() => {{
-                        button.textContent = "Copiar";
-                        button.classList.remove("copied");
-                    }}, 1400);
-                }}
-
-                function fallbackCopy(value) {{
-                    const textarea = document.createElement("textarea");
-                    textarea.value = value;
-                    textarea.setAttribute("readonly", "");
-                    textarea.style.position = "fixed";
-                    textarea.style.opacity = "0";
-                    document.body.appendChild(textarea);
-                    textarea.select();
-                    textarea.setSelectionRange(0, textarea.value.length);
-                    document.execCommand("copy");
-                    document.body.removeChild(textarea);
-                    showCopied();
-                }}
-
-                async function copyPhone() {{
-                    if (!phoneValue) {{
-                        button.textContent = "Sem número";
-                        setTimeout(() => {{
-                            button.textContent = "Copiar";
-                        }}, 1400);
-                        return;
-                    }}
-
-                    try {{
-                        if (navigator.clipboard && window.isSecureContext) {{
-                            await navigator.clipboard.writeText(phoneValue);
-                            showCopied();
-                        }} else {{
-                            fallbackCopy(phoneValue);
-                        }}
-                    }} catch (error) {{
-                        fallbackCopy(phoneValue);
-                    }}
-                }}
-            </script>
-        </body>
-        </html>
-        """,
-        height=30,
-        scrolling=False,
-    )
-
-
-def render_latest_calls_section(
-    filtered_df: pd.DataFrame,
-    columns: dict,
-    source_df: pd.DataFrame,
-) -> None:
+def render_latest_calls_section(filtered_df: pd.DataFrame) -> None:
     statuses = [
         ("Novo Lead", "✦", "#E8F0FF", "#5C8BFF"),
-        ("Conversando", "•", "#F8EFE6", "#B37A2A"),
-        ("Sem interesse", "⊘", "#E9F8FA", "#2F9FB3"),
-        ("Não responde", "⚑", "#FBECEF", "#DA5C78"),
-        ("Proposta", "▤", "#EAF2FF", "#5C9DFF"),
-        ("Reunião", "◉", "#F3EAFE", "#A65BDB"),
+        ("Chamando", "•", "#F8EFE6", "#B37A2A"),
+        ("Sem Interesse", "⊘", "#E9F8FA", "#2F9FB3"),
+        ("Não Responde", "⚑", "#FBECEF", "#DA5C78"),
         ("Fechado", "✓", "#EAF8EF", "#58B97A"),
     ]
 
-    selected_card_key = "ultimos_chamados_status_selecionado"
+    state_key = "ultimos_chamados_status"
 
-    if selected_card_key not in st.session_state:
-        st.session_state[selected_card_key] = None
+    if state_key not in st.session_state:
+        st.session_state[state_key] = None
 
-    valid_dates = source_df["_data_chamado"].dropna()
-
-    if valid_dates.empty:
-        date_max = date.today()
-        date_min = date_max - timedelta(days=30)
-    else:
-        date_min = valid_dates.min().date()
-        date_max = valid_dates.max().date()
-
-    seller_options = sorted(
-        [
-            seller
-            for seller in source_df["_vendedor"].dropna().astype(str).unique().tolist()
-            if normalize_text(seller)
-        ]
-    )
+    selected_status = st.session_state.get(state_key)
 
     render_html(
         """
         <div class="latest-calls-shell">
             <div class="latest-calls-head">
                 <div>
-                    <div class="latest-filter-title">Filtros dos chamados</div>
-                    <div class="latest-filter-subtitle">Refine os resultados por vendedor, status, período ou empresa.</div>
+                    <div class="latest-calls-title">Últimos chamados</div>
+                    <div class="latest-calls-subtitle">Clique em “Ver nomes” para visualizar as empresas daquela etapa.</div>
                 </div>
-                <div class="latest-calls-chip">Filtros</div>
+                <div class="latest-calls-chip">Status</div>
             </div>
         </div>
         """
     )
 
-    filter_1, filter_2, filter_3, filter_4 = st.columns(4, gap="medium")
-
-    with filter_1:
-        st.selectbox(
-            "Vendedor",
-            ["Todos os vendedores"] + seller_options,
-            key="dashboard_filter_seller",
-        )
-
-    with filter_2:
-        st.selectbox(
-            "Status",
-            ["Todos os status"] + STATUS_OPTIONS,
-            key="dashboard_filter_status",
-        )
-
-    with filter_3:
-        st.date_input(
-            "Período",
-            min_value=date_min,
-            max_value=max(date_max, date.today()),
-            key="dashboard_filter_period",
-        )
-
-    with filter_4:
-        st.text_input(
-            "Buscar empresa ou telefone",
-            placeholder="Digite para buscar...",
-            key="dashboard_filter_search",
-        )
-
-    st.write("")
-
-    def choose_status(status_name: str) -> None:
-        st.session_state[selected_card_key] = status_name
-
-    selected_status = st.session_state.get(selected_card_key)
-    card_columns = st.columns(7, gap="small")
+    card_columns = st.columns(5, gap="medium")
 
     for column, (status_name, icon, bg_color, icon_color) in zip(card_columns, statuses):
         count = int((filtered_df["_status_grupo"] == status_name).sum())
@@ -2222,21 +1558,21 @@ def render_latest_calls_section(
                 """
             )
 
-            st.button(
+            if st.button(
                 "Ver nomes",
                 key=f"btn_ultimos_{status_name}",
                 use_container_width=True,
-                on_click=choose_status,
-                args=(status_name,),
-            )
+            ):
+                st.session_state[state_key] = status_name
+                st.rerun()
 
-    selected_status = st.session_state.get(selected_card_key)
+    selected_status = st.session_state.get(state_key)
 
     if not selected_status:
         render_html(
             """
             <div class="latest-placeholder-card">
-                Selecione um status clicando em “Ver nomes” para visualizar os registros.
+                Selecione um status acima para visualizar os nomes dos chamados.
             </div>
             """
         )
@@ -2252,147 +1588,40 @@ def render_latest_calls_section(
         {
             "Empresa": selected_df["_empresa"],
             "Telefone": selected_df["_telefone"],
-            "E-mail": safe_series(selected_df, columns.get("email")),
-            "CNPJ": safe_series(selected_df, columns.get("cnpj")),
             "Status": selected_df["_status_grupo"],
             "Vendedor": selected_df["_vendedor"],
             "Data": selected_df["_data_chamado"].dt.strftime("%d/%m/%Y").fillna(""),
         }
     )
 
-    if display_df.empty:
-        st.info("Nenhum chamado encontrado para este status no período selecionado.")
-        return
-
-    editor_df = display_df.copy()
-    editor_df["_sheet_row"] = selected_df["_sheet_row"].astype(int).values
-
-    flash_message = st.session_state.pop("status_auto_save_success", None)
-    if flash_message:
-        st.success(flash_message)
-
-    flash_error = st.session_state.pop("status_auto_save_error", None)
-    if flash_error:
-        st.error(flash_error)
+    badge_text = f"{len(display_df)} registro(s)"
 
     render_html(
-        """
-        <div class="premium-inline-hint">
-            Altere o <strong>Status</strong> pelo seletor ou use <strong>Copiar</strong> para copiar o telefone.
+        f"""
+        <div class="latest-table-card">
+            <div class="latest-table-head">
+                <div>
+                    <div class="latest-table-title">{html.escape(selected_status)}</div>
+                    <div class="latest-table-subtitle">Empresas registradas no comercial com status e responsável.</div>
+                </div>
+                <div class="latest-table-badge">{html.escape(badge_text)}</div>
+            </div>
         </div>
         """
     )
 
-    with st.container(key="compact_inline_table"):
-        header_columns = st.columns(
-            [3.15, 1.45, 0.92, 1.65, 1.35, 0.90],
-            gap="small",
+    if display_df.empty:
+        st.info("Nenhum chamado encontrado para este status no período selecionado.")
+    else:
+        st.dataframe(
+            display_df,
+            use_container_width=True,
+            hide_index=True,
+            height=320,
         )
 
-        header_labels = [
-            "Empresa",
-            "Telefone",
-            "Copiar",
-            "Status",
-            "Vendedor",
-            "Data",
-        ]
 
-        for column, label in zip(header_columns, header_labels):
-            with column:
-                render_html(f'<div class="premium-inline-table-header">{html.escape(label)}</div>')
-
-        status_column_name = columns.get("status")
-
-        for _, row in editor_df.iterrows():
-            sheet_row = int(row["_sheet_row"])
-            original_status = normalize_text(row["Status"])
-
-            if original_status not in STATUS_OPTIONS:
-                original_status = "Novo Lead"
-
-            row_columns = st.columns(
-                [3.15, 1.45, 0.92, 1.65, 1.35, 0.90],
-                gap="small",
-            )
-
-            with row_columns[0]:
-                render_html(
-                    f'<div class="premium-inline-cell">{html.escape(normalize_text(row["Empresa"]) or "Sem empresa")}</div>'
-                )
-
-            with row_columns[1]:
-                render_html(
-                    f'<div class="premium-inline-cell phone">{html.escape(normalize_text(row["Telefone"]) or "Sem número")}</div>'
-                )
-
-            with row_columns[2]:
-                render_phone_copy_button(
-                    normalize_text(row["Telefone"]),
-                    row_key=f"phone-{sheet_row}",
-                )
-
-            status_widget_key = f"inline_status_{sheet_row}_{normalize_search_text(original_status).replace(' ', '_')}"
-
-            def save_inline_status(
-                sheet_row_value: int = sheet_row,
-                widget_key: str = status_widget_key,
-                previous_status: str = original_status,
-            ) -> None:
-                new_status = normalize_text(st.session_state.get(widget_key, previous_status))
-
-                if new_status == previous_status:
-                    return
-
-                if not status_column_name:
-                    st.session_state["status_auto_save_error"] = (
-                        "Não encontrei a coluna Status na planilha."
-                    )
-                    return
-
-                try:
-                    update_statuses_in_sheet(
-                        changes=[
-                            {
-                                "sheet_row": sheet_row_value,
-                                "status": new_status,
-                            }
-                        ],
-                        status_column_name=status_column_name,
-                        updated_at_column_name=columns.get("ultima_atualizacao"),
-                    )
-
-                    st.session_state["status_auto_save_success"] = (
-                        f"Status alterado para “{new_status}” e salvo diretamente na planilha."
-                    )
-                except Exception as error:
-                    st.session_state["status_auto_save_error"] = (
-                        "Não consegui atualizar o status diretamente na planilha: "
-                        f"{error}"
-                    )
-                    st.session_state[widget_key] = previous_status
-
-            with row_columns[3]:
-                st.selectbox(
-                    "Status",
-                    STATUS_OPTIONS,
-                    index=STATUS_OPTIONS.index(original_status),
-                    key=status_widget_key,
-                    label_visibility="collapsed",
-                    on_change=save_inline_status,
-                )
-
-            with row_columns[4]:
-                render_html(
-                    f'<div class="premium-inline-cell muted">{html.escape(normalize_text(row["Vendedor"]) or "Sem vendedor")}</div>'
-                )
-
-            with row_columns[5]:
-                render_html(
-                    f'<div class="premium-inline-cell date">{html.escape(normalize_text(row["Data"]))}</div>'
-                )
-
-def prepare_filters(df: pd.DataFrame) -> pd.DataFrame:
+def prepare_filters(df: pd.DataFrame):
     title_column, refresh_column = st.columns([3.8, 1.0], gap="large")
 
     with title_column:
@@ -2419,6 +1648,11 @@ def prepare_filters(df: pd.DataFrame) -> pd.DataFrame:
         date_min = valid_dates.min().date()
         date_max = valid_dates.max().date()
 
+    filter_1, filter_2, filter_3, filter_4 = st.columns(
+        [1, 1, 1, 1],
+        gap="medium",
+    )
+
     seller_options = sorted(
         [
             seller
@@ -2427,28 +1661,40 @@ def prepare_filters(df: pd.DataFrame) -> pd.DataFrame:
         ]
     )
 
-    if "dashboard_filter_seller" not in st.session_state:
-        st.session_state.dashboard_filter_seller = "Todos os vendedores"
+    status_options = [
+        "Novo Lead",
+        "Chamando",
+        "Sem Interesse",
+        "Não Responde",
+        "Fechado",
+        "Proposta",
+    ]
 
-    if st.session_state.dashboard_filter_seller not in ["Todos os vendedores"] + seller_options:
-        st.session_state.dashboard_filter_seller = "Todos os vendedores"
+    with filter_1:
+        selected_seller = st.selectbox(
+            "Vendedor",
+            ["Todos os vendedores"] + seller_options,
+        )
 
-    if "dashboard_filter_status" not in st.session_state:
-        st.session_state.dashboard_filter_status = "Todos os status"
+    with filter_2:
+        selected_status = st.selectbox(
+            "Status",
+            ["Todos os status"] + status_options,
+        )
 
-    if st.session_state.dashboard_filter_status not in ["Todos os status"] + STATUS_OPTIONS:
-        st.session_state.dashboard_filter_status = "Todos os status"
+    with filter_3:
+        selected_range = st.date_input(
+            "Período",
+            value=(date_min, date_max),
+            min_value=date_min,
+            max_value=max(date_max, date.today()),
+        )
 
-    if "dashboard_filter_period" not in st.session_state:
-        st.session_state.dashboard_filter_period = (date_min, date_max)
-
-    if "dashboard_filter_search" not in st.session_state:
-        st.session_state.dashboard_filter_search = ""
-
-    selected_seller = st.session_state.dashboard_filter_seller
-    selected_status = st.session_state.dashboard_filter_status
-    selected_range = st.session_state.dashboard_filter_period
-    search_term = st.session_state.dashboard_filter_search
+    with filter_4:
+        search_term = st.text_input(
+            "Buscar empresa ou telefone",
+            placeholder="Digite para buscar...",
+        )
 
     filtered_df = df.copy()
 
@@ -2458,7 +1704,7 @@ def prepare_filters(df: pd.DataFrame) -> pd.DataFrame:
     if selected_status != "Todos os status":
         filtered_df = filtered_df[filtered_df["_status_grupo"] == selected_status].copy()
 
-    if isinstance(selected_range, (tuple, list)) and len(selected_range) == 2:
+    if isinstance(selected_range, tuple) and len(selected_range) == 2:
         start_date, end_date = selected_range
 
         filtered_df = filtered_df[
@@ -2519,7 +1765,7 @@ def render_overview_page(df: pd.DataFrame, columns: dict) -> None:
         render_metric_card("Chamados no mês", str(called_month), "Base atual", "📊", "linear-gradient(135deg,#FF4BAA,#8F2BFF)")
 
     with card_4:
-        render_metric_card("Empresas cadastradas no mês", str(companies), "Base atual filtrada", "🏢", "linear-gradient(135deg,#8F2BFF,#C94AFF)")
+        render_metric_card("Empresas contatadas", str(companies), "Base atual filtrada", "🏢", "linear-gradient(135deg,#8F2BFF,#C94AFF)")
 
     st.write("")
 
@@ -2528,79 +1774,41 @@ def render_overview_page(df: pd.DataFrame, columns: dict) -> None:
     with chart_column:
         render_html(
             """
-            <div class="section-heading">Chamados por semana</div>
-            <div class="section-subtitle">Volume de chamados agrupado por semana conforme o período selecionado.</div>
+            <div class="section-heading">Chamados por dia</div>
+            <div class="section-subtitle">Volume de chamados conforme o período selecionado.</div>
             """
         )
 
         chart_df = filtered_df.dropna(subset=["_data_chamado"]).copy()
 
         if chart_df.empty:
-            current_week_start = (
-                pd.Timestamp.today().normalize()
-                - pd.to_timedelta(pd.Timestamp.today().weekday(), unit="D")
+            chart_df = pd.DataFrame(
+                {
+                    "Dia": ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"],
+                    "Quantidade": [0, 0, 0, 0, 0, 0, 0],
+                }
             )
-            week_starts = pd.date_range(
-                end=current_week_start,
-                periods=4,
-                freq="7D",
-            )
-            chart_df = pd.DataFrame({"InicioSemana": week_starts})
-            chart_df["Quantidade"] = 0
         else:
-            chart_df["InicioSemana"] = (
-                chart_df["_data_chamado"].dt.normalize()
-                - pd.to_timedelta(chart_df["_data_chamado"].dt.weekday, unit="D")
-            )
-            chart_df = (
-                chart_df.groupby("InicioSemana")
-                .size()
-                .reset_index(name="Quantidade")
-                .sort_values("InicioSemana")
-            )
-
-        chart_df["FimSemana"] = chart_df["InicioSemana"] + pd.Timedelta(days=6)
-        chart_df["Semana"] = (
-            chart_df["InicioSemana"].dt.strftime("%d/%m")
-            + " – "
-            + chart_df["FimSemana"].dt.strftime("%d/%m")
-        )
-
-        # Mantém o preenchimento roxo mesmo quando existe apenas uma semana.
-        # O ponto auxiliar serve apenas para desenhar a área visualmente e não
-        # altera a contagem dos chamados.
-        plot_df = chart_df.copy()
-
-        if len(plot_df) == 1:
-            support_point = plot_df.iloc[0].copy()
-            support_point["InicioSemana"] = support_point["FimSemana"]
-            plot_df = pd.concat(
-                [plot_df, pd.DataFrame([support_point])],
-                ignore_index=True,
-            )
+            chart_df["DiaReal"] = chart_df["_data_chamado"].dt.date
+            chart_df = chart_df.groupby("DiaReal").size().reset_index(name="Quantidade")
+            chart_df = chart_df.sort_values("DiaReal")
+            chart_df["Dia"] = pd.to_datetime(chart_df["DiaReal"]).dt.strftime("%d/%m")
 
         figure = px.area(
-            plot_df,
-            x="InicioSemana",
+            chart_df,
+            x="Dia",
             y="Quantidade",
             markers=True,
-            custom_data=["Semana"],
         )
 
         figure.update_traces(
-            line=dict(
-                color="#E14BFF",
-                width=4,
-                shape="spline",
-            ),
+            line=dict(color="#E14BFF", width=4),
             marker=dict(
                 size=9,
                 color="#FFFFFF",
                 line=dict(width=3, color="#D74BFF"),
             ),
-            fill="tozeroy",
             fillcolor="rgba(224,67,255,0.34)",
-            hovertemplate="Semana: %{customdata[0]}<br>Chamados: %{y}<extra></extra>",
         )
 
         figure.update_layout(
@@ -2613,12 +1821,7 @@ def render_overview_page(df: pd.DataFrame, columns: dict) -> None:
             yaxis_title="",
         )
 
-        figure.update_xaxes(
-            showgrid=False,
-            tickmode="array",
-            tickvals=chart_df["InicioSemana"].tolist(),
-            ticktext=chart_df["Semana"].tolist(),
-        )
+        figure.update_xaxes(showgrid=False)
         figure.update_yaxes(gridcolor="rgba(255,255,255,0.08)")
 
         st.plotly_chart(figure, use_container_width=True)
@@ -2627,7 +1830,7 @@ def render_overview_page(df: pd.DataFrame, columns: dict) -> None:
         render_status_summary(filtered_df)
 
     st.write("")
-    render_latest_calls_section(filtered_df, columns, df)
+    render_latest_calls_section(filtered_df)
 
 
 # =========================================================
