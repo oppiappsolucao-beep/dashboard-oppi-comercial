@@ -1538,11 +1538,12 @@ def apply_dashboard_css() -> None:
             }
 
             .premium-inline-cell {
-                min-height: 30px;
+                min-height: 34px;
+                height: 34px;
                 display: flex;
                 align-items: center;
                 padding: 4px 7px;
-                border-radius: 7px;
+                border-radius: 5px;
                 margin-top: 0;
                 margin-bottom: 0;
                 background: rgba(255,255,255,0.97);
@@ -1588,12 +1589,18 @@ def apply_dashboard_css() -> None:
                 gap: 0.28rem !important;
                 margin-top: 0 !important;
                 margin-bottom: 0 !important;
+                padding-top: 0 !important;
+                padding-bottom: 0 !important;
             }
 
             .st-key-compact_inline_table > div,
             .st-key-compact_inline_table div[data-testid="stVerticalBlock"] {
-                gap: 0.02rem !important;
-                row-gap: 0.02rem !important;
+                gap: 0 !important;
+                row-gap: 0 !important;
+            }
+
+            .st-key-compact_inline_table div[data-testid="stHorizontalBlock"] + div[data-testid="stHorizontalBlock"] {
+                margin-top: 0 !important;
             }
 
             .st-key-compact_inline_table div[data-testid="stElementContainer"] {
@@ -1645,10 +1652,11 @@ def apply_dashboard_css() -> None:
             }
 
             .st-key-compact_inline_table iframe {
-                min-height: 30px !important;
-                height: 30px !important;
+                min-height: 34px !important;
+                height: 34px !important;
                 margin-top: 0 !important;
                 margin-bottom: 0 !important;
+                display: block !important;
             }
 
             /* A tabela não deve ampliar no hover */
@@ -2050,7 +2058,7 @@ def render_phone_copy_button(phone: str, row_key: str) -> None:
                     margin: 0;
                     padding: 0;
                     width: 100%;
-                    height: 30px;
+                    height: 34px;
                     overflow: hidden;
                     background: transparent;
                     font-family: Arial, sans-serif;
@@ -2145,7 +2153,7 @@ def render_phone_copy_button(phone: str, row_key: str) -> None:
         </body>
         </html>
         """,
-        height=30,
+        height=34,
         scrolling=False,
     )
 
