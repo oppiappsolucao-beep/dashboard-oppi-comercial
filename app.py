@@ -453,12 +453,132 @@ def _set_sheet_value_by_header(
     return False
 
 
+class DuplicateRegistrationError(RuntimeError):
+    """Impede o cadastro quando telefone ou CPF já existe na planilha."""
+
+
+def normalize_digits(value) -> str:
+    """Mantém somente números para comparar telefones e CPFs independentemente da máscara."""
+    return re.sub(r"\D", "", normalize_text(value))
+
+
+def normalize_phone_for_duplicate(value) -> str:
+    """Normaliza telefone brasileiro, removendo DDI 55 quando informado."""
+    digits = normalize_digits(value)
+
+    if digits.startswith("55") and len(digits) in (12, 13):
+        digits = digits[2:]
+
+    return digits if len(digits) >= 8 else ""
+
+
+def normalize_cpf_for_duplicate(value) -> str:
+    """Normaliza CPF para comparação, ignorando campos vazios ou incompletos."""
+    digits = normalize_digits(value)
+    return digits if len(digits) == 11 else ""
+
+
+def _header_matches_any(header: str, aliases: list[str]) -> bool:
+    normalized_header = normalize_search_text(header)
+    return any(alias in normalized_header for alias in aliases)
+
+
+def validate_unique_company_registration(payload: dict, worksheet) -> None:
+    """
+    Bloqueia novo cadastro quando qualquer telefone ou CPF informado já existe
+    em qualquer coluna correspondente da planilha. A leitura é feita diretamente
+    da aba para evitar duplicidade mesmo quando o cache ainda não atualizou.
+    """
+    values = worksheet.get_all_values()
+
+    if not values:
+        return
+
+    headers = values[0]
+    rows = values[1:]
+
+    phone_column_indexes = [
+        index
+        for index, header in enumerate(headers)
+        if _header_matches_any(header, ["telefone", "celular", "whatsapp", "fone"])
+    ]
+
+    cpf_column_indexes = [
+        index
+        for index, header in enumerate(headers)
+        if normalize_search_text(header) == "cpf"
+        or _header_matches_any(header, ["cpf do", "cpf socio", "cpf sócio"])
+    ]
+
+    submitted_phones = {
+        normalize_phone_for_duplicate(payload.get(field))
+        for field in [
+            "telefone_b2b",
+            "telefone_fixo",
+            "telefone_alternativo",
+            "telefone_socio_1",
+        ]
+    }
+    submitted_phones.discard("")
+
+    submitted_cpfs = {
+        normalize_cpf_for_duplicate(payload.get(field))
+        for field in [
+            "cpf_socio_1",
+            "cpf_socio_2",
+            "cpf_socio_3",
+        ]
+    }
+    submitted_cpfs.discard("")
+
+    duplicate_phones = set()
+    duplicate_cpfs = set()
+
+    for row in rows:
+        for index in phone_column_indexes:
+            if index >= len(row):
+                continue
+
+            existing_phone = normalize_phone_for_duplicate(row[index])
+
+            if existing_phone and existing_phone in submitted_phones:
+                duplicate_phones.add(existing_phone)
+
+        for index in cpf_column_indexes:
+            if index >= len(row):
+                continue
+
+            existing_cpf = normalize_cpf_for_duplicate(row[index])
+
+            if existing_cpf and existing_cpf in submitted_cpfs:
+                duplicate_cpfs.add(existing_cpf)
+
+    if not duplicate_phones and not duplicate_cpfs:
+        return
+
+    messages = []
+
+    if duplicate_phones:
+        phones_text = ", ".join(sorted(duplicate_phones))
+        messages.append(f"Telefone já cadastrado: {phones_text}")
+
+    if duplicate_cpfs:
+        cpfs_text = ", ".join(sorted(duplicate_cpfs))
+        messages.append(f"CPF já cadastrado: {cpfs_text}")
+
+    raise DuplicateRegistrationError(
+        "Não foi possível cadastrar novamente. " + " | ".join(messages)
+    )
+
+
 def append_company_to_sheet(payload: dict) -> None:
     """Adiciona uma nova empresa na aba principal respeitando a estrutura atual da planilha."""
     client = get_gsheet_client()
     spreadsheet = client.open_by_key(SHEET_ID)
     worksheet = spreadsheet.worksheet(WORKSHEET_NAME)
     headers = worksheet.row_values(1)
+
+    validate_unique_company_registration(payload, worksheet)
 
     if not headers:
         raise RuntimeError("A primeira linha da planilha precisa conter os cabeçalhos.")
@@ -2750,6 +2870,11 @@ def prepare_filters(df: pd.DataFrame) -> pd.DataFrame:
 # PÁGINA: VISÃO GERAL
 # =========================================================
 def render_overview_page(df: pd.DataFrame, columns: dict) -> None:
+    registration_success = st.session_state.pop("company_registration_success", None)
+
+    if registration_success:
+        st.success(registration_success)
+
     filtered_df = prepare_filters(df)
 
     today = date.today()
@@ -3158,12 +3283,26 @@ def render_proposals_page(df: pd.DataFrame, columns: dict) -> None:
                     "ultima_atualizacao": now_text,
                 }
             )
+        except DuplicateRegistrationError as error:
+            st.error(str(error))
+            return
         except Exception as error:
             st.error("Não consegui cadastrar a empresa na planilha.")
             st.code(str(error))
             return
 
-        st.success("Empresa cadastrada com sucesso na planilha comercial.")
+        # Após o cadastro, abre a Visão Geral já com os dados atualizados.
+        # Também limpa filtros antigos que poderiam esconder a nova empresa.
+        st.session_state.selected_page = "Visão Geral"
+        st.session_state.dashboard_filter_seller = "Todos os vendedores"
+        st.session_state.dashboard_filter_status = "Todos os status"
+        st.session_state.dashboard_filter_search = ""
+        st.session_state.pop("dashboard_filter_period", None)
+        st.session_state["ultimos_chamados_status_selecionado"] = status
+        st.session_state["company_registration_success"] = (
+            f"Empresa “{normalize_text(empresa)}” cadastrada com sucesso na planilha e adicionada à Visão Geral com o status “{normalize_text(status)}”."
+        )
+        st.rerun()
 
 
 # =========================================================
