@@ -4054,8 +4054,8 @@ def render_all_contracts_page(df: pd.DataFrame, columns: dict) -> None:
 
     with filter_col_4:
         search_term = st.text_input(
-            "Buscar empresa ou telefone",
-            placeholder="Digite para buscar...",
+            "Buscar empresa",
+            placeholder="Digite o nome da empresa...",
             key="contracts_names_filter_search",
         )
 
@@ -4080,52 +4080,10 @@ def render_all_contracts_page(df: pd.DataFrame, columns: dict) -> None:
     if normalize_text(search_term):
         term = normalize_search_text(search_term)
         filtered_df = filtered_df[
-            filtered_df.apply(
-                lambda row: term
-                in normalize_search_text(
-                    " | ".join(
-                        [
-                            normalize_text(row.get("_empresa", "")),
-                            normalize_text(row.get("_telefone", "")),
-                        ]
-                    )
-                ),
-                axis=1,
+            filtered_df["_empresa"].apply(
+                lambda value: term in normalize_search_text(value)
             )
         ].copy()
-
-    status_cards = [
-        ("Novo Lead", "✦", "#E8F0FF", "#5C8BFF"),
-        ("Conversando", "•", "#F8EFE6", "#B37A2A"),
-        ("Sem interesse", "⊘", "#E9F8FA", "#2F9FB3"),
-        ("Não responde", "⚑", "#FBECEF", "#DA5C78"),
-        ("Proposta", "▤", "#EAF2FF", "#5C9DFF"),
-        ("Reunião", "◉", "#F3EAFE", "#A65BDB"),
-        ("Fechado", "✓", "#EAF8EF", "#58B97A"),
-    ]
-
-    summary_cards_html = ""
-
-    for status_name, icon, background_color, icon_color in status_cards:
-        status_count = int((filtered_df["_status_grupo"] == status_name).sum())
-        summary_cards_html += (
-            '<div class="contracts-filter-summary-card">'
-            '<div class="contracts-filter-summary-top">'
-            f'<div class="contracts-filter-summary-icon" style="background:{background_color}; color:{icon_color};">{icon}</div>'
-            f'<div class="contracts-filter-summary-name">{html.escape(status_name)}</div>'
-            '</div>'
-            f'<div class="contracts-filter-summary-count">{status_count}</div>'
-            '<div class="contracts-filter-summary-caption">registros nesta seleção</div>'
-            '</div>'
-        )
-
-    render_html(
-        f"""
-        <div class="contracts-filter-summary-grid">
-            {summary_cards_html}
-        </div>
-        """
-    )
 
     names_df = pd.DataFrame(
         {
