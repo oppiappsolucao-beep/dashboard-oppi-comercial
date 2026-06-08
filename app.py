@@ -2231,18 +2231,27 @@ def render_latest_calls_section(
             )
 
     selected_status = st.session_state.get(selected_card_key)
+    search_term = normalize_text(st.session_state.get("dashboard_filter_search", ""))
+    global_search_active = bool(search_term)
 
-    if not selected_status:
-        render_html(
-            """
-            <div class="latest-placeholder-card">
-                Selecione um status clicando em “Ver nomes” para visualizar os registros.
-            </div>
-            """
-        )
-        return
+    # Quando o campo de busca estiver preenchido, a tabela exibe todos os
+    # registros encontrados na planilha inteira, independentemente do card de
+    # status que estava selecionado anteriormente.
+    if global_search_active:
+        selected_df = filtered_df.copy()
+    else:
+        if not selected_status:
+            render_html(
+                """
+                <div class="latest-placeholder-card">
+                    Selecione um status clicando em “Ver nomes” para visualizar os registros.
+                </div>
+                """
+            )
+            return
 
-    selected_df = filtered_df[filtered_df["_status_grupo"] == selected_status].copy()
+        selected_df = filtered_df[filtered_df["_status_grupo"] == selected_status].copy()
+
     selected_df = selected_df.sort_values(
         ["_data_chamado", "_empresa"],
         ascending=[False, True],
@@ -2450,6 +2459,31 @@ def prepare_filters(df: pd.DataFrame) -> pd.DataFrame:
     selected_range = st.session_state.dashboard_filter_period
     search_term = st.session_state.dashboard_filter_search
 
+    # A busca por empresa ou telefone é global: quando o usuário digita algo
+    # nesse campo, pesquisamos a planilha inteira e ignoramos os filtros de
+    # vendedor, status e período. Dessa forma, nenhum registro fica oculto por
+    # um filtro aplicado anteriormente.
+    if normalize_text(search_term):
+        term = normalize_search_text(search_term)
+        global_search_df = df.copy()
+
+        global_search_df = global_search_df[
+            global_search_df.apply(
+                lambda row: term
+                in normalize_search_text(
+                    " | ".join(
+                        [
+                            normalize_text(row.get("_empresa", "")),
+                            normalize_text(row.get("_telefone", "")),
+                        ]
+                    )
+                ),
+                axis=1,
+            )
+        ].copy()
+
+        return global_search_df
+
     filtered_df = df.copy()
 
     if selected_seller != "Todos os vendedores":
@@ -2466,26 +2500,6 @@ def prepare_filters(df: pd.DataFrame) -> pd.DataFrame:
             | (
                 (filtered_df["_data_chamado"].dt.date >= start_date)
                 & (filtered_df["_data_chamado"].dt.date <= end_date)
-            )
-        ].copy()
-
-    if normalize_text(search_term):
-        term = normalize_search_text(search_term)
-
-        filtered_df = filtered_df[
-            filtered_df.apply(
-                lambda row: term
-                in normalize_search_text(
-                    " | ".join(
-                        [
-                            normalize_text(row.get("_empresa", "")),
-                            normalize_text(row.get("_telefone", "")),
-                            normalize_text(row.get("_vendedor", "")),
-                            normalize_text(row.get("_status_grupo", "")),
-                        ]
-                    )
-                ),
-                axis=1,
             )
         ].copy()
 
