@@ -3,6 +3,7 @@ import html
 import json
 import re
 import unicodedata
+import uuid
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Optional
@@ -70,6 +71,9 @@ if "selected_page" not in st.session_state:
 
 if "selected_cadastro_subpage" not in st.session_state:
     st.session_state.selected_cadastro_subpage = "Novo contrato"
+
+if "navigation_session_token" not in st.session_state:
+    st.session_state.navigation_session_token = ""
 
 
 # =========================================================
@@ -2455,6 +2459,45 @@ def apply_registration_css() -> None:
 
 
 # =========================================================
+# SESSÃO DE NAVEGAÇÃO PARA LINKS INTERNOS
+# =========================================================
+@st.cache_resource
+def get_navigation_session_registry() -> set[str]:
+    """Mantém tokens temporários para preservar o login ao usar os links do submenu."""
+    return set()
+
+
+def create_navigation_session_token() -> str:
+    token = uuid.uuid4().hex
+    get_navigation_session_registry().add(token)
+    st.session_state.navigation_session_token = token
+    st.query_params["session"] = token
+    return token
+
+
+def restore_navigation_session_from_url() -> None:
+    """Restaura o login quando um link interno recarrega a página com token válido."""
+    if st.session_state.get("authenticated", False):
+        return
+
+    token = normalize_text(st.query_params.get("session", ""))
+
+    if token and token in get_navigation_session_registry():
+        st.session_state.authenticated = True
+        st.session_state.navigation_session_token = token
+        st.session_state.auth_error = ""
+
+
+def revoke_navigation_session_token() -> None:
+    token = normalize_text(st.session_state.get("navigation_session_token", ""))
+
+    if token:
+        get_navigation_session_registry().discard(token)
+
+    st.session_state.navigation_session_token = ""
+
+
+# =========================================================
 # LOGIN
 # =========================================================
 def check_login(username: str, password: str) -> bool:
@@ -2537,6 +2580,7 @@ def render_login_page() -> None:
             if check_login(username, password):
                 st.session_state.authenticated = True
                 st.session_state.auth_error = ""
+                create_navigation_session_token()
                 st.rerun()
             else:
                 st.session_state.auth_error = "Usuário ou senha inválidos."
@@ -2611,11 +2655,13 @@ def render_sidebar() -> str:
         details_open = "open" if st.session_state.selected_page == "Cadastro" else ""
         novo_active = "active" if st.session_state.get("selected_cadastro_subpage", "Novo contrato") == "Novo contrato" else ""
         todos_active = "active" if st.session_state.get("selected_cadastro_subpage", "Novo contrato") == "Todos os contratos" else ""
+        navigation_token = normalize_text(st.session_state.get("navigation_session_token", ""))
+        session_query = f"&session={navigation_token}" if navigation_token else ""
 
         render_html(
             f"""
             <nav class="oppi-side-nav">
-                <a class="oppi-nav-link {overview_active}" href="?page=visao-geral" target="_self">
+                <a class="oppi-nav-link {overview_active}" href="?page=visao-geral{session_query}" target="_self">
                     <span class="oppi-nav-dot"></span>
                     <span>Visão Geral</span>
                 </a>
@@ -2629,12 +2675,12 @@ def render_sidebar() -> str:
 
                     <div class="oppi-cadastro-flyout">
                         <div class="oppi-flyout-title">Cadastro</div>
-                        <a class="oppi-flyout-link {novo_active}" href="?page=cadastro&contracts=novo" target="_self">Novo contrato</a>
-                        <a class="oppi-flyout-link {todos_active}" href="?page=cadastro&contracts=todos" target="_self">Todos os contratos</a>
+                        <a class="oppi-flyout-link {novo_active}" href="?page=cadastro&contracts=novo{session_query}" target="_self">Novo contrato</a>
+                        <a class="oppi-flyout-link {todos_active}" href="?page=cadastro&contracts=todos{session_query}" target="_self">Todos os contratos</a>
                     </div>
                 </details>
 
-                <a class="oppi-nav-link {scores_active}" href="?page=pesos-e-medidas" target="_self">
+                <a class="oppi-nav-link {scores_active}" href="?page=pesos-e-medidas{session_query}" target="_self">
                     <span class="oppi-nav-dot"></span>
                     <span>Pesos e Medidas</span>
                 </a>
@@ -2652,6 +2698,7 @@ def render_sidebar() -> str:
         )
 
         if st.button("Sair", use_container_width=True, key="sidebar_logout"):
+            revoke_navigation_session_token()
             st.session_state.authenticated = False
             st.session_state.auth_error = ""
             st.query_params.clear()
@@ -3944,6 +3991,8 @@ def render_connection_error(error: Exception) -> None:
 # APLICAÇÃO PRINCIPAL
 # =========================================================
 def main() -> None:
+    restore_navigation_session_from_url()
+
     if not st.session_state.authenticated:
         render_login_page()
         return
