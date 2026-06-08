@@ -2033,6 +2033,76 @@ def apply_dashboard_css() -> None:
                 box-shadow: inset 4px 0 0 #FF4BAA;
             }
 
+            .contracts-filter-summary-grid {
+                display: grid;
+                grid-template-columns: repeat(7, minmax(0, 1fr));
+                gap: 10px;
+                margin: 16px 0 4px 0;
+            }
+
+            .contracts-filter-summary-card {
+                min-height: 110px;
+                padding: 13px 12px;
+                border-radius: 18px;
+                border: 1px solid rgba(255,255,255,0.06);
+                background: linear-gradient(145deg, rgba(22,20,42,0.98), rgba(10,9,25,0.98));
+                box-shadow: 0 14px 34px rgba(0,0,0,0.20);
+                transition: transform 0.20s ease, box-shadow 0.20s ease, border-color 0.20s ease !important;
+            }
+
+            .contracts-filter-summary-card:hover {
+                transform: scale(1.025);
+                border-color: rgba(255,75,170,0.40);
+                box-shadow: 0 18px 42px rgba(0,0,0,0.24), 0 0 20px rgba(169,28,255,0.10);
+            }
+
+            .contracts-filter-summary-top {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                margin-bottom: 7px;
+            }
+
+            .contracts-filter-summary-icon {
+                width: 34px;
+                height: 34px;
+                min-width: 34px;
+                border-radius: 11px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 0.90rem;
+                font-weight: 900;
+            }
+
+            .contracts-filter-summary-name {
+                color: #FFFFFF;
+                font-size: 0.77rem;
+                font-weight: 850;
+                line-height: 1.15;
+            }
+
+            .contracts-filter-summary-count {
+                color: #FFFFFF;
+                font-size: 1.18rem;
+                line-height: 1;
+                font-weight: 950;
+            }
+
+            .contracts-filter-summary-caption {
+                margin-top: 7px;
+                color: #55DF7D;
+                font-size: 0.69rem;
+                line-height: 1.25;
+                font-weight: 800;
+            }
+
+            @media (max-width: 1200px) {
+                .contracts-filter-summary-grid {
+                    grid-template-columns: repeat(4, minmax(0, 1fr));
+                }
+            }
+
             /* Animações suaves de zoom ao passar o mouse */
             .metric-card,
             .latest-calls-shell,
@@ -3920,8 +3990,8 @@ def render_all_contracts_page(df: pd.DataFrame, columns: dict) -> None:
     render_html(
         """
         <div class="registration-header-card">
-            <div class="registration-kicker">OPPI COMERCIAL • TODOS OS CONTRATOS</div>
-            <div class="registration-title">Todos os contratos</div>
+            <div class="registration-kicker">OPPI COMERCIAL • CADASTROS</div>
+            <div class="registration-title">Empresas cadastradas</div>
             <div class="registration-subtitle">
                 Consulte os nomes de todas as empresas cadastradas na planilha comercial.
             </div>
@@ -3929,9 +3999,137 @@ def render_all_contracts_page(df: pd.DataFrame, columns: dict) -> None:
         """
     )
 
+    valid_dates = df["_data_chamado"].dropna()
+
+    if valid_dates.empty:
+        date_max = date.today()
+        date_min = date_max - timedelta(days=30)
+    else:
+        date_min = valid_dates.min().date()
+        date_max = valid_dates.max().date()
+
+    seller_options = sorted(
+        [
+            seller
+            for seller in df["_vendedor"].dropna().astype(str).unique().tolist()
+            if normalize_text(seller)
+        ]
+    )
+
+    if "contracts_names_filter_seller" not in st.session_state:
+        st.session_state.contracts_names_filter_seller = "Todos os vendedores"
+
+    if "contracts_names_filter_status" not in st.session_state:
+        st.session_state.contracts_names_filter_status = "Todos os status"
+
+    if "contracts_names_filter_period" not in st.session_state:
+        st.session_state.contracts_names_filter_period = (date_min, date_max)
+
+    if "contracts_names_filter_search" not in st.session_state:
+        st.session_state.contracts_names_filter_search = ""
+
+    filter_col_1, filter_col_2, filter_col_3, filter_col_4 = st.columns(4, gap="medium")
+
+    with filter_col_1:
+        selected_seller = st.selectbox(
+            "Vendedor",
+            ["Todos os vendedores"] + seller_options,
+            key="contracts_names_filter_seller",
+        )
+
+    with filter_col_2:
+        selected_status = st.selectbox(
+            "Status",
+            ["Todos os status"] + STATUS_OPTIONS,
+            key="contracts_names_filter_status",
+        )
+
+    with filter_col_3:
+        selected_period = st.date_input(
+            "Período",
+            min_value=date_min,
+            max_value=max(date_max, date.today()),
+            key="contracts_names_filter_period",
+        )
+
+    with filter_col_4:
+        search_term = st.text_input(
+            "Buscar empresa ou telefone",
+            placeholder="Digite para buscar...",
+            key="contracts_names_filter_search",
+        )
+
+    filtered_df = df.copy()
+
+    if selected_seller != "Todos os vendedores":
+        filtered_df = filtered_df[filtered_df["_vendedor"] == selected_seller].copy()
+
+    if selected_status != "Todos os status":
+        filtered_df = filtered_df[filtered_df["_status_grupo"] == selected_status].copy()
+
+    if isinstance(selected_period, (tuple, list)) and len(selected_period) == 2:
+        start_date, end_date = selected_period
+        filtered_df = filtered_df[
+            filtered_df["_data_chamado"].isna()
+            | (
+                (filtered_df["_data_chamado"].dt.date >= start_date)
+                & (filtered_df["_data_chamado"].dt.date <= end_date)
+            )
+        ].copy()
+
+    if normalize_text(search_term):
+        term = normalize_search_text(search_term)
+        filtered_df = filtered_df[
+            filtered_df.apply(
+                lambda row: term
+                in normalize_search_text(
+                    " | ".join(
+                        [
+                            normalize_text(row.get("_empresa", "")),
+                            normalize_text(row.get("_telefone", "")),
+                        ]
+                    )
+                ),
+                axis=1,
+            )
+        ].copy()
+
+    status_cards = [
+        ("Novo Lead", "✦", "#E8F0FF", "#5C8BFF"),
+        ("Conversando", "•", "#F8EFE6", "#B37A2A"),
+        ("Sem interesse", "⊘", "#E9F8FA", "#2F9FB3"),
+        ("Não responde", "⚑", "#FBECEF", "#DA5C78"),
+        ("Proposta", "▤", "#EAF2FF", "#5C9DFF"),
+        ("Reunião", "◉", "#F3EAFE", "#A65BDB"),
+        ("Fechado", "✓", "#EAF8EF", "#58B97A"),
+    ]
+
+    summary_cards_html = ""
+
+    for status_name, icon, background_color, icon_color in status_cards:
+        status_count = int((filtered_df["_status_grupo"] == status_name).sum())
+        summary_cards_html += (
+            '<div class="contracts-filter-summary-card">'
+            '<div class="contracts-filter-summary-top">'
+            f'<div class="contracts-filter-summary-icon" style="background:{background_color}; color:{icon_color};">{icon}</div>'
+            f'<div class="contracts-filter-summary-name">{html.escape(status_name)}</div>'
+            '</div>'
+            f'<div class="contracts-filter-summary-count">{status_count}</div>'
+            '<div class="contracts-filter-summary-caption">registros nesta seleção</div>'
+            '</div>'
+        )
+
+    render_html(
+        f"""
+        <div class="contracts-filter-summary-grid">
+            {summary_cards_html}
+        </div>
+        """
+    )
+
     names_df = pd.DataFrame(
         {
-            "Empresa": df["_empresa"],
+            "Empresa": filtered_df["_empresa"],
         }
     )
 
@@ -3945,13 +4143,13 @@ def render_all_contracts_page(df: pd.DataFrame, columns: dict) -> None:
     render_html(
         f"""
         <div class="contracts-names-count-card">
-            Exibindo <strong>{len(names_df)}</strong> nome(s) cadastrado(s) na planilha.
+            Exibindo <strong>{len(names_df)}</strong> empresa(s) cadastrada(s) na planilha.
         </div>
         """
     )
 
     if names_df.empty:
-        st.info("Nenhum nome cadastrado foi encontrado na planilha.")
+        st.info("Nenhuma empresa cadastrada foi encontrada com os filtros informados.")
         return
 
     names_rows_html = "".join(
@@ -3962,7 +4160,7 @@ def render_all_contracts_page(df: pd.DataFrame, columns: dict) -> None:
     render_html(
         f"""
         <div class="contracts-names-table">
-            <div class="contracts-names-table-header">Empresa</div>
+            <div class="contracts-names-table-header">Empresas cadastradas</div>
             {names_rows_html}
         </div>
         """
