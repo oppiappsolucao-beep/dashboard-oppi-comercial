@@ -2364,15 +2364,15 @@ def apply_registration_css() -> None:
                 margin: 8px 0 14px 0;
                 padding: 14px 16px;
                 border-radius: 16px;
-                background:
-                    linear-gradient(90deg, rgba(255,75,170,0.08), rgba(169,28,255,0.08)),
-                    rgba(13,11,31,0.94);
-                border: 1px solid rgba(255,75,170,0.25);
-                box-shadow: inset 0 1px 0 rgba(255,255,255,0.025);
+                background: rgba(255,255,255,0.96);
+                border: 1px solid rgba(255,75,170,0.38);
+                box-shadow:
+                    0 8px 18px rgba(169,28,255,0.08),
+                    inset 0 1px 0 rgba(255,255,255,0.92);
             }
 
             .registration-section-title {
-                color: #FFFFFF;
+                color: #1E1729;
                 font-size: 0.95rem;
                 font-weight: 900;
                 letter-spacing: 0.015em;
@@ -2380,7 +2380,7 @@ def apply_registration_css() -> None:
 
             .registration-section-text {
                 margin-top: 4px;
-                color: rgba(255,255,255,0.62);
+                color: rgba(30,23,41,0.72);
                 font-size: 0.80rem;
                 line-height: 1.4;
             }
