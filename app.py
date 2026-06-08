@@ -2257,25 +2257,23 @@ def apply_registration_css() -> None:
                 z-index: 10 !important;
             }
 
-            /* Mantém Vendedor, Status comercial e Observações escuros sobre o fundo cinza */
-            [data-testid="stForm"] div[data-testid="stSelectbox"] div[data-baseweb="select"],
-            [data-testid="stForm"] div[data-testid="stSelectbox"] div[data-baseweb="select"] > div,
-            [data-testid="stForm"] div[data-testid="stSelectbox"] div[data-baseweb="select"] > div > div,
-            [data-testid="stForm"] div[data-testid="stSelectbox"] [role="button"] {
+            /* Labels dos seletores escuros sobre o fundo cinza, sem adicionar borda extra */
+            [data-testid="stForm"] div[data-testid="stSelectbox"] label,
+            [data-testid="stForm"] div[data-testid="stSelectbox"] label p,
+            [data-testid="stForm"] div[data-testid="stSelectbox"] label span,
+            [data-testid="stForm"] div[data-testid="stSelectbox"] [data-testid="stWidgetLabel"],
+            [data-testid="stForm"] div[data-testid="stSelectbox"] [data-testid="stWidgetLabel"] p {
+                color: #2A2338 !important;
+                -webkit-text-fill-color: #2A2338 !important;
+            }
+
+            /* Mantém somente o fundo escuro da caixa de Observações */
+            [data-testid="stForm"] div[data-testid="stTextArea"] div[data-baseweb="textarea"] > div {
                 background: rgba(8,7,24,0.96) !important;
-                color: #FFFFFF !important;
-                -webkit-text-fill-color: #FFFFFF !important;
             }
 
-            [data-testid="stForm"] div[data-testid="stSelectbox"] svg {
-                color: #FFFFFF !important;
-                fill: #FFFFFF !important;
-            }
-
-            [data-testid="stForm"] div[data-testid="stTextArea"] div[data-baseweb="textarea"],
-            [data-testid="stForm"] div[data-testid="stTextArea"] div[data-baseweb="textarea"] > div,
             [data-testid="stForm"] div[data-testid="stTextArea"] textarea {
-                background: rgba(8,7,24,0.96) !important;
+                background: transparent !important;
                 color: #FFFFFF !important;
                 -webkit-text-fill-color: #FFFFFF !important;
             }
