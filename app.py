@@ -1964,14 +1964,14 @@ def apply_dashboard_css() -> None:
                 margin: 14px 0 14px 0;
                 padding: 13px 16px;
                 border-radius: 14px;
-                color: rgba(255,255,255,0.78);
+                color: rgba(38,31,53,0.82);
                 font-size: 0.86rem;
                 line-height: 1.4;
                 background:
-                    radial-gradient(circle at 100% 0%, rgba(169,28,255,0.18), transparent 35%),
-                    linear-gradient(90deg, rgba(15,13,34,0.98), rgba(21,13,45,0.98));
+                    radial-gradient(circle at 100% 0%, rgba(255,255,255,0.80), transparent 35%),
+                    linear-gradient(90deg, rgba(247,248,252,0.98), rgba(220,224,233,0.98));
                 border: 1px solid rgba(255,75,170,0.30);
-                box-shadow: 0 12px 30px rgba(0,0,0,0.18), 0 0 18px rgba(169,28,255,0.08);
+                box-shadow: 0 12px 30px rgba(0,0,0,0.14), 0 0 14px rgba(169,28,255,0.06);
             }
 
             .contracts-names-count-card strong {
@@ -2445,9 +2445,9 @@ def apply_registration_css() -> None:
                 min-height: 48px !important;
                 border-radius: 13px !important;
                 border: 1px solid rgba(255,75,170,0.58) !important;
-                background: rgba(8,7,24,0.92) !important;
-                box-shadow: inset 0 1px 0 rgba(255,255,255,0.03) !important;
-                color: #FFFFFF !important;
+                background: #FFFFFF !important;
+                box-shadow: inset 0 1px 0 rgba(255,255,255,0.88) !important;
+                color: #1E1828 !important;
                 transition:
                     transform 0.20s ease,
                     box-shadow 0.20s ease,
@@ -2497,8 +2497,8 @@ def apply_registration_css() -> None:
                 min-height: 124px !important;
                 border-radius: 13px !important;
                 border: 1px solid rgba(255,75,170,0.58) !important;
-                background: rgba(8,7,24,0.92) !important;
-                box-shadow: inset 0 1px 0 rgba(255,255,255,0.03) !important;
+                background: #FFFFFF !important;
+                box-shadow: inset 0 1px 0 rgba(255,255,255,0.88) !important;
                 transition:
                     transform 0.18s ease,
                     box-shadow 0.18s ease,
@@ -2529,7 +2529,7 @@ def apply_registration_css() -> None:
                 outline: none !important;
                 background: transparent !important;
                 box-shadow: none !important;
-                color: #FFFFFF !important;
+                color: #1E1828 !important;
                 position: relative !important;
                 z-index: 1 !important;
                 resize: vertical !important;
@@ -2556,37 +2556,50 @@ def apply_registration_css() -> None:
                 -webkit-text-fill-color: #2A2338 !important;
             }
 
-            /* Mantém somente o fundo escuro da caixa de Observações */
+            /* Campos do formulário: caixas brancas e texto preto sobre o fundo cinza */
+            [data-testid="stForm"] div[data-baseweb="input"] input,
+            [data-testid="stForm"] div[data-baseweb="select"] *,
+            [data-testid="stForm"] div[data-testid="stDateInput"] input {
+                color: #1E1828 !important;
+                -webkit-text-fill-color: #1E1828 !important;
+            }
+
+            [data-testid="stForm"] div[data-baseweb="input"] input::placeholder,
+            [data-testid="stForm"] div[data-testid="stDateInput"] input::placeholder {
+                color: rgba(30,24,40,0.52) !important;
+                -webkit-text-fill-color: rgba(30,24,40,0.52) !important;
+            }
+
             [data-testid="stForm"] div[data-testid="stTextArea"] div[data-baseweb="textarea"] > div {
-                background: rgba(8,7,24,0.96) !important;
+                background: #FFFFFF !important;
             }
 
             [data-testid="stForm"] div[data-testid="stTextArea"] textarea {
                 background: transparent !important;
-                color: #FFFFFF !important;
-                -webkit-text-fill-color: #FFFFFF !important;
+                color: #1E1828 !important;
+                -webkit-text-fill-color: #1E1828 !important;
             }
 
             [data-testid="stForm"] div[data-testid="stTextArea"] textarea::placeholder {
-                color: rgba(255,255,255,0.44) !important;
-                -webkit-text-fill-color: rgba(255,255,255,0.44) !important;
+                color: rgba(30,24,40,0.52) !important;
+                -webkit-text-fill-color: rgba(30,24,40,0.52) !important;
             }
 
 
-            /* Lista clicável das empresas cadastradas na paleta do dashboard */
+            /* Lista clicável das empresas cadastradas com fundo cinza igual ao menu */
             .st-key-contracts_names_list {
                 margin-top: 10px !important;
                 overflow: hidden !important;
                 border-radius: 18px !important;
                 border: 1px solid rgba(255,75,170,0.34) !important;
                 background:
-                    radial-gradient(circle at top left, rgba(169,28,255,0.15) 0%, rgba(169,28,255,0.00) 34%),
-                    radial-gradient(circle at bottom right, rgba(255,75,170,0.10) 0%, rgba(255,75,170,0.00) 36%),
-                    linear-gradient(180deg, #100D21 0%, #0C0A19 48%, #090812 100%) !important;
+                    radial-gradient(circle at top left, rgba(255,255,255,0.94) 0%, rgba(255,255,255,0.00) 34%),
+                    radial-gradient(circle at bottom right, rgba(208,212,223,0.72) 0%, rgba(208,212,223,0.00) 36%),
+                    linear-gradient(180deg, #F7F8FC 0%, #ECEEF4 42%, #DCE0E9 72%, #CED3DE 100%) !important;
                 box-shadow:
-                    0 18px 42px rgba(0,0,0,0.28),
-                    0 0 0 1px rgba(169,28,255,0.10),
-                    0 0 22px rgba(169,28,255,0.10) !important;
+                    0 18px 42px rgba(0,0,0,0.18),
+                    0 0 0 1px rgba(169,28,255,0.08),
+                    0 0 18px rgba(169,28,255,0.08) !important;
             }
 
             .st-key-contracts_names_list div[data-testid="stVerticalBlock"] {
@@ -2607,8 +2620,8 @@ def apply_registration_css() -> None:
                 border: none !important;
                 border-bottom: 1px solid rgba(255,75,170,0.10) !important;
                 border-radius: 0 !important;
-                color: rgba(255,255,255,0.92) !important;
-                background: rgba(13,11,31,0.96) !important;
+                color: #211A30 !important;
+                background: rgba(255,255,255,0.92) !important;
                 box-shadow: none !important;
                 font-size: 0.90rem !important;
                 font-weight: 700 !important;
@@ -2622,14 +2635,14 @@ def apply_registration_css() -> None:
             }
 
             .st-key-contracts_names_list div[data-testid="stElementContainer"]:nth-child(even) .stButton > button {
-                background: rgba(20,15,43,0.98) !important;
+                background: rgba(232,235,242,0.96) !important;
             }
 
             .st-key-contracts_names_list .stButton > button:hover {
                 transform: none !important;
                 padding-left: 22px !important;
-                color: #FFFFFF !important;
-                background: linear-gradient(90deg, rgba(255,75,170,0.18), rgba(169,28,255,0.20), rgba(13,11,31,0.98)) !important;
+                color: #211A30 !important;
+                background: linear-gradient(90deg, rgba(255,75,170,0.16), rgba(169,28,255,0.11), rgba(255,255,255,0.94)) !important;
                 box-shadow: inset 4px 0 0 #FF4BAA, 0 0 20px rgba(169,28,255,0.12) !important;
             }
 
@@ -2729,8 +2742,8 @@ def apply_registration_css() -> None:
                 padding: 12px 14px;
                 border-radius: 13px;
                 border: 1px solid rgba(255,75,170,0.58);
-                background: rgba(8,7,24,0.94);
-                color: #FFFFFF;
+                background: #FFFFFF;
+                color: #1E1828;
                 font-size: 0.91rem;
                 line-height: 1.35;
                 word-break: break-word;
