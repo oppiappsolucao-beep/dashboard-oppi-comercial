@@ -2578,14 +2578,15 @@ def apply_registration_css() -> None:
                 margin-top: 10px !important;
                 overflow: hidden !important;
                 border-radius: 18px !important;
-                border: 1px solid rgba(255,75,170,0.44) !important;
+                border: 1px solid rgba(169,28,255,0.20) !important;
                 background:
-                    radial-gradient(circle at 100% 0%, rgba(169,28,255,0.14), transparent 34%),
-                    linear-gradient(145deg, rgba(13,11,31,0.99), rgba(7,6,18,0.99)) !important;
+                    radial-gradient(circle at top left, rgba(255,255,255,0.92) 0%, rgba(255,255,255,0.00) 34%),
+                    radial-gradient(circle at bottom right, rgba(208,212,223,0.72) 0%, rgba(208,212,223,0.00) 36%),
+                    linear-gradient(180deg, #F7F8FC 0%, #ECEEF4 42%, #DCE0E9 76%, #CED3DE 100%) !important;
                 box-shadow:
-                    0 20px 46px rgba(0,0,0,0.30),
-                    0 0 0 1px rgba(169,28,255,0.08),
-                    0 0 26px rgba(169,28,255,0.12) !important;
+                    0 18px 42px rgba(0,0,0,0.18),
+                    0 0 0 1px rgba(255,255,255,0.54),
+                    0 0 22px rgba(169,28,255,0.08) !important;
             }
 
             .st-key-contracts_names_list div[data-testid="stVerticalBlock"] {
@@ -2604,13 +2605,13 @@ def apply_registration_css() -> None:
                 padding: 11px 18px !important;
                 justify-content: flex-start !important;
                 border: none !important;
-                border-bottom: 1px solid rgba(255,75,170,0.10) !important;
+                border-bottom: 1px solid rgba(84,72,107,0.10) !important;
                 border-radius: 0 !important;
-                color: rgba(255,255,255,0.92) !important;
-                background: rgba(11,10,27,0.96) !important;
+                color: #241C34 !important;
+                background: rgba(247,248,252,0.92) !important;
                 box-shadow: none !important;
                 font-size: 0.90rem !important;
-                font-weight: 650 !important;
+                font-weight: 700 !important;
                 line-height: 1.25 !important;
                 text-align: left !important;
                 transition:
@@ -2621,14 +2622,14 @@ def apply_registration_css() -> None:
             }
 
             .st-key-contracts_names_list div[data-testid="stElementContainer"]:nth-child(even) .stButton > button {
-                background: rgba(18,13,38,0.97) !important;
+                background: rgba(231,234,241,0.94) !important;
             }
 
             .st-key-contracts_names_list .stButton > button:hover {
                 transform: none !important;
                 padding-left: 22px !important;
-                color: #FFFFFF !important;
-                background: linear-gradient(90deg, rgba(255,75,170,0.18), rgba(169,28,255,0.13)) !important;
+                color: #6E26D9 !important;
+                background: linear-gradient(90deg, rgba(255,75,170,0.14), rgba(169,28,255,0.10), rgba(255,255,255,0.70)) !important;
                 box-shadow: inset 4px 0 0 #FF4BAA !important;
             }
 
@@ -2670,14 +2671,14 @@ def apply_registration_css() -> None:
 
             .contracts-names-clickable-header {
                 padding: 14px 18px;
-                color: #FFFFFF;
+                color: #241C34;
                 font-size: 0.90rem;
                 font-weight: 950;
                 letter-spacing: 0.02em;
                 text-transform: uppercase;
                 background:
-                    linear-gradient(90deg, rgba(255,75,170,0.34), rgba(169,28,255,0.32)),
-                    rgba(12,10,28,0.98);
+                    linear-gradient(90deg, rgba(255,75,170,0.16), rgba(169,28,255,0.14)),
+                    rgba(247,248,252,0.96);
                 border-bottom: 1px solid rgba(255,75,170,0.34);
             }
 
