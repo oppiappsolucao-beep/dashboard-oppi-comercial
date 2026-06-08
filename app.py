@@ -1956,6 +1956,43 @@ def apply_dashboard_css() -> None:
                 box-shadow: 0 8px 18px rgba(14, 13, 27, 0.04);
             }
 
+            /* Tabela simples de nomes em Todos os contratos */
+            .contracts-names-table {
+                margin-top: 10px;
+                overflow: hidden;
+                border-radius: 16px;
+                border: 1px solid rgba(255,75,170,0.34);
+                background: rgba(10,9,25,0.72);
+                box-shadow: 0 18px 42px rgba(0,0,0,0.20), 0 0 22px rgba(169,28,255,0.08);
+            }
+
+            .contracts-names-table-header {
+                padding: 12px 16px;
+                color: #FFFFFF;
+                font-size: 0.88rem;
+                font-weight: 900;
+                letter-spacing: 0.01em;
+                background: linear-gradient(90deg, rgba(255,75,170,0.20), rgba(169,28,255,0.20));
+                border-bottom: 1px solid rgba(255,75,170,0.24);
+            }
+
+            .contracts-names-table-row {
+                padding: 11px 16px;
+                color: #2A2035;
+                font-size: 0.90rem;
+                line-height: 1.25;
+                background: rgba(255,255,255,0.98);
+                border-bottom: 1px solid rgba(169,28,255,0.10);
+            }
+
+            .contracts-names-table-row:last-child {
+                border-bottom: none;
+            }
+
+            .contracts-names-table-row:hover {
+                background: linear-gradient(90deg, rgba(255,255,255,0.99), rgba(249,241,255,0.99));
+            }
+
             /* Animações suaves de zoom ao passar o mouse */
             .metric-card,
             .latest-calls-shell,
@@ -3961,23 +3998,35 @@ def render_all_contracts_page(df: pd.DataFrame, columns: dict) -> None:
             )
         ].copy()
 
+    names_df = filtered_contracts_df[["Empresa"]].copy()
+    names_df["Empresa"] = names_df["Empresa"].apply(normalize_text)
+    names_df = names_df[names_df["Empresa"] != ""].copy()
+    names_df = names_df.sort_values("Empresa", key=lambda series: series.map(normalize_search_text))
+
     render_html(
         f"""
         <div class="registration-note" style="margin-top:14px; margin-bottom:14px;">
-            Exibindo <strong>{len(filtered_contracts_df)}</strong> contrato(s) na tabela abaixo.
+            Exibindo <strong>{len(names_df)}</strong> nome(s) cadastrado(s) na planilha.
         </div>
         """
     )
 
-    if filtered_contracts_df.empty:
-        st.info("Nenhum contrato encontrado com os filtros informados.")
+    if names_df.empty:
+        st.info("Nenhum nome encontrado com os filtros informados.")
         return
 
-    st.dataframe(
-        filtered_contracts_df,
-        use_container_width=True,
-        hide_index=True,
-        height=620,
+    names_rows_html = "".join(
+        f'<div class="contracts-names-table-row">{html.escape(company_name)}</div>'
+        for company_name in names_df["Empresa"].tolist()
+    )
+
+    render_html(
+        f"""
+        <div class="contracts-names-table">
+            <div class="contracts-names-table-header">Empresa</div>
+            {names_rows_html}
+        </div>
+        """
     )
 
 
