@@ -362,14 +362,32 @@ def get_gsheet_client():
         "universe_domain": os.getenv("GOOGLE_UNIVERSE_DOMAIN", "googleapis.com"),
     }
 
-    if not any(normalize_text(value) for value in credentials_info.values()):
+    environment_required_fields = [
+        "type",
+        "project_id",
+        "private_key_id",
+        "private_key",
+        "client_email",
+        "client_id",
+        "auth_uri",
+        "token_uri",
+        "auth_provider_x509_cert_url",
+        "client_x509_cert_url",
+    ]
+
+    has_easypanel_credentials = all(
+        normalize_text(credentials_info.get(field, ""))
+        for field in environment_required_fields
+    )
+
+    if not has_easypanel_credentials:
         try:
             credentials_info = dict(st.secrets["gcp_service_account"])
         except Exception as error:
             raise RuntimeError(
-                "Não encontrei as credenciais do Google. Configure as variáveis "
-                "GOOGLE_* no EasyPanel ou a seção [gcp_service_account] nos "
-                "Secrets do Streamlit."
+                "Não encontrei as credenciais do Google. Configure todas as "
+                "variáveis GOOGLE_* no EasyPanel ou mantenha a seção "
+                "[gcp_service_account] nos Secrets do Streamlit Cloud."
             ) from error
 
     required_fields = [
