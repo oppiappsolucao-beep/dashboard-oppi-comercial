@@ -1,6 +1,7 @@
 import base64
 import html
 import json
+import os
 import re
 import unicodedata
 import uuid
@@ -318,14 +319,58 @@ def get_logo_data_uri() -> str:
 # =========================================================
 # CONEXÃO COM GOOGLE SHEETS
 # =========================================================
+def get_runtime_setting(name: str, default: str = "") -> str:
+    """
+    Busca primeiro uma variável de ambiente do EasyPanel.
+    Caso ela não exista, mantém compatibilidade com os Secrets do Streamlit Cloud.
+    """
+    environment_value = os.getenv(name)
+
+    if normalize_text(environment_value):
+        return str(environment_value)
+
+    try:
+        return str(st.secrets.get(name, default))
+    except Exception:
+        return default
+
+
 @st.cache_resource
 def get_gsheet_client():
-    try:
-        credentials_info = dict(st.secrets["gcp_service_account"])
-    except Exception as error:
-        raise RuntimeError(
-            "Não encontrei a seção [gcp_service_account] nos Secrets do Streamlit."
-        ) from error
+    """
+    Conecta ao Google Sheets usando variáveis de ambiente no EasyPanel.
+    Caso elas não estejam configuradas, tenta usar [gcp_service_account]
+    dos Secrets do Streamlit Cloud.
+    """
+    credentials_info = {
+        "type": os.getenv("GOOGLE_TYPE", ""),
+        "project_id": os.getenv("GOOGLE_PROJECT_ID", ""),
+        "private_key_id": os.getenv("GOOGLE_PRIVATE_KEY_ID", ""),
+        "private_key": os.getenv("GOOGLE_PRIVATE_KEY", ""),
+        "client_email": os.getenv("GOOGLE_CLIENT_EMAIL", ""),
+        "client_id": os.getenv("GOOGLE_CLIENT_ID", ""),
+        "auth_uri": os.getenv("GOOGLE_AUTH_URI", ""),
+        "token_uri": os.getenv("GOOGLE_TOKEN_URI", ""),
+        "auth_provider_x509_cert_url": os.getenv(
+            "GOOGLE_AUTH_PROVIDER_X509_CERT_URL",
+            "",
+        ),
+        "client_x509_cert_url": (
+            os.getenv("GOOGLE_CLIENT_X509_CERT_URL", "")
+            or os.getenv("_CLIENT_X509_CERT_URL", "")
+        ),
+        "universe_domain": os.getenv("GOOGLE_UNIVERSE_DOMAIN", "googleapis.com"),
+    }
+
+    if not any(normalize_text(value) for value in credentials_info.values()):
+        try:
+            credentials_info = dict(st.secrets["gcp_service_account"])
+        except Exception as error:
+            raise RuntimeError(
+                "Não encontrei as credenciais do Google. Configure as variáveis "
+                "GOOGLE_* no EasyPanel ou a seção [gcp_service_account] nos "
+                "Secrets do Streamlit."
+            ) from error
 
     required_fields = [
         "type",
@@ -348,7 +393,7 @@ def get_gsheet_client():
 
     if missing_fields:
         raise RuntimeError(
-            "Estão faltando campos nos Secrets: " + ", ".join(missing_fields)
+            "Estão faltando credenciais do Google: " + ", ".join(missing_fields)
         )
 
     credentials_info["private_key"] = (
@@ -3133,8 +3178,8 @@ def revoke_navigation_session_token() -> None:
 # LOGIN
 # =========================================================
 def check_login(username: str, password: str) -> bool:
-    expected_user = st.secrets.get("APP_USERNAME", "oppitech")
-    expected_password = st.secrets.get("APP_PASSWORD", "100316Rahi*")
+    expected_user = get_runtime_setting("APP_USERNAME", "oppitech")
+    expected_password = get_runtime_setting("APP_PASSWORD", "100316Rahi*")
 
     return username == expected_user and password == expected_password
 
