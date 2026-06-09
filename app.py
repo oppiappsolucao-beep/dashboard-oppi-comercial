@@ -499,11 +499,11 @@ def _header_matches_any(header: str, aliases: list[str]) -> bool:
     return any(alias in normalized_header for alias in aliases)
 
 
-def validate_unique_company_registration(payload: dict, worksheet) -> None:
+def validate_unique_company_registration(payload: dict, worksheet, ignore_sheet_row: Optional[int] = None) -> None:
     """
-    Bloqueia novo cadastro quando qualquer telefone, CPF ou CNPJ informado já existe
-    em qualquer coluna correspondente da planilha. A leitura é feita diretamente
-    da aba para evitar duplicidade mesmo quando o cache ainda não atualizou.
+    Bloqueia cadastro ou edição quando qualquer telefone, CPF ou CNPJ informado já existe
+    em outra linha da planilha. A leitura é feita diretamente da aba para evitar
+    duplicidade mesmo quando o cache ainda não atualizou.
     """
     values = worksheet.get_all_values()
 
@@ -563,7 +563,10 @@ def validate_unique_company_registration(payload: dict, worksheet) -> None:
     duplicate_cpfs = set()
     duplicate_cnpjs = set()
 
-    for row in rows:
+    for row_offset, row in enumerate(rows, start=2):
+        if ignore_sheet_row is not None and int(row_offset) == int(ignore_sheet_row):
+            continue
+
         for index in phone_column_indexes:
             if index >= len(row):
                 continue
@@ -609,7 +612,7 @@ def validate_unique_company_registration(payload: dict, worksheet) -> None:
         messages.append(f"CNPJ já cadastrado: {cnpjs_text}")
 
     raise DuplicateRegistrationError(
-        "Não foi possível cadastrar novamente. " + " | ".join(messages)
+        "Não foi possível salvar porque já existe outro cadastro com os mesmos dados. " + " | ".join(messages)
     )
 
 
@@ -663,6 +666,71 @@ def append_company_to_sheet(payload: dict) -> None:
         value_input_option="USER_ENTERED",
         insert_data_option="INSERT_ROWS",
     )
+
+    st.cache_data.clear()
+
+
+def update_company_in_sheet(sheet_row: int, payload: dict) -> None:
+    """Atualiza uma empresa diretamente na planilha, preservando as demais colunas da linha."""
+    client = get_gsheet_client()
+    spreadsheet = client.open_by_key(SHEET_ID)
+    worksheet = spreadsheet.worksheet(WORKSHEET_NAME)
+    headers = worksheet.row_values(1)
+
+    if not headers:
+        raise RuntimeError("A primeira linha da planilha precisa conter os cabeçalhos.")
+
+    validate_unique_company_registration(
+        payload,
+        worksheet,
+        ignore_sheet_row=int(sheet_row),
+    )
+
+    current_row = worksheet.row_values(int(sheet_row))
+    row_values = list(current_row) + [""] * max(0, len(headers) - len(current_row))
+    row_values = row_values[:len(headers)]
+
+    _set_sheet_value_by_header(row_values, headers, ["Nome da empresa", "Empresa", "Nome Empresa"], payload.get("empresa"))
+    _set_sheet_value_by_header(row_values, headers, ["Data de abertura", "Data abertura"], payload.get("data_abertura"))
+    _set_sheet_value_by_header(row_values, headers, ["Capital", "Capital social"], payload.get("capital"))
+    _set_sheet_value_by_header(row_values, headers, ["CNPJ"], payload.get("cnpj"))
+    _set_sheet_value_by_header(row_values, headers, ["Endereço", "Endereco"], payload.get("endereco"))
+    _set_sheet_value_by_header(row_values, headers, ["Email", "E-mail"], payload.get("email_empresa"))
+    _set_sheet_value_by_header(row_values, headers, ["Site empresa", "Site", "Website"], payload.get("site"))
+
+    _set_sheet_value_by_header(row_values, headers, ["Telefone (b2b)", "Telefone b2b"], payload.get("telefone_b2b"))
+    _set_sheet_value_by_header(row_values, headers, ["Telefone fixo", "Fixo"], payload.get("telefone_fixo"))
+    _set_sheet_value_by_header(row_values, headers, ["Telefone lemitt", "Telefone alternativo", "Outro telefone"], payload.get("telefone_alternativo"))
+
+    _set_sheet_value_by_header(row_values, headers, ["Sócio 1", "Socio 1", "Sócio1", "Socio1"], payload.get("socio_1"))
+    _set_sheet_value_by_header(row_values, headers, ["CPF"], payload.get("cpf_socio_1"), occurrence=1)
+    _set_sheet_value_by_header(row_values, headers, ["E-mail Sócio 1", "Email Sócio 1", "E-mail Socio 1", "Email Socio 1"], payload.get("email_socio_1"))
+    _set_sheet_value_by_header(row_values, headers, ["Telefone"], payload.get("telefone_socio_1"), occurrence=1)
+
+    _set_sheet_value_by_header(row_values, headers, ["Sócio 2", "Socio 2", "Sócio2", "Socio2"], payload.get("socio_2"))
+    _set_sheet_value_by_header(row_values, headers, ["CPF"], payload.get("cpf_socio_2"), occurrence=2)
+
+    _set_sheet_value_by_header(row_values, headers, ["Sócio 3", "Socio 3", "Sócio3", "Socio3"], payload.get("socio_3"))
+    _set_sheet_value_by_header(row_values, headers, ["CPF"], payload.get("cpf_socio_3"), occurrence=3)
+
+    _set_sheet_value_by_header(row_values, headers, ["Instagram"], payload.get("instagram"))
+    _set_sheet_value_by_header(row_values, headers, ["Linkedin", "LinkedIn"], payload.get("linkedin"))
+    _set_sheet_value_by_header(row_values, headers, ["Vendedor", "Responsável", "Responsavel"], payload.get("vendedor"))
+    _set_sheet_value_by_header(row_values, headers, ["Status", "Etapa"], payload.get("status"))
+    _set_sheet_value_by_header(row_values, headers, ["Data do chamado", "Data chamado"], payload.get("data_chamado"))
+    _set_sheet_value_by_header(row_values, headers, ["Última atualização", "Ultima atualização", "Ultima atualizacao"], payload.get("ultima_atualizacao"))
+    _set_sheet_value_by_header(row_values, headers, ["Observações", "Observacoes", "Observação", "Observacao"], payload.get("observacoes"))
+
+    changed_cells = []
+
+    for column_index, new_value in enumerate(row_values, start=1):
+        old_value = current_row[column_index - 1] if column_index - 1 < len(current_row) else ""
+
+        if normalize_text(old_value) != normalize_text(new_value):
+            changed_cells.append(gspread.Cell(int(sheet_row), column_index, normalize_text(new_value)))
+
+    if changed_cells:
+        worksheet.update_cells(changed_cells, value_input_option="USER_ENTERED")
 
     st.cache_data.clear()
 
@@ -4367,6 +4435,283 @@ def _contract_detail_field(label: str, value: str, full_width: bool = False, lon
     )
 
 
+def _contract_edit_value(row: pd.Series, columns: dict, key: str) -> str:
+    column_name = columns.get(key)
+
+    if column_name and column_name in row.index:
+        return normalize_text(row.get(column_name, ""))
+
+    return ""
+
+
+def _contract_edit_date(row: pd.Series, columns: dict, key: str):
+    value = _contract_edit_value(row, columns, key)
+    parsed_value = parse_date(value)
+
+    if pd.isna(parsed_value):
+        return date.today()
+
+    return parsed_value.date()
+
+
+def render_contract_edit_form(df: pd.DataFrame, columns: dict, row: pd.Series, sheet_row: int) -> None:
+    company_name = normalize_text(row.get("_empresa", "")) or "Empresa cadastrada"
+    seller_options = sorted(
+        {
+            normalize_text(value)
+            for value in df["_vendedor"].tolist()
+            if normalize_text(value) and normalize_text(value) != "Sem vendedor"
+        }
+    )
+    current_seller = normalize_text(row.get("_vendedor", "")) or "Sem vendedor"
+
+    if current_seller not in seller_options:
+        seller_options.append(current_seller)
+
+    seller_options = sorted(set(seller_options)) or ["Sem vendedor"]
+    current_status = status_group(row.get("_status_original", row.get("_status_grupo", "Novo Lead")))
+
+    if current_status not in STATUS_OPTIONS:
+        current_status = "Novo Lead"
+
+    render_html(
+        f"""
+        <div class="registration-header-card">
+            <div class="registration-kicker">OPPI COMERCIAL • EDITAR CADASTRO</div>
+            <div class="registration-title">Editar {html.escape(company_name)}</div>
+            <div class="registration-subtitle">
+                Corrija os dados abaixo e salve. As alterações serão enviadas diretamente para a planilha comercial.
+            </div>
+        </div>
+        """
+    )
+
+    with st.form(f"edit_company_form_{sheet_row}", clear_on_submit=False):
+        render_html(
+            """
+            <div class="registration-note">
+                Revise os campos necessários. Ao clicar em <strong>Salvar alterações</strong>, os dados serão atualizados diretamente na aba Folha1.
+            </div>
+            <div class="registration-section">
+                <div class="registration-section-title">DADOS DA EMPRESA</div>
+                <div class="registration-section-text">Informações principais da empresa e dados institucionais.</div>
+            </div>
+            """
+        )
+
+        company_col, opening_col = st.columns([1.65, 0.75], gap="medium")
+
+        with company_col:
+            empresa = st.text_input("Nome da empresa", value=_contract_edit_value(row, columns, "empresa"))
+
+        with opening_col:
+            data_abertura = st.text_input("Data de abertura", value=_contract_edit_value(row, columns, "data_abertura"))
+
+        cnpj_col, capital_col = st.columns(2, gap="medium")
+
+        with cnpj_col:
+            cnpj = st.text_input("CNPJ", value=_contract_edit_value(row, columns, "cnpj"))
+
+        with capital_col:
+            capital = st.text_input("Capital social", value=_contract_edit_value(row, columns, "capital"))
+
+        endereco = st.text_input("Endereço", value=_contract_edit_value(row, columns, "endereco"))
+
+        email_col, site_col = st.columns(2, gap="medium")
+
+        with email_col:
+            email_empresa = st.text_input("E-mail da empresa", value=_contract_edit_value(row, columns, "email"))
+
+        with site_col:
+            site = st.text_input("Site da empresa", value=_contract_edit_value(row, columns, "site"))
+
+        render_html(
+            """
+            <div class="registration-section">
+                <div class="registration-section-title">TELEFONES DA EMPRESA</div>
+                <div class="registration-section-text">Contatos principais utilizados no acompanhamento comercial.</div>
+            </div>
+            """
+        )
+
+        phone_1, phone_2, phone_3 = st.columns(3, gap="medium")
+
+        with phone_1:
+            telefone_b2b = st.text_input("Telefone B2B", value=_contract_edit_value(row, columns, "telefone_b2b"))
+
+        with phone_2:
+            telefone_fixo = st.text_input("Telefone fixo", value=_contract_edit_value(row, columns, "telefone_fixo"))
+
+        with phone_3:
+            telefone_alternativo = st.text_input("Telefone alternativo", value=_contract_edit_value(row, columns, "telefone_alternativo"))
+
+        render_html(
+            """
+            <div class="registration-section">
+                <div class="registration-section-title">SÓCIOS E RESPONSÁVEIS</div>
+                <div class="registration-section-text">Cadastre ou corrija os responsáveis vinculados à empresa.</div>
+            </div>
+            """
+        )
+
+        socio_1_col, cpf_1_col = st.columns([1.55, 0.85], gap="medium")
+
+        with socio_1_col:
+            socio_1 = st.text_input("Sócio 1", value=_contract_edit_value(row, columns, "socio_1"))
+
+        with cpf_1_col:
+            cpf_socio_1 = st.text_input("CPF do sócio 1", value=_contract_edit_value(row, columns, "cpf_socio_1"))
+
+        email_socio_col, telefone_socio_col = st.columns(2, gap="medium")
+
+        with email_socio_col:
+            email_socio_1 = st.text_input("E-mail do sócio 1", value=_contract_edit_value(row, columns, "email_socio_1"))
+
+        with telefone_socio_col:
+            telefone_socio_1 = st.text_input("Telefone do sócio 1", value=_contract_edit_value(row, columns, "telefone_socio_1"))
+
+        socio_2_col, cpf_2_col = st.columns([1.55, 0.85], gap="medium")
+
+        with socio_2_col:
+            socio_2 = st.text_input("Sócio 2", value=_contract_edit_value(row, columns, "socio_2"))
+
+        with cpf_2_col:
+            cpf_socio_2 = st.text_input("CPF do sócio 2", value=_contract_edit_value(row, columns, "cpf_socio_2"))
+
+        socio_3_col, cpf_3_col = st.columns([1.55, 0.85], gap="medium")
+
+        with socio_3_col:
+            socio_3 = st.text_input("Sócio 3", value=_contract_edit_value(row, columns, "socio_3"))
+
+        with cpf_3_col:
+            cpf_socio_3 = st.text_input("CPF do sócio 3", value=_contract_edit_value(row, columns, "cpf_socio_3"))
+
+        render_html(
+            """
+            <div class="registration-section">
+                <div class="registration-section-title">REDES SOCIAIS E ACOMPANHAMENTO</div>
+                <div class="registration-section-text">Atualize os dados comerciais e o status atual do atendimento.</div>
+            </div>
+            """
+        )
+
+        social_1, social_2 = st.columns(2, gap="medium")
+
+        with social_1:
+            instagram = st.text_input("Instagram", value=_contract_edit_value(row, columns, "instagram"))
+
+        with social_2:
+            linkedin = st.text_input("LinkedIn", value=_contract_edit_value(row, columns, "linkedin"))
+
+        vendedor_col, status_col, called_at_col = st.columns([1.15, 1.15, 0.85], gap="medium")
+
+        with vendedor_col:
+            vendedor = st.selectbox("Vendedor", seller_options, index=seller_options.index(current_seller))
+
+        with status_col:
+            status = st.selectbox("Status comercial", STATUS_OPTIONS, index=STATUS_OPTIONS.index(current_status))
+
+        with called_at_col:
+            data_chamado = st.date_input(
+                "Data do chamado",
+                value=_contract_edit_date(row, columns, "data_chamado"),
+                format="DD/MM/YYYY",
+            )
+
+        observacoes = st.text_area(
+            "Observações",
+            value=_contract_edit_value(row, columns, "observacoes"),
+            height=120,
+        )
+
+        action_col_1, action_col_2 = st.columns(2, gap="medium")
+
+        with action_col_1:
+            save_changes = st.form_submit_button("💾 Salvar alterações", use_container_width=True)
+
+        with action_col_2:
+            cancel_edit = st.form_submit_button("Cancelar edição", use_container_width=True)
+
+    if cancel_edit:
+        st.session_state.edit_contract_sheet_row = None
+        st.rerun()
+
+    if not save_changes:
+        return
+
+    if not normalize_text(empresa):
+        st.error("Preencha o nome da empresa antes de salvar.")
+        return
+
+    if normalize_text(cnpj) and not normalize_cnpj_for_duplicate(cnpj):
+        st.error("Digite um CNPJ válido com 14 números ou deixe o campo vazio.")
+        return
+
+    for phone_label, phone_value in [
+        ("Telefone B2B", telefone_b2b),
+        ("Telefone fixo", telefone_fixo),
+        ("Telefone alternativo", telefone_alternativo),
+        ("Telefone do sócio 1", telefone_socio_1),
+    ]:
+        if normalize_text(phone_value) and not normalize_phone_for_duplicate(phone_value):
+            st.error(f"Digite um número válido no campo {phone_label} ou deixe o campo vazio.")
+            return
+
+    for cpf_label, cpf_value in [
+        ("CPF do sócio 1", cpf_socio_1),
+        ("CPF do sócio 2", cpf_socio_2),
+        ("CPF do sócio 3", cpf_socio_3),
+    ]:
+        if normalize_text(cpf_value) and not normalize_cpf_for_duplicate(cpf_value):
+            st.error(f"Digite um CPF válido no campo {cpf_label} ou deixe o campo vazio.")
+            return
+
+    now_text = pd.Timestamp.now(tz="America/Sao_Paulo").strftime("%d/%m/%Y %H:%M")
+
+    try:
+        update_company_in_sheet(
+            sheet_row=int(sheet_row),
+            payload={
+                "empresa": empresa,
+                "data_abertura": data_abertura,
+                "capital": capital,
+                "cnpj": cnpj,
+                "endereco": endereco,
+                "email_empresa": email_empresa,
+                "site": site,
+                "telefone_b2b": telefone_b2b,
+                "telefone_fixo": telefone_fixo,
+                "telefone_alternativo": telefone_alternativo,
+                "socio_1": socio_1,
+                "cpf_socio_1": cpf_socio_1,
+                "email_socio_1": email_socio_1,
+                "telefone_socio_1": telefone_socio_1,
+                "socio_2": socio_2,
+                "cpf_socio_2": cpf_socio_2,
+                "socio_3": socio_3,
+                "cpf_socio_3": cpf_socio_3,
+                "instagram": instagram,
+                "linkedin": linkedin,
+                "vendedor": vendedor,
+                "status": status,
+                "data_chamado": data_chamado.strftime("%d/%m/%Y"),
+                "ultima_atualizacao": now_text,
+                "observacoes": observacoes,
+            },
+        )
+    except DuplicateRegistrationError as error:
+        st.error(str(error))
+        return
+    except Exception as error:
+        st.error("Não consegui atualizar os dados na planilha.")
+        st.code(str(error))
+        return
+
+    st.session_state.edit_contract_sheet_row = None
+    st.session_state.contract_update_success = "Dados atualizados com sucesso diretamente na planilha."
+    st.rerun()
+
+
 def render_contract_detail_page(df: pd.DataFrame, columns: dict, sheet_row: int) -> None:
     selected_rows = df[df["_sheet_row"].astype(int) == int(sheet_row)].copy()
 
@@ -4378,9 +4723,27 @@ def render_contract_detail_page(df: pd.DataFrame, columns: dict, sheet_row: int)
     row = selected_rows.iloc[0]
     company_name = normalize_text(row.get("_empresa", "")) or "Empresa cadastrada"
 
-    with st.container(key="contract_detail_back"):
-        if st.button("← Voltar para empresas cadastradas", key="back_to_contracts_names"):
-            st.session_state.selected_contract_sheet_row = None
+    if st.session_state.get("edit_contract_sheet_row") == int(sheet_row):
+        render_contract_edit_form(df, columns, row, int(sheet_row))
+        return
+
+    flash_message = st.session_state.pop("contract_update_success", None)
+
+    if flash_message:
+        st.success(flash_message)
+
+    back_col, edit_col = st.columns([3.2, 1.0], gap="medium")
+
+    with back_col:
+        with st.container(key="contract_detail_back"):
+            if st.button("← Voltar para empresas cadastradas", key="back_to_contracts_names"):
+                st.session_state.selected_contract_sheet_row = None
+                st.session_state.edit_contract_sheet_row = None
+                st.rerun()
+
+    with edit_col:
+        if st.button("✏️ Editar dados", key=f"edit_contract_{sheet_row}", use_container_width=True):
+            st.session_state.edit_contract_sheet_row = int(sheet_row)
             st.rerun()
 
     render_html(
@@ -4611,6 +4974,7 @@ def render_all_contracts_page(df: pd.DataFrame, columns: dict) -> None:
                 use_container_width=True,
             ):
                 st.session_state.selected_contract_sheet_row = sheet_row
+                st.session_state.edit_contract_sheet_row = None
                 st.rerun()
 
 
