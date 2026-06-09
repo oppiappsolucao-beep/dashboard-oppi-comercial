@@ -2844,6 +2844,70 @@ def apply_registration_css() -> None:
                 border-radius: 13px !important;
             }
 
+            /* Botão Editar dados posicionado dentro do bloco DADOS DA EMPRESA */
+            .st-key-contract_detail_edit_inline {
+                position: relative !important;
+                z-index: 30 !important;
+                height: 0 !important;
+                min-height: 0 !important;
+                margin: 0 !important;
+                padding: 0 36px 0 0 !important;
+                overflow: visible !important;
+            }
+
+            .st-key-contract_detail_edit_inline div[data-testid="stHorizontalBlock"] {
+                position: relative !important;
+                z-index: 31 !important;
+                height: 0 !important;
+                min-height: 0 !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                overflow: visible !important;
+            }
+
+            .st-key-contract_detail_edit_inline .stButton {
+                position: relative !important;
+                z-index: 32 !important;
+                height: 0 !important;
+                min-height: 0 !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                overflow: visible !important;
+            }
+
+            .st-key-contract_detail_edit_inline .stButton > button {
+                width: 100% !important;
+                min-height: 42px !important;
+                height: 42px !important;
+                margin: 0 !important;
+                padding: 0 18px !important;
+                border-radius: 13px !important;
+                transform: translateY(62px) !important;
+                box-shadow: 0 10px 22px rgba(169,28,255,0.18) !important;
+            }
+
+            .st-key-contract_detail_edit_inline .stButton > button:hover {
+                transform: translateY(62px) scale(1.035) !important;
+            }
+
+            @media (max-width: 900px) {
+                .st-key-contract_detail_edit_inline {
+                    padding-right: 24px !important;
+                }
+
+                .st-key-contract_detail_edit_inline .stButton > button {
+                    transform: translateY(62px) !important;
+                    min-height: 38px !important;
+                    height: 38px !important;
+                    padding: 0 10px !important;
+                    font-size: 0.80rem !important;
+                }
+
+                .st-key-contract_detail_edit_inline .stButton > button:hover {
+                    transform: translateY(62px) scale(1.025) !important;
+                }
+            }
+
             @media (max-width: 900px) {
                 .contract-detail-grid,
                 .contract-detail-grid.three-columns {
@@ -4732,18 +4796,10 @@ def render_contract_detail_page(df: pd.DataFrame, columns: dict, sheet_row: int)
     if flash_message:
         st.success(flash_message)
 
-    back_col, edit_col = st.columns([3.2, 1.0], gap="medium")
-
-    with back_col:
-        with st.container(key="contract_detail_back"):
-            if st.button("← Voltar para empresas cadastradas", key="back_to_contracts_names"):
-                st.session_state.selected_contract_sheet_row = None
-                st.session_state.edit_contract_sheet_row = None
-                st.rerun()
-
-    with edit_col:
-        if st.button("✏️ Editar dados", key=f"edit_contract_{sheet_row}", use_container_width=True):
-            st.session_state.edit_contract_sheet_row = int(sheet_row)
+    with st.container(key="contract_detail_back"):
+        if st.button("← Voltar para empresas cadastradas", key="back_to_contracts_names"):
+            st.session_state.selected_contract_sheet_row = None
+            st.session_state.edit_contract_sheet_row = None
             st.rerun()
 
     render_html(
@@ -4802,6 +4858,14 @@ def render_contract_detail_page(df: pd.DataFrame, columns: dict, sheet_row: int)
             _contract_detail_field("Observações", _contract_detail_value(row, columns, "observacoes"), full_width=True, long_text=True),
         ]
     )
+
+    with st.container(key="contract_detail_edit_inline"):
+        inline_space_col, inline_edit_col = st.columns([4.2, 1.15], gap="small")
+
+        with inline_edit_col:
+            if st.button("✏️ Editar dados", key=f"edit_contract_{sheet_row}_inline", use_container_width=True):
+                st.session_state.edit_contract_sheet_row = int(sheet_row)
+                st.rerun()
 
     render_html(
         f"""
