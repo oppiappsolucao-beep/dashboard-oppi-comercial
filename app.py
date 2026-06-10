@@ -5190,8 +5190,7 @@ PRICING_SCRIPT_VERSION = "pricing_v3"
 
 OPPI_PRICING_INTRO = (
     "Olá! Vou ajudar você, vendedor, a elaborar a faixa de preço para este cliente. "
-    "As perguntas são sempre as mesmas. Responda com o número da opção e, se desejar, acrescente um breve contexto.\n\n"
-    "Exemplo de resposta do vendedor: 2 — o cliente possui 12 colaboradores."
+    "As perguntas são sempre as mesmas. Responda somente com o número da opção correspondente."
 )
 
 OPPI_PRICING_STEPS = [
@@ -5205,7 +5204,7 @@ OPPI_PRICING_STEPS = [
             "3 — Estruturada: 16 a 30 colaboradores",
             "4 — Operação grande: acima de 30 colaboradores",
         ],
-        "example": "Exemplo de resposta do vendedor: 2 — o cliente possui 12 colaboradores.",
+        "example": "Responda somente com: 1, 2, 3 ou 4.",
         "weighted": True,
     },
     {
@@ -5218,7 +5217,7 @@ OPPI_PRICING_STEPS = [
             "3 — Alta: comercial + operação + pós-venda",
             "4 — Complexa: múltiplas equipes, unidades ou setores",
         ],
-        "example": "Exemplo de resposta do vendedor: 3 — comercial, operação e pós-venda.",
+        "example": "Responda somente com: 1, 2, 3 ou 4.",
         "weighted": True,
     },
     {
@@ -5231,7 +5230,7 @@ OPPI_PRICING_STEPS = [
             "3 — Três processos: pipeline + operação + acompanhamento",
             "4 — Quatro ou mais processos: fluxos completos integrados",
         ],
-        "example": "Exemplo de resposta do vendedor: 3 — pipeline, pedidos e acompanhamento.",
+        "example": "Responda somente com: 1, 2, 3 ou 4.",
         "weighted": True,
     },
     {
@@ -5244,7 +5243,7 @@ OPPI_PRICING_STEPS = [
             "3 — Alta: regras específicas",
             "4 — Muito alta: fluxos únicos ou complexos",
         ],
-        "example": "Exemplo de resposta do vendedor: 2 — precisamos ajustar etapas e campos.",
+        "example": "Responda somente com: 1, 2, 3 ou 4.",
         "weighted": True,
     },
     {
@@ -5257,7 +5256,7 @@ OPPI_PRICING_STEPS = [
             "3 — Alto: grande quantidade diária",
             "4 — Muito alto: operação intensa ou múltiplas equipes",
         ],
-        "example": "Exemplo de resposta do vendedor: 3 — existe uma grande quantidade diária de atendimentos.",
+        "example": "Responda somente com: 1, 2, 3 ou 4.",
         "weighted": True,
     },
     {
@@ -5270,7 +5269,7 @@ OPPI_PRICING_STEPS = [
             "3 — Alto: leads ou pedidos perdidos",
             "4 — Crítico: a empresa perdeu o controle da operação",
         ],
-        "example": "Exemplo de resposta do vendedor: 3 — existem leads perdidos e retrabalho.",
+        "example": "Responda somente com: 1, 2, 3 ou 4.",
         "weighted": True,
     },
     {
@@ -5281,7 +5280,7 @@ OPPI_PRICING_STEPS = [
             "Informe o faturamento aproximado mensal ou anual, caso saiba.",
             "Caso ainda não tenha essa informação, responda: não informado.",
         ],
-        "example": "Exemplo de resposta do vendedor: aproximadamente R$ 80 mil por mês. Outro exemplo: não informado.",
+        "example": "Exemplos de resposta: R$ 80 mil/mês; R$ 1 milhão/ano; não informado.",
         "weighted": False,
     },
 ]
@@ -5929,7 +5928,7 @@ def _pricing_result_message(company_name: str) -> str:
         f"Faturamento informado: {revenue}.\n"
         f"Sugestão de suporte ou acompanhamento: {support_range}.\n\n"
         f"Pelo que vi aqui, o valor ficaria {pricing_text}. Quanto você deseja gerar a proposta?\n\n"
-        "Exemplo de resposta do vendedor: gerar proposta no valor de R$ 8.500."
+        "Exemplos de resposta: R$ 8.500; R$ 10.000; R$ 12.000; sob consulta."
     )
 
 
