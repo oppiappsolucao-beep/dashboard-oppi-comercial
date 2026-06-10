@@ -5186,58 +5186,682 @@ def render_all_contracts_page(df: pd.DataFrame, columns: dict) -> None:
 # =========================================================
 # PÁGINA: PESOS E MEDIDAS
 # =========================================================
-def render_scoring_page(df: pd.DataFrame, columns: dict) -> None:
+OPPI_DIAGNOSTIC_INTRO = (
+    "A Oppi hoje atua organizando operações comerciais e operacionais através de automações, "
+    "acompanhamento visual e gestão operacional. Nosso objetivo é entender como funciona sua "
+    "operação hoje e identificar oportunidades de melhoria e organização."
+)
+
+OPPI_DIAGNOSTIC_QUESTIONS = [
+    "Me explica um pouco como funciona a empresa hoje?",
+    "Como funciona o fluxo do cliente dentro da operação?",
+    "Quantas pessoas fazem parte da equipe atualmente?",
+    "Hoje quais áreas mais demandam acompanhamento?",
+    "Como vocês acompanham os processos atualmente?",
+    "Hoje, o que mais gera dificuldade operacional?",
+    "Existe algum processo que costuma atrasar?",
+    "O que mais gera retrabalho na equipe?",
+    "Existe dificuldade no acompanhamento dos clientes?",
+    "Hoje vocês sentem falta de mais controle em qual área?",
+    "Existe algo que depende muito de pessoas específicas?",
+    "O gestor consegue acompanhar tudo com facilidade?",
+    "Existe perda de informações ou falta de organização?",
+    "Como os clientes chegam hoje até vocês?",
+    "Como vocês acompanham os atendimentos?",
+    "Existe algum pipeline ou acompanhamento visual?",
+    "Como funciona hoje o pós-venda?",
+    "Como vocês organizam contratos, propostas ou documentos?",
+    "Existe alguma automação atualmente?",
+    "Hoje o que essa desorganização mais impacta?",
+    "Vocês acreditam que existe perda financeira ou de produtividade?",
+    "Onde vocês sentem maior falta de acompanhamento?",
+    "O que mais sobrecarrega a equipe hoje?",
+    "Se vocês resolvessem um único problema operacional hoje, qual seria?",
+]
+
+OPPI_DIAGNOSTIC_CONNECTION = (
+    "Pelo que entendemos da operação de vocês, acreditamos que faria sentido estruturar um fluxo "
+    "utilizando o Oppi Flow para acompanhamento comercial e o Oppi Track para acompanhamento operacional."
+)
+
+OPPI_DIAGNOSTIC_CLOSING = (
+    "Agora vamos estruturar um diagnóstico da operação de vocês e montar uma proposta personalizada "
+    "baseada exatamente nas necessidades que identificamos hoje."
+)
+
+
+def apply_chat_css() -> None:
     render_html(
         """
-        <div class="page-title">Pesos e Medidas</div>
-        <div class="page-subtitle">Pontuação dos leads com base na qualidade dos dados e avanço no comercial.</div>
+        <style>
+            .oppi-chat-page-title {
+                color: #FFFFFF;
+                font-size: 2.55rem;
+                line-height: 1.08;
+                font-weight: 950;
+                letter-spacing: -0.04em;
+                margin-bottom: 5px;
+            }
+
+            .oppi-chat-page-subtitle {
+                color: rgba(255,255,255,0.72);
+                font-size: 0.98rem;
+                margin-bottom: 18px;
+            }
+
+            .oppi-chat-shell {
+                border-radius: 22px;
+                border: 1px solid rgba(255,255,255,0.09);
+                background:
+                    radial-gradient(circle at 76% 22%, rgba(145,38,255,0.14), transparent 25%),
+                    linear-gradient(145deg, rgba(16,14,35,0.99), rgba(7,7,19,0.99));
+                box-shadow: 0 24px 62px rgba(0,0,0,0.30);
+                overflow: hidden;
+                min-height: 640px;
+            }
+
+            .oppi-chat-contact-header,
+            .oppi-chat-window-header {
+                min-height: 78px;
+                display: flex;
+                align-items: center;
+                padding: 14px 18px;
+                border-bottom: 1px solid rgba(255,255,255,0.08);
+                background: rgba(255,255,255,0.018);
+            }
+
+            .oppi-chat-contact-header {
+                justify-content: space-between;
+            }
+
+            .oppi-chat-contact-title {
+                color: #FFFFFF;
+                font-size: 1.02rem;
+                font-weight: 900;
+            }
+
+            .oppi-chat-contact-subtitle {
+                margin-top: 4px;
+                color: rgba(255,255,255,0.52);
+                font-size: 0.76rem;
+            }
+
+            .oppi-chat-avatar {
+                width: 46px;
+                height: 46px;
+                min-width: 46px;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                color: #FFFFFF;
+                font-size: 0.92rem;
+                font-weight: 900;
+                background: linear-gradient(135deg, #FF4BAA 0%, #9C19FF 100%);
+                box-shadow: 0 10px 22px rgba(169,28,255,0.20);
+            }
+
+            .oppi-chat-window-person {
+                display: flex;
+                align-items: center;
+                gap: 12px;
+            }
+
+            .oppi-chat-window-name {
+                color: #FFFFFF;
+                font-size: 1rem;
+                font-weight: 900;
+            }
+
+            .oppi-chat-window-status {
+                margin-top: 3px;
+                color: #67E986;
+                font-size: 0.78rem;
+                font-weight: 750;
+            }
+
+            .oppi-chat-window-status::before {
+                content: "";
+                display: inline-block;
+                width: 8px;
+                height: 8px;
+                margin-right: 6px;
+                border-radius: 50%;
+                background: #55DF7D;
+                box-shadow: 0 0 12px rgba(85,223,125,0.70);
+            }
+
+            .oppi-chat-messages {
+                min-height: 446px;
+                max-height: 446px;
+                overflow-y: auto;
+                padding: 20px 22px 16px 22px;
+                background:
+                    linear-gradient(rgba(8,7,22,0.96), rgba(8,7,22,0.96)),
+                    radial-gradient(circle at center, rgba(169,28,255,0.14), transparent 54%);
+            }
+
+            .oppi-chat-day {
+                display: flex;
+                justify-content: center;
+                margin-bottom: 16px;
+            }
+
+            .oppi-chat-day span {
+                padding: 5px 12px;
+                border-radius: 999px;
+                color: rgba(255,255,255,0.58);
+                font-size: 0.73rem;
+                background: rgba(255,255,255,0.035);
+                border: 1px solid rgba(255,255,255,0.05);
+            }
+
+            .oppi-chat-message-row {
+                display: flex;
+                margin: 9px 0;
+            }
+
+            .oppi-chat-message-row.assistant {
+                justify-content: flex-start;
+            }
+
+            .oppi-chat-message-row.user {
+                justify-content: flex-end;
+            }
+
+            .oppi-chat-bubble {
+                max-width: min(74%, 710px);
+                padding: 12px 14px 9px 14px;
+                border-radius: 17px;
+                color: #FFFFFF;
+                font-size: 0.90rem;
+                line-height: 1.45;
+                box-shadow: 0 10px 20px rgba(0,0,0,0.12);
+                word-break: break-word;
+            }
+
+            .oppi-chat-message-row.assistant .oppi-chat-bubble {
+                border-bottom-left-radius: 5px;
+                background: rgba(31,30,48,0.98);
+                border: 1px solid rgba(255,255,255,0.06);
+            }
+
+            .oppi-chat-message-row.user .oppi-chat-bubble {
+                border-bottom-right-radius: 5px;
+                background: linear-gradient(135deg, #A92BFF 0%, #6D2AEF 100%);
+                border: 1px solid rgba(255,255,255,0.10);
+            }
+
+            .oppi-chat-bubble-time {
+                display: block;
+                text-align: right;
+                margin-top: 4px;
+                color: rgba(255,255,255,0.54);
+                font-size: 0.68rem;
+            }
+
+            .oppi-chat-progress-wrap {
+                margin: 0;
+                padding: 11px 18px;
+                border-top: 1px solid rgba(255,255,255,0.06);
+                border-bottom: 1px solid rgba(255,255,255,0.06);
+                background: rgba(255,255,255,0.018);
+            }
+
+            .oppi-chat-progress-label {
+                color: rgba(255,255,255,0.68);
+                font-size: 0.75rem;
+                font-weight: 750;
+                margin-bottom: 7px;
+            }
+
+            .oppi-chat-progress-bar {
+                width: 100%;
+                height: 7px;
+                overflow: hidden;
+                border-radius: 999px;
+                background: rgba(255,255,255,0.07);
+            }
+
+            .oppi-chat-progress-fill {
+                height: 100%;
+                border-radius: 999px;
+                background: linear-gradient(90deg, #FF4BAA 0%, #A91CFF 100%);
+                box-shadow: 0 0 18px rgba(169,28,255,0.22);
+            }
+
+            .oppi-chat-empty {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                min-height: 570px;
+                padding: 24px;
+                text-align: center;
+                color: rgba(255,255,255,0.58);
+                font-size: 0.94rem;
+                line-height: 1.55;
+            }
+
+            .st-key-diagnostic_contacts_panel {
+                border-radius: 22px 0 0 22px;
+                border: 1px solid rgba(255,255,255,0.08);
+                background: linear-gradient(145deg, rgba(20,18,41,0.99), rgba(9,8,24,0.99));
+                min-height: 640px;
+                overflow: hidden;
+            }
+
+            .st-key-diagnostic_chat_panel {
+                border-radius: 0 22px 22px 0;
+                border: 1px solid rgba(255,255,255,0.08);
+                border-left: none;
+                background: linear-gradient(145deg, rgba(14,13,31,0.99), rgba(7,7,18,0.99));
+                min-height: 640px;
+                overflow: hidden;
+            }
+
+            .st-key-diagnostic_contacts_panel div[data-testid="stTextInput"] {
+                padding: 0 14px !important;
+                margin: 12px 0 8px 0 !important;
+            }
+
+            .st-key-diagnostic_contacts_panel div[data-testid="stTextInput"] div[data-baseweb="input"] > div {
+                min-height: 44px !important;
+                height: 44px !important;
+                border-radius: 999px !important;
+                border: 1px solid rgba(255,255,255,0.08) !important;
+                background: rgba(255,255,255,0.04) !important;
+                box-shadow: none !important;
+            }
+
+            .st-key-diagnostic_contacts_panel div[data-testid="stTextInput"] input {
+                min-height: 44px !important;
+                height: 44px !important;
+                line-height: 44px !important;
+                color: #FFFFFF !important;
+                -webkit-text-fill-color: #FFFFFF !important;
+            }
+
+            .st-key-diagnostic_contacts_panel .stButton > button {
+                width: calc(100% - 18px) !important;
+                min-height: 60px !important;
+                margin: 3px 9px !important;
+                padding: 8px 12px !important;
+                justify-content: flex-start !important;
+                border: 1px solid transparent !important;
+                border-radius: 14px !important;
+                text-align: left !important;
+                color: rgba(255,255,255,0.88) !important;
+                font-size: 0.82rem !important;
+                background: rgba(255,255,255,0.018) !important;
+                box-shadow: none !important;
+            }
+
+            .st-key-diagnostic_contacts_panel .stButton > button:hover {
+                transform: none !important;
+                border-color: rgba(255,75,170,0.22) !important;
+                background: linear-gradient(90deg, rgba(255,75,170,0.14), rgba(169,28,255,0.12)) !important;
+            }
+
+            .st-key-diagnostic_contacts_panel .stButton > button[kind="primary"] {
+                border-color: rgba(255,75,170,0.34) !important;
+                background: linear-gradient(90deg, rgba(255,75,170,0.20), rgba(169,28,255,0.18)) !important;
+            }
+
+            .st-key-diagnostic_chat_form {
+                padding: 11px 14px 12px 14px;
+                background: rgba(255,255,255,0.018);
+            }
+
+            .st-key-diagnostic_chat_form [data-testid="stForm"] {
+                display: block !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                max-width: none !important;
+                border: none !important;
+                border-radius: 0 !important;
+                background: transparent !important;
+                box-shadow: none !important;
+            }
+
+            .st-key-diagnostic_chat_form [data-testid="stForm"]::before,
+            .st-key-diagnostic_chat_form [data-testid="stForm"]::after {
+                display: none !important;
+            }
+
+            .st-key-diagnostic_chat_form div[data-testid="stTextInput"] div[data-baseweb="input"] > div {
+                min-height: 50px !important;
+                height: 50px !important;
+                border-radius: 999px !important;
+                border: 1px solid rgba(255,255,255,0.09) !important;
+                background: rgba(255,255,255,0.055) !important;
+                box-shadow: none !important;
+            }
+
+            .st-key-diagnostic_chat_form div[data-testid="stTextInput"] input {
+                min-height: 50px !important;
+                height: 50px !important;
+                line-height: 50px !important;
+                padding: 0 18px !important;
+                color: #FFFFFF !important;
+                -webkit-text-fill-color: #FFFFFF !important;
+            }
+
+            .st-key-diagnostic_chat_form div[data-testid="stTextInput"] input::placeholder {
+                color: rgba(255,255,255,0.48) !important;
+                -webkit-text-fill-color: rgba(255,255,255,0.48) !important;
+            }
+
+            .st-key-diagnostic_chat_form .stButton > button,
+            .st-key-diagnostic_chat_form button[kind="secondaryFormSubmit"] {
+                min-height: 50px !important;
+                height: 50px !important;
+                margin-top: 0 !important;
+                border-radius: 999px !important;
+                border: none !important;
+                color: #FFFFFF !important;
+                background: linear-gradient(135deg, #FF4BAA 0%, #A91CFF 100%) !important;
+                box-shadow: 0 10px 22px rgba(169,28,255,0.20) !important;
+            }
+
+            .st-key-diagnostic_chat_form .stButton > button:hover,
+            .st-key-diagnostic_chat_form button[kind="secondaryFormSubmit"]:hover {
+                transform: scale(1.025) !important;
+            }
+
+            .st-key-diagnostic_chat_toolbar .stButton > button {
+                min-height: 38px !important;
+                border-radius: 999px !important;
+                font-size: 0.76rem !important;
+                background: rgba(255,255,255,0.055) !important;
+                border: 1px solid rgba(255,255,255,0.08) !important;
+                box-shadow: none !important;
+            }
+
+            .st-key-diagnostic_chat_toolbar .stButton > button:hover {
+                transform: none !important;
+                background: rgba(255,75,170,0.14) !important;
+            }
+
+            @media (max-width: 980px) {
+                .st-key-diagnostic_contacts_panel,
+                .st-key-diagnostic_chat_panel {
+                    min-height: auto;
+                    border-radius: 18px;
+                    border: 1px solid rgba(255,255,255,0.08);
+                }
+
+                .oppi-chat-messages {
+                    min-height: 420px;
+                    max-height: 420px;
+                }
+            }
+        </style>
         """
     )
 
-    hot = int((df["_classificacao"] == "Lead Quente").sum())
-    warm = int((df["_classificacao"] == "Lead Morno").sum())
-    cold = int((df["_classificacao"] == "Lead Frio").sum())
-    average = int(round(df["_pontuacao"].mean())) if not df.empty else 0
 
-    card_1, card_2, card_3, card_4 = st.columns(4, gap="medium")
+def _diagnostic_initials(company_name: str) -> str:
+    words = [word for word in normalize_text(company_name).split() if word]
 
-    with card_1:
-        render_metric_card("Leads Quentes", str(hot), "Pontuação acima de 70", "🔥", "linear-gradient(135deg,#FF4BAA,#D83BFF)")
+    if not words:
+        return "OP"
 
-    with card_2:
-        render_metric_card("Leads Mornos", str(warm), "Pontuação entre 40 e 69", "🌤", "linear-gradient(135deg,#FF9C2D,#FFCC45)")
+    if len(words) == 1:
+        return words[0][:2].upper()
 
-    with card_3:
-        render_metric_card("Leads Frios", str(cold), "Pontuação abaixo de 40", "❄", "linear-gradient(135deg,#5F8BFF,#66C2FF)")
+    return (words[0][0] + words[1][0]).upper()
 
-    with card_4:
-        render_metric_card("Pontuação Média", str(average), "Média da base", "⚖", "linear-gradient(135deg,#7A39FF,#D64AFF)")
 
-    st.write("")
+def _diagnostic_now() -> str:
+    return pd.Timestamp.now(tz="America/Sao_Paulo").strftime("%H:%M")
 
-    ranking_df = df.sort_values(by="_pontuacao", ascending=False).copy()
 
-    display_df = pd.DataFrame(
+def _diagnostic_get_threads() -> dict:
+    if "oppi_diagnostic_threads" not in st.session_state:
+        st.session_state.oppi_diagnostic_threads = {}
+
+    return st.session_state.oppi_diagnostic_threads
+
+
+def _diagnostic_get_progress() -> dict:
+    if "oppi_diagnostic_progress" not in st.session_state:
+        st.session_state.oppi_diagnostic_progress = {}
+
+    return st.session_state.oppi_diagnostic_progress
+
+
+def _diagnostic_ensure_thread(company_name: str) -> list[dict]:
+    threads = _diagnostic_get_threads()
+    progress = _diagnostic_get_progress()
+
+    if company_name not in threads:
+        threads[company_name] = [
+            {
+                "role": "assistant",
+                "content": OPPI_DIAGNOSTIC_INTRO,
+                "time": _diagnostic_now(),
+            },
+            {
+                "role": "assistant",
+                "content": OPPI_DIAGNOSTIC_QUESTIONS[0],
+                "time": _diagnostic_now(),
+            },
+        ]
+        progress[company_name] = 1
+
+    return threads[company_name]
+
+
+def _diagnostic_add_answer(company_name: str, answer: str) -> None:
+    messages = _diagnostic_ensure_thread(company_name)
+    progress = _diagnostic_get_progress()
+
+    clean_answer = normalize_text(answer)
+
+    if not clean_answer:
+        return
+
+    messages.append(
         {
-            "Empresa": ranking_df["_empresa"],
-            "CNPJ": safe_series(ranking_df, columns.get("cnpj")),
-            "Capital": ranking_df["_capital_num"].apply(format_money),
-            "Telefone": ranking_df["_telefone"],
-            "Email": safe_series(ranking_df, columns.get("email")),
-            "Instagram": safe_series(ranking_df, columns.get("instagram")),
-            "Vendedor": ranking_df["_vendedor"],
-            "Status": ranking_df["_status_grupo"],
-            "Pontuação": ranking_df["_pontuacao"],
-            "Classificação": ranking_df["_classificacao"],
+            "role": "user",
+            "content": clean_answer,
+            "time": _diagnostic_now(),
         }
     )
 
-    st.dataframe(
-        display_df,
-        use_container_width=True,
-        hide_index=True,
-        height=560,
+    current_index = int(progress.get(company_name, 1))
+
+    if current_index < len(OPPI_DIAGNOSTIC_QUESTIONS):
+        messages.append(
+            {
+                "role": "assistant",
+                "content": OPPI_DIAGNOSTIC_QUESTIONS[current_index],
+                "time": _diagnostic_now(),
+            }
+        )
+        progress[company_name] = current_index + 1
+        return
+
+    if current_index == len(OPPI_DIAGNOSTIC_QUESTIONS):
+        messages.append(
+            {
+                "role": "assistant",
+                "content": OPPI_DIAGNOSTIC_CONNECTION,
+                "time": _diagnostic_now(),
+            }
+        )
+        messages.append(
+            {
+                "role": "assistant",
+                "content": OPPI_DIAGNOSTIC_CLOSING,
+                "time": _diagnostic_now(),
+            }
+        )
+        progress[company_name] = current_index + 1
+
+
+def _diagnostic_reset(company_name: str) -> None:
+    threads = _diagnostic_get_threads()
+    progress = _diagnostic_get_progress()
+    threads.pop(company_name, None)
+    progress.pop(company_name, None)
+    _diagnostic_ensure_thread(company_name)
+
+
+def _diagnostic_render_messages(messages: list[dict]) -> str:
+    rows = ['<div class="oppi-chat-messages">', '<div class="oppi-chat-day"><span>Hoje</span></div>']
+
+    for message in messages:
+        role = "user" if message.get("role") == "user" else "assistant"
+        safe_content = html.escape(normalize_text(message.get("content"))).replace("\n", "<br>")
+        safe_time = html.escape(normalize_text(message.get("time")))
+        check = " ✓✓" if role == "user" else ""
+
+        rows.append(
+            f'<div class="oppi-chat-message-row {role}">'
+            f'<div class="oppi-chat-bubble">{safe_content}'
+            f'<span class="oppi-chat-bubble-time">{safe_time}{check}</span>'
+            f'</div></div>'
+        )
+
+    rows.append("</div>")
+    return "".join(rows)
+
+
+def render_scoring_page(df: pd.DataFrame, columns: dict) -> None:
+    apply_chat_css()
+
+    render_html(
+        """
+        <div class="oppi-chat-page-title">Mensagens</div>
+        <div class="oppi-chat-page-subtitle">Converse com seus clientes e conduza o diagnóstico comercial da Oppi em tempo real.</div>
+        """
     )
+
+    companies = sorted(
+        {
+            normalize_text(company)
+            for company in df["_empresa"].tolist()
+            if normalize_text(company)
+        }
+    )
+
+    if not companies:
+        st.info("Nenhuma empresa cadastrada para iniciar um diagnóstico.")
+        return
+
+    if "oppi_diagnostic_selected_company" not in st.session_state:
+        st.session_state.oppi_diagnostic_selected_company = companies[0]
+
+    if st.session_state.oppi_diagnostic_selected_company not in companies:
+        st.session_state.oppi_diagnostic_selected_company = companies[0]
+
+    left_column, right_column = st.columns([0.92, 1.78], gap=None)
+
+    with left_column:
+        with st.container(key="diagnostic_contacts_panel"):
+            render_html(
+                """
+                <div class="oppi-chat-contact-header">
+                    <div>
+                        <div class="oppi-chat-contact-title">Conversas</div>
+                        <div class="oppi-chat-contact-subtitle">Diagnóstico comercial automatizado</div>
+                    </div>
+                    <div class="oppi-chat-avatar">OP</div>
+                </div>
+                """
+            )
+
+            search_term = st.text_input(
+                "Buscar conversas",
+                placeholder="🔍  Buscar conversas...",
+                label_visibility="collapsed",
+                key="oppi_diagnostic_search",
+            )
+
+            normalized_search = normalize_search_text(search_term)
+            visible_companies = [
+                company
+                for company in companies
+                if not normalized_search or normalized_search in normalize_search_text(company)
+            ]
+
+            for company in visible_companies[:16]:
+                messages = _diagnostic_ensure_thread(company)
+                last_message = normalize_text(messages[-1].get("content")) if messages else ""
+                snippet = last_message[:44] + ("..." if len(last_message) > 44 else "")
+                initials = _diagnostic_initials(company)
+                label = f"{initials}   {company}\n{snippet}"
+                selected = company == st.session_state.oppi_diagnostic_selected_company
+
+                if st.button(
+                    label,
+                    key=f"diagnostic_contact_{normalize_search_text(company).replace(' ', '_')}_{len(company)}",
+                    use_container_width=True,
+                    type="primary" if selected else "secondary",
+                ):
+                    st.session_state.oppi_diagnostic_selected_company = company
+                    st.rerun()
+
+            if len(visible_companies) > 16:
+                st.caption(f"Exibindo 16 de {len(visible_companies)} conversas. Use a busca para localizar uma empresa.")
+
+    with right_column:
+        with st.container(key="diagnostic_chat_panel"):
+            selected_company = st.session_state.oppi_diagnostic_selected_company
+            messages = _diagnostic_ensure_thread(selected_company)
+            progress = int(_diagnostic_get_progress().get(selected_company, 1))
+            answered = min(progress, len(OPPI_DIAGNOSTIC_QUESTIONS))
+            progress_percent = round((answered / len(OPPI_DIAGNOSTIC_QUESTIONS)) * 100)
+            initials = _diagnostic_initials(selected_company)
+
+            render_html(
+                f"""
+                <div class="oppi-chat-window-header">
+                    <div class="oppi-chat-window-person">
+                        <div class="oppi-chat-avatar">{html.escape(initials)}</div>
+                        <div>
+                            <div class="oppi-chat-window-name">{html.escape(selected_company)}</div>
+                            <div class="oppi-chat-window-status">Diagnóstico ativo</div>
+                        </div>
+                    </div>
+                </div>
+                {_diagnostic_render_messages(messages)}
+                <div class="oppi-chat-progress-wrap">
+                    <div class="oppi-chat-progress-label">Roteiro comercial: {answered} de {len(OPPI_DIAGNOSTIC_QUESTIONS)} perguntas respondidas</div>
+                    <div class="oppi-chat-progress-bar"><div class="oppi-chat-progress-fill" style="width:{progress_percent}%;"></div></div>
+                </div>
+                """
+            )
+
+            with st.container(key="diagnostic_chat_toolbar"):
+                toolbar_left, toolbar_right = st.columns([1.0, 1.0], gap="small")
+
+                with toolbar_left:
+                    if st.button("↻ Reiniciar diagnóstico", use_container_width=True, key=f"reset_diagnostic_{normalize_search_text(selected_company)}"):
+                        _diagnostic_reset(selected_company)
+                        st.rerun()
+
+                with toolbar_right:
+                    st.button("✓ Roteiro fixo da Oppi", use_container_width=True, disabled=True, key=f"fixed_script_{normalize_search_text(selected_company)}")
+
+            with st.container(key="diagnostic_chat_form"):
+                with st.form(f"diagnostic_form_{normalize_search_text(selected_company)}", clear_on_submit=True):
+                    input_column, send_column = st.columns([8.4, 1.0], gap="small")
+
+                    with input_column:
+                        answer = st.text_input(
+                            "Mensagem",
+                            placeholder="Digite a resposta do cliente...",
+                            label_visibility="collapsed",
+                        )
+
+                    with send_column:
+                        submitted = st.form_submit_button("➤", use_container_width=True)
+
+                if submitted and normalize_text(answer):
+                    _diagnostic_add_answer(selected_company, answer)
+                    st.rerun()
 
 
 # =========================================================
