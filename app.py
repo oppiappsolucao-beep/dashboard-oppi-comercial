@@ -5229,6 +5229,139 @@ def render_all_contracts_page(df: pd.DataFrame, columns: dict) -> None:
 
 # =========================================================
 # PÁGINA: PESOS E MEDIDAS
+
+# =========================================================
+# AJUSTES VISUAIS GLOBAIS DO MENU RECOLHIDO
+# =========================================================
+def apply_global_sidebar_toggle_css() -> None:
+    """Mantém a seta de reabertura do menu clara e visível em todas as páginas."""
+    render_html(
+        """
+        <style>
+            [data-testid="collapsedControl"],
+            [data-testid="stSidebarCollapsedControl"],
+            button[data-testid="collapsedControl"],
+            button[data-testid="stSidebarCollapsedControl"],
+            [data-testid="collapsedControl"] > button,
+            [data-testid="stSidebarCollapsedControl"] > button,
+            [data-testid="collapsedControl"] button,
+            [data-testid="stSidebarCollapsedControl"] button {
+                display: flex !important;
+                visibility: visible !important;
+                opacity: 1 !important;
+                align-items: center !important;
+                justify-content: center !important;
+                width: 40px !important;
+                min-width: 40px !important;
+                height: 40px !important;
+                min-height: 40px !important;
+                padding: 0 !important;
+                border-radius: 11px !important;
+                border: 1px solid rgba(75,85,99,0.28) !important;
+                background: #D1D5DB !important;
+                background-color: #D1D5DB !important;
+                color: #4B5563 !important;
+                box-shadow: 0 8px 20px rgba(0,0,0,0.20) !important;
+                z-index: 1000002 !important;
+                pointer-events: auto !important;
+            }
+
+            [data-testid="collapsedControl"] svg,
+            [data-testid="stSidebarCollapsedControl"] svg,
+            button[data-testid="collapsedControl"] svg,
+            button[data-testid="stSidebarCollapsedControl"] svg,
+            [data-testid="collapsedControl"] svg path,
+            [data-testid="stSidebarCollapsedControl"] svg path {
+                color: #4B5563 !important;
+                fill: #4B5563 !important;
+                stroke: #4B5563 !important;
+                opacity: 1 !important;
+            }
+
+            [data-testid="collapsedControl"]:hover,
+            [data-testid="stSidebarCollapsedControl"]:hover,
+            button[data-testid="collapsedControl"]:hover,
+            button[data-testid="stSidebarCollapsedControl"]:hover,
+            [data-testid="collapsedControl"] button:hover,
+            [data-testid="stSidebarCollapsedControl"] button:hover {
+                background: #E5E7EB !important;
+                background-color: #E5E7EB !important;
+                color: #374151 !important;
+                transform: scale(1.06) !important;
+            }
+        </style>
+        """
+    )
+
+
+def apply_chat_position_and_scroll_css() -> None:
+    """Desce o chat alguns pixels e exibe quatro conversas completas com rolagem interna."""
+    render_html(
+        """
+        <style>
+            .st-key-diagnostic_contacts_panel,
+            .st-key-diagnostic_chat_panel {
+                margin-top: 42px !important;
+                min-height: calc(100dvh - 42px) !important;
+                height: calc(100dvh - 42px) !important;
+                max-height: calc(100dvh - 42px) !important;
+            }
+
+            .st-key-diagnostic_contacts_list {
+                display: block !important;
+                flex: 0 0 336px !important;
+                width: 100% !important;
+                height: 336px !important;
+                min-height: 336px !important;
+                max-height: 336px !important;
+                overflow-y: auto !important;
+                overflow-x: hidden !important;
+                padding: 0 4px 0 0 !important;
+                margin: 0 !important;
+                scrollbar-width: thin !important;
+                scrollbar-color: rgba(169,28,255,0.72) rgba(255,255,255,0.54) !important;
+            }
+
+            .st-key-diagnostic_contacts_list > div[data-testid="stVerticalBlock"],
+            .st-key-diagnostic_contacts_list div[data-testid="stVerticalBlock"] {
+                display: block !important;
+                height: auto !important;
+                min-height: 0 !important;
+                max-height: none !important;
+                overflow: visible !important;
+                padding: 0 !important;
+                margin: 0 !important;
+            }
+
+            .st-key-diagnostic_contacts_list div[data-testid="stElementContainer"] {
+                margin: 0 !important;
+                padding: 0 !important;
+            }
+
+            .st-key-diagnostic_contacts_list .stButton > button {
+                width: calc(100% - 18px) !important;
+                min-height: 76px !important;
+                height: 76px !important;
+                margin: 4px 9px !important;
+            }
+
+            .st-key-diagnostic_contacts_list::-webkit-scrollbar {
+                width: 8px !important;
+            }
+
+            .st-key-diagnostic_contacts_list::-webkit-scrollbar-track {
+                background: rgba(255,255,255,0.54) !important;
+                border-radius: 999px !important;
+            }
+
+            .st-key-diagnostic_contacts_list::-webkit-scrollbar-thumb {
+                border-radius: 999px !important;
+                background: linear-gradient(180deg, #FF4BAA 0%, #A91CFF 100%) !important;
+            }
+        </style>
+        """
+    )
+
 # =========================================================
 PRICING_SCRIPT_VERSION = "pricing_v3"
 
@@ -6404,6 +6537,8 @@ def _diagnostic_render_messages(messages: list[dict]) -> str:
 
 def render_scoring_page(df: pd.DataFrame, columns: dict) -> None:
     apply_chat_css()
+    apply_global_sidebar_toggle_css()
+    apply_chat_position_and_scroll_css()
 
     companies = sorted(
         {
@@ -6586,6 +6721,7 @@ def main() -> None:
         return
 
     apply_dashboard_css()
+    apply_global_sidebar_toggle_css()
     page = render_sidebar()
 
     try:
