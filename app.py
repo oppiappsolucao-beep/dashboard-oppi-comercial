@@ -5227,6 +5227,177 @@ def render_all_contracts_page(df: pd.DataFrame, columns: dict) -> None:
                 st.rerun()
 
 
+
+# =========================================================
+# CORREÇÕES FINAIS: POSIÇÃO DO CHAT E SETA DO MENU RECOLHIDO
+# =========================================================
+def apply_final_sidebar_toggle_override_css() -> None:
+    """Força uma seta cinza clara e visível quando o menu lateral estiver recolhido."""
+    render_html(
+        """
+        <style>
+            /* Compatibilidade com versões diferentes do Streamlit. */
+            [data-testid="collapsedControl"],
+            [data-testid="stSidebarCollapsedControl"],
+            button[data-testid="collapsedControl"],
+            button[data-testid="stSidebarCollapsedControl"] {
+                display: flex !important;
+                visibility: visible !important;
+                opacity: 1 !important;
+                position: fixed !important;
+                top: 18px !important;
+                left: 14px !important;
+                z-index: 2147483646 !important;
+                pointer-events: auto !important;
+                align-items: center !important;
+                justify-content: center !important;
+                width: 42px !important;
+                min-width: 42px !important;
+                height: 42px !important;
+                min-height: 42px !important;
+                padding: 0 !important;
+                border-radius: 12px !important;
+                border: 1px solid rgba(107,114,128,0.34) !important;
+                background: #E5E7EB !important;
+                background-color: #E5E7EB !important;
+                color: #6B7280 !important;
+                box-shadow: 0 8px 20px rgba(0,0,0,0.18) !important;
+            }
+
+            [data-testid="collapsedControl"] > button,
+            [data-testid="stSidebarCollapsedControl"] > button,
+            [data-testid="collapsedControl"] button,
+            [data-testid="stSidebarCollapsedControl"] button {
+                display: flex !important;
+                visibility: visible !important;
+                opacity: 1 !important;
+                align-items: center !important;
+                justify-content: center !important;
+                width: 100% !important;
+                height: 100% !important;
+                padding: 0 !important;
+                border: none !important;
+                border-radius: 12px !important;
+                background: #E5E7EB !important;
+                background-color: #E5E7EB !important;
+                color: #6B7280 !important;
+                box-shadow: none !important;
+            }
+
+            /* Esconde a seta escura original e desenha uma seta cinza mais legível. */
+            [data-testid="collapsedControl"] svg,
+            [data-testid="stSidebarCollapsedControl"] svg,
+            button[data-testid="collapsedControl"] svg,
+            button[data-testid="stSidebarCollapsedControl"] svg {
+                display: none !important;
+            }
+
+            [data-testid="collapsedControl"] > button::after,
+            [data-testid="stSidebarCollapsedControl"] > button::after,
+            button[data-testid="collapsedControl"]::after,
+            button[data-testid="stSidebarCollapsedControl"]::after {
+                content: "›" !important;
+                display: block !important;
+                color: #6B7280 !important;
+                font-size: 32px !important;
+                font-weight: 900 !important;
+                line-height: 0.88 !important;
+                transform: translateY(-1px) !important;
+            }
+
+            [data-testid="collapsedControl"]:hover,
+            [data-testid="stSidebarCollapsedControl"]:hover,
+            button[data-testid="collapsedControl"]:hover,
+            button[data-testid="stSidebarCollapsedControl"]:hover,
+            [data-testid="collapsedControl"] button:hover,
+            [data-testid="stSidebarCollapsedControl"] button:hover {
+                background: #F3F4F6 !important;
+                background-color: #F3F4F6 !important;
+                transform: scale(1.06) !important;
+            }
+        </style>
+        """
+    )
+
+
+def apply_final_chat_layout_override_css() -> None:
+    """Abaixa o chat e garante quatro conversas completas com rolagem interna."""
+    render_html(
+        """
+        <style>
+            .diagnostic-page-top-spacer {
+                display: block !important;
+                width: 100% !important;
+                height: 46px !important;
+                min-height: 46px !important;
+                flex: 0 0 46px !important;
+            }
+
+            .st-key-diagnostic_contacts_panel,
+            .st-key-diagnostic_chat_panel {
+                margin-top: 0 !important;
+                min-height: calc(100dvh - 46px) !important;
+                height: calc(100dvh - 46px) !important;
+                max-height: calc(100dvh - 46px) !important;
+            }
+
+            /* Quatro cards inteiros visíveis; os demais aparecem ao rolar a lista. */
+            .st-key-diagnostic_contacts_list {
+                display: block !important;
+                flex: 0 0 360px !important;
+                width: 100% !important;
+                height: 360px !important;
+                min-height: 360px !important;
+                max-height: 360px !important;
+                overflow-y: auto !important;
+                overflow-x: hidden !important;
+                padding: 0 4px 0 0 !important;
+                margin: 0 !important;
+                scrollbar-width: thin !important;
+                scrollbar-color: rgba(169,28,255,0.74) rgba(255,255,255,0.58) !important;
+            }
+
+            .st-key-diagnostic_contacts_list > div[data-testid="stVerticalBlock"],
+            .st-key-diagnostic_contacts_list div[data-testid="stVerticalBlock"] {
+                display: block !important;
+                height: auto !important;
+                min-height: 0 !important;
+                max-height: none !important;
+                overflow: visible !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                gap: 0 !important;
+            }
+
+            .st-key-diagnostic_contacts_list div[data-testid="stElementContainer"] {
+                margin: 0 !important;
+                padding: 0 !important;
+            }
+
+            .st-key-diagnostic_contacts_list .stButton > button {
+                width: calc(100% - 18px) !important;
+                min-height: 78px !important;
+                height: 78px !important;
+                margin: 5px 9px !important;
+            }
+
+            .st-key-diagnostic_contacts_list::-webkit-scrollbar {
+                width: 8px !important;
+            }
+
+            .st-key-diagnostic_contacts_list::-webkit-scrollbar-track {
+                background: rgba(255,255,255,0.58) !important;
+                border-radius: 999px !important;
+            }
+
+            .st-key-diagnostic_contacts_list::-webkit-scrollbar-thumb {
+                border-radius: 999px !important;
+                background: linear-gradient(180deg, #FF4BAA 0%, #A91CFF 100%) !important;
+            }
+        </style>
+        """
+    )
+
 # =========================================================
 # PÁGINA: PESOS E MEDIDAS
 
@@ -6539,6 +6710,9 @@ def render_scoring_page(df: pd.DataFrame, columns: dict) -> None:
     apply_chat_css()
     apply_global_sidebar_toggle_css()
     apply_chat_position_and_scroll_css()
+    apply_final_sidebar_toggle_override_css()
+    apply_final_chat_layout_override_css()
+    render_html('<div class="diagnostic-page-top-spacer"></div>')
 
     companies = sorted(
         {
@@ -6722,6 +6896,7 @@ def main() -> None:
 
     apply_dashboard_css()
     apply_global_sidebar_toggle_css()
+    apply_final_sidebar_toggle_override_css()
     page = render_sidebar()
 
     try:
