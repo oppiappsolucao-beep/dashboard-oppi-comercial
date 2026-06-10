@@ -5325,13 +5325,38 @@ def apply_chat_css() -> None:
     render_html(
         """
         <style>
+            /* Remove a faixa vazia superior e inferior somente na página do chat. */
+            header[data-testid="stHeader"] {
+                display: none !important;
+                height: 0 !important;
+                min-height: 0 !important;
+            }
+
+            [data-testid="stAppViewContainer"],
+            [data-testid="stMain"],
+            .main {
+                height: 100dvh !important;
+                min-height: 100dvh !important;
+                max-height: 100dvh !important;
+                overflow: hidden !important;
+            }
+
+            [data-testid="stMain"] {
+                padding: 0 !important;
+                margin: 0 !important;
+            }
+
             /* Tela integral: mantém somente o menu lateral e utiliza todo o restante da página. */
             .block-container,
             [data-testid="stMainBlockContainer"] {
                 max-width: none !important;
                 width: 100% !important;
+                height: 100dvh !important;
+                min-height: 100dvh !important;
+                max-height: 100dvh !important;
                 padding: 0 !important;
                 margin: 0 !important;
+                overflow: hidden !important;
             }
 
             [data-testid="stMain"] > div,
@@ -5341,10 +5366,28 @@ def apply_chat_css() -> None:
                 margin-bottom: 0 !important;
             }
 
+            [data-testid="stMainBlockContainer"] > div[data-testid="stVerticalBlock"] {
+                gap: 0 !important;
+                height: 100dvh !important;
+                max-height: 100dvh !important;
+                overflow: hidden !important;
+            }
+
+            [data-testid="stMainBlockContainer"] div[data-testid="stHorizontalBlock"] {
+                gap: 0 !important;
+                margin: 0 !important;
+            }
+
+            [data-testid="stMainBlockContainer"] div[data-testid="column"] {
+                padding: 0 !important;
+                margin: 0 !important;
+            }
+
             .st-key-diagnostic_contacts_panel,
             .st-key-diagnostic_chat_panel {
-                min-height: 100vh !important;
-                height: 100vh !important;
+                min-height: 100dvh !important;
+                height: 100dvh !important;
+                max-height: 100dvh !important;
                 margin: 0 !important;
                 border-radius: 0 !important;
                 box-shadow: none !important;
@@ -5435,8 +5478,8 @@ def apply_chat_css() -> None:
             }
 
             .oppi-chat-messages {
-                min-height: calc(100vh - 266px) !important;
-                max-height: calc(100vh - 266px) !important;
+                min-height: calc(100dvh - 266px) !important;
+                max-height: calc(100dvh - 266px) !important;
                 overflow-y: auto;
                 padding: 20px 22px 16px 22px;
                 background:
@@ -5571,13 +5614,36 @@ def apply_chat_css() -> None:
 
             /* Somente quatro empresas aparecem por vez na lista lateral. */
             .st-key-diagnostic_contacts_list {
+                height: 304px !important;
                 max-height: 304px !important;
                 min-height: 304px !important;
+                overflow: hidden !important;
+                padding: 2px 0 4px 0 !important;
+            }
+
+            .st-key-diagnostic_contacts_list > div[data-testid="stVerticalBlock"],
+            .st-key-diagnostic_contacts_list div[data-testid="stVerticalBlock"] {
+                height: 298px !important;
+                max-height: 298px !important;
+                min-height: 298px !important;
                 overflow-y: auto !important;
                 overflow-x: hidden !important;
-                padding: 2px 0 4px 0 !important;
+                padding-right: 2px !important;
                 scrollbar-width: thin;
                 scrollbar-color: rgba(169,28,255,0.48) rgba(255,255,255,0.44);
+            }
+
+            .st-key-diagnostic_contacts_list div[data-testid="stVerticalBlock"]::-webkit-scrollbar {
+                width: 7px;
+            }
+
+            .st-key-diagnostic_contacts_list div[data-testid="stVerticalBlock"]::-webkit-scrollbar-track {
+                background: rgba(255,255,255,0.44);
+            }
+
+            .st-key-diagnostic_contacts_list div[data-testid="stVerticalBlock"]::-webkit-scrollbar-thumb {
+                border-radius: 999px;
+                background: linear-gradient(180deg, #FF4BAA, #A91CFF);
             }
 
             .st-key-diagnostic_contacts_list .stButton > button {
