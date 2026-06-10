@@ -5186,104 +5186,214 @@ def render_all_contracts_page(df: pd.DataFrame, columns: dict) -> None:
 # =========================================================
 # PÁGINA: PESOS E MEDIDAS
 # =========================================================
-OPPI_DIAGNOSTIC_INTRO = (
-    "A Oppi hoje atua organizando operações comerciais e operacionais através de automações, "
-    "acompanhamento visual e gestão operacional. Nosso objetivo é entender como funciona sua "
-    "operação hoje e identificar oportunidades de melhoria e organização."
+PRICING_SCRIPT_VERSION = "pricing_v3"
+
+OPPI_PRICING_INTRO = (
+    "Olá! Vou ajudar você, vendedor, a elaborar a faixa de preço para este cliente. "
+    "As perguntas são sempre as mesmas. Responda com o número da opção e, se desejar, acrescente um breve contexto.\n\n"
+    "Exemplo de resposta do vendedor: 2 — o cliente possui 12 colaboradores."
 )
 
-OPPI_DIAGNOSTIC_QUESTIONS = [
-    "Me explica um pouco como funciona a empresa hoje?",
-    "Como funciona o fluxo do cliente dentro da operação?",
-    "Quantas pessoas fazem parte da equipe atualmente?",
-    "Hoje quais áreas mais demandam acompanhamento?",
-    "Como vocês acompanham os processos atualmente?",
-    "Hoje, o que mais gera dificuldade operacional?",
-    "Existe algum processo que costuma atrasar?",
-    "O que mais gera retrabalho na equipe?",
-    "Existe dificuldade no acompanhamento dos clientes?",
-    "Hoje vocês sentem falta de mais controle em qual área?",
-    "Existe algo que depende muito de pessoas específicas?",
-    "O gestor consegue acompanhar tudo com facilidade?",
-    "Existe perda de informações ou falta de organização?",
-    "Como os clientes chegam hoje até vocês?",
-    "Como vocês acompanham os atendimentos?",
-    "Existe algum pipeline ou acompanhamento visual?",
-    "Como funciona hoje o pós-venda?",
-    "Como vocês organizam contratos, propostas ou documentos?",
-    "Existe alguma automação atualmente?",
-    "Hoje o que essa desorganização mais impacta?",
-    "Vocês acreditam que existe perda financeira ou de produtividade?",
-    "Onde vocês sentem maior falta de acompanhamento?",
-    "O que mais sobrecarrega a equipe hoje?",
-    "Se vocês resolvessem um único problema operacional hoje, qual seria?",
+OPPI_PRICING_STEPS = [
+    {
+        "id": "colaboradores",
+        "title": "🔵 1. Quantidade de colaboradores do cliente",
+        "question": "Quantos colaboradores o cliente possui atualmente?",
+        "options": [
+            "1 — Pequena: 1 a 5 colaboradores",
+            "2 — Média: 6 a 15 colaboradores",
+            "3 — Estruturada: 16 a 30 colaboradores",
+            "4 — Operação grande: acima de 30 colaboradores",
+        ],
+        "example": "Exemplo de resposta do vendedor: 2 — o cliente possui 12 colaboradores.",
+        "weighted": True,
+    },
+    {
+        "id": "setores",
+        "title": "🟣 2. Setores que o cliente deseja organizar",
+        "question": "Quantos setores ou áreas o cliente deseja organizar?",
+        "options": [
+            "1 — Simples: apenas um fluxo ou setor",
+            "2 — Média: comercial + atendimento",
+            "3 — Alta: comercial + operação + pós-venda",
+            "4 — Complexa: múltiplas equipes, unidades ou setores",
+        ],
+        "example": "Exemplo de resposta do vendedor: 3 — comercial, operação e pós-venda.",
+        "weighted": True,
+    },
+    {
+        "id": "processos",
+        "title": "🔴 3. Quantidade de processos",
+        "question": "Quantos processos precisam ser organizados ou integrados?",
+        "options": [
+            "1 — Um processo: apenas pipeline",
+            "2 — Dois processos: pipeline + propostas",
+            "3 — Três processos: pipeline + operação + acompanhamento",
+            "4 — Quatro ou mais processos: fluxos completos integrados",
+        ],
+        "example": "Exemplo de resposta do vendedor: 3 — pipeline, pedidos e acompanhamento.",
+        "weighted": True,
+    },
+    {
+        "id": "personalizacao",
+        "title": "🟢 4. Nível de personalização",
+        "question": "Qual é o nível de personalização necessário para atender o cliente?",
+        "options": [
+            "1 — Baixa: apenas identidade visual",
+            "2 — Média: ajustes de etapas e campos",
+            "3 — Alta: regras específicas",
+            "4 — Muito alta: fluxos únicos ou complexos",
+        ],
+        "example": "Exemplo de resposta do vendedor: 2 — precisamos ajustar etapas e campos.",
+        "weighted": True,
+    },
+    {
+        "id": "volume",
+        "title": "🟠 5. Volume operacional",
+        "question": "Qual é o volume operacional do cliente?",
+        "options": [
+            "1 — Baixo: poucos atendimentos ou pedidos",
+            "2 — Médio: fluxo diário constante",
+            "3 — Alto: grande quantidade diária",
+            "4 — Muito alto: operação intensa ou múltiplas equipes",
+        ],
+        "example": "Exemplo de resposta do vendedor: 3 — existe uma grande quantidade diária de atendimentos.",
+        "weighted": True,
+    },
+    {
+        "id": "impacto",
+        "title": "⚫ 6. Impacto do caos operacional",
+        "question": "Qual é o impacto atual da desorganização na empresa? Esta é a pergunta mais importante.",
+        "options": [
+            "1 — Baixo: pequena desorganização",
+            "2 — Médio: perda ocasional de clientes",
+            "3 — Alto: leads ou pedidos perdidos",
+            "4 — Crítico: a empresa perdeu o controle da operação",
+        ],
+        "example": "Exemplo de resposta do vendedor: 3 — existem leads perdidos e retrabalho.",
+        "weighted": True,
+    },
+    {
+        "id": "faturamento",
+        "title": "💰 7. Faturamento do cliente",
+        "question": "Você sabe o faturamento aproximado do cliente?",
+        "options": [
+            "Informe o faturamento aproximado mensal ou anual, caso saiba.",
+            "Caso ainda não tenha essa informação, responda: não informado.",
+        ],
+        "example": "Exemplo de resposta do vendedor: aproximadamente R$ 80 mil por mês. Outro exemplo: não informado.",
+        "weighted": False,
+    },
 ]
 
-OPPI_DIAGNOSTIC_CONNECTION = (
-    "Pelo que entendemos da operação de vocês, acreditamos que faria sentido estruturar um fluxo "
-    "utilizando o Oppi Flow para acompanhamento comercial e o Oppi Track para acompanhamento operacional."
-)
+OPPI_PRODUCT_PRICE_TABLE = {
+    "Oppi Vision": {
+        "pequena": ("R$ 3.000", "R$ 5.000", "3 meses"),
+        "media": ("R$ 5.000", "R$ 8.000", "3 a 6 meses"),
+        "estruturada": ("R$ 8.000", "R$ 15.000", "6 meses"),
+    },
+    "Oppi Flow": {
+        "pequena": ("R$ 4.000", "R$ 7.000", "3 meses"),
+        "media": ("R$ 7.000", "R$ 12.000", "3 a 6 meses"),
+        "estruturada": ("R$ 12.000", "R$ 20.000", "6 meses"),
+    },
+    "Oppi Track": {
+        "pequena": ("R$ 5.000", "R$ 8.000", "3 meses"),
+        "media": ("R$ 8.000", "R$ 15.000", "3 a 6 meses"),
+        "estruturada": ("R$ 15.000", "Sob consulta", "6 meses"),
+    },
+}
 
-OPPI_DIAGNOSTIC_CLOSING = (
-    "Agora vamos estruturar um diagnóstico da operação de vocês e montar uma proposta personalizada "
-    "baseada exatamente nas necessidades que identificamos hoje."
-)
+OPPI_SUPPORT_TABLE = {
+    "Pequeno": "R$ 600 a R$ 900",
+    "Médio": "R$ 1.000 a R$ 2.000",
+    "Premium": "R$ 2.000 a R$ 4.000",
+    "Enterprise": "Sob consulta",
+}
+
+
+def _pricing_question_text(step: dict) -> str:
+    options_text = "\n".join(step["options"])
+    return (
+        f"{step['title']}\n\n"
+        f"{step['question']}\n\n"
+        f"{options_text}\n\n"
+        f"{step['example']}"
+    )
 
 
 def apply_chat_css() -> None:
     render_html(
         """
         <style>
-            .oppi-chat-page-title {
-                color: #FFFFFF;
-                font-size: 2.55rem;
-                line-height: 1.08;
-                font-weight: 950;
-                letter-spacing: -0.04em;
-                margin-bottom: 5px;
+            /* Tela integral: mantém somente o menu lateral e utiliza todo o restante da página. */
+            .block-container,
+            [data-testid="stMainBlockContainer"] {
+                max-width: none !important;
+                width: 100% !important;
+                padding: 0 !important;
+                margin: 0 !important;
             }
 
-            .oppi-chat-page-subtitle {
-                color: rgba(255,255,255,0.72);
-                font-size: 0.98rem;
-                margin-bottom: 18px;
+            [data-testid="stMain"] > div,
+            [data-testid="stMainBlockContainer"] > div,
+            [data-testid="stMainBlockContainer"] div[data-testid="stVerticalBlock"] {
+                margin-top: 0 !important;
+                margin-bottom: 0 !important;
             }
 
-            .oppi-chat-shell {
-                border-radius: 22px;
-                border: 1px solid rgba(255,255,255,0.09);
+            .st-key-diagnostic_contacts_panel,
+            .st-key-diagnostic_chat_panel {
+                min-height: 100vh !important;
+                height: 100vh !important;
+                margin: 0 !important;
+                border-radius: 0 !important;
+                box-shadow: none !important;
+                overflow: hidden !important;
+            }
+
+            /* Cantos claros e painel de conversas em cinza, seguindo o menu lateral. */
+            .st-key-diagnostic_contacts_panel {
+                border: none !important;
+                border-right: 1px solid rgba(80,69,105,0.18) !important;
                 background:
-                    radial-gradient(circle at 76% 22%, rgba(145,38,255,0.14), transparent 25%),
-                    linear-gradient(145deg, rgba(16,14,35,0.99), rgba(7,7,19,0.99));
-                box-shadow: 0 24px 62px rgba(0,0,0,0.30);
-                overflow: hidden;
-                min-height: 640px;
+                    radial-gradient(circle at top left, rgba(255,255,255,0.98) 0%, rgba(255,255,255,0.00) 34%),
+                    radial-gradient(circle at bottom right, rgba(208,212,223,0.72) 0%, rgba(208,212,223,0.00) 38%),
+                    linear-gradient(180deg, #F7F8FC 0%, #ECEEF4 40%, #DCE0E9 74%, #CED3DE 100%) !important;
+            }
+
+            .st-key-diagnostic_chat_panel {
+                display: flex !important;
+                flex-direction: column !important;
+                border: none !important;
+                background: #E4E7EE !important;
             }
 
             .oppi-chat-contact-header,
             .oppi-chat-window-header {
-                min-height: 78px;
+                min-height: 76px;
                 display: flex;
                 align-items: center;
                 padding: 14px 18px;
-                border-bottom: 1px solid rgba(255,255,255,0.08);
-                background: rgba(255,255,255,0.018);
+                border-bottom: 1px solid rgba(80,69,105,0.14);
+                background: rgba(255,255,255,0.92);
             }
 
             .oppi-chat-contact-header {
                 justify-content: space-between;
             }
 
-            .oppi-chat-contact-title {
-                color: #FFFFFF;
-                font-size: 1.02rem;
+            .oppi-chat-contact-title,
+            .oppi-chat-window-name {
+                color: #211A30;
+                font-size: 1rem;
                 font-weight: 900;
             }
 
             .oppi-chat-contact-subtitle {
                 margin-top: 4px;
-                color: rgba(255,255,255,0.52);
-                font-size: 0.76rem;
+                color: rgba(33,26,48,0.64);
+                font-size: 0.75rem;
             }
 
             .oppi-chat-avatar {
@@ -5298,7 +5408,7 @@ def apply_chat_css() -> None:
                 font-size: 0.92rem;
                 font-weight: 900;
                 background: linear-gradient(135deg, #FF4BAA 0%, #9C19FF 100%);
-                box-shadow: 0 10px 22px rgba(169,28,255,0.20);
+                box-shadow: 0 10px 22px rgba(169,28,255,0.18);
             }
 
             .oppi-chat-window-person {
@@ -5307,17 +5417,11 @@ def apply_chat_css() -> None:
                 gap: 12px;
             }
 
-            .oppi-chat-window-name {
-                color: #FFFFFF;
-                font-size: 1rem;
-                font-weight: 900;
-            }
-
             .oppi-chat-window-status {
                 margin-top: 3px;
-                color: #67E986;
+                color: #289B50;
                 font-size: 0.78rem;
-                font-weight: 750;
+                font-weight: 800;
             }
 
             .oppi-chat-window-status::before {
@@ -5328,17 +5432,19 @@ def apply_chat_css() -> None:
                 margin-right: 6px;
                 border-radius: 50%;
                 background: #55DF7D;
-                box-shadow: 0 0 12px rgba(85,223,125,0.70);
+                box-shadow: 0 0 12px rgba(85,223,125,0.56);
             }
 
             .oppi-chat-messages {
-                min-height: 446px;
-                max-height: 446px;
+                min-height: calc(100vh - 266px) !important;
+                max-height: calc(100vh - 266px) !important;
                 overflow-y: auto;
                 padding: 20px 22px 16px 22px;
                 background:
-                    linear-gradient(rgba(8,7,22,0.96), rgba(8,7,22,0.96)),
-                    radial-gradient(circle at center, rgba(169,28,255,0.14), transparent 54%);
+                    radial-gradient(circle at 76% 18%, rgba(169,28,255,0.08), transparent 31%),
+                    linear-gradient(180deg, #E8EAF0 0%, #DCE0E9 100%);
+                scrollbar-width: thin;
+                scrollbar-color: rgba(169,28,255,0.48) rgba(255,255,255,0.42);
             }
 
             .oppi-chat-day {
@@ -5350,10 +5456,10 @@ def apply_chat_css() -> None:
             .oppi-chat-day span {
                 padding: 5px 12px;
                 border-radius: 999px;
-                color: rgba(255,255,255,0.58);
+                color: rgba(33,26,48,0.66);
                 font-size: 0.73rem;
-                background: rgba(255,255,255,0.035);
-                border: 1px solid rgba(255,255,255,0.05);
+                background: rgba(255,255,255,0.78);
+                border: 1px solid rgba(80,69,105,0.10);
             }
 
             .oppi-chat-message-row {
@@ -5370,48 +5476,55 @@ def apply_chat_css() -> None:
             }
 
             .oppi-chat-bubble {
-                max-width: min(74%, 710px);
+                max-width: min(78%, 760px);
                 padding: 12px 14px 9px 14px;
                 border-radius: 17px;
-                color: #FFFFFF;
-                font-size: 0.90rem;
-                line-height: 1.45;
-                box-shadow: 0 10px 20px rgba(0,0,0,0.12);
+                font-size: 0.89rem;
+                line-height: 1.48;
+                box-shadow: 0 8px 18px rgba(45,36,70,0.08);
                 word-break: break-word;
             }
 
+            /* Perguntas do robô: caixas brancas com letras escuras. */
             .oppi-chat-message-row.assistant .oppi-chat-bubble {
+                color: #211A30;
                 border-bottom-left-radius: 5px;
-                background: rgba(31,30,48,0.98);
-                border: 1px solid rgba(255,255,255,0.06);
+                background: #FFFFFF;
+                border: 1px solid rgba(80,69,105,0.12);
             }
 
+            /* Respostas do vendedor: mantém o gradiente rosa e roxo. */
             .oppi-chat-message-row.user .oppi-chat-bubble {
+                color: #FFFFFF;
                 border-bottom-right-radius: 5px;
-                background: linear-gradient(135deg, #A92BFF 0%, #6D2AEF 100%);
-                border: 1px solid rgba(255,255,255,0.10);
+                background: linear-gradient(135deg, #FF4BAA 0%, #A91CFF 100%);
+                border: 1px solid rgba(255,255,255,0.24);
             }
 
             .oppi-chat-bubble-time {
                 display: block;
                 text-align: right;
                 margin-top: 4px;
-                color: rgba(255,255,255,0.54);
-                font-size: 0.68rem;
+                color: rgba(33,26,48,0.48);
+                font-size: 0.67rem;
+            }
+
+            .oppi-chat-message-row.user .oppi-chat-bubble-time {
+                color: rgba(255,255,255,0.72);
             }
 
             .oppi-chat-progress-wrap {
                 margin: 0;
-                padding: 11px 18px;
-                border-top: 1px solid rgba(255,255,255,0.06);
-                border-bottom: 1px solid rgba(255,255,255,0.06);
-                background: rgba(255,255,255,0.018);
+                padding: 10px 18px;
+                border-top: 1px solid rgba(80,69,105,0.12);
+                border-bottom: 1px solid rgba(80,69,105,0.12);
+                background: rgba(255,255,255,0.86);
             }
 
             .oppi-chat-progress-label {
-                color: rgba(255,255,255,0.68);
+                color: rgba(33,26,48,0.72);
                 font-size: 0.75rem;
-                font-weight: 750;
+                font-weight: 800;
                 margin-bottom: 7px;
             }
 
@@ -5420,43 +5533,14 @@ def apply_chat_css() -> None:
                 height: 7px;
                 overflow: hidden;
                 border-radius: 999px;
-                background: rgba(255,255,255,0.07);
+                background: rgba(80,69,105,0.12);
             }
 
             .oppi-chat-progress-fill {
                 height: 100%;
                 border-radius: 999px;
                 background: linear-gradient(90deg, #FF4BAA 0%, #A91CFF 100%);
-                box-shadow: 0 0 18px rgba(169,28,255,0.22);
-            }
-
-            .oppi-chat-empty {
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                min-height: 570px;
-                padding: 24px;
-                text-align: center;
-                color: rgba(255,255,255,0.58);
-                font-size: 0.94rem;
-                line-height: 1.55;
-            }
-
-            .st-key-diagnostic_contacts_panel {
-                border-radius: 22px 0 0 22px;
-                border: 1px solid rgba(255,255,255,0.08);
-                background: linear-gradient(145deg, rgba(20,18,41,0.99), rgba(9,8,24,0.99));
-                min-height: 640px;
-                overflow: hidden;
-            }
-
-            .st-key-diagnostic_chat_panel {
-                border-radius: 0 22px 22px 0;
-                border: 1px solid rgba(255,255,255,0.08);
-                border-left: none;
-                background: linear-gradient(145deg, rgba(14,13,31,0.99), rgba(7,7,18,0.99));
-                min-height: 640px;
-                overflow: hidden;
+                box-shadow: 0 0 18px rgba(169,28,255,0.18);
             }
 
             .st-key-diagnostic_contacts_panel div[data-testid="stTextInput"] {
@@ -5468,8 +5552,8 @@ def apply_chat_css() -> None:
                 min-height: 44px !important;
                 height: 44px !important;
                 border-radius: 999px !important;
-                border: 1px solid rgba(255,255,255,0.08) !important;
-                background: rgba(255,255,255,0.04) !important;
+                border: 1px solid rgba(80,69,105,0.14) !important;
+                background: rgba(255,255,255,0.88) !important;
                 box-shadow: none !important;
             }
 
@@ -5477,39 +5561,78 @@ def apply_chat_css() -> None:
                 min-height: 44px !important;
                 height: 44px !important;
                 line-height: 44px !important;
-                color: #FFFFFF !important;
-                -webkit-text-fill-color: #FFFFFF !important;
+                color: #211A30 !important;
+                -webkit-text-fill-color: #211A30 !important;
             }
 
-            .st-key-diagnostic_contacts_panel .stButton > button {
+            .st-key-diagnostic_contacts_panel div[data-testid="stTextInput"] input::placeholder {
+                color: rgba(33,26,48,0.48) !important;
+                -webkit-text-fill-color: rgba(33,26,48,0.48) !important;
+            }
+
+            /* Somente quatro empresas aparecem por vez na lista lateral. */
+            .st-key-diagnostic_contacts_list {
+                max-height: 304px !important;
+                min-height: 304px !important;
+                overflow-y: auto !important;
+                overflow-x: hidden !important;
+                padding: 2px 0 4px 0 !important;
+                scrollbar-width: thin;
+                scrollbar-color: rgba(169,28,255,0.48) rgba(255,255,255,0.44);
+            }
+
+            .st-key-diagnostic_contacts_list .stButton > button {
                 width: calc(100% - 18px) !important;
-                min-height: 60px !important;
+                min-height: 70px !important;
+                height: 70px !important;
                 margin: 3px 9px !important;
                 padding: 8px 12px !important;
                 justify-content: flex-start !important;
-                border: 1px solid transparent !important;
+                border: 1px solid rgba(80,69,105,0.08) !important;
                 border-radius: 14px !important;
                 text-align: left !important;
-                color: rgba(255,255,255,0.88) !important;
-                font-size: 0.82rem !important;
-                background: rgba(255,255,255,0.018) !important;
+                color: #211A30 !important;
+                font-size: 0.80rem !important;
+                background: rgba(255,255,255,0.36) !important;
                 box-shadow: none !important;
             }
 
-            .st-key-diagnostic_contacts_panel .stButton > button:hover {
+            .st-key-diagnostic_contacts_list .stButton > button:hover {
                 transform: none !important;
-                border-color: rgba(255,75,170,0.22) !important;
-                background: linear-gradient(90deg, rgba(255,75,170,0.14), rgba(169,28,255,0.12)) !important;
+                border-color: rgba(255,75,170,0.42) !important;
+                background: rgba(255,255,255,0.78) !important;
             }
 
-            .st-key-diagnostic_contacts_panel .stButton > button[kind="primary"] {
-                border-color: rgba(255,75,170,0.34) !important;
-                background: linear-gradient(90deg, rgba(255,75,170,0.20), rgba(169,28,255,0.18)) !important;
+            .st-key-diagnostic_contacts_list .stButton > button[kind="primary"] {
+                color: #FFFFFF !important;
+                border-color: rgba(255,75,170,0.60) !important;
+                background: linear-gradient(90deg, #FF4BAA 0%, #A91CFF 100%) !important;
+            }
+
+            .st-key-diagnostic_chat_toolbar {
+                padding: 8px 14px 0 14px;
+                background: rgba(255,255,255,0.86);
+            }
+
+            .st-key-diagnostic_chat_toolbar .stButton > button {
+                min-height: 38px !important;
+                border-radius: 999px !important;
+                color: #211A30 !important;
+                font-size: 0.76rem !important;
+                background: rgba(255,255,255,0.96) !important;
+                border: 1px solid rgba(80,69,105,0.12) !important;
+                box-shadow: none !important;
+            }
+
+            .st-key-diagnostic_chat_toolbar .stButton > button:hover {
+                transform: none !important;
+                border-color: rgba(255,75,170,0.44) !important;
+                background: #FFFFFF !important;
             }
 
             .st-key-diagnostic_chat_form {
-                padding: 11px 14px 12px 14px;
-                background: rgba(255,255,255,0.018);
+                padding: 9px 14px 12px 14px;
+                background: rgba(255,255,255,0.86);
             }
 
             .st-key-diagnostic_chat_form [data-testid="stForm"] {
@@ -5532,8 +5655,8 @@ def apply_chat_css() -> None:
                 min-height: 50px !important;
                 height: 50px !important;
                 border-radius: 999px !important;
-                border: 1px solid rgba(255,255,255,0.09) !important;
-                background: rgba(255,255,255,0.055) !important;
+                border: 1px solid rgba(80,69,105,0.14) !important;
+                background: #FFFFFF !important;
                 box-shadow: none !important;
             }
 
@@ -5542,13 +5665,13 @@ def apply_chat_css() -> None:
                 height: 50px !important;
                 line-height: 50px !important;
                 padding: 0 18px !important;
-                color: #FFFFFF !important;
-                -webkit-text-fill-color: #FFFFFF !important;
+                color: #211A30 !important;
+                -webkit-text-fill-color: #211A30 !important;
             }
 
             .st-key-diagnostic_chat_form div[data-testid="stTextInput"] input::placeholder {
-                color: rgba(255,255,255,0.48) !important;
-                -webkit-text-fill-color: rgba(255,255,255,0.48) !important;
+                color: rgba(33,26,48,0.46) !important;
+                -webkit-text-fill-color: rgba(33,26,48,0.46) !important;
             }
 
             .st-key-diagnostic_chat_form .stButton > button,
@@ -5560,7 +5683,7 @@ def apply_chat_css() -> None:
                 border: none !important;
                 color: #FFFFFF !important;
                 background: linear-gradient(135deg, #FF4BAA 0%, #A91CFF 100%) !important;
-                box-shadow: 0 10px 22px rgba(169,28,255,0.20) !important;
+                box-shadow: 0 10px 22px rgba(169,28,255,0.18) !important;
             }
 
             .st-key-diagnostic_chat_form .stButton > button:hover,
@@ -5568,111 +5691,16 @@ def apply_chat_css() -> None:
                 transform: scale(1.025) !important;
             }
 
-            .st-key-diagnostic_chat_toolbar .stButton > button {
-                min-height: 38px !important;
-                border-radius: 999px !important;
-                font-size: 0.76rem !important;
-                background: rgba(255,255,255,0.055) !important;
-                border: 1px solid rgba(255,255,255,0.08) !important;
-                box-shadow: none !important;
-            }
-
-            .st-key-diagnostic_chat_toolbar .stButton > button:hover {
-                transform: none !important;
-                background: rgba(255,75,170,0.14) !important;
-            }
-
-            /* Chat ocupando integralmente a área disponível, sem margens externas */
-            .block-container,
-            [data-testid="stMainBlockContainer"] {
-                max-width: none !important;
-                width: 100% !important;
-                padding: 0 !important;
-                margin: 0 !important;
-            }
-
-            [data-testid="stMain"] > div,
-            [data-testid="stMainBlockContainer"] > div,
-            [data-testid="stMainBlockContainer"] div[data-testid="stVerticalBlock"] {
-                margin-top: 0 !important;
-                margin-bottom: 0 !important;
-            }
-
-            .st-key-diagnostic_contacts_panel,
-            .st-key-diagnostic_chat_panel {
-                min-height: 100vh !important;
-                height: 100vh !important;
-                margin: 0 !important;
-                border-radius: 0 !important;
-                border-top: none !important;
-                border-bottom: none !important;
-                box-shadow: none !important;
-            }
-
-            .st-key-diagnostic_contacts_panel {
-                border-left: none !important;
-                overflow: hidden !important;
-            }
-
-            .st-key-diagnostic_chat_panel {
-                display: flex !important;
-                flex-direction: column !important;
-                border-right: none !important;
-            }
-
-            .oppi-chat-messages {
-                min-height: calc(100vh - 268px) !important;
-                max-height: calc(100vh - 268px) !important;
-            }
-
-            /* Exibe somente quatro conversas por vez; o restante fica disponível na rolagem. */
-            .st-key-diagnostic_contacts_list {
-                max-height: 312px !important;
-                min-height: 312px !important;
-                overflow-y: auto !important;
-                overflow-x: hidden !important;
-                padding: 2px 0 4px 0 !important;
-                scrollbar-width: thin;
-                scrollbar-color: rgba(169,28,255,0.56) rgba(255,255,255,0.035);
-            }
-
-            .st-key-diagnostic_contacts_list::-webkit-scrollbar {
-                width: 7px;
-            }
-
-            .st-key-diagnostic_contacts_list::-webkit-scrollbar-track {
-                background: rgba(255,255,255,0.035);
-            }
-
-            .st-key-diagnostic_contacts_list::-webkit-scrollbar-thumb {
-                border-radius: 999px;
-                background: linear-gradient(180deg, #FF4BAA, #A91CFF);
-            }
-
-            .st-key-diagnostic_contacts_list .stButton > button {
-                min-height: 70px !important;
-                height: 70px !important;
-                margin: 3px 9px !important;
-            }
-
             @media (max-width: 980px) {
                 .st-key-diagnostic_contacts_panel,
                 .st-key-diagnostic_chat_panel {
                     min-height: auto !important;
                     height: auto !important;
-                    border-radius: 0 !important;
-                    border-left: none !important;
-                    border-right: none !important;
                 }
 
                 .oppi-chat-messages {
                     min-height: 420px !important;
                     max-height: 420px !important;
-                }
-
-                .st-key-diagnostic_contacts_list {
-                    min-height: 304px !important;
-                    max-height: 304px !important;
                 }
             }
         </style>
@@ -5697,37 +5725,234 @@ def _diagnostic_now() -> str:
 
 
 def _diagnostic_get_threads() -> dict:
-    if "oppi_diagnostic_threads" not in st.session_state:
-        st.session_state.oppi_diagnostic_threads = {}
+    key = f"oppi_pricing_threads_{PRICING_SCRIPT_VERSION}"
 
-    return st.session_state.oppi_diagnostic_threads
+    if key not in st.session_state:
+        st.session_state[key] = {}
+
+    return st.session_state[key]
 
 
 def _diagnostic_get_progress() -> dict:
-    if "oppi_diagnostic_progress" not in st.session_state:
-        st.session_state.oppi_diagnostic_progress = {}
+    key = f"oppi_pricing_progress_{PRICING_SCRIPT_VERSION}"
 
-    return st.session_state.oppi_diagnostic_progress
+    if key not in st.session_state:
+        st.session_state[key] = {}
+
+    return st.session_state[key]
+
+
+def _diagnostic_get_answers() -> dict:
+    key = f"oppi_pricing_answers_{PRICING_SCRIPT_VERSION}"
+
+    if key not in st.session_state:
+        st.session_state[key] = {}
+
+    return st.session_state[key]
+
+
+def _pricing_extract_explicit_option(answer: str) -> Optional[int]:
+    normalized = normalize_search_text(answer)
+    patterns = [
+        r"^(?:opcao|opção|peso)?\s*([1-4])(?:\s|$|[-—:])",
+        r"\b(?:opcao|opção|peso)\s*([1-4])\b",
+    ]
+
+    for pattern in patterns:
+        match = re.search(pattern, normalized)
+
+        if match:
+            return int(match.group(1))
+
+    return None
+
+
+def _pricing_extract_numbers(answer: str) -> list[int]:
+    return [int(value) for value in re.findall(r"\d+", normalize_text(answer))]
+
+
+def _pricing_weight_from_answer(step_id: str, answer: str) -> Optional[int]:
+    explicit_option = _pricing_extract_explicit_option(answer)
+
+    if explicit_option:
+        return explicit_option
+
+    normalized = normalize_search_text(answer)
+    numbers = _pricing_extract_numbers(answer)
+
+    if step_id == "colaboradores" and numbers:
+        collaborators = numbers[0]
+
+        if collaborators <= 5:
+            return 1
+        if collaborators <= 15:
+            return 2
+        if collaborators <= 30:
+            return 3
+        return 4
+
+    if step_id == "setores":
+        if any(term in normalized for term in ["multi", "unidade", "varios setores", "vários setores", "complexa"]):
+            return 4
+        if "operacao" in normalized or "pos-venda" in normalized or "pós-venda" in normalized:
+            return 3
+        if "atendimento" in normalized and "comercial" in normalized:
+            return 2
+        if any(term in normalized for term in ["um setor", "1 setor", "apenas um", "simples"]):
+            return 1
+
+    if step_id == "processos":
+        if numbers:
+            quantity = numbers[0]
+            return 4 if quantity >= 4 else max(1, quantity)
+        if any(term in normalized for term in ["fluxos completos", "integrados", "quatro", "4+"]):
+            return 4
+        if "acompanhamento" in normalized or "operacao" in normalized:
+            return 3
+        if "proposta" in normalized:
+            return 2
+        if "pipeline" in normalized:
+            return 1
+
+    if step_id == "personalizacao":
+        if "muito alta" in normalized or "complex" in normalized or "unico" in normalized or "único" in normalized:
+            return 4
+        if "alta" in normalized or "regra" in normalized:
+            return 3
+        if "media" in normalized or "média" in normalized or "etapa" in normalized or "campo" in normalized:
+            return 2
+        if "baixa" in normalized or "visual" in normalized:
+            return 1
+
+    if step_id == "volume":
+        if "muito alto" in normalized or "intensa" in normalized or "multi" in normalized:
+            return 4
+        if "alto" in normalized or "grande" in normalized:
+            return 3
+        if "medio" in normalized or "médio" in normalized or "constante" in normalized:
+            return 2
+        if "baixo" in normalized or "pouco" in normalized:
+            return 1
+
+    if step_id == "impacto":
+        if "critico" in normalized or "crítico" in normalized or "perdeu controle" in normalized:
+            return 4
+        if "alto" in normalized or "lead" in normalized or "pedido" in normalized:
+            return 3
+        if "medio" in normalized or "médio" in normalized or "ocasional" in normalized:
+            return 2
+        if "baixo" in normalized or "pequena" in normalized:
+            return 1
+
+    return None
+
+
+def _pricing_profile(total_score: int) -> str:
+    if total_score <= 10:
+        return "Pequeno"
+    if total_score <= 15:
+        return "Médio"
+    if total_score <= 20:
+        return "Premium"
+    return "Enterprise"
+
+
+def _pricing_product(answer_map: dict) -> str:
+    combined_text = normalize_search_text(
+        " | ".join(normalize_text(item.get("answer")) for item in answer_map.values())
+    )
+    sectors_weight = int(answer_map.get("setores", {}).get("weight") or 0)
+    processes_weight = int(answer_map.get("processos", {}).get("weight") or 0)
+    volume_weight = int(answer_map.get("volume", {}).get("weight") or 0)
+
+    operational_terms = [
+        "operacao",
+        "operacional",
+        "pos-venda",
+        "pós-venda",
+        "pedido",
+        "acompanhamento",
+        "multi equipe",
+        "multiequipe",
+        "unidade",
+    ]
+
+    if any(term in combined_text for term in operational_terms) or sectors_weight >= 3 or processes_weight >= 3 or volume_weight >= 4:
+        return "Oppi Track"
+
+    commercial_terms = ["comercial", "pipeline", "proposta", "atendimento", "lead"]
+
+    if any(term in combined_text for term in commercial_terms) or sectors_weight >= 2 or processes_weight >= 2:
+        return "Oppi Flow"
+
+    return "Oppi Vision"
+
+
+def _pricing_company_size(answer_map: dict) -> str:
+    collaborators_weight = int(answer_map.get("colaboradores", {}).get("weight") or 1)
+
+    if collaborators_weight <= 1:
+        return "pequena"
+    if collaborators_weight == 2:
+        return "media"
+    return "estruturada"
+
+
+def _pricing_result_message(company_name: str) -> str:
+    answer_map = _diagnostic_get_answers().get(company_name, {})
+    weights = [
+        int(answer_map.get(step["id"], {}).get("weight") or 0)
+        for step in OPPI_PRICING_STEPS
+        if step["weighted"]
+    ]
+    total_score = sum(weights)
+    profile = _pricing_profile(total_score)
+    product = _pricing_product(answer_map)
+    company_size = _pricing_company_size(answer_map)
+    price_from, price_to, ideal_term = OPPI_PRODUCT_PRICE_TABLE[product][company_size]
+    support_range = OPPI_SUPPORT_TABLE[profile]
+    revenue = normalize_text(answer_map.get("faturamento", {}).get("answer")) or "Não informado"
+
+    if price_to == "Sob consulta":
+        pricing_text = f"a partir de {price_from}"
+    else:
+        pricing_text = f"entre {price_from} e {price_to}"
+
+    weights_text = " + ".join(str(weight) for weight in weights)
+
+    return (
+        "✅ Diagnóstico concluído.\n\n"
+        f"Soma dos pesos: {weights_text} = {total_score}.\n"
+        f"Perfil do projeto: {profile}.\n"
+        f"Solução sugerida: {product}.\n"
+        f"Prazo ideal: {ideal_term}.\n"
+        f"Faturamento informado: {revenue}.\n"
+        f"Sugestão de suporte ou acompanhamento: {support_range}.\n\n"
+        f"Pelo que vi aqui, o valor ficaria {pricing_text}. Quanto você deseja gerar a proposta?\n\n"
+        "Exemplo de resposta do vendedor: gerar proposta no valor de R$ 8.500."
+    )
 
 
 def _diagnostic_ensure_thread(company_name: str) -> list[dict]:
     threads = _diagnostic_get_threads()
     progress = _diagnostic_get_progress()
+    answers = _diagnostic_get_answers()
 
     if company_name not in threads:
         threads[company_name] = [
             {
                 "role": "assistant",
-                "content": OPPI_DIAGNOSTIC_INTRO,
+                "content": OPPI_PRICING_INTRO,
                 "time": _diagnostic_now(),
             },
             {
                 "role": "assistant",
-                "content": OPPI_DIAGNOSTIC_QUESTIONS[0],
+                "content": _pricing_question_text(OPPI_PRICING_STEPS[0]),
                 "time": _diagnostic_now(),
             },
         ]
-        progress[company_name] = 1
+        progress[company_name] = 0
+        answers[company_name] = {}
 
     return threads[company_name]
 
@@ -5735,11 +5960,53 @@ def _diagnostic_ensure_thread(company_name: str) -> list[dict]:
 def _diagnostic_add_answer(company_name: str, answer: str) -> None:
     messages = _diagnostic_ensure_thread(company_name)
     progress = _diagnostic_get_progress()
-
+    answers = _diagnostic_get_answers()
     clean_answer = normalize_text(answer)
 
     if not clean_answer:
         return
+
+    current_index = int(progress.get(company_name, 0))
+
+    if current_index >= len(OPPI_PRICING_STEPS):
+        messages.append(
+            {
+                "role": "user",
+                "content": clean_answer,
+                "time": _diagnostic_now(),
+            }
+        )
+        messages.append(
+            {
+                "role": "assistant",
+                "content": (
+                    "Perfeito. O valor desejado para a proposta foi registrado nesta conversa. "
+                    "Você já pode utilizar essa referência para montar a proposta personalizada.\n\n"
+                    "Exemplo de próxima ação do vendedor: abrir o cadastro e preparar a proposta comercial."
+                ),
+                "time": _diagnostic_now(),
+            }
+        )
+        return
+
+    step = OPPI_PRICING_STEPS[current_index]
+    weight = None
+
+    if step["weighted"]:
+        weight = _pricing_weight_from_answer(step["id"], clean_answer)
+
+        if weight is None:
+            messages.append(
+                {
+                    "role": "assistant",
+                    "content": (
+                        "Não consegui identificar o peso dessa resposta. Responda com uma opção de 1 a 4 para continuarmos.\n\n"
+                        f"{step['example']}"
+                    ),
+                    "time": _diagnostic_now(),
+                }
+            )
+            return
 
     messages.append(
         {
@@ -5749,42 +6016,40 @@ def _diagnostic_add_answer(company_name: str, answer: str) -> None:
         }
     )
 
-    current_index = int(progress.get(company_name, 1))
+    answers.setdefault(company_name, {})[step["id"]] = {
+        "answer": clean_answer,
+        "weight": weight,
+    }
 
-    if current_index < len(OPPI_DIAGNOSTIC_QUESTIONS):
+    next_index = current_index + 1
+    progress[company_name] = next_index
+
+    if next_index < len(OPPI_PRICING_STEPS):
         messages.append(
             {
                 "role": "assistant",
-                "content": OPPI_DIAGNOSTIC_QUESTIONS[current_index],
+                "content": _pricing_question_text(OPPI_PRICING_STEPS[next_index]),
                 "time": _diagnostic_now(),
             }
         )
-        progress[company_name] = current_index + 1
         return
 
-    if current_index == len(OPPI_DIAGNOSTIC_QUESTIONS):
-        messages.append(
-            {
-                "role": "assistant",
-                "content": OPPI_DIAGNOSTIC_CONNECTION,
-                "time": _diagnostic_now(),
-            }
-        )
-        messages.append(
-            {
-                "role": "assistant",
-                "content": OPPI_DIAGNOSTIC_CLOSING,
-                "time": _diagnostic_now(),
-            }
-        )
-        progress[company_name] = current_index + 1
+    messages.append(
+        {
+            "role": "assistant",
+            "content": _pricing_result_message(company_name),
+            "time": _diagnostic_now(),
+        }
+    )
 
 
 def _diagnostic_reset(company_name: str) -> None:
     threads = _diagnostic_get_threads()
     progress = _diagnostic_get_progress()
+    answers = _diagnostic_get_answers()
     threads.pop(company_name, None)
     progress.pop(company_name, None)
+    answers.pop(company_name, None)
     _diagnostic_ensure_thread(company_name)
 
 
@@ -5820,14 +6085,16 @@ def render_scoring_page(df: pd.DataFrame, columns: dict) -> None:
     )
 
     if not companies:
-        st.info("Nenhuma empresa cadastrada para iniciar um diagnóstico.")
+        st.info("Nenhuma empresa cadastrada para iniciar uma precificação.")
         return
 
-    if "oppi_diagnostic_selected_company" not in st.session_state:
-        st.session_state.oppi_diagnostic_selected_company = companies[0]
+    selected_company_key = f"oppi_pricing_selected_company_{PRICING_SCRIPT_VERSION}"
 
-    if st.session_state.oppi_diagnostic_selected_company not in companies:
-        st.session_state.oppi_diagnostic_selected_company = companies[0]
+    if selected_company_key not in st.session_state:
+        st.session_state[selected_company_key] = companies[0]
+
+    if st.session_state[selected_company_key] not in companies:
+        st.session_state[selected_company_key] = companies[0]
 
     left_column, right_column = st.columns([0.92, 1.78], gap=None)
 
@@ -5837,8 +6104,8 @@ def render_scoring_page(df: pd.DataFrame, columns: dict) -> None:
                 """
                 <div class="oppi-chat-contact-header">
                     <div>
-                        <div class="oppi-chat-contact-title">Conversas</div>
-                        <div class="oppi-chat-contact-subtitle">Diagnóstico comercial automatizado</div>
+                        <div class="oppi-chat-contact-title">Empresas</div>
+                        <div class="oppi-chat-contact-subtitle">Assistente de precificação para o vendedor</div>
                     </div>
                     <div class="oppi-chat-avatar">OP</div>
                 </div>
@@ -5846,10 +6113,10 @@ def render_scoring_page(df: pd.DataFrame, columns: dict) -> None:
             )
 
             search_term = st.text_input(
-                "Buscar conversas",
-                placeholder="🔍  Buscar conversas...",
+                "Buscar empresas",
+                placeholder="🔍  Buscar empresa...",
                 label_visibility="collapsed",
-                key="oppi_diagnostic_search",
+                key=f"oppi_pricing_search_{PRICING_SCRIPT_VERSION}",
             )
 
             normalized_search = normalize_search_text(search_term)
@@ -5863,27 +6130,27 @@ def render_scoring_page(df: pd.DataFrame, columns: dict) -> None:
                 for company in visible_companies:
                     messages = _diagnostic_ensure_thread(company)
                     last_message = normalize_text(messages[-1].get("content")) if messages else ""
-                    snippet = last_message[:44] + ("..." if len(last_message) > 44 else "")
+                    snippet = last_message[:48] + ("..." if len(last_message) > 48 else "")
                     initials = _diagnostic_initials(company)
                     label = f"{initials}   {company}\n{snippet}"
-                    selected = company == st.session_state.oppi_diagnostic_selected_company
+                    selected = company == st.session_state[selected_company_key]
 
                     if st.button(
                         label,
-                        key=f"diagnostic_contact_{normalize_search_text(company).replace(' ', '_')}_{len(company)}",
+                        key=f"pricing_contact_{normalize_search_text(company).replace(' ', '_')}_{len(company)}",
                         use_container_width=True,
                         type="primary" if selected else "secondary",
                     ):
-                        st.session_state.oppi_diagnostic_selected_company = company
+                        st.session_state[selected_company_key] = company
                         st.rerun()
 
     with right_column:
         with st.container(key="diagnostic_chat_panel"):
-            selected_company = st.session_state.oppi_diagnostic_selected_company
+            selected_company = st.session_state[selected_company_key]
             messages = _diagnostic_ensure_thread(selected_company)
-            progress = int(_diagnostic_get_progress().get(selected_company, 1))
-            answered = min(progress, len(OPPI_DIAGNOSTIC_QUESTIONS))
-            progress_percent = round((answered / len(OPPI_DIAGNOSTIC_QUESTIONS)) * 100)
+            progress = int(_diagnostic_get_progress().get(selected_company, 0))
+            answered = min(progress, len(OPPI_PRICING_STEPS))
+            progress_percent = round((answered / len(OPPI_PRICING_STEPS)) * 100)
             initials = _diagnostic_initials(selected_company)
 
             render_html(
@@ -5893,13 +6160,13 @@ def render_scoring_page(df: pd.DataFrame, columns: dict) -> None:
                         <div class="oppi-chat-avatar">{html.escape(initials)}</div>
                         <div>
                             <div class="oppi-chat-window-name">{html.escape(selected_company)}</div>
-                            <div class="oppi-chat-window-status">Diagnóstico ativo</div>
+                            <div class="oppi-chat-window-status">Precificação ativa para o vendedor</div>
                         </div>
                     </div>
                 </div>
                 {_diagnostic_render_messages(messages)}
                 <div class="oppi-chat-progress-wrap">
-                    <div class="oppi-chat-progress-label">Roteiro comercial: {answered} de {len(OPPI_DIAGNOSTIC_QUESTIONS)} perguntas respondidas</div>
+                    <div class="oppi-chat-progress-label">Tabela de elaboração de preço: {answered} de {len(OPPI_PRICING_STEPS)} respostas registradas</div>
                     <div class="oppi-chat-progress-bar"><div class="oppi-chat-progress-fill" style="width:{progress_percent}%;"></div></div>
                 </div>
                 """
@@ -5909,21 +6176,33 @@ def render_scoring_page(df: pd.DataFrame, columns: dict) -> None:
                 toolbar_left, toolbar_right = st.columns([1.0, 1.0], gap="small")
 
                 with toolbar_left:
-                    if st.button("↻ Reiniciar diagnóstico", use_container_width=True, key=f"reset_diagnostic_{normalize_search_text(selected_company)}"):
+                    if st.button(
+                        "↻ Reiniciar precificação",
+                        use_container_width=True,
+                        key=f"reset_pricing_{normalize_search_text(selected_company)}",
+                    ):
                         _diagnostic_reset(selected_company)
                         st.rerun()
 
                 with toolbar_right:
-                    st.button("✓ Roteiro fixo da Oppi", use_container_width=True, disabled=True, key=f"fixed_script_{normalize_search_text(selected_company)}")
+                    st.button(
+                        "✓ Perguntas fixas da Oppi",
+                        use_container_width=True,
+                        disabled=True,
+                        key=f"fixed_pricing_script_{normalize_search_text(selected_company)}",
+                    )
 
             with st.container(key="diagnostic_chat_form"):
-                with st.form(f"diagnostic_form_{normalize_search_text(selected_company)}", clear_on_submit=True):
+                with st.form(
+                    f"pricing_form_{normalize_search_text(selected_company)}",
+                    clear_on_submit=True,
+                ):
                     input_column, send_column = st.columns([8.4, 1.0], gap="small")
 
                     with input_column:
                         answer = st.text_input(
                             "Mensagem",
-                            placeholder="Digite a resposta do cliente...",
+                            placeholder="Digite a resposta do vendedor...",
                             label_visibility="collapsed",
                         )
 
