@@ -1669,6 +1669,50 @@ def apply_dashboard_css() -> None:
                 background: linear-gradient(90deg, #FF4BAA 0%, #A91CFF 100%) !important;
             }
 
+            /* Seta para reabrir o menu lateral: cinza e visível em todas as páginas. */
+            [data-testid="collapsedControl"],
+            [data-testid="stSidebarCollapsedControl"] {
+                display: flex !important;
+                visibility: visible !important;
+                opacity: 1 !important;
+                align-items: center !important;
+                justify-content: center !important;
+                width: 40px !important;
+                height: 40px !important;
+                border-radius: 11px !important;
+                border: 1px solid rgba(55,65,81,0.20) !important;
+                background: #D1D5DB !important;
+                box-shadow: 0 8px 20px rgba(0,0,0,0.20) !important;
+                z-index: 1000001 !important;
+            }
+
+            [data-testid="collapsedControl"] button,
+            [data-testid="stSidebarCollapsedControl"] button {
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                width: 100% !important;
+                height: 100% !important;
+                padding: 0 !important;
+                border: none !important;
+                background: transparent !important;
+                box-shadow: none !important;
+            }
+
+            [data-testid="collapsedControl"] svg,
+            [data-testid="stSidebarCollapsedControl"] svg {
+                color: #4B5563 !important;
+                fill: #4B5563 !important;
+                stroke: #4B5563 !important;
+                opacity: 1 !important;
+            }
+
+            [data-testid="collapsedControl"]:hover,
+            [data-testid="stSidebarCollapsedControl"]:hover {
+                background: #E5E7EB !important;
+                transform: scale(1.06) !important;
+            }
+
             .latest-calls-shell {
                 margin-top: 18px;
                 margin-bottom: 14px;
@@ -5398,10 +5442,10 @@ def apply_chat_css() -> None:
 
             .st-key-diagnostic_contacts_panel,
             .st-key-diagnostic_chat_panel {
-                min-height: 100dvh !important;
-                height: 100dvh !important;
-                max-height: 100dvh !important;
-                margin: 0 !important;
+                min-height: calc(100dvh - 24px) !important;
+                height: calc(100dvh - 24px) !important;
+                max-height: calc(100dvh - 24px) !important;
+                margin: 24px 0 0 0 !important;
                 border-radius: 0 !important;
                 box-shadow: none !important;
                 overflow: hidden !important;
@@ -5876,9 +5920,9 @@ def apply_chat_css() -> None:
             .st-key-diagnostic_contacts_panel {
                 display: flex !important;
                 flex-direction: column !important;
-                min-height: 100dvh !important;
-                height: 100dvh !important;
-                max-height: 100dvh !important;
+                min-height: calc(100dvh - 24px) !important;
+                height: calc(100dvh - 24px) !important;
+                max-height: calc(100dvh - 24px) !important;
                 overflow: hidden !important;
             }
 
@@ -5934,7 +5978,7 @@ def apply_chat_css() -> None:
                 visibility: visible !important;
                 opacity: 1 !important;
                 position: fixed !important;
-                top: 12px !important;
+                top: 18px !important;
                 left: 12px !important;
                 z-index: 1000001 !important;
                 pointer-events: auto !important;
