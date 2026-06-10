@@ -5582,52 +5582,17 @@ def apply_chat_css() -> None:
                 background: rgba(255,75,170,0.14) !important;
             }
 
-            /* Chat ocupando toda a área útil da página */
-            .block-container {
-                max-width: none !important;
-                padding-top: 0.55rem !important;
-                padding-right: 1.05rem !important;
-                padding-bottom: 0.55rem !important;
-                padding-left: 1.05rem !important;
-            }
-
-            .st-key-diagnostic_contacts_panel,
-            .st-key-diagnostic_chat_panel {
-                min-height: calc(100vh - 92px) !important;
-                height: calc(100vh - 92px) !important;
-                margin-top: 0 !important;
-            }
-
-            .oppi-chat-messages {
-                min-height: calc(100vh - 332px) !important;
-                max-height: calc(100vh - 332px) !important;
-            }
-
-            .st-key-diagnostic_contacts_panel {
-                overflow-y: auto !important;
-            }
-
-            .st-key-diagnostic_chat_panel {
-                display: flex !important;
-                flex-direction: column !important;
-            }
-
             @media (max-width: 980px) {
-                .block-container {
-                    padding: 0.45rem !important;
-                }
-
                 .st-key-diagnostic_contacts_panel,
                 .st-key-diagnostic_chat_panel {
-                    min-height: auto !important;
-                    height: auto !important;
+                    min-height: auto;
                     border-radius: 18px;
                     border: 1px solid rgba(255,255,255,0.08);
                 }
 
                 .oppi-chat-messages {
-                    min-height: 420px !important;
-                    max-height: 420px !important;
+                    min-height: 420px;
+                    max-height: 420px;
                 }
             }
         </style>
@@ -5765,6 +5730,13 @@ def _diagnostic_render_messages(messages: list[dict]) -> str:
 
 def render_scoring_page(df: pd.DataFrame, columns: dict) -> None:
     apply_chat_css()
+
+    render_html(
+        """
+        <div class="oppi-chat-page-title">Mensagens</div>
+        <div class="oppi-chat-page-subtitle">Converse com seus clientes e conduza o diagnóstico comercial da Oppi em tempo real.</div>
+        """
+    )
 
     companies = sorted(
         {
