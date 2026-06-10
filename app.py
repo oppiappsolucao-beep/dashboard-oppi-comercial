@@ -5327,9 +5327,22 @@ def apply_chat_css() -> None:
         <style>
             /* Remove a faixa vazia superior e inferior somente na página do chat. */
             header[data-testid="stHeader"] {
-                display: none !important;
+                display: block !important;
+                position: fixed !important;
+                top: 0 !important;
+                left: 0 !important;
+                right: 0 !important;
                 height: 0 !important;
                 min-height: 0 !important;
+                background: transparent !important;
+                z-index: 999998 !important;
+                pointer-events: none !important;
+            }
+
+            header[data-testid="stHeader"] [data-testid="collapsedControl"],
+            header[data-testid="stHeader"] [data-testid="stSidebarCollapsedControl"],
+            header[data-testid="stHeader"] button {
+                pointer-events: auto !important;
             }
 
             [data-testid="stAppViewContainer"],
@@ -5856,6 +5869,110 @@ def apply_chat_css() -> None:
             [data-testid="collapsedControl"]:hover,
             [data-testid="stSidebarCollapsedControl"]:hover {
                 background: rgba(209,213,219,0.98) !important;
+                transform: scale(1.06) !important;
+            }
+
+            /* AJUSTE FINAL: mantém o menu lateral funcional e mostra exatamente quatro conversas completas. */
+            .st-key-diagnostic_contacts_panel {
+                display: flex !important;
+                flex-direction: column !important;
+                min-height: 100dvh !important;
+                height: 100dvh !important;
+                max-height: 100dvh !important;
+                overflow: hidden !important;
+            }
+
+            .st-key-diagnostic_contacts_panel > div[data-testid="stVerticalBlock"] {
+                display: flex !important;
+                flex-direction: column !important;
+                min-height: 0 !important;
+                height: 100% !important;
+                overflow: hidden !important;
+            }
+
+            .st-key-diagnostic_contacts_list {
+                display: block !important;
+                flex: 0 0 336px !important;
+                height: 336px !important;
+                min-height: 336px !important;
+                max-height: 336px !important;
+                overflow-y: auto !important;
+                overflow-x: hidden !important;
+                padding: 0 4px 0 0 !important;
+                margin: 0 !important;
+                scrollbar-width: thin !important;
+                scrollbar-color: rgba(169,28,255,0.72) rgba(255,255,255,0.54) !important;
+            }
+
+            .st-key-diagnostic_contacts_list > div[data-testid="stVerticalBlock"],
+            .st-key-diagnostic_contacts_list div[data-testid="stVerticalBlock"] {
+                display: block !important;
+                height: auto !important;
+                min-height: 0 !important;
+                max-height: none !important;
+                overflow: visible !important;
+                padding: 0 !important;
+                margin: 0 !important;
+            }
+
+            .st-key-diagnostic_contacts_list div[data-testid="stElementContainer"] {
+                margin: 0 !important;
+                padding: 0 !important;
+            }
+
+            .st-key-diagnostic_contacts_list .stButton > button {
+                width: calc(100% - 18px) !important;
+                min-height: 76px !important;
+                height: 76px !important;
+                margin: 4px 9px !important;
+            }
+
+            /* A seta para reabrir o menu continua visível mesmo com o sidebar recolhido. */
+            [data-testid="collapsedControl"],
+            [data-testid="stSidebarCollapsedControl"] {
+                display: flex !important;
+                visibility: visible !important;
+                opacity: 1 !important;
+                position: fixed !important;
+                top: 12px !important;
+                left: 12px !important;
+                z-index: 1000001 !important;
+                pointer-events: auto !important;
+                align-items: center !important;
+                justify-content: center !important;
+                width: 40px !important;
+                height: 40px !important;
+                border-radius: 11px !important;
+                border: 1px solid rgba(55,65,81,0.20) !important;
+                background: #D1D5DB !important;
+                box-shadow: 0 8px 20px rgba(0,0,0,0.20) !important;
+            }
+
+            [data-testid="collapsedControl"] button,
+            [data-testid="stSidebarCollapsedControl"] button {
+                display: flex !important;
+                width: 100% !important;
+                height: 100% !important;
+                align-items: center !important;
+                justify-content: center !important;
+                padding: 0 !important;
+                pointer-events: auto !important;
+                background: transparent !important;
+                border: none !important;
+                box-shadow: none !important;
+            }
+
+            [data-testid="collapsedControl"] svg,
+            [data-testid="stSidebarCollapsedControl"] svg {
+                color: #4B5563 !important;
+                fill: #4B5563 !important;
+                stroke: #4B5563 !important;
+                opacity: 1 !important;
+            }
+
+            [data-testid="collapsedControl"]:hover,
+            [data-testid="stSidebarCollapsedControl"]:hover {
+                background: #E5E7EB !important;
                 transform: scale(1.06) !important;
             }
 
