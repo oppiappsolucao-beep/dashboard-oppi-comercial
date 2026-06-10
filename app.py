@@ -44,6 +44,7 @@ STATUS_OPTIONS = [
     "Não responde",
     "Proposta",
     "Reunião",
+    "Ligação",
     "Fechado",
 ]
 
@@ -55,6 +56,7 @@ STATUS_COLORS = {
     "Fechado": ("#EAF8EF", "#58B97A"),
     "Proposta": ("#EAF2FF", "#5C9DFF"),
     "Reunião": ("#F3EAFE", "#A65BDB"),
+    "Ligação": ("#EAF8FF", "#3C92A8"),
 }
 
 
@@ -233,6 +235,9 @@ def status_group(value: str) -> str:
     if any(word in status for word in ["sem interesse", "nao tem interesse"]):
         return "Sem interesse"
 
+    if any(word in status for word in ["ligacao", "ligando", "telefonema", "telefone"]):
+        return "Ligação"
+
     if any(word in status for word in ["chamando", "conversando", "contato", "negoci", "andamento"]):
         return "Conversando"
 
@@ -282,6 +287,8 @@ def calculate_score(row: pd.Series, columns: dict) -> int:
         score += 14
     elif grouped_status == "Conversando":
         score += 12
+    elif grouped_status == "Ligação":
+        score += 10
     elif grouped_status == "Novo Lead":
         score += 6
 
@@ -335,60 +342,117 @@ def get_runtime_setting(name: str, default: str = "") -> str:
         return default
 
 
-@st.cache_resource
-def get_gsheet_client():
-    """
-    Conecta ao Google Sheets usando variáveis de ambiente no EasyPanel.
-    Caso elas não estejam configuradas, tenta usar [gcp_service_account]
-    dos Secrets do Streamlit Cloud.
-    """
-    credentials_info = {
-        "type": os.getenv("GOOGLE_TYPE", ""),
-        "project_id": os.getenv("GOOGLE_PROJECT_ID", ""),
-        "private_key_id": os.getenv("GOOGLE_PRIVATE_KEY_ID", ""),
-        "private_key": os.getenv("GOOGLE_PRIVATE_KEY", ""),
-        "client_email": os.getenv("GOOGLE_CLIENT_EMAIL", ""),
-        "client_id": os.getenv("GOOGLE_CLIENT_ID", ""),
-        "auth_uri": os.getenv("GOOGLE_AUTH_URI", ""),
-        "token_uri": os.getenv("GOOGLE_TOKEN_URI", ""),
-        "auth_provider_x509_cert_url": os.getenv(
-            "GOOGLE_AUTH_PROVIDER_X509_CERT_URL",
-            "",
-        ),
-        "client_x509_cert_url": (
-            os.getenv("GOOGLE_CLIENT_X509_CERT_URL", "")
-            or os.getenv("_CLIENT_X509_CERT_URL", "")
-        ),
-        "universe_domain": os.getenv("GOOGLE_UNIVERSE_DOMAIN", "googleapis.com"),
-    }
+def _decode_service_account_b64(raw_value: str) -> dict:
+    """Converte o JSON da conta de serviço armazenado em Base64 no EasyPanel."""
+    value = normalize_text(raw_value)
 
-    environment_required_fields = [
-        "type",
-        "project_id",
-        "private_key_id",
-        "private_key",
-        "client_email",
-        "client_id",
-        "auth_uri",
-        "token_uri",
-        "auth_provider_x509_cert_url",
-        "client_x509_cert_url",
-    ]
+    if value.startswith("GCP_SERVICE_ACCOUNT_B64="):
+        value = value.split("=", 1)[1].strip()
 
-    has_easypanel_credentials = all(
-        normalize_text(credentials_info.get(field, ""))
-        for field in environment_required_fields
+    if value.startswith("GOOGLE_SERVICE_ACCOUNT_B64="):
+        value = value.split("=", 1)[1].strip()
+
+    if not value:
+        raise RuntimeError("A variável Base64 da conta de serviço está vazia.")
+
+    try:
+        decoded_json = base64.b64decode(value).decode("utf-8")
+        credentials_info = json.loads(decoded_json)
+    except Exception as error:
+        raise RuntimeError(
+            "Não consegui converter a variável GCP_SERVICE_ACCOUNT_B64 em JSON. "
+            "Gere novamente o Base64 usando o arquivo JSON original da conta de serviço."
+        ) from error
+
+    if not isinstance(credentials_info, dict):
+        raise RuntimeError("O conteúdo decodificado da conta de serviço não é um JSON válido.")
+
+    return credentials_info
+
+
+def _normalize_google_private_key(value: str) -> str:
+    """Normaliza quebras de linha da chave privada sem alterar seu conteúdo."""
+    private_key = str(value or "").strip()
+
+    # Quando o valor foi salvo com aspas no painel, remove somente as aspas externas.
+    if (private_key.startswith('"') and private_key.endswith('"')) or (
+        private_key.startswith("'") and private_key.endswith("'")
+    ):
+        private_key = private_key[1:-1].strip()
+
+    private_key = private_key.replace("\\n", "\n")
+
+    if private_key and not private_key.endswith("\n"):
+        private_key += "\n"
+
+    return private_key
+
+
+def _load_google_credentials_info() -> dict:
+    """
+    Prioridade de leitura:
+    1. JSON completo em Base64 no EasyPanel;
+    2. variáveis GOOGLE_* separadas;
+    3. Secrets do Streamlit Cloud.
+
+    Usar o JSON completo em Base64 evita misturar private_key, private_key_id e
+    client_email de credenciais diferentes.
+    """
+    b64_credentials = (
+        os.getenv("GCP_SERVICE_ACCOUNT_B64", "").strip()
+        or os.getenv("GOOGLE_SERVICE_ACCOUNT_B64", "").strip()
     )
 
-    if not has_easypanel_credentials:
-        try:
-            credentials_info = dict(st.secrets["gcp_service_account"])
-        except Exception as error:
-            raise RuntimeError(
-                "Não encontrei as credenciais do Google. Configure todas as "
-                "variáveis GOOGLE_* no EasyPanel ou mantenha a seção "
-                "[gcp_service_account] nos Secrets do Streamlit Cloud."
-            ) from error
+    if b64_credentials:
+        credentials_info = _decode_service_account_b64(b64_credentials)
+    else:
+        credentials_info = {
+            "type": os.getenv("GOOGLE_TYPE", ""),
+            "project_id": os.getenv("GOOGLE_PROJECT_ID", ""),
+            "private_key_id": os.getenv("GOOGLE_PRIVATE_KEY_ID", ""),
+            "private_key": os.getenv("GOOGLE_PRIVATE_KEY", ""),
+            "client_email": os.getenv("GOOGLE_CLIENT_EMAIL", ""),
+            "client_id": os.getenv("GOOGLE_CLIENT_ID", ""),
+            "auth_uri": os.getenv("GOOGLE_AUTH_URI", ""),
+            "token_uri": os.getenv("GOOGLE_TOKEN_URI", ""),
+            "auth_provider_x509_cert_url": os.getenv(
+                "GOOGLE_AUTH_PROVIDER_X509_CERT_URL",
+                "",
+            ),
+            "client_x509_cert_url": (
+                os.getenv("GOOGLE_CLIENT_X509_CERT_URL", "")
+                or os.getenv("_CLIENT_X509_CERT_URL", "")
+            ),
+            "universe_domain": os.getenv("GOOGLE_UNIVERSE_DOMAIN", "googleapis.com"),
+        }
+
+        required_env_fields = [
+            "type",
+            "project_id",
+            "private_key_id",
+            "private_key",
+            "client_email",
+            "client_id",
+            "auth_uri",
+            "token_uri",
+            "auth_provider_x509_cert_url",
+            "client_x509_cert_url",
+        ]
+
+        has_all_separate_env_values = all(
+            normalize_text(credentials_info.get(field, ""))
+            for field in required_env_fields
+        )
+
+        if not has_all_separate_env_values:
+            try:
+                credentials_info = dict(st.secrets["gcp_service_account"])
+            except Exception as error:
+                raise RuntimeError(
+                    "Não encontrei credenciais completas do Google. No EasyPanel, "
+                    "configure preferencialmente uma única variável chamada "
+                    "GCP_SERVICE_ACCOUNT_B64 com o JSON completo convertido em Base64."
+                ) from error
 
     required_fields = [
         "type",
@@ -411,22 +475,34 @@ def get_gsheet_client():
 
     if missing_fields:
         raise RuntimeError(
-            "Estão faltando credenciais do Google: " + ", ".join(missing_fields)
+            "A credencial do Google está incompleta. Campos ausentes: "
+            + ", ".join(missing_fields)
         )
 
-    credentials_info["private_key"] = (
-        str(credentials_info["private_key"])
-        .replace("\\n", "\n")
-        .strip()
-        + "\n"
+    credentials_info["private_key"] = _normalize_google_private_key(
+        credentials_info.get("private_key", "")
     )
 
-    credentials = Credentials.from_service_account_info(
-        credentials_info,
-        scopes=SCOPES,
-    )
+    return credentials_info
 
-    return gspread.authorize(credentials)
+
+@st.cache_resource
+def get_gsheet_client():
+    """Conecta ao Google Sheets usando uma única credencial consistente."""
+    credentials_info = _load_google_credentials_info()
+
+    try:
+        credentials = Credentials.from_service_account_info(
+            credentials_info,
+            scopes=SCOPES,
+        )
+
+        return gspread.authorize(credentials)
+    except Exception as error:
+        raise RuntimeError(
+            "Não consegui preparar a credencial do Google. Gere uma nova chave JSON "
+            "da conta de serviço e atualize a variável GCP_SERVICE_ACCOUNT_B64 no EasyPanel."
+        ) from error
 
 
 @st.cache_data(show_spinner=False, ttl=CACHE_TTL_SECONDS)
@@ -3515,6 +3591,7 @@ def render_status_summary(filtered_df: pd.DataFrame) -> None:
         ("Não responde", "#DF5578"),
         ("Proposta", "#5C9DFF"),
         ("Reunião", "#A65BDB"),
+        ("Ligação", "#3C92A8"),
         ("Fechado", "#70C854"),
     ]
 
@@ -3675,6 +3752,7 @@ def render_latest_calls_section(
         ("Não responde", "⚑", "#FBECEF", "#DA5C78"),
         ("Proposta", "▤", "#EAF2FF", "#5C9DFF"),
         ("Reunião", "◉", "#F3EAFE", "#A65BDB"),
+        ("Ligação", "☎", "#EAF8FF", "#3C92A8"),
         ("Fechado", "✓", "#EAF8EF", "#58B97A"),
     ]
 
@@ -3751,7 +3829,7 @@ def render_latest_calls_section(
         st.session_state[selected_card_key] = status_name
 
     selected_status = st.session_state.get(selected_card_key)
-    card_columns = st.columns(7, gap="small")
+    card_columns = st.columns(len(statuses), gap="small")
 
     for column, (status_name, icon, bg_color, icon_color) in zip(card_columns, statuses):
         count = int((filtered_df["_status_grupo"] == status_name).sum())
