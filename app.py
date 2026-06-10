@@ -5770,6 +5770,95 @@ def apply_chat_css() -> None:
                 transform: scale(1.025) !important;
             }
 
+            /* Ajuste final da lista lateral: quatro conversas completas visíveis e rolagem interna para as demais. */
+            .st-key-diagnostic_contacts_list {
+                height: 308px !important;
+                min-height: 308px !important;
+                max-height: 308px !important;
+                overflow-y: auto !important;
+                overflow-x: hidden !important;
+                padding: 0 4px 0 0 !important;
+                scrollbar-width: thin !important;
+                scrollbar-color: rgba(169,28,255,0.62) rgba(255,255,255,0.50) !important;
+            }
+
+            .st-key-diagnostic_contacts_list > div[data-testid="stVerticalBlock"],
+            .st-key-diagnostic_contacts_list div[data-testid="stVerticalBlock"] {
+                height: auto !important;
+                min-height: 0 !important;
+                max-height: none !important;
+                overflow: visible !important;
+                padding: 0 !important;
+                gap: 0 !important;
+            }
+
+            .st-key-diagnostic_contacts_list::-webkit-scrollbar {
+                width: 8px !important;
+            }
+
+            .st-key-diagnostic_contacts_list::-webkit-scrollbar-track {
+                background: rgba(255,255,255,0.50) !important;
+                border-radius: 999px !important;
+            }
+
+            .st-key-diagnostic_contacts_list::-webkit-scrollbar-thumb {
+                border-radius: 999px !important;
+                background: linear-gradient(180deg, #FF4BAA 0%, #A91CFF 100%) !important;
+            }
+
+            .st-key-diagnostic_contacts_list .stButton > button {
+                min-height: 69px !important;
+                height: 69px !important;
+                margin: 4px 9px !important;
+            }
+
+            /* Quando o menu lateral for fechado, mantém a seta de reabertura visível em cinza. */
+            [data-testid="collapsedControl"],
+            [data-testid="stSidebarCollapsedControl"] {
+                display: flex !important;
+                visibility: visible !important;
+                opacity: 1 !important;
+                position: fixed !important;
+                top: 14px !important;
+                left: 12px !important;
+                z-index: 999999 !important;
+                align-items: center !important;
+                justify-content: center !important;
+                width: 36px !important;
+                height: 36px !important;
+                border-radius: 10px !important;
+                border: 1px solid rgba(255,255,255,0.15) !important;
+                background: rgba(156,163,175,0.92) !important;
+                box-shadow: 0 8px 20px rgba(0,0,0,0.22) !important;
+            }
+
+            [data-testid="collapsedControl"] button,
+            [data-testid="stSidebarCollapsedControl"] button {
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                width: 100% !important;
+                height: 100% !important;
+                padding: 0 !important;
+                border: none !important;
+                background: transparent !important;
+                box-shadow: none !important;
+            }
+
+            [data-testid="collapsedControl"] svg,
+            [data-testid="stSidebarCollapsedControl"] svg {
+                color: #374151 !important;
+                fill: #374151 !important;
+                stroke: #374151 !important;
+                opacity: 1 !important;
+            }
+
+            [data-testid="collapsedControl"]:hover,
+            [data-testid="stSidebarCollapsedControl"]:hover {
+                background: rgba(209,213,219,0.98) !important;
+                transform: scale(1.06) !important;
+            }
+
             @media (max-width: 980px) {
                 .st-key-diagnostic_contacts_panel,
                 .st-key-diagnostic_chat_panel {
