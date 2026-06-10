@@ -5612,25 +5612,31 @@ def apply_chat_css() -> None:
                 -webkit-text-fill-color: rgba(33,26,48,0.48) !important;
             }
 
-            /* Somente quatro empresas aparecem por vez na lista lateral. */
+            /* Exibe quatro conversas completas por vez e mantém rolagem interna para as demais. */
             .st-key-diagnostic_contacts_list {
-                height: 304px !important;
-                max-height: 304px !important;
-                min-height: 304px !important;
+                height: 344px !important;
+                max-height: 344px !important;
+                min-height: 344px !important;
                 overflow: hidden !important;
                 padding: 2px 0 4px 0 !important;
             }
 
             .st-key-diagnostic_contacts_list > div[data-testid="stVerticalBlock"],
             .st-key-diagnostic_contacts_list div[data-testid="stVerticalBlock"] {
-                height: 298px !important;
-                max-height: 298px !important;
-                min-height: 298px !important;
+                height: 338px !important;
+                max-height: 338px !important;
+                min-height: 338px !important;
                 overflow-y: auto !important;
                 overflow-x: hidden !important;
-                padding-right: 2px !important;
+                padding: 2px 5px 4px 0 !important;
+                gap: 0 !important;
                 scrollbar-width: thin;
                 scrollbar-color: rgba(169,28,255,0.48) rgba(255,255,255,0.44);
+            }
+
+            .st-key-diagnostic_contacts_list div[data-testid="stElementContainer"] {
+                margin: 0 !important;
+                padding: 0 !important;
             }
 
             .st-key-diagnostic_contacts_list div[data-testid="stVerticalBlock"]::-webkit-scrollbar {
@@ -5648,9 +5654,9 @@ def apply_chat_css() -> None:
 
             .st-key-diagnostic_contacts_list .stButton > button {
                 width: calc(100% - 18px) !important;
-                min-height: 70px !important;
-                height: 70px !important;
-                margin: 3px 9px !important;
+                min-height: 76px !important;
+                height: 76px !important;
+                margin: 4px 9px !important;
                 padding: 8px 12px !important;
                 justify-content: flex-start !important;
                 border: 1px solid rgba(80,69,105,0.08) !important;
@@ -5660,12 +5666,15 @@ def apply_chat_css() -> None:
                 font-size: 0.80rem !important;
                 background: rgba(255,255,255,0.36) !important;
                 box-shadow: none !important;
+                transform-origin: center center !important;
+                transition: transform 0.20s ease, box-shadow 0.20s ease, border-color 0.20s ease, background 0.20s ease !important;
             }
 
             .st-key-diagnostic_contacts_list .stButton > button:hover {
-                transform: none !important;
-                border-color: rgba(255,75,170,0.42) !important;
-                background: rgba(255,255,255,0.78) !important;
+                transform: scale(1.025) !important;
+                border-color: rgba(255,75,170,0.52) !important;
+                background: rgba(255,255,255,0.82) !important;
+                box-shadow: 0 10px 22px rgba(169,28,255,0.14) !important;
             }
 
             .st-key-diagnostic_contacts_list .stButton > button[kind="primary"] {
@@ -5680,19 +5689,24 @@ def apply_chat_css() -> None:
             }
 
             .st-key-diagnostic_chat_toolbar .stButton > button {
-                min-height: 38px !important;
+                min-height: 40px !important;
                 border-radius: 999px !important;
-                color: #211A30 !important;
+                color: #FFFFFF !important;
                 font-size: 0.76rem !important;
-                background: rgba(255,255,255,0.96) !important;
-                border: 1px solid rgba(80,69,105,0.12) !important;
-                box-shadow: none !important;
+                font-weight: 850 !important;
+                background: linear-gradient(90deg, #FF4BAA 0%, #A91CFF 100%) !important;
+                border: 1px solid rgba(255,255,255,0.20) !important;
+                box-shadow: 0 8px 18px rgba(169,28,255,0.18) !important;
+                transform-origin: center center !important;
+                transition: transform 0.20s ease, filter 0.20s ease, box-shadow 0.20s ease !important;
             }
 
             .st-key-diagnostic_chat_toolbar .stButton > button:hover {
-                transform: none !important;
-                border-color: rgba(255,75,170,0.44) !important;
-                background: #FFFFFF !important;
+                transform: scale(1.035) !important;
+                filter: brightness(1.07) !important;
+                border-color: rgba(255,255,255,0.34) !important;
+                background: linear-gradient(90deg, #FF4BAA 0%, #A91CFF 100%) !important;
+                box-shadow: 0 12px 24px rgba(169,28,255,0.28) !important;
             }
 
             .st-key-diagnostic_chat_form {
