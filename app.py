@@ -5582,17 +5582,97 @@ def apply_chat_css() -> None:
                 background: rgba(255,75,170,0.14) !important;
             }
 
+            /* Chat ocupando integralmente a área disponível, sem margens externas */
+            .block-container,
+            [data-testid="stMainBlockContainer"] {
+                max-width: none !important;
+                width: 100% !important;
+                padding: 0 !important;
+                margin: 0 !important;
+            }
+
+            [data-testid="stMain"] > div,
+            [data-testid="stMainBlockContainer"] > div,
+            [data-testid="stMainBlockContainer"] div[data-testid="stVerticalBlock"] {
+                margin-top: 0 !important;
+                margin-bottom: 0 !important;
+            }
+
+            .st-key-diagnostic_contacts_panel,
+            .st-key-diagnostic_chat_panel {
+                min-height: 100vh !important;
+                height: 100vh !important;
+                margin: 0 !important;
+                border-radius: 0 !important;
+                border-top: none !important;
+                border-bottom: none !important;
+                box-shadow: none !important;
+            }
+
+            .st-key-diagnostic_contacts_panel {
+                border-left: none !important;
+                overflow: hidden !important;
+            }
+
+            .st-key-diagnostic_chat_panel {
+                display: flex !important;
+                flex-direction: column !important;
+                border-right: none !important;
+            }
+
+            .oppi-chat-messages {
+                min-height: calc(100vh - 268px) !important;
+                max-height: calc(100vh - 268px) !important;
+            }
+
+            /* Exibe somente quatro conversas por vez; o restante fica disponível na rolagem. */
+            .st-key-diagnostic_contacts_list {
+                max-height: 312px !important;
+                min-height: 312px !important;
+                overflow-y: auto !important;
+                overflow-x: hidden !important;
+                padding: 2px 0 4px 0 !important;
+                scrollbar-width: thin;
+                scrollbar-color: rgba(169,28,255,0.56) rgba(255,255,255,0.035);
+            }
+
+            .st-key-diagnostic_contacts_list::-webkit-scrollbar {
+                width: 7px;
+            }
+
+            .st-key-diagnostic_contacts_list::-webkit-scrollbar-track {
+                background: rgba(255,255,255,0.035);
+            }
+
+            .st-key-diagnostic_contacts_list::-webkit-scrollbar-thumb {
+                border-radius: 999px;
+                background: linear-gradient(180deg, #FF4BAA, #A91CFF);
+            }
+
+            .st-key-diagnostic_contacts_list .stButton > button {
+                min-height: 70px !important;
+                height: 70px !important;
+                margin: 3px 9px !important;
+            }
+
             @media (max-width: 980px) {
                 .st-key-diagnostic_contacts_panel,
                 .st-key-diagnostic_chat_panel {
-                    min-height: auto;
-                    border-radius: 18px;
-                    border: 1px solid rgba(255,255,255,0.08);
+                    min-height: auto !important;
+                    height: auto !important;
+                    border-radius: 0 !important;
+                    border-left: none !important;
+                    border-right: none !important;
                 }
 
                 .oppi-chat-messages {
-                    min-height: 420px;
-                    max-height: 420px;
+                    min-height: 420px !important;
+                    max-height: 420px !important;
+                }
+
+                .st-key-diagnostic_contacts_list {
+                    min-height: 304px !important;
+                    max-height: 304px !important;
                 }
             }
         </style>
@@ -5731,13 +5811,6 @@ def _diagnostic_render_messages(messages: list[dict]) -> str:
 def render_scoring_page(df: pd.DataFrame, columns: dict) -> None:
     apply_chat_css()
 
-    render_html(
-        """
-        <div class="oppi-chat-page-title">Mensagens</div>
-        <div class="oppi-chat-page-subtitle">Converse com seus clientes e conduza o diagnóstico comercial da Oppi em tempo real.</div>
-        """
-    )
-
     companies = sorted(
         {
             normalize_text(company)
@@ -5786,25 +5859,23 @@ def render_scoring_page(df: pd.DataFrame, columns: dict) -> None:
                 if not normalized_search or normalized_search in normalize_search_text(company)
             ]
 
-            for company in visible_companies[:16]:
-                messages = _diagnostic_ensure_thread(company)
-                last_message = normalize_text(messages[-1].get("content")) if messages else ""
-                snippet = last_message[:44] + ("..." if len(last_message) > 44 else "")
-                initials = _diagnostic_initials(company)
-                label = f"{initials}   {company}\n{snippet}"
-                selected = company == st.session_state.oppi_diagnostic_selected_company
+            with st.container(key="diagnostic_contacts_list"):
+                for company in visible_companies:
+                    messages = _diagnostic_ensure_thread(company)
+                    last_message = normalize_text(messages[-1].get("content")) if messages else ""
+                    snippet = last_message[:44] + ("..." if len(last_message) > 44 else "")
+                    initials = _diagnostic_initials(company)
+                    label = f"{initials}   {company}\n{snippet}"
+                    selected = company == st.session_state.oppi_diagnostic_selected_company
 
-                if st.button(
-                    label,
-                    key=f"diagnostic_contact_{normalize_search_text(company).replace(' ', '_')}_{len(company)}",
-                    use_container_width=True,
-                    type="primary" if selected else "secondary",
-                ):
-                    st.session_state.oppi_diagnostic_selected_company = company
-                    st.rerun()
-
-            if len(visible_companies) > 16:
-                st.caption(f"Exibindo 16 de {len(visible_companies)} conversas. Use a busca para localizar uma empresa.")
+                    if st.button(
+                        label,
+                        key=f"diagnostic_contact_{normalize_search_text(company).replace(' ', '_')}_{len(company)}",
+                        use_container_width=True,
+                        type="primary" if selected else "secondary",
+                    ):
+                        st.session_state.oppi_diagnostic_selected_company = company
+                        st.rerun()
 
     with right_column:
         with st.container(key="diagnostic_chat_panel"):
