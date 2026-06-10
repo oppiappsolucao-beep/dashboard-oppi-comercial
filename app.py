@@ -6712,6 +6712,7 @@ def render_scoring_page(df: pd.DataFrame, columns: dict) -> None:
     apply_chat_position_and_scroll_css()
     apply_final_sidebar_toggle_override_css()
     apply_final_chat_layout_override_css()
+    apply_requested_sidebar_and_chat_fix_css()
     render_html('<div class="diagnostic-page-top-spacer"></div>')
 
     companies = sorted(
@@ -6852,6 +6853,155 @@ def render_scoring_page(df: pd.DataFrame, columns: dict) -> None:
                     st.rerun()
 
 
+
+# =========================================================
+# AJUSTE DEFINITIVO SOLICITADO: SETA CINZA + LISTA COM SCROLL
+# =========================================================
+def apply_requested_sidebar_and_chat_fix_css() -> None:
+    """Aplica por último os dois ajustes solicitados no menu e na lista de conversas."""
+    render_html(
+        """
+        <style>
+            /* Seta cinza para reabrir o menu lateral quando ele estiver recolhido. */
+            [data-testid="collapsedControl"],
+            [data-testid="stSidebarCollapsedControl"] {
+                display: flex !important;
+                visibility: visible !important;
+                opacity: 1 !important;
+                position: fixed !important;
+                top: 18px !important;
+                left: 14px !important;
+                width: 42px !important;
+                min-width: 42px !important;
+                height: 42px !important;
+                min-height: 42px !important;
+                padding: 0 !important;
+                align-items: center !important;
+                justify-content: center !important;
+                border-radius: 12px !important;
+                border: 1px solid rgba(75, 85, 99, 0.34) !important;
+                background: #D1D5DB !important;
+                background-color: #D1D5DB !important;
+                box-shadow: 0 8px 20px rgba(0, 0, 0, 0.22) !important;
+                pointer-events: auto !important;
+                z-index: 2147483647 !important;
+                overflow: visible !important;
+            }
+
+            [data-testid="collapsedControl"] button,
+            [data-testid="stSidebarCollapsedControl"] button {
+                display: flex !important;
+                visibility: visible !important;
+                opacity: 1 !important;
+                width: 100% !important;
+                height: 100% !important;
+                padding: 0 !important;
+                align-items: center !important;
+                justify-content: center !important;
+                border: none !important;
+                border-radius: 12px !important;
+                background: transparent !important;
+                box-shadow: none !important;
+                pointer-events: auto !important;
+            }
+
+            [data-testid="collapsedControl"] svg,
+            [data-testid="stSidebarCollapsedControl"] svg {
+                display: none !important;
+                visibility: hidden !important;
+                opacity: 0 !important;
+            }
+
+            [data-testid="collapsedControl"]::after,
+            [data-testid="stSidebarCollapsedControl"]::after {
+                content: "›" !important;
+                display: block !important;
+                position: absolute !important;
+                top: 50% !important;
+                left: 50% !important;
+                transform: translate(-50%, -54%) !important;
+                color: #4B5563 !important;
+                font-family: Arial, sans-serif !important;
+                font-size: 33px !important;
+                font-weight: 900 !important;
+                line-height: 1 !important;
+                pointer-events: none !important;
+            }
+
+            [data-testid="collapsedControl"]:hover,
+            [data-testid="stSidebarCollapsedControl"]:hover {
+                background: #E5E7EB !important;
+                background-color: #E5E7EB !important;
+                transform: scale(1.06) !important;
+            }
+
+            /* Lista lateral: mostra 4 conversas completas e permite rolar para ver todas. */
+            .st-key-diagnostic_contacts_list {
+                display: block !important;
+                width: 100% !important;
+                height: 324px !important;
+                min-height: 324px !important;
+                max-height: 324px !important;
+                margin: 0 !important;
+                padding: 0 4px 0 0 !important;
+                overflow-y: auto !important;
+                overflow-x: hidden !important;
+                scrollbar-width: thin !important;
+                scrollbar-color: rgba(169, 28, 255, 0.76) rgba(255, 255, 255, 0.58) !important;
+            }
+
+            .st-key-diagnostic_contacts_list > div[data-testid="stVerticalBlock"] {
+                display: block !important;
+                width: 100% !important;
+                height: auto !important;
+                min-height: 0 !important;
+                max-height: none !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                overflow: visible !important;
+                gap: 0 !important;
+            }
+
+            .st-key-diagnostic_contacts_list div[data-testid="stElementContainer"],
+            .st-key-diagnostic_contacts_list .stButton {
+                margin: 0 !important;
+                padding: 0 !important;
+            }
+
+            .st-key-diagnostic_contacts_list .stButton > button {
+                width: calc(100% - 16px) !important;
+                min-height: 72px !important;
+                height: 72px !important;
+                max-height: 72px !important;
+                margin: 4px 8px !important;
+                padding: 8px 12px !important;
+                overflow: hidden !important;
+                transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease !important;
+            }
+
+            .st-key-diagnostic_contacts_list .stButton > button:hover {
+                transform: scale(1.018) !important;
+                filter: brightness(1.03) !important;
+                box-shadow: 0 10px 22px rgba(169, 28, 255, 0.16) !important;
+            }
+
+            .st-key-diagnostic_contacts_list::-webkit-scrollbar {
+                width: 8px !important;
+            }
+
+            .st-key-diagnostic_contacts_list::-webkit-scrollbar-track {
+                background: rgba(255, 255, 255, 0.58) !important;
+                border-radius: 999px !important;
+            }
+
+            .st-key-diagnostic_contacts_list::-webkit-scrollbar-thumb {
+                border-radius: 999px !important;
+                background: linear-gradient(180deg, #FF4BAA 0%, #A91CFF 100%) !important;
+            }
+        </style>
+        """
+    )
+
 # =========================================================
 # TRATAMENTO DE ERROS
 # =========================================================
@@ -6897,6 +7047,7 @@ def main() -> None:
     apply_dashboard_css()
     apply_global_sidebar_toggle_css()
     apply_final_sidebar_toggle_override_css()
+    apply_requested_sidebar_and_chat_fix_css()
     page = render_sidebar()
 
     try:
