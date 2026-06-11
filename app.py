@@ -7450,6 +7450,8 @@ def render_scoring_page(df: pd.DataFrame, columns: dict) -> None:
     apply_final_chat_layout_override_css()
     apply_requested_sidebar_and_chat_fix_css()
     apply_chat_sidebar_toggle_slot_css()
+    apply_chat_contacts_top_slot_real_css()
+    install_chat_contacts_top_slot_runtime_fix()
 
     companies = sorted(
         {
@@ -7826,6 +7828,213 @@ def apply_chat_sidebar_toggle_slot_css() -> None:
             }
         </style>
         """
+    )
+
+
+# =========================================================
+# AJUSTE FINAL REAL: ESPAÇO SUPERIOR NA COLUNA DE EMPRESAS
+# =========================================================
+def apply_chat_contacts_top_slot_real_css() -> None:
+    """
+    Reserva uma faixa clara acima de "Empresas" para a seta do menu recolhido.
+    A lista continua exibindo quatro conversas completas e aproveita a sobra inferior.
+    """
+    render_html(
+        """
+        <style>
+            /* Move somente o conteúdo da coluna esquerda para baixo. */
+            .st-key-diagnostic_contacts_panel {
+                box-sizing: border-box !important;
+                padding-top: 54px !important;
+                position: relative !important;
+            }
+
+            /* Neutraliza o padding antigo aplicado no bloco interno para não duplicar o espaço. */
+            .st-key-diagnostic_contacts_panel > div[data-testid="stVerticalBlock"] {
+                box-sizing: border-box !important;
+                padding-top: 0 !important;
+            }
+
+            /* Mantém quatro conversas completas e rolagem interna para todas as demais. */
+            .st-key-diagnostic_contacts_list {
+                height: 344px !important;
+                min-height: 344px !important;
+                max-height: 344px !important;
+                overflow-y: auto !important;
+                overflow-x: hidden !important;
+            }
+
+            /* Seta nativa visível dentro da faixa livre quando o menu estiver fechado. */
+            [data-testid="collapsedControl"],
+            [data-testid="stSidebarCollapsedControl"],
+            button[data-testid="collapsedControl"],
+            button[data-testid="stSidebarCollapsedControl"] {
+                position: fixed !important;
+                top: 14px !important;
+                left: 14px !important;
+                width: 40px !important;
+                min-width: 40px !important;
+                height: 40px !important;
+                min-height: 40px !important;
+                display: flex !important;
+                visibility: visible !important;
+                opacity: 1 !important;
+                align-items: center !important;
+                justify-content: center !important;
+                padding: 0 !important;
+                border-radius: 12px !important;
+                border: 1px solid rgba(75,85,99,0.30) !important;
+                background: #D1D5DB !important;
+                background-color: #D1D5DB !important;
+                color: #4B5563 !important;
+                box-shadow: 0 8px 18px rgba(0,0,0,0.16) !important;
+                transform: none !important;
+                pointer-events: auto !important;
+                z-index: 2147483647 !important;
+            }
+
+            [data-testid="collapsedControl"] button,
+            [data-testid="stSidebarCollapsedControl"] button {
+                width: 100% !important;
+                height: 100% !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                padding: 0 !important;
+                border: none !important;
+                border-radius: 12px !important;
+                background: transparent !important;
+                box-shadow: none !important;
+            }
+
+            /* Usa a seta nativa do Streamlit em cinza; remove o símbolo artificial antigo. */
+            [data-testid="collapsedControl"]::after,
+            [data-testid="stSidebarCollapsedControl"]::after,
+            button[data-testid="collapsedControl"]::after,
+            button[data-testid="stSidebarCollapsedControl"]::after {
+                content: none !important;
+                display: none !important;
+            }
+
+            [data-testid="collapsedControl"] svg,
+            [data-testid="stSidebarCollapsedControl"] svg,
+            button[data-testid="collapsedControl"] svg,
+            button[data-testid="stSidebarCollapsedControl"] svg {
+                display: block !important;
+                visibility: visible !important;
+                opacity: 1 !important;
+                width: 22px !important;
+                height: 22px !important;
+                color: #4B5563 !important;
+                fill: #4B5563 !important;
+                stroke: #4B5563 !important;
+            }
+
+            [data-testid="collapsedControl"]:hover,
+            [data-testid="stSidebarCollapsedControl"]:hover,
+            button[data-testid="collapsedControl"]:hover,
+            button[data-testid="stSidebarCollapsedControl"]:hover {
+                background: #E5E7EB !important;
+                background-color: #E5E7EB !important;
+                transform: scale(1.06) !important;
+            }
+        </style>
+        """
+    )
+
+
+def install_chat_contacts_top_slot_runtime_fix() -> None:
+    """Reaplica o posicionamento após os reruns do Streamlit."""
+    components.html(
+        """
+        <script>
+            (function () {
+                function getHostDocument() {
+                    try {
+                        if (window.frameElement && window.frameElement.ownerDocument) {
+                            return window.frameElement.ownerDocument;
+                        }
+                    } catch (error) {}
+
+                    try {
+                        return window.parent.document;
+                    } catch (error) {
+                        return document;
+                    }
+                }
+
+                const hostDocument = getHostDocument();
+                const hostWindow = window.parent || window;
+
+                function forceStyle(element, property, value) {
+                    if (element && element.style) {
+                        element.style.setProperty(property, value, 'important');
+                    }
+                }
+
+                function applyFix() {
+                    const panel = hostDocument.querySelector('.st-key-diagnostic_contacts_panel');
+
+                    if (panel) {
+                        forceStyle(panel, 'box-sizing', 'border-box');
+                        forceStyle(panel, 'padding-top', '54px');
+                        forceStyle(panel, 'position', 'relative');
+                    }
+
+                    const directBlock = panel
+                        ? panel.querySelector(':scope > div[data-testid="stVerticalBlock"]')
+                        : null;
+
+                    if (directBlock) {
+                        forceStyle(directBlock, 'padding-top', '0px');
+                    }
+
+                    const selectors = [
+                        '[data-testid="collapsedControl"]',
+                        '[data-testid="stSidebarCollapsedControl"]',
+                        'button[data-testid="collapsedControl"]',
+                        'button[data-testid="stSidebarCollapsedControl"]'
+                    ];
+
+                    selectors.forEach(function (selector) {
+                        hostDocument.querySelectorAll(selector).forEach(function (control) {
+                            forceStyle(control, 'top', '14px');
+                            forceStyle(control, 'left', '14px');
+                            forceStyle(control, 'background', '#D1D5DB');
+                            forceStyle(control, 'background-color', '#D1D5DB');
+                            forceStyle(control, 'color', '#4B5563');
+                            forceStyle(control, 'visibility', 'visible');
+                            forceStyle(control, 'opacity', '1');
+                            forceStyle(control, 'z-index', '2147483647');
+
+                            control.querySelectorAll('svg').forEach(function (svg) {
+                                forceStyle(svg, 'display', 'block');
+                                forceStyle(svg, 'visibility', 'visible');
+                                forceStyle(svg, 'opacity', '1');
+                                forceStyle(svg, 'color', '#4B5563');
+                                forceStyle(svg, 'fill', '#4B5563');
+                                forceStyle(svg, 'stroke', '#4B5563');
+                            });
+                        });
+                    });
+                }
+
+                applyFix();
+                hostWindow.setTimeout(applyFix, 80);
+                hostWindow.setTimeout(applyFix, 240);
+                hostWindow.setTimeout(applyFix, 700);
+
+                const observer = new MutationObserver(function () {
+                    applyFix();
+                });
+
+                observer.observe(hostDocument.body, { childList: true, subtree: true });
+                hostWindow.setTimeout(function () { observer.disconnect(); }, 6000);
+            })();
+        </script>
+        """,
+        height=0,
+        scrolling=False,
     )
 
 
