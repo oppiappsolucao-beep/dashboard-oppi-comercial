@@ -119,6 +119,110 @@ def normalize_search_text(value) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
+def infer_niche_from_company_name(value) -> str:
+    """Identifica automaticamente o nicho usando palavras presentes no nome da empresa."""
+    company_name = normalize_search_text(value)
+
+    if not company_name:
+        return "Não identificado"
+
+    niche_keywords = [
+        ("Marmoraria", [
+            "marmoraria", "marmore", "marmores", "granito", "granitos",
+            "pedra", "pedras", "revestimento", "revestimentos", "travertino",
+        ]),
+        ("Marcenaria", [
+            "marcenaria", "marceneiro", "moveis", "movel", "planejados",
+            "planejado", "armarios", "armario",
+        ]),
+        ("Academia", [
+            "academia", "fitness", "gym", "crossfit", "jiu jitsu", "muay thai",
+        ]),
+        ("Clínica", [
+            "clinica", "consultorio", "odontologia", "odontologica", "dental",
+            "saude", "estetica",
+        ]),
+        ("Pet shop", [
+            "pet shop", "petshop", "pet", "veterinaria", "veterinario",
+        ]),
+        ("Construção civil", [
+            "construtora", "construcao", "engenharia", "arquitetura", "obra",
+        ]),
+        ("Restaurante", [
+            "restaurante", "pizzaria", "lanchonete", "hamburgueria", "bar", "cafe",
+        ]),
+        ("Loja", [
+            "loja", "comercio", "varejo", "store",
+        ]),
+        ("Serviços", [
+            "servicos", "servico", "solucoes", "consultoria",
+        ]),
+    ]
+
+    for niche_name, keywords in niche_keywords:
+        if any(keyword in company_name for keyword in keywords):
+            return niche_name
+
+    return "Outros"
+
+
+def infer_state_from_address(value) -> str:
+    """Extrai a UF do endereço. Reconhece siglas e nomes completos dos estados brasileiros."""
+    address_original = normalize_text(value)
+
+    if not address_original:
+        return "Não identificado"
+
+    valid_ufs = [
+        "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA",
+        "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN",
+        "RS", "RO", "RR", "SC", "SP", "SE", "TO",
+    ]
+
+    upper_address = address_original.upper()
+    uf_matches = re.findall(r"(?<![A-Z])(" + "|".join(valid_ufs) + r")(?![A-Z])", upper_address)
+
+    if uf_matches:
+        return uf_matches[-1]
+
+    normalized_address = normalize_search_text(address_original)
+    state_names = {
+        "acre": "AC",
+        "alagoas": "AL",
+        "amapa": "AP",
+        "amazonas": "AM",
+        "bahia": "BA",
+        "ceara": "CE",
+        "distrito federal": "DF",
+        "espirito santo": "ES",
+        "goias": "GO",
+        "maranhao": "MA",
+        "mato grosso do sul": "MS",
+        "mato grosso": "MT",
+        "minas gerais": "MG",
+        "para": "PA",
+        "paraiba": "PB",
+        "parana": "PR",
+        "pernambuco": "PE",
+        "piaui": "PI",
+        "rio de janeiro": "RJ",
+        "rio grande do norte": "RN",
+        "rio grande do sul": "RS",
+        "rondonia": "RO",
+        "roraima": "RR",
+        "santa catarina": "SC",
+        "sao paulo": "SP",
+        "sergipe": "SE",
+        "tocantins": "TO",
+    }
+
+    for state_name, uf in sorted(state_names.items(), key=lambda item: len(item[0]), reverse=True):
+        if state_name in normalized_address:
+            return uf
+
+    return "Não identificado"
+
+
 def parse_money(value) -> float:
     text = normalize_text(value)
 
@@ -916,6 +1020,8 @@ def prepare_data(df: pd.DataFrame, columns: dict) -> pd.DataFrame:
     result["_status_grupo"] = result["_status_original"].apply(status_group)
     result["_vendedor"] = safe_series(result, columns.get("vendedor")).replace("", "Sem vendedor")
     result["_telefone"] = safe_series(result, columns.get("telefone_b2b"))
+    result["_nicho"] = result["_empresa"].apply(infer_niche_from_company_name)
+    result["_estado"] = safe_series(result, columns.get("endereco")).apply(infer_state_from_address)
     result["_data_chamado"] = safe_series(result, columns.get("data_chamado")).apply(parse_date)
     result["_ultima_atualizacao"] = safe_series(result, columns.get("ultima_atualizacao")).apply(parse_date)
     result["_pontuacao"] = result.apply(lambda row: calculate_score(row, columns), axis=1)
@@ -5301,6 +5407,30 @@ def render_all_contracts_page(df: pd.DataFrame, columns: dict) -> None:
     if "contracts_names_filter_search" not in st.session_state:
         st.session_state.contracts_names_filter_search = ""
 
+    niche_options = sorted(
+        [
+            niche
+            for niche in df["_nicho"].dropna().astype(str).unique().tolist()
+            if normalize_text(niche)
+        ],
+        key=normalize_search_text,
+    )
+
+    state_options = sorted(
+        [
+            state
+            for state in df["_estado"].dropna().astype(str).unique().tolist()
+            if normalize_text(state)
+        ],
+        key=lambda value: (value == "Não identificado", value),
+    )
+
+    if "contracts_names_filter_niche" not in st.session_state:
+        st.session_state.contracts_names_filter_niche = "Todos os nichos"
+
+    if "contracts_names_filter_state" not in st.session_state:
+        st.session_state.contracts_names_filter_state = "Todos os estados"
+
     filter_col_1, filter_col_2, filter_col_3, filter_col_4 = st.columns(4, gap="medium")
 
     with filter_col_1:
@@ -5332,6 +5462,22 @@ def render_all_contracts_page(df: pd.DataFrame, columns: dict) -> None:
             key="contracts_names_filter_search",
         )
 
+    niche_filter_col, state_filter_col, _, _ = st.columns(4, gap="medium")
+
+    with niche_filter_col:
+        selected_niche = st.selectbox(
+            "Nichos",
+            ["Todos os nichos"] + niche_options,
+            key="contracts_names_filter_niche",
+        )
+
+    with state_filter_col:
+        selected_state = st.selectbox(
+            "Estados",
+            ["Todos os estados"] + state_options,
+            key="contracts_names_filter_state",
+        )
+
     filtered_df = df.copy()
 
     if selected_seller != "Todos os vendedores":
@@ -5339,6 +5485,12 @@ def render_all_contracts_page(df: pd.DataFrame, columns: dict) -> None:
 
     if selected_status != "Todos os status":
         filtered_df = filtered_df[filtered_df["_status_grupo"] == selected_status].copy()
+
+    if selected_niche != "Todos os nichos":
+        filtered_df = filtered_df[filtered_df["_nicho"] == selected_niche].copy()
+
+    if selected_state != "Todos os estados":
+        filtered_df = filtered_df[filtered_df["_estado"] == selected_state].copy()
 
     if isinstance(selected_period, (tuple, list)) and len(selected_period) == 2:
         start_date, end_date = selected_period
