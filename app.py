@@ -3469,6 +3469,65 @@ def apply_registration_css() -> None:
                 margin: 0 !important;
                 line-height: 1.18 !important;
             }
+
+
+            /* CORREÇÃO REAL DO ALINHAMENTO DOS FILTROS DA VISÃO GERAL:
+               todos os labels com a mesma altura e todos os campos iniciando no mesmo topo. */
+            .st-key-overview_filters_aligned div[data-testid="stHorizontalBlock"] {
+                align-items: flex-start !important;
+            }
+
+            .st-key-overview_filters_aligned div[data-testid="column"] {
+                padding-top: 0 !important;
+                margin-top: 0 !important;
+            }
+
+            .st-key-overview_filters_aligned [data-testid="stWidgetLabel"],
+            .st-key-overview_filters_aligned label {
+                height: 24px !important;
+                min-height: 24px !important;
+                max-height: 24px !important;
+                margin: 0 0 6px 0 !important;
+                padding: 0 !important;
+                display: flex !important;
+                align-items: flex-start !important;
+                overflow: visible !important;
+            }
+
+            .st-key-overview_filters_aligned [data-testid="stWidgetLabel"] p,
+            .st-key-overview_filters_aligned label p,
+            .st-key-overview_filters_aligned label span {
+                margin: 0 !important;
+                padding: 0 !important;
+                line-height: 18px !important;
+                height: 18px !important;
+                white-space: nowrap !important;
+                overflow: hidden !important;
+                text-overflow: ellipsis !important;
+            }
+
+            .st-key-overview_filters_aligned div[data-testid="stSelectbox"],
+            .st-key-overview_filters_aligned div[data-testid="stDateInput"],
+            .st-key-overview_filters_aligned div[data-testid="stTextInput"] {
+                padding-top: 0 !important;
+                margin-top: 0 !important;
+            }
+
+            .st-key-overview_filters_aligned div[data-testid="stSelectbox"] > div,
+            .st-key-overview_filters_aligned div[data-testid="stDateInput"] > div,
+            .st-key-overview_filters_aligned div[data-testid="stTextInput"] > div {
+                padding-top: 0 !important;
+                margin-top: 0 !important;
+            }
+
+            .st-key-overview_filters_aligned div[data-baseweb="select"] > div,
+            .st-key-overview_filters_aligned div[data-baseweb="input"] > div {
+                height: 54px !important;
+                min-height: 54px !important;
+                margin-top: 0 !important;
+                transform: none !important;
+                box-sizing: border-box !important;
+            }
         </style>
         """
     )
@@ -7623,3 +7682,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+    
