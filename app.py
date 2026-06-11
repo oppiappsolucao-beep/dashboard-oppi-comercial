@@ -5438,7 +5438,7 @@ def render_all_contracts_page(df: pd.DataFrame, columns: dict) -> None:
         filter_col_4,
         filter_col_5,
         filter_col_6,
-    ) = st.columns([1.05, 1.0, 1.12, 1.25, 1.0, 1.0], gap="small")
+    ) = st.columns([1.05, 1.0, 1.12, 1.0, 1.0, 1.25], gap="small")
 
     with filter_col_1:
         selected_seller = st.selectbox(
@@ -5463,24 +5463,24 @@ def render_all_contracts_page(df: pd.DataFrame, columns: dict) -> None:
         )
 
     with filter_col_4:
-        search_term = st.text_input(
-            "Buscar empresa",
-            placeholder="Digite o nome da empresa...",
-            key="contracts_names_filter_search",
-        )
-
-    with filter_col_5:
         selected_niche = st.selectbox(
             "Nichos",
             ["Todos os nichos"] + niche_options,
             key="contracts_names_filter_niche",
         )
 
-    with filter_col_6:
+    with filter_col_5:
         selected_state = st.selectbox(
             "Estados",
             ["Todos os estados"] + state_options,
             key="contracts_names_filter_state",
+        )
+
+    with filter_col_6:
+        search_term = st.text_input(
+            "Buscar empresa",
+            placeholder="Digite o nome da empresa...",
+            key="contracts_names_filter_search",
         )
 
     filtered_df = df.copy()
