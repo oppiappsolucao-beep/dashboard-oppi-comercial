@@ -3374,6 +3374,33 @@ def apply_registration_css() -> None:
             [data-testid="stForm"] div[data-testid="stSelectbox"] div[role="combobox"] {
                 border-radius: 20px !important;
             }
+
+
+            /* Todos os cadastros: mantém os seis filtros rigorosamente alinhados na mesma linha. */
+            .st-key-contracts_filters_aligned div[data-testid="stHorizontalBlock"] {
+                align-items: flex-start !important;
+            }
+
+            .st-key-contracts_filters_aligned div[data-testid="stTextInput"],
+            .st-key-contracts_filters_aligned div[data-testid="stDateInput"],
+            .st-key-contracts_filters_aligned div[data-testid="stSelectbox"] {
+                padding-top: 0 !important;
+                margin-top: 0 !important;
+            }
+
+            .st-key-contracts_filters_aligned div[data-testid="stTextInput"] > div,
+            .st-key-contracts_filters_aligned div[data-testid="stDateInput"] > div,
+            .st-key-contracts_filters_aligned div[data-testid="stSelectbox"] > div {
+                margin-top: 0 !important;
+            }
+
+            .st-key-contracts_filters_aligned div[data-testid="stTextInput"] div[data-baseweb="input"] > div,
+            .st-key-contracts_filters_aligned div[data-testid="stDateInput"] div[data-baseweb="input"] > div,
+            .st-key-contracts_filters_aligned div[data-testid="stSelectbox"] > div[data-baseweb="select"] > div {
+                min-height: 54px !important;
+                height: 54px !important;
+                box-sizing: border-box !important;
+            }
         </style>
         """
     )
@@ -5431,57 +5458,58 @@ def render_all_contracts_page(df: pd.DataFrame, columns: dict) -> None:
     if "contracts_names_filter_state" not in st.session_state:
         st.session_state.contracts_names_filter_state = "Todos os estados"
 
-    (
-        filter_col_1,
-        filter_col_2,
-        filter_col_3,
-        filter_col_4,
-        filter_col_5,
-        filter_col_6,
-    ) = st.columns([1.05, 1.0, 1.12, 1.0, 1.0, 1.25], gap="small")
+    with st.container(key="contracts_filters_aligned"):
+        (
+            filter_col_1,
+            filter_col_2,
+            filter_col_3,
+            filter_col_4,
+            filter_col_5,
+            filter_col_6,
+        ) = st.columns([1.05, 1.0, 1.12, 1.0, 1.0, 1.25], gap="small")
 
-    with filter_col_1:
-        selected_seller = st.selectbox(
-            "Vendedor",
-            ["Todos os vendedores"] + seller_options,
-            key="contracts_names_filter_seller",
-        )
+        with filter_col_1:
+            selected_seller = st.selectbox(
+                "Vendedor",
+                ["Todos os vendedores"] + seller_options,
+                key="contracts_names_filter_seller",
+            )
 
-    with filter_col_2:
-        selected_status = st.selectbox(
-            "Status",
-            ["Todos os status"] + STATUS_OPTIONS,
-            key="contracts_names_filter_status",
-        )
+        with filter_col_2:
+            selected_status = st.selectbox(
+                "Status",
+                ["Todos os status"] + STATUS_OPTIONS,
+                key="contracts_names_filter_status",
+            )
 
-    with filter_col_3:
-        selected_period = st.date_input(
-            "Período",
-            min_value=date_min,
-            max_value=max(date_max, date.today()),
-            key="contracts_names_filter_period",
-        )
+        with filter_col_3:
+            selected_period = st.date_input(
+                "Período",
+                min_value=date_min,
+                max_value=max(date_max, date.today()),
+                key="contracts_names_filter_period",
+            )
 
-    with filter_col_4:
-        selected_niche = st.selectbox(
-            "Nichos",
-            ["Todos os nichos"] + niche_options,
-            key="contracts_names_filter_niche",
-        )
+        with filter_col_4:
+            selected_niche = st.selectbox(
+                "Nichos",
+                ["Todos os nichos"] + niche_options,
+                key="contracts_names_filter_niche",
+            )
 
-    with filter_col_5:
-        selected_state = st.selectbox(
-            "Estados",
-            ["Todos os estados"] + state_options,
-            key="contracts_names_filter_state",
-        )
+        with filter_col_5:
+            selected_state = st.selectbox(
+                "Estados",
+                ["Todos os estados"] + state_options,
+                key="contracts_names_filter_state",
+            )
 
-    with filter_col_6:
-        search_term = st.text_input(
-            "Buscar empresa",
-            placeholder="Digite o nome da empresa...",
-            key="contracts_names_filter_search",
-        )
+        with filter_col_6:
+            search_term = st.text_input(
+                "Buscar empresa",
+                placeholder="Digite o nome da empresa...",
+                key="contracts_names_filter_search",
+            )
 
     filtered_df = df.copy()
 
