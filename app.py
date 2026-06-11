@@ -3528,6 +3528,21 @@ def apply_registration_css() -> None:
                 transform: none !important;
                 box-sizing: border-box !important;
             }
+
+            /* Ajuste final: os componentes nativos de data e texto possuem um recuo
+               interno diferente do selectbox. Sobe somente as caixas, preservando
+               a posição dos títulos e alinhando visualmente todos os filtros. */
+            .st-key-overview_filters_aligned div[data-testid="stDateInput"] [data-baseweb="input"],
+            .st-key-overview_filters_aligned div[data-testid="stTextInput"] [data-baseweb="input"] {
+                position: relative !important;
+                top: -4px !important;
+            }
+
+            .st-key-overview_filters_aligned div[data-testid="stDateInput"] [data-baseweb="input"] > div,
+            .st-key-overview_filters_aligned div[data-testid="stTextInput"] [data-baseweb="input"] > div {
+                margin-top: 0 !important;
+                top: 0 !important;
+            }
         </style>
         """
     )
@@ -7682,4 +7697,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-    
