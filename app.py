@@ -3435,6 +3435,174 @@ def _sync_navigation_from_query_params() -> None:
             st.session_state.selected_cadastro_subpage = "Novo cadastro"
 
 
+
+def install_sidebar_navigation_persistence() -> None:
+    """
+    Mantém o menu lateral aberto ao navegar entre as páginas internas.
+
+    O menu só permanece recolhido quando o próprio usuário clica na seta
+    nativa do Streamlit. Ao clicar em Visão Geral, Cadastro ou Pesos e
+    Medidas, a navegação preserva o menu aberto em vez de recolhê-lo.
+    """
+    components.html(
+        """
+        <script>
+            (function () {
+                function getHostWindow() {
+                    try {
+                        return window.parent || window;
+                    } catch (error) {
+                        return window;
+                    }
+                }
+
+                function getHostDocument() {
+                    try {
+                        if (window.frameElement && window.frameElement.ownerDocument) {
+                            return window.frameElement.ownerDocument;
+                        }
+                    } catch (error) {}
+
+                    try {
+                        return window.parent.document;
+                    } catch (error) {
+                        return document;
+                    }
+                }
+
+                const hostWindow = getHostWindow();
+                const hostDocument = getHostDocument();
+                const storageKey = "__oppi_keep_sidebar_expanded_after_navigation__";
+                const installedKey = "__oppi_sidebar_navigation_persistence_installed__";
+
+                function isElementVisible(element) {
+                    if (!element) {
+                        return false;
+                    }
+
+                    const style = hostWindow.getComputedStyle(element);
+                    const rect = element.getBoundingClientRect();
+
+                    return (
+                        style.display !== "none" &&
+                        style.visibility !== "hidden" &&
+                        Number(style.opacity || "1") > 0 &&
+                        rect.width > 4 &&
+                        rect.height > 4
+                    );
+                }
+
+                function sidebarIsExpanded() {
+                    const sidebar = hostDocument.querySelector('section[data-testid="stSidebar"]');
+
+                    if (!sidebar) {
+                        return false;
+                    }
+
+                    const style = hostWindow.getComputedStyle(sidebar);
+                    const rect = sidebar.getBoundingClientRect();
+
+                    return (
+                        style.display !== "none" &&
+                        style.visibility !== "hidden" &&
+                        rect.width > 120 &&
+                        rect.right > 40
+                    );
+                }
+
+                function getVisibleExpandControl() {
+                    const selectors = [
+                        '[data-testid="collapsedControl"] button',
+                        '[data-testid="stSidebarCollapsedControl"] button',
+                        'button[data-testid="collapsedControl"]',
+                        'button[data-testid="stSidebarCollapsedControl"]',
+                        '[data-testid="collapsedControl"]',
+                        '[data-testid="stSidebarCollapsedControl"]'
+                    ];
+
+                    for (const selector of selectors) {
+                        const element = hostDocument.querySelector(selector);
+
+                        if (isElementVisible(element)) {
+                            return element;
+                        }
+                    }
+
+                    return null;
+                }
+
+                function ensureSidebarExpanded(attempt) {
+                    if (sidebarIsExpanded()) {
+                        try {
+                            hostWindow.sessionStorage.removeItem(storageKey);
+                        } catch (error) {}
+                        return;
+                    }
+
+                    const control = getVisibleExpandControl();
+
+                    if (control) {
+                        control.click();
+                    }
+
+                    if ((attempt || 0) < 24) {
+                        hostWindow.setTimeout(function () {
+                            ensureSidebarExpanded((attempt || 0) + 1);
+                        }, 120);
+                    }
+                }
+
+                function shouldPreserveSidebarForLink(link) {
+                    if (!link || !link.matches) {
+                        return false;
+                    }
+
+                    if (!link.matches('.oppi-side-nav a')) {
+                        return false;
+                    }
+
+                    const href = String(link.getAttribute('href') || '');
+                    return href.includes('page=');
+                }
+
+                if (!hostWindow[installedKey]) {
+                    hostWindow[installedKey] = true;
+
+                    hostDocument.addEventListener(
+                        'pointerdown',
+                        function (event) {
+                            const link = event.target && event.target.closest
+                                ? event.target.closest('a')
+                                : null;
+
+                            if (!shouldPreserveSidebarForLink(link)) {
+                                return;
+                            }
+
+                            if (sidebarIsExpanded()) {
+                                try {
+                                    hostWindow.sessionStorage.setItem(storageKey, '1');
+                                } catch (error) {}
+                            }
+                        },
+                        true
+                    );
+                }
+
+                try {
+                    if (hostWindow.sessionStorage.getItem(storageKey) === '1') {
+                        hostWindow.setTimeout(function () {
+                            ensureSidebarExpanded(0);
+                        }, 80);
+                    }
+                } catch (error) {}
+            })();
+        </script>
+        """,
+        height=0,
+        scrolling=False,
+    )
+
 def render_sidebar() -> str:
     _sync_navigation_from_query_params()
 
@@ -7091,6 +7259,7 @@ def main() -> None:
     apply_final_sidebar_toggle_override_css()
     apply_requested_sidebar_and_chat_fix_css()
     page = render_sidebar()
+    install_sidebar_navigation_persistence()
 
     try:
         df = load_sheet_data()
