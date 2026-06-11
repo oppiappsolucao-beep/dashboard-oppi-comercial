@@ -7451,6 +7451,7 @@ def render_scoring_page(df: pd.DataFrame, columns: dict) -> None:
     apply_requested_sidebar_and_chat_fix_css()
     apply_chat_sidebar_toggle_slot_css()
     apply_chat_contacts_top_slot_real_css()
+    apply_contacts_real_top_slot_css()
     install_chat_contacts_top_slot_runtime_fix()
 
     companies = sorted(
@@ -7477,6 +7478,8 @@ def render_scoring_page(df: pd.DataFrame, columns: dict) -> None:
 
     with left_column:
         with st.container(key="diagnostic_contacts_panel"):
+            render_html('<div class="diagnostic-left-top-slot" aria-hidden="true"></div>')
+
             render_html(
                 """
                 <div class="oppi-chat-contact-header">
@@ -7943,6 +7946,59 @@ def apply_chat_contacts_top_slot_real_css() -> None:
     )
 
 
+
+# =========================================================
+# AJUSTE VISUAL FINAL: ESPAÇO REAL ACIMA DE EMPRESAS
+# =========================================================
+def apply_contacts_real_top_slot_css() -> None:
+    """Cria espaço visual real no topo da coluna Empresas sem mexer nas conversas."""
+    render_html(
+        """
+        <style>
+            /* O espaçamento agora é um elemento real dentro da coluna esquerda. */
+            .st-key-diagnostic_contacts_panel,
+            .st-key-diagnostic_contacts_panel > div[data-testid="stVerticalBlock"] {
+                padding-top: 0 !important;
+            }
+
+            .diagnostic-left-top-slot {
+                display: block !important;
+                width: 100% !important;
+                height: 58px !important;
+                min-height: 58px !important;
+                max-height: 58px !important;
+                flex: 0 0 58px !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                background: transparent !important;
+                pointer-events: none !important;
+            }
+
+            /* Preserva as quatro conversas e a rolagem interna. */
+            .st-key-diagnostic_contacts_list {
+                height: 344px !important;
+                min-height: 344px !important;
+                max-height: 344px !important;
+                overflow-y: auto !important;
+                overflow-x: hidden !important;
+            }
+
+            /* A seta do menu recolhido ocupa a faixa liberada. */
+            [data-testid="collapsedControl"],
+            [data-testid="stSidebarCollapsedControl"],
+            button[data-testid="collapsedControl"],
+            button[data-testid="stSidebarCollapsedControl"] {
+                top: 16px !important;
+                left: 14px !important;
+                transform: none !important;
+                background: #D1D5DB !important;
+                background-color: #D1D5DB !important;
+                color: #4B5563 !important;
+            }
+        </style>
+        """
+    )
+
 def install_chat_contacts_top_slot_runtime_fix() -> None:
     """Reaplica o posicionamento após os reruns do Streamlit."""
     components.html(
@@ -7977,7 +8033,7 @@ def install_chat_contacts_top_slot_runtime_fix() -> None:
 
                     if (panel) {
                         forceStyle(panel, 'box-sizing', 'border-box');
-                        forceStyle(panel, 'padding-top', '54px');
+                        forceStyle(panel, 'padding-top', '0px');
                         forceStyle(panel, 'position', 'relative');
                     }
 
@@ -7987,6 +8043,15 @@ def install_chat_contacts_top_slot_runtime_fix() -> None:
 
                     if (directBlock) {
                         forceStyle(directBlock, 'padding-top', '0px');
+                    }
+
+                    const realSlot = hostDocument.querySelector('.diagnostic-left-top-slot');
+                    if (realSlot) {
+                        forceStyle(realSlot, 'display', 'block');
+                        forceStyle(realSlot, 'height', '58px');
+                        forceStyle(realSlot, 'min-height', '58px');
+                        forceStyle(realSlot, 'max-height', '58px');
+                        forceStyle(realSlot, 'flex', '0 0 58px');
                     }
 
                     const selectors = [
