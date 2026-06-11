@@ -5431,7 +5431,14 @@ def render_all_contracts_page(df: pd.DataFrame, columns: dict) -> None:
     if "contracts_names_filter_state" not in st.session_state:
         st.session_state.contracts_names_filter_state = "Todos os estados"
 
-    filter_col_1, filter_col_2, filter_col_3, filter_col_4 = st.columns(4, gap="medium")
+    (
+        filter_col_1,
+        filter_col_2,
+        filter_col_3,
+        filter_col_4,
+        filter_col_5,
+        filter_col_6,
+    ) = st.columns([1.05, 1.0, 1.12, 1.25, 1.0, 1.0], gap="small")
 
     with filter_col_1:
         selected_seller = st.selectbox(
@@ -5462,16 +5469,14 @@ def render_all_contracts_page(df: pd.DataFrame, columns: dict) -> None:
             key="contracts_names_filter_search",
         )
 
-    niche_filter_col, state_filter_col, _, _ = st.columns(4, gap="medium")
-
-    with niche_filter_col:
+    with filter_col_5:
         selected_niche = st.selectbox(
             "Nichos",
             ["Todos os nichos"] + niche_options,
             key="contracts_names_filter_niche",
         )
 
-    with state_filter_col:
+    with filter_col_6:
         selected_state = st.selectbox(
             "Estados",
             ["Todos os estados"] + state_options,
