@@ -3604,6 +3604,21 @@ def apply_registration_css() -> None:
             .st-key-overview_filter_controls [data-testid="stWidgetLabel"] {
                 display: none !important;
             }
+
+            /* Visão Geral: mantém os títulos dos filtros sempre brancos. */
+            .st-key-overview_filter_labels .overview-filter-custom-label,
+            .st-key-overview_filter_labels .overview-filter-custom-label *,
+            .st-key-overview_filter_labels .overview-filter-custom-label p,
+            .st-key-overview_filter_labels .overview-filter-custom-label span,
+            .st-key-overview_filter_labels [data-testid="stMarkdownContainer"],
+            .st-key-overview_filter_labels [data-testid="stMarkdownContainer"] *,
+            .st-key-overview_filter_labels p,
+            .st-key-overview_filter_labels span,
+            .st-key-overview_filter_labels div {
+                color: #FFFFFF !important;
+                -webkit-text-fill-color: #FFFFFF !important;
+                opacity: 1 !important;
+            }
         </style>
         """
     )
