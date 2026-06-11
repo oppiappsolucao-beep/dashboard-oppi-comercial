@@ -7455,6 +7455,8 @@ def render_scoring_page(df: pd.DataFrame, columns: dict) -> None:
     install_chat_contacts_top_slot_runtime_fix()
     apply_sidebar_toggle_aligned_without_clip_css()
     install_sidebar_toggle_aligned_without_clip_runtime_fix()
+    apply_sidebar_toggle_lowered_final_css()
+    install_sidebar_toggle_lowered_final_runtime_fix()
 
     companies = sorted(
         {
@@ -8115,10 +8117,10 @@ def apply_sidebar_toggle_aligned_without_clip_css() -> None:
         <style>
             /* Faixa reservada no topo esquerdo para acomodar a seta sem cortar. */
             .diagnostic-left-top-slot {
-                height: 84px !important;
-                min-height: 84px !important;
-                max-height: 84px !important;
-                flex: 0 0 84px !important;
+                height: 104px !important;
+                min-height: 104px !important;
+                max-height: 104px !important;
+                flex: 0 0 104px !important;
             }
 
             /* Posiciona somente o controle externo. */
@@ -8127,7 +8129,7 @@ def apply_sidebar_toggle_aligned_without_clip_css() -> None:
             button[data-testid="collapsedControl"],
             button[data-testid="stSidebarCollapsedControl"] {
                 position: fixed !important;
-                top: 32px !important;
+                top: 92px !important;
                 left: 16px !important;
                 width: 40px !important;
                 min-width: 40px !important;
@@ -8217,7 +8219,7 @@ def install_sidebar_toggle_aligned_without_clip_runtime_fix() -> None:
 
                     wrappers.forEach(function (wrapper) {
                         setImportant(wrapper, 'position', 'fixed');
-                        setImportant(wrapper, 'top', '32px');
+                        setImportant(wrapper, 'top', '92px');
                         setImportant(wrapper, 'left', '16px');
                         setImportant(wrapper, 'width', '40px');
                         setImportant(wrapper, 'height', '40px');
@@ -8238,7 +8240,7 @@ def install_sidebar_toggle_aligned_without_clip_runtime_fix() -> None:
                     hostDocument.querySelectorAll('button[data-testid="collapsedControl"], button[data-testid="stSidebarCollapsedControl"]').forEach(function (button) {
                         if (!button.closest('[data-testid="collapsedControl"], [data-testid="stSidebarCollapsedControl"]') || button.matches('[data-testid="collapsedControl"], [data-testid="stSidebarCollapsedControl"]')) {
                             setImportant(button, 'position', 'fixed');
-                            setImportant(button, 'top', '32px');
+                            setImportant(button, 'top', '92px');
                             setImportant(button, 'left', '16px');
                             setImportant(button, 'width', '40px');
                             setImportant(button, 'height', '40px');
@@ -8290,6 +8292,95 @@ def apply_overview_filter_labels_white_css() -> None:
         """
     )
 
+
+
+# =========================================================
+# OVERRIDE FINAL: SETA DO MENU ABAIXADA DENTRO DA FAIXA LIVRE
+# =========================================================
+def apply_sidebar_toggle_lowered_final_css() -> None:
+    """Mantém a seta inteira, cinza e afastada da borda superior na página de Pesos e Medidas."""
+    render_html(
+        """
+        <style>
+            [data-testid="collapsedControl"],
+            [data-testid="stSidebarCollapsedControl"],
+            button[data-testid="collapsedControl"],
+            button[data-testid="stSidebarCollapsedControl"] {
+                top: 92px !important;
+                left: 18px !important;
+                margin: 0 !important;
+                transform: none !important;
+                overflow: visible !important;
+                z-index: 2147483647 !important;
+            }
+
+            [data-testid="collapsedControl"] > button,
+            [data-testid="stSidebarCollapsedControl"] > button,
+            [data-testid="collapsedControl"] button,
+            [data-testid="stSidebarCollapsedControl"] button {
+                top: auto !important;
+                left: auto !important;
+                margin: 0 !important;
+                transform: none !important;
+                overflow: visible !important;
+            }
+        </style>
+        """
+    )
+
+
+def install_sidebar_toggle_lowered_final_runtime_fix() -> None:
+    """Reforça a posição após reruns do Streamlit e mudanças no menu."""
+    components.html(
+        """
+        <script>
+            (function () {
+                function getHostDocument() {
+                    try {
+                        if (window.frameElement && window.frameElement.ownerDocument) {
+                            return window.frameElement.ownerDocument;
+                        }
+                    } catch (error) {}
+                    try { return window.parent.document; } catch (error) { return document; }
+                }
+
+                const hostDocument = getHostDocument();
+                const hostWindow = window.parent || window;
+
+                function setImportant(element, property, value) {
+                    if (element && element.style) {
+                        element.style.setProperty(property, value, 'important');
+                    }
+                }
+
+                function applyLoweredPosition() {
+                    hostDocument.querySelectorAll(
+                        '[data-testid="collapsedControl"], [data-testid="stSidebarCollapsedControl"], button[data-testid="collapsedControl"], button[data-testid="stSidebarCollapsedControl"]'
+                    ).forEach(function (element) {
+                        setImportant(element, 'top', '92px');
+                        setImportant(element, 'left', '18px');
+                        setImportant(element, 'margin', '0');
+                        setImportant(element, 'overflow', 'visible');
+                        setImportant(element, 'z-index', '2147483647');
+                        setImportant(element, 'visibility', 'visible');
+                        setImportant(element, 'opacity', '1');
+                    });
+                }
+
+                applyLoweredPosition();
+                hostWindow.setTimeout(applyLoweredPosition, 100);
+                hostWindow.setTimeout(applyLoweredPosition, 350);
+                hostWindow.setTimeout(applyLoweredPosition, 900);
+
+                const observer = new MutationObserver(applyLoweredPosition);
+                observer.observe(hostDocument.body, { childList: true, subtree: true });
+                hostWindow.setTimeout(function () { observer.disconnect(); }, 8000);
+            })();
+        </script>
+        """,
+        height=0,
+        scrolling=False,
+    )
 
 # =========================================================
 # TRATAMENTO DE ERROS
