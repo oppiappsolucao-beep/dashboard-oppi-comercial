@@ -7453,6 +7453,8 @@ def render_scoring_page(df: pd.DataFrame, columns: dict) -> None:
     apply_chat_contacts_top_slot_real_css()
     apply_contacts_real_top_slot_css()
     install_chat_contacts_top_slot_runtime_fix()
+    apply_sidebar_toggle_aligned_without_clip_css()
+    install_sidebar_toggle_aligned_without_clip_runtime_fix()
 
     companies = sorted(
         {
@@ -7964,10 +7966,10 @@ def apply_contacts_real_top_slot_css() -> None:
             .diagnostic-left-top-slot {
                 display: block !important;
                 width: 100% !important;
-                height: 58px !important;
-                min-height: 58px !important;
-                max-height: 58px !important;
-                flex: 0 0 58px !important;
+                height: 84px !important;
+                min-height: 84px !important;
+                max-height: 84px !important;
+                flex: 0 0 84px !important;
                 margin: 0 !important;
                 padding: 0 !important;
                 background: transparent !important;
@@ -7988,8 +7990,8 @@ def apply_contacts_real_top_slot_css() -> None:
             [data-testid="stSidebarCollapsedControl"],
             button[data-testid="collapsedControl"],
             button[data-testid="stSidebarCollapsedControl"] {
-                top: 16px !important;
-                left: 14px !important;
+                top: 32px !important;
+                left: 16px !important;
                 transform: none !important;
                 background: #D1D5DB !important;
                 background-color: #D1D5DB !important;
@@ -8048,10 +8050,10 @@ def install_chat_contacts_top_slot_runtime_fix() -> None:
                     const realSlot = hostDocument.querySelector('.diagnostic-left-top-slot');
                     if (realSlot) {
                         forceStyle(realSlot, 'display', 'block');
-                        forceStyle(realSlot, 'height', '58px');
-                        forceStyle(realSlot, 'min-height', '58px');
-                        forceStyle(realSlot, 'max-height', '58px');
-                        forceStyle(realSlot, 'flex', '0 0 58px');
+                        forceStyle(realSlot, 'height', '84px');
+                        forceStyle(realSlot, 'min-height', '84px');
+                        forceStyle(realSlot, 'max-height', '84px');
+                        forceStyle(realSlot, 'flex', '0 0 84px');
                     }
 
                     const selectors = [
@@ -8063,8 +8065,8 @@ def install_chat_contacts_top_slot_runtime_fix() -> None:
 
                     selectors.forEach(function (selector) {
                         hostDocument.querySelectorAll(selector).forEach(function (control) {
-                            forceStyle(control, 'top', '14px');
-                            forceStyle(control, 'left', '14px');
+                            forceStyle(control, 'top', '32px');
+                            forceStyle(control, 'left', '16px');
                             forceStyle(control, 'background', '#D1D5DB');
                             forceStyle(control, 'background-color', '#D1D5DB');
                             forceStyle(control, 'color', '#4B5563');
@@ -8093,6 +8095,165 @@ def install_chat_contacts_top_slot_runtime_fix() -> None:
                     applyFix();
                 });
 
+                observer.observe(hostDocument.body, { childList: true, subtree: true });
+                hostWindow.setTimeout(function () { observer.disconnect(); }, 6000);
+            })();
+        </script>
+        """,
+        height=0,
+        scrolling=False,
+    )
+
+
+# =========================================================
+# AJUSTE DEFINITIVO: SETA DO MENU ALINHADA SEM CORTE
+# =========================================================
+def apply_sidebar_toggle_aligned_without_clip_css() -> None:
+    """Abaixa a seta recolhida, centraliza no espaço reservado e impede corte pelo botão interno."""
+    render_html(
+        """
+        <style>
+            /* Faixa reservada no topo esquerdo para acomodar a seta sem cortar. */
+            .diagnostic-left-top-slot {
+                height: 84px !important;
+                min-height: 84px !important;
+                max-height: 84px !important;
+                flex: 0 0 84px !important;
+            }
+
+            /* Posiciona somente o controle externo. */
+            [data-testid="collapsedControl"],
+            [data-testid="stSidebarCollapsedControl"],
+            button[data-testid="collapsedControl"],
+            button[data-testid="stSidebarCollapsedControl"] {
+                position: fixed !important;
+                top: 32px !important;
+                left: 16px !important;
+                width: 40px !important;
+                min-width: 40px !important;
+                height: 40px !important;
+                min-height: 40px !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                border-radius: 12px !important;
+                overflow: visible !important;
+                transform: none !important;
+                z-index: 2147483647 !important;
+            }
+
+            /* O botão interno não pode receber posição fixa: isso era o que cortava a seta. */
+            [data-testid="collapsedControl"] > button,
+            [data-testid="stSidebarCollapsedControl"] > button,
+            [data-testid="collapsedControl"] button,
+            [data-testid="stSidebarCollapsedControl"] button {
+                position: static !important;
+                top: auto !important;
+                left: auto !important;
+                transform: none !important;
+                width: 100% !important;
+                height: 100% !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                overflow: visible !important;
+            }
+
+            [data-testid="collapsedControl"] svg,
+            [data-testid="stSidebarCollapsedControl"] svg,
+            button[data-testid="collapsedControl"] svg,
+            button[data-testid="stSidebarCollapsedControl"] svg {
+                display: block !important;
+                visibility: visible !important;
+                opacity: 1 !important;
+                width: 22px !important;
+                height: 22px !important;
+                color: #4B5563 !important;
+                fill: #4B5563 !important;
+                stroke: #4B5563 !important;
+                overflow: visible !important;
+            }
+
+            [data-testid="collapsedControl"]:hover,
+            [data-testid="stSidebarCollapsedControl"]:hover,
+            button[data-testid="collapsedControl"]:hover,
+            button[data-testid="stSidebarCollapsedControl"]:hover {
+                transform: scale(1.06) !important;
+            }
+        </style>
+        """
+    )
+
+
+def install_sidebar_toggle_aligned_without_clip_runtime_fix() -> None:
+    """Reaplica a posição correta da seta após reruns do Streamlit."""
+    components.html(
+        """
+        <script>
+            (function () {
+                function getHostDocument() {
+                    try {
+                        if (window.frameElement && window.frameElement.ownerDocument) {
+                            return window.frameElement.ownerDocument;
+                        }
+                    } catch (error) {}
+                    try { return window.parent.document; } catch (error) { return document; }
+                }
+
+                const hostDocument = getHostDocument();
+                const hostWindow = window.parent || window;
+
+                function setImportant(element, property, value) {
+                    if (element && element.style) {
+                        element.style.setProperty(property, value, 'important');
+                    }
+                }
+
+                function fixToggle() {
+                    const wrappers = hostDocument.querySelectorAll(
+                        '[data-testid="collapsedControl"], [data-testid="stSidebarCollapsedControl"]'
+                    );
+
+                    wrappers.forEach(function (wrapper) {
+                        setImportant(wrapper, 'position', 'fixed');
+                        setImportant(wrapper, 'top', '32px');
+                        setImportant(wrapper, 'left', '16px');
+                        setImportant(wrapper, 'width', '40px');
+                        setImportant(wrapper, 'height', '40px');
+                        setImportant(wrapper, 'overflow', 'visible');
+                        setImportant(wrapper, 'z-index', '2147483647');
+                        setImportant(wrapper, 'visibility', 'visible');
+                        setImportant(wrapper, 'opacity', '1');
+
+                        wrapper.querySelectorAll('button').forEach(function (button) {
+                            setImportant(button, 'position', 'static');
+                            setImportant(button, 'top', 'auto');
+                            setImportant(button, 'left', 'auto');
+                            setImportant(button, 'transform', 'none');
+                            setImportant(button, 'overflow', 'visible');
+                        });
+                    });
+
+                    hostDocument.querySelectorAll('button[data-testid="collapsedControl"], button[data-testid="stSidebarCollapsedControl"]').forEach(function (button) {
+                        if (!button.closest('[data-testid="collapsedControl"], [data-testid="stSidebarCollapsedControl"]') || button.matches('[data-testid="collapsedControl"], [data-testid="stSidebarCollapsedControl"]')) {
+                            setImportant(button, 'position', 'fixed');
+                            setImportant(button, 'top', '32px');
+                            setImportant(button, 'left', '16px');
+                            setImportant(button, 'width', '40px');
+                            setImportant(button, 'height', '40px');
+                            setImportant(button, 'overflow', 'visible');
+                            setImportant(button, 'z-index', '2147483647');
+                        }
+                    });
+                }
+
+                fixToggle();
+                hostWindow.setTimeout(fixToggle, 80);
+                hostWindow.setTimeout(fixToggle, 260);
+                hostWindow.setTimeout(fixToggle, 700);
+
+                const observer = new MutationObserver(fixToggle);
                 observer.observe(hostDocument.body, { childList: true, subtree: true });
                 hostWindow.setTimeout(function () { observer.disconnect(); }, 6000);
             })();
