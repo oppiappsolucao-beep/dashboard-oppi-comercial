@@ -3543,6 +3543,67 @@ def apply_registration_css() -> None:
                 margin-top: 0 !important;
                 top: 0 !important;
             }
+
+            /* ALINHAMENTO DEFINITIVO DA VISÃO GERAL:
+               labels próprios em uma linha e todos os controles em outra linha. */
+            .st-key-overview_filter_labels {
+                margin-bottom: 6px !important;
+            }
+
+            .st-key-overview_filter_labels div[data-testid="stHorizontalBlock"],
+            .st-key-overview_filter_controls div[data-testid="stHorizontalBlock"] {
+                align-items: flex-start !important;
+                gap: 0.72rem !important;
+            }
+
+            .overview-filter-custom-label {
+                min-height: 20px !important;
+                height: 20px !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                color: rgba(255,255,255,0.92) !important;
+                font-size: 0.86rem !important;
+                font-weight: 700 !important;
+                line-height: 20px !important;
+                white-space: nowrap !important;
+                overflow: hidden !important;
+                text-overflow: ellipsis !important;
+            }
+
+            .st-key-overview_filter_controls div[data-testid="stSelectbox"],
+            .st-key-overview_filter_controls div[data-testid="stDateInput"],
+            .st-key-overview_filter_controls div[data-testid="stTextInput"],
+            .st-key-overview_filter_controls div[data-testid="stElementContainer"],
+            .st-key-overview_filter_controls div[data-testid="stVerticalBlock"] {
+                margin-top: 0 !important;
+                padding-top: 0 !important;
+            }
+
+            .st-key-overview_filter_controls div[data-testid="stDateInput"] [data-baseweb="input"],
+            .st-key-overview_filter_controls div[data-testid="stTextInput"] [data-baseweb="input"],
+            .st-key-overview_filter_controls div[data-testid="stSelectbox"] [data-baseweb="select"] {
+                position: static !important;
+                top: auto !important;
+                margin-top: 0 !important;
+                padding-top: 0 !important;
+                transform: none !important;
+            }
+
+            .st-key-overview_filter_controls div[data-testid="stDateInput"] [data-baseweb="input"] > div,
+            .st-key-overview_filter_controls div[data-testid="stTextInput"] [data-baseweb="input"] > div,
+            .st-key-overview_filter_controls div[data-testid="stSelectbox"] [data-baseweb="select"] > div {
+                min-height: 54px !important;
+                height: 54px !important;
+                margin-top: 0 !important;
+                padding-top: 0 !important;
+                padding-bottom: 0 !important;
+                transform: none !important;
+                box-sizing: border-box !important;
+            }
+
+            .st-key-overview_filter_controls [data-testid="stWidgetLabel"] {
+                display: none !important;
+            }
         </style>
         """
     )
@@ -4297,9 +4358,31 @@ def render_latest_calls_section(
         """
     )
 
-    with st.container(key="overview_filters_aligned"):
+    # Renderiza os títulos em uma linha separada e os campos em outra linha.
+    # Assim os componentes nativos do Streamlit (selectbox, date_input e text_input)
+    # começam exatamente na mesma altura, independentemente do tipo do campo.
+    filter_widths = [1.05, 1.0, 1.12, 1.0, 1.0, 1.32]
+
+    with st.container(key="overview_filter_labels"):
+        label_columns = st.columns(filter_widths, gap="small")
+        filter_labels = [
+            "Vendedor",
+            "Status",
+            "Período",
+            "Nichos",
+            "Estados",
+            "Buscar empresa ou telefone",
+        ]
+
+        for label_column, filter_label in zip(label_columns, filter_labels):
+            with label_column:
+                render_html(
+                    f'<div class="overview-filter-custom-label">{html.escape(filter_label)}</div>'
+                )
+
+    with st.container(key="overview_filter_controls"):
         filter_1, filter_2, filter_3, filter_4, filter_5, filter_6 = st.columns(
-            [1.05, 1.0, 1.12, 1.0, 1.0, 1.32],
+            filter_widths,
             gap="small",
         )
 
@@ -4308,6 +4391,7 @@ def render_latest_calls_section(
                 "Vendedor",
                 ["Todos os vendedores"] + seller_options,
                 key="dashboard_filter_seller",
+                label_visibility="collapsed",
             )
 
         with filter_2:
@@ -4315,6 +4399,7 @@ def render_latest_calls_section(
                 "Status",
                 ["Todos os status"] + STATUS_OPTIONS,
                 key="dashboard_filter_status",
+                label_visibility="collapsed",
             )
 
         with filter_3:
@@ -4323,6 +4408,7 @@ def render_latest_calls_section(
                 min_value=date_min,
                 max_value=max(date_max, date.today()),
                 key="dashboard_filter_period",
+                label_visibility="collapsed",
             )
 
         with filter_4:
@@ -4330,6 +4416,7 @@ def render_latest_calls_section(
                 "Nichos",
                 ["Todos os nichos"] + niche_options,
                 key="dashboard_filter_niche",
+                label_visibility="collapsed",
             )
 
         with filter_5:
@@ -4337,6 +4424,7 @@ def render_latest_calls_section(
                 "Estados",
                 ["Todos os estados"] + state_options,
                 key="dashboard_filter_state",
+                label_visibility="collapsed",
             )
 
         with filter_6:
@@ -4344,6 +4432,7 @@ def render_latest_calls_section(
                 "Buscar empresa ou telefone",
                 placeholder="Digite para buscar...",
                 key="dashboard_filter_search",
+                label_visibility="collapsed",
             )
 
     st.write("")
