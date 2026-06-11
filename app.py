@@ -7449,6 +7449,7 @@ def render_scoring_page(df: pd.DataFrame, columns: dict) -> None:
     apply_final_sidebar_toggle_override_css()
     apply_final_chat_layout_override_css()
     apply_requested_sidebar_and_chat_fix_css()
+    apply_chat_sidebar_toggle_slot_css()
 
     companies = sorted(
         {
@@ -7779,6 +7780,54 @@ def apply_requested_sidebar_and_chat_fix_css() -> None:
         </style>
         """
     )
+
+# =========================================================
+# AJUSTE FINAL DO CHAT: ESPAÇO SUPERIOR PARA A SETA DO MENU
+# =========================================================
+def apply_chat_sidebar_toggle_slot_css() -> None:
+    """Reserva espaço no topo da coluna de empresas e posiciona a seta do menu recolhido nesse espaço."""
+    render_html(
+        """
+        <style>
+            /*
+               Na tela Pesos e Medidas, a coluna de empresas tinha sobra na parte inferior,
+               mas o topo ficava ocupado pelo título. Reservamos um pequeno espaço no topo
+               para a seta que reabre o menu quando o sidebar estiver recolhido.
+            */
+            .st-key-diagnostic_contacts_panel > div[data-testid="stVerticalBlock"] {
+                box-sizing: border-box !important;
+                padding-top: 46px !important;
+            }
+
+            /* A seta fica dentro da área clara liberada no topo esquerdo do chat. */
+            [data-testid="collapsedControl"],
+            [data-testid="stSidebarCollapsedControl"],
+            button[data-testid="collapsedControl"],
+            button[data-testid="stSidebarCollapsedControl"] {
+                top: 12px !important;
+                left: 14px !important;
+                transform: none !important;
+            }
+
+            [data-testid="collapsedControl"]:hover,
+            [data-testid="stSidebarCollapsedControl"]:hover,
+            button[data-testid="collapsedControl"]:hover,
+            button[data-testid="stSidebarCollapsedControl"]:hover {
+                transform: scale(1.06) !important;
+            }
+
+            /* Mantém exatamente quatro conversas visíveis e rolagem interna para as demais. */
+            .st-key-diagnostic_contacts_list {
+                height: 344px !important;
+                min-height: 344px !important;
+                max-height: 344px !important;
+                overflow-y: auto !important;
+                overflow-x: hidden !important;
+            }
+        </style>
+        """
+    )
+
 
 # =========================================================
 # CSS FINAL: TÍTULOS DOS FILTROS DA VISÃO GERAL EM BRANCO
