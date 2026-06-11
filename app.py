@@ -7720,6 +7720,33 @@ def apply_requested_sidebar_and_chat_fix_css() -> None:
     )
 
 # =========================================================
+# CSS FINAL: TÍTULOS DOS FILTROS DA VISÃO GERAL EM BRANCO
+# =========================================================
+def apply_overview_filter_labels_white_css() -> None:
+    """Força os títulos customizados dos filtros da Visão Geral a permanecerem brancos."""
+    render_html(
+        """
+        <style>
+            /* Este bloco é aplicado globalmente no dashboard, inclusive na Visão Geral.
+               O ajuste anterior estava dentro do CSS exclusivo das páginas de cadastro. */
+            .overview-filter-custom-label,
+            .overview-filter-custom-label *,
+            .st-key-overview_filter_labels .overview-filter-custom-label,
+            .st-key-overview_filter_labels .overview-filter-custom-label *,
+            .st-key-overview_filter_labels [data-testid="stMarkdownContainer"],
+            .st-key-overview_filter_labels [data-testid="stMarkdownContainer"] *,
+            .st-key-overview_filter_labels p,
+            .st-key-overview_filter_labels span {
+                color: #FFFFFF !important;
+                -webkit-text-fill-color: #FFFFFF !important;
+                opacity: 1 !important;
+            }
+        </style>
+        """
+    )
+
+
+# =========================================================
 # TRATAMENTO DE ERROS
 # =========================================================
 def render_connection_error(error: Exception) -> None:
@@ -7762,6 +7789,7 @@ def main() -> None:
         return
 
     apply_dashboard_css()
+    apply_overview_filter_labels_white_css()
     apply_global_sidebar_toggle_css()
     apply_final_sidebar_toggle_override_css()
     page = render_sidebar()
