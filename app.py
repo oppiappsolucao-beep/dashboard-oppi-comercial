@@ -3449,6 +3449,26 @@ def apply_registration_css() -> None:
                 height: 54px !important;
                 box-sizing: border-box !important;
             }
+
+            /* Visão Geral: reserva a mesma altura para todos os títulos dos filtros.
+               Assim, mesmo o título maior da busca não empurra somente o último campo para baixo. */
+            .st-key-overview_filters_aligned [data-testid="stWidgetLabel"],
+            .st-key-overview_filters_aligned label {
+                min-height: 42px !important;
+                height: 42px !important;
+                display: flex !important;
+                align-items: flex-start !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                line-height: 1.18 !important;
+                box-sizing: border-box !important;
+            }
+
+            .st-key-overview_filters_aligned [data-testid="stWidgetLabel"] p,
+            .st-key-overview_filters_aligned label p {
+                margin: 0 !important;
+                line-height: 1.18 !important;
+            }
         </style>
         """
     )
