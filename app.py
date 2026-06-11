@@ -3041,7 +3041,11 @@ def apply_registration_css() -> None:
             }
 
             .contracts-names-clickable-header {
-                padding: 14px 18px;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 12px;
+                padding: 10px 12px 10px 18px;
                 color: #FFFFFF;
                 font-size: 0.90rem;
                 font-weight: 950;
@@ -3051,6 +3055,31 @@ def apply_registration_css() -> None:
                     linear-gradient(90deg, rgba(255,75,170,0.42), rgba(169,28,255,0.42)),
                     rgba(20,15,43,0.98);
                 border-bottom: 1px solid rgba(255,75,170,0.30);
+            }
+
+            .contracts-names-sort-toggle {
+                width: 34px;
+                height: 30px;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                flex-shrink: 0;
+                border-radius: 10px;
+                color: #FFFFFF !important;
+                text-decoration: none !important;
+                font-size: 1.12rem;
+                font-weight: 950;
+                line-height: 1;
+                background: linear-gradient(135deg, rgba(255,75,170,0.92), rgba(169,28,255,0.92));
+                border: 1px solid rgba(255,255,255,0.24);
+                box-shadow: 0 8px 18px rgba(169,28,255,0.18);
+                transition: transform 0.18s ease, filter 0.18s ease, box-shadow 0.18s ease;
+            }
+
+            .contracts-names-sort-toggle:hover {
+                transform: scale(1.08);
+                filter: brightness(1.08);
+                box-shadow: 0 10px 22px rgba(169,28,255,0.28);
             }
 
             /* Página de visualização do cadastro preenchido */
@@ -5868,10 +5897,19 @@ def render_all_contracts_page(df: pd.DataFrame, columns: dict) -> None:
     names_df = filtered_df[["_empresa", "_sheet_row"]].copy()
     names_df["Empresa"] = names_df["_empresa"].apply(normalize_text)
     names_df = names_df[names_df["Empresa"] != ""].copy()
-    names_df = names_df.sort_values(
-        "Empresa",
-        key=lambda series: series.map(normalize_search_text),
-    )
+
+    # Ao entrar em Todos os cadastros, a lista começa pelos registros mais recentes
+    # da planilha. A seta no cabeçalho alterna para ordem alfabética e permite voltar.
+    requested_order = normalize_search_text(_query_param_value("order"))
+    sort_mode = "alfabetica" if requested_order == "alfabetica" else "recentes"
+
+    if sort_mode == "alfabetica":
+        names_df = names_df.sort_values(
+            "Empresa",
+            key=lambda series: series.map(normalize_search_text),
+        )
+    else:
+        names_df = names_df.sort_values("_sheet_row", ascending=False)
 
     render_html(
         f"""
@@ -5886,7 +5924,30 @@ def render_all_contracts_page(df: pd.DataFrame, columns: dict) -> None:
         return
 
     with st.container(key="contracts_names_list"):
-        render_html('<div class="contracts-names-clickable-header">Empresas cadastradas</div>')
+        navigation_token = normalize_text(st.session_state.get("navigation_session_token", ""))
+        next_order = "alfabetica" if sort_mode == "recentes" else "recentes"
+        sort_arrow = "↓" if sort_mode == "recentes" else "↑"
+        sort_title = (
+            "Mais recentes primeiro — clique para ordenar em ordem alfabética"
+            if sort_mode == "recentes"
+            else "Ordem alfabética — clique para voltar aos cadastros mais recentes"
+        )
+        session_query = f"&session={html.escape(navigation_token, quote=True)}" if navigation_token else ""
+
+        render_html(
+            f"""
+            <div class="contracts-names-clickable-header">
+                <span>Empresas cadastradas</span>
+                <a
+                    class="contracts-names-sort-toggle"
+                    href="?page=cadastro&contracts=todos&order={next_order}{session_query}"
+                    target="_self"
+                    title="{html.escape(sort_title, quote=True)}"
+                    aria-label="{html.escape(sort_title, quote=True)}"
+                >{sort_arrow}</a>
+            </div>
+            """
+        )
 
         for _, company_row in names_df.iterrows():
             sheet_row = int(company_row["_sheet_row"])
