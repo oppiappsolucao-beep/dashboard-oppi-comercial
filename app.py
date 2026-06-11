@@ -3401,6 +3401,23 @@ def apply_registration_css() -> None:
                 height: 54px !important;
                 box-sizing: border-box !important;
             }
+
+            /* Todos os cadastros: devolve a respiração visual sem alterar o alinhamento. */
+            .contracts-page-header-gap {
+                height: 18px;
+            }
+
+            .st-key-contracts_filters_aligned {
+                margin-bottom: 22px !important;
+            }
+
+            .contracts-names-count-card {
+                margin: 0 0 18px 0 !important;
+            }
+
+            .st-key-contracts_names_list {
+                margin-top: 0 !important;
+            }
         </style>
         """
     )
@@ -5404,6 +5421,8 @@ def render_all_contracts_page(df: pd.DataFrame, columns: dict) -> None:
         </div>
         """
     )
+
+    render_html('<div class="contracts-page-header-gap"></div>')
 
     valid_dates = df["_data_chamado"].dropna()
 
