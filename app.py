@@ -73,7 +73,7 @@ if "selected_page" not in st.session_state:
     st.session_state.selected_page = "Visão Geral"
 
 if "selected_cadastro_subpage" not in st.session_state:
-    st.session_state.selected_cadastro_subpage = "Novo contrato"
+    st.session_state.selected_cadastro_subpage = "Novo cadastro"
 
 if "selected_contract_sheet_row" not in st.session_state:
     st.session_state.selected_contract_sheet_row = None
@@ -2210,7 +2210,7 @@ def apply_dashboard_css() -> None:
                 box-shadow: 0 8px 18px rgba(14, 13, 27, 0.04);
             }
 
-            /* Lista de nomes em Todos os contratos: visual preto, rosa e roxo */
+            /* Lista de nomes em Todos os cadastros: visual preto, rosa e roxo */
             .contracts-names-count-card {
                 margin: 14px 0 14px 0;
                 padding: 13px 16px;
@@ -3130,7 +3130,7 @@ def apply_registration_css() -> None:
                 font-weight: 900;
             }
 
-            /* CORREÇÃO FINAL: campos do Novo contrato brancos com texto preto.
+            /* CORREÇÃO FINAL: campos do Novo cadastro brancos com texto preto.
                Este bloco fica por último para não ser sobrescrito pelo CSS anterior. */
             [data-testid="stForm"] label,
             [data-testid="stForm"] label p,
@@ -3430,9 +3430,9 @@ def _sync_navigation_from_query_params() -> None:
         st.session_state.selected_page = "Cadastro"
 
         if requested_contracts_page == "todos":
-            st.session_state.selected_cadastro_subpage = "Todos os contratos"
+            st.session_state.selected_cadastro_subpage = "Todos os cadastros"
         elif requested_contracts_page == "novo":
-            st.session_state.selected_cadastro_subpage = "Novo contrato"
+            st.session_state.selected_cadastro_subpage = "Novo cadastro"
 
 
 def render_sidebar() -> str:
@@ -3468,8 +3468,8 @@ def render_sidebar() -> str:
         cadastro_active = "active" if st.session_state.selected_page == "Cadastro" else ""
         scores_active = "active" if st.session_state.selected_page == "Pesos e Medidas" else ""
         details_open = "open" if st.session_state.selected_page == "Cadastro" else ""
-        novo_active = "active" if st.session_state.get("selected_cadastro_subpage", "Novo contrato") == "Novo contrato" else ""
-        todos_active = "active" if st.session_state.get("selected_cadastro_subpage", "Novo contrato") == "Todos os contratos" else ""
+        novo_active = "active" if st.session_state.get("selected_cadastro_subpage", "Novo cadastro") == "Novo cadastro" else ""
+        todos_active = "active" if st.session_state.get("selected_cadastro_subpage", "Novo cadastro") == "Todos os cadastros" else ""
         navigation_token = normalize_text(st.session_state.get("navigation_session_token", ""))
         session_query = f"&session={navigation_token}" if navigation_token else ""
 
@@ -3490,8 +3490,8 @@ def render_sidebar() -> str:
 
                     <div class="oppi-cadastro-flyout">
                         <div class="oppi-flyout-title">Cadastro</div>
-                        <a class="oppi-flyout-link {novo_active}" href="?page=cadastro&contracts=novo{session_query}" target="_self">Novo contrato</a>
-                        <a class="oppi-flyout-link {todos_active}" href="?page=cadastro&contracts=todos{session_query}" target="_self">Todos os contratos</a>
+                        <a class="oppi-flyout-link {novo_active}" href="?page=cadastro&contracts=novo{session_query}" target="_self">Novo cadastro</a>
+                        <a class="oppi-flyout-link {todos_active}" href="?page=cadastro&contracts=todos{session_query}" target="_self">Todos os cadastros</a>
                     </div>
                 </details>
 
@@ -4332,8 +4332,8 @@ def render_proposals_page(df: pd.DataFrame, columns: dict) -> None:
     render_html(
         """
         <div class="registration-header-card">
-            <div class="registration-kicker">OPPI COMERCIAL • NOVO CONTRATO</div>
-            <div class="registration-title">Novo contrato</div>
+            <div class="registration-kicker">OPPI COMERCIAL • NOVO CADASTRO</div>
+            <div class="registration-title">Novo cadastro</div>
             <div class="registration-subtitle">
                 Registre uma nova empresa e envie os dados diretamente para a planilha comercial.
             </div>
@@ -4652,7 +4652,7 @@ def render_proposals_page(df: pd.DataFrame, columns: dict) -> None:
 
 
 # =========================================================
-# PÁGINA: TODOS OS CONTRATOS
+# PÁGINA: TODOS OS CADASTROS
 # =========================================================
 def _contract_detail_value(row: pd.Series, columns: dict, key: str) -> str:
     column_name = columns.get(key)
@@ -6713,7 +6713,6 @@ def render_scoring_page(df: pd.DataFrame, columns: dict) -> None:
     apply_final_sidebar_toggle_override_css()
     apply_final_chat_layout_override_css()
     apply_requested_sidebar_and_chat_fix_css()
-    render_html('<div class="diagnostic-page-top-spacer"></div>')
 
     companies = sorted(
         {
@@ -6858,19 +6857,54 @@ def render_scoring_page(df: pd.DataFrame, columns: dict) -> None:
 # AJUSTE DEFINITIVO SOLICITADO: SETA CINZA + LISTA COM SCROLL
 # =========================================================
 def apply_requested_sidebar_and_chat_fix_css() -> None:
-    """Aplica por último os dois ajustes solicitados no menu e na lista de conversas."""
+    """Ajuste final: remove faixas vazias, centraliza a seta cinza e mostra 4 conversas com scroll."""
     render_html(
         """
         <style>
-            /* Seta cinza para reabrir o menu lateral quando ele estiver recolhido. */
+            /* Remove definitivamente qualquer faixa vazia criada acima do chat. */
+            .diagnostic-page-top-spacer {
+                display: none !important;
+                width: 0 !important;
+                height: 0 !important;
+                min-height: 0 !important;
+                max-height: 0 !important;
+                margin: 0 !important;
+                padding: 0 !important;
+            }
+
+            /* O chat encosta no topo e na base da área útil, sem faixas pretas. */
+            .st-key-diagnostic_contacts_panel,
+            .st-key-diagnostic_chat_panel {
+                margin: 0 !important;
+                padding: 0 !important;
+                min-height: 100dvh !important;
+                height: 100dvh !important;
+                max-height: 100dvh !important;
+                border-radius: 0 !important;
+                box-shadow: none !important;
+                overflow: hidden !important;
+            }
+
+            [data-testid="stMainBlockContainer"],
+            [data-testid="stMainBlockContainer"] > div[data-testid="stVerticalBlock"] {
+                padding-top: 0 !important;
+                padding-bottom: 0 !important;
+                margin-top: 0 !important;
+                margin-bottom: 0 !important;
+                gap: 0 !important;
+            }
+
+            /* Quando o menu estiver recolhido, a seta aparece no meio da lateral em cinza. */
             [data-testid="collapsedControl"],
-            [data-testid="stSidebarCollapsedControl"] {
+            [data-testid="stSidebarCollapsedControl"],
+            button[data-testid="collapsedControl"],
+            button[data-testid="stSidebarCollapsedControl"] {
                 display: flex !important;
                 visibility: visible !important;
                 opacity: 1 !important;
                 position: fixed !important;
-                top: 18px !important;
-                left: 14px !important;
+                top: 50vh !important;
+                left: 12px !important;
                 width: 42px !important;
                 min-width: 42px !important;
                 height: 42px !important;
@@ -6882,7 +6916,9 @@ def apply_requested_sidebar_and_chat_fix_css() -> None:
                 border: 1px solid rgba(75, 85, 99, 0.34) !important;
                 background: #D1D5DB !important;
                 background-color: #D1D5DB !important;
-                box-shadow: 0 8px 20px rgba(0, 0, 0, 0.22) !important;
+                color: #4B5563 !important;
+                box-shadow: 0 8px 20px rgba(0, 0, 0, 0.20) !important;
+                transform: translateY(-50%) !important;
                 pointer-events: auto !important;
                 z-index: 2147483647 !important;
                 overflow: visible !important;
@@ -6913,7 +6949,9 @@ def apply_requested_sidebar_and_chat_fix_css() -> None:
             }
 
             [data-testid="collapsedControl"]::after,
-            [data-testid="stSidebarCollapsedControl"]::after {
+            [data-testid="stSidebarCollapsedControl"]::after,
+            button[data-testid="collapsedControl"]::after,
+            button[data-testid="stSidebarCollapsedControl"]::after {
                 content: "›" !important;
                 display: block !important;
                 position: absolute !important;
@@ -6929,19 +6967,22 @@ def apply_requested_sidebar_and_chat_fix_css() -> None:
             }
 
             [data-testid="collapsedControl"]:hover,
-            [data-testid="stSidebarCollapsedControl"]:hover {
+            [data-testid="stSidebarCollapsedControl"]:hover,
+            button[data-testid="collapsedControl"]:hover,
+            button[data-testid="stSidebarCollapsedControl"]:hover {
                 background: #E5E7EB !important;
                 background-color: #E5E7EB !important;
-                transform: scale(1.06) !important;
+                transform: translateY(-50%) scale(1.06) !important;
             }
 
-            /* Lista lateral: mostra 4 conversas completas e permite rolar para ver todas. */
+            /* Mostra exatamente 4 conversas completas inicialmente e permite rolar todas as demais. */
             .st-key-diagnostic_contacts_list {
                 display: block !important;
+                flex: 0 0 344px !important;
                 width: 100% !important;
-                height: 324px !important;
-                min-height: 324px !important;
-                max-height: 324px !important;
+                height: 344px !important;
+                min-height: 344px !important;
+                max-height: 344px !important;
                 margin: 0 !important;
                 padding: 0 4px 0 0 !important;
                 overflow-y: auto !important;
@@ -6950,7 +6991,8 @@ def apply_requested_sidebar_and_chat_fix_css() -> None:
                 scrollbar-color: rgba(169, 28, 255, 0.76) rgba(255, 255, 255, 0.58) !important;
             }
 
-            .st-key-diagnostic_contacts_list > div[data-testid="stVerticalBlock"] {
+            .st-key-diagnostic_contacts_list > div[data-testid="stVerticalBlock"],
+            .st-key-diagnostic_contacts_list div[data-testid="stVerticalBlock"] {
                 display: block !important;
                 width: 100% !important;
                 height: auto !important;
@@ -6970,10 +7012,10 @@ def apply_requested_sidebar_and_chat_fix_css() -> None:
 
             .st-key-diagnostic_contacts_list .stButton > button {
                 width: calc(100% - 16px) !important;
-                min-height: 72px !important;
-                height: 72px !important;
-                max-height: 72px !important;
-                margin: 4px 8px !important;
+                min-height: 76px !important;
+                height: 76px !important;
+                max-height: 76px !important;
+                margin: 5px 8px !important;
                 padding: 8px 12px !important;
                 overflow: hidden !important;
                 transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease !important;
@@ -7072,9 +7114,9 @@ def main() -> None:
     if page == "Visão Geral":
         render_overview_page(prepared_df, columns)
     elif page == "Cadastro":
-        cadastro_subpage = st.session_state.get("selected_cadastro_subpage", "Novo contrato")
+        cadastro_subpage = st.session_state.get("selected_cadastro_subpage", "Novo cadastro")
 
-        if cadastro_subpage == "Todos os contratos":
+        if cadastro_subpage == "Todos os cadastros":
             render_all_contracts_page(prepared_df, columns)
         else:
             render_proposals_page(prepared_df, columns)
