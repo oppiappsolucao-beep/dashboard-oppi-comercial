@@ -3418,6 +3418,37 @@ def apply_registration_css() -> None:
             .st-key-contracts_names_list {
                 margin-top: 0 !important;
             }
+
+            /* Visão Geral: seis filtros alinhados e com respiro entre filtros e cards. */
+            .st-key-overview_filters_aligned {
+                margin-bottom: 22px !important;
+            }
+
+            .st-key-overview_filters_aligned div[data-testid="stHorizontalBlock"] {
+                align-items: flex-start !important;
+                gap: 0.72rem !important;
+            }
+
+            .st-key-overview_filters_aligned div[data-testid="stTextInput"],
+            .st-key-overview_filters_aligned div[data-testid="stDateInput"],
+            .st-key-overview_filters_aligned div[data-testid="stSelectbox"] {
+                padding-top: 0 !important;
+                margin-top: 0 !important;
+            }
+
+            .st-key-overview_filters_aligned div[data-testid="stTextInput"] > div,
+            .st-key-overview_filters_aligned div[data-testid="stDateInput"] > div,
+            .st-key-overview_filters_aligned div[data-testid="stSelectbox"] > div {
+                margin-top: 0 !important;
+            }
+
+            .st-key-overview_filters_aligned div[data-testid="stTextInput"] div[data-baseweb="input"] > div,
+            .st-key-overview_filters_aligned div[data-testid="stDateInput"] div[data-baseweb="input"] > div,
+            .st-key-overview_filters_aligned div[data-testid="stSelectbox"] > div[data-baseweb="select"] > div {
+                min-height: 54px !important;
+                height: 54px !important;
+                box-sizing: border-box !important;
+            }
         </style>
         """
     )
@@ -4140,13 +4171,31 @@ def render_latest_calls_section(
         ]
     )
 
+    niche_options = sorted(
+        [
+            niche
+            for niche in source_df["_nicho"].dropna().astype(str).unique().tolist()
+            if normalize_text(niche)
+        ],
+        key=normalize_search_text,
+    )
+
+    state_options = sorted(
+        [
+            state
+            for state in source_df["_estado"].dropna().astype(str).unique().tolist()
+            if normalize_text(state)
+        ],
+        key=lambda value: (value == "Não identificado", value),
+    )
+
     render_html(
         """
         <div class="latest-calls-shell">
             <div class="latest-calls-head">
                 <div>
                     <div class="latest-filter-title">Filtros dos chamados</div>
-                    <div class="latest-filter-subtitle">Refine os resultados por vendedor, status, período ou empresa.</div>
+                    <div class="latest-filter-subtitle">Refine os resultados por vendedor, status, período, nicho, estado ou empresa.</div>
                 </div>
                 <div class="latest-calls-chip">Filtros</div>
             </div>
@@ -4154,36 +4203,54 @@ def render_latest_calls_section(
         """
     )
 
-    filter_1, filter_2, filter_3, filter_4 = st.columns(4, gap="medium")
-
-    with filter_1:
-        st.selectbox(
-            "Vendedor",
-            ["Todos os vendedores"] + seller_options,
-            key="dashboard_filter_seller",
+    with st.container(key="overview_filters_aligned"):
+        filter_1, filter_2, filter_3, filter_4, filter_5, filter_6 = st.columns(
+            [1.05, 1.0, 1.12, 1.0, 1.0, 1.32],
+            gap="small",
         )
 
-    with filter_2:
-        st.selectbox(
-            "Status",
-            ["Todos os status"] + STATUS_OPTIONS,
-            key="dashboard_filter_status",
-        )
+        with filter_1:
+            st.selectbox(
+                "Vendedor",
+                ["Todos os vendedores"] + seller_options,
+                key="dashboard_filter_seller",
+            )
 
-    with filter_3:
-        st.date_input(
-            "Período",
-            min_value=date_min,
-            max_value=max(date_max, date.today()),
-            key="dashboard_filter_period",
-        )
+        with filter_2:
+            st.selectbox(
+                "Status",
+                ["Todos os status"] + STATUS_OPTIONS,
+                key="dashboard_filter_status",
+            )
 
-    with filter_4:
-        st.text_input(
-            "Buscar empresa ou telefone",
-            placeholder="Digite para buscar...",
-            key="dashboard_filter_search",
-        )
+        with filter_3:
+            st.date_input(
+                "Período",
+                min_value=date_min,
+                max_value=max(date_max, date.today()),
+                key="dashboard_filter_period",
+            )
+
+        with filter_4:
+            st.selectbox(
+                "Nichos",
+                ["Todos os nichos"] + niche_options,
+                key="dashboard_filter_niche",
+            )
+
+        with filter_5:
+            st.selectbox(
+                "Estados",
+                ["Todos os estados"] + state_options,
+                key="dashboard_filter_state",
+            )
+
+        with filter_6:
+            st.text_input(
+                "Buscar empresa ou telefone",
+                placeholder="Digite para buscar...",
+                key="dashboard_filter_search",
+            )
 
     st.write("")
 
@@ -4446,9 +4513,41 @@ def prepare_filters(df: pd.DataFrame) -> pd.DataFrame:
     if "dashboard_filter_search" not in st.session_state:
         st.session_state.dashboard_filter_search = ""
 
+    niche_options = sorted(
+        [
+            niche
+            for niche in df["_nicho"].dropna().astype(str).unique().tolist()
+            if normalize_text(niche)
+        ],
+        key=normalize_search_text,
+    )
+
+    state_options = sorted(
+        [
+            state
+            for state in df["_estado"].dropna().astype(str).unique().tolist()
+            if normalize_text(state)
+        ],
+        key=lambda value: (value == "Não identificado", value),
+    )
+
+    if "dashboard_filter_niche" not in st.session_state:
+        st.session_state.dashboard_filter_niche = "Todos os nichos"
+
+    if st.session_state.dashboard_filter_niche not in ["Todos os nichos"] + niche_options:
+        st.session_state.dashboard_filter_niche = "Todos os nichos"
+
+    if "dashboard_filter_state" not in st.session_state:
+        st.session_state.dashboard_filter_state = "Todos os estados"
+
+    if st.session_state.dashboard_filter_state not in ["Todos os estados"] + state_options:
+        st.session_state.dashboard_filter_state = "Todos os estados"
+
     selected_seller = st.session_state.dashboard_filter_seller
     selected_status = st.session_state.dashboard_filter_status
     selected_range = st.session_state.dashboard_filter_period
+    selected_niche = st.session_state.dashboard_filter_niche
+    selected_state = st.session_state.dashboard_filter_state
     search_term = st.session_state.dashboard_filter_search
 
     # A busca por empresa ou telefone é global: quando o usuário digita algo
@@ -4483,6 +4582,12 @@ def prepare_filters(df: pd.DataFrame) -> pd.DataFrame:
 
     if selected_status != "Todos os status":
         filtered_df = filtered_df[filtered_df["_status_grupo"] == selected_status].copy()
+
+    if selected_niche != "Todos os nichos":
+        filtered_df = filtered_df[filtered_df["_nicho"] == selected_niche].copy()
+
+    if selected_state != "Todos os estados":
+        filtered_df = filtered_df[filtered_df["_estado"] == selected_state].copy()
 
     if isinstance(selected_range, (tuple, list)) and len(selected_range) == 2:
         start_date, end_date = selected_range
@@ -7461,7 +7566,6 @@ def main() -> None:
     apply_dashboard_css()
     apply_global_sidebar_toggle_css()
     apply_final_sidebar_toggle_override_css()
-    apply_requested_sidebar_and_chat_fix_css()
     page = render_sidebar()
     install_sidebar_navigation_persistence()
 
