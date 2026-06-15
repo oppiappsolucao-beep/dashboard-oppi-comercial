@@ -6372,7 +6372,7 @@ OPPI_PRICING_STEPS = [
     {
         "id": "resumo_cliente",
         "title": "📝 8. Resumo do cliente e da reunião",
-        "question": "Comente sobre o cliente: faça um resumo da ata de reunião, informe os serviços desejados e descreva os principais problemas apresentados.",
+        "question": "Comente sobre o cliente: me envie um resumo da ata de reunião, informe os serviços desejados e descreva os principais problemas apresentados.",
         "options": [
             "Inclua os pontos mais importantes identificados durante a conversa.",
             "Esse resumo será utilizado para indicar a solução Oppi mais adequada e gerar o PDF do diagnóstico.",
@@ -6400,12 +6400,29 @@ OPPI_PRODUCT_PRICE_TABLE = {
     },
 }
 
-OPPI_SUPPORT_TABLE = {
-    "Pequeno": "R$ 600 a R$ 900",
-    "Médio": "R$ 1.000 a R$ 2.000",
-    "Premium": "R$ 2.000 a R$ 4.000",
-    "Enterprise": "Sob consulta",
+OPPI_ADDITIONAL_SERVICES_TABLE = {
+    "Pequeno": {
+        "contrato": "Equipe 20 - contratos digitais: R$ 791,00 à vista ou R$ 184,78/mês em até 6x",
+        "disparos": "Essencial WhatsApp - até 100 envios: R$ 149,00/mês",
+    },
+    "Médio": {
+        "contrato": "Equipe 80 - contratos digitais: R$ 3.175,00 à vista ou R$ 645,54/mês em até 6x",
+        "disparos": "Crescimento WhatsApp - até 200 envios: R$ 249,00/mês",
+    },
+    "Premium": {
+        "contrato": "Equipe 150 - contratos digitais: R$ 3.960,00 à vista ou R$ 771,84/mês em até 6x",
+        "disparos": "Profissional WhatsApp - até 300 envios: R$ 349,00/mês",
+    },
+    "Enterprise": {
+        "contrato": "Equipe 150+ - contratos digitais: sob consulta conforme volume",
+        "disparos": "Profissional WhatsApp ou pacote personalizado: sob consulta conforme volume",
+    },
 }
+
+
+def _pricing_additional_services(profile: str) -> str:
+    services = OPPI_ADDITIONAL_SERVICES_TABLE.get(profile, OPPI_ADDITIONAL_SERVICES_TABLE["Médio"])
+    return f"{services['contrato']} | {services['disparos']}"
 
 
 def _pricing_question_text(step: dict) -> str:
@@ -7314,7 +7331,7 @@ def _pricing_result_message(company_name: str) -> str:
     product = _pricing_product(answer_map)
     company_size = _pricing_company_size(answer_map)
     price_from, price_to, ideal_term = OPPI_PRODUCT_PRICE_TABLE[product][company_size]
-    support_range = OPPI_SUPPORT_TABLE[profile]
+    additional_services = _pricing_additional_services(profile)
     revenue = normalize_text(answer_map.get("faturamento", {}).get("answer")) or "Não informado"
     meeting_summary = normalize_text(answer_map.get("resumo_cliente", {}).get("answer")) or "Não informado"
 
@@ -7332,7 +7349,7 @@ def _pricing_result_message(company_name: str) -> str:
         f"Solução sugerida: {product}.\n"
         f"Prazo ideal: {ideal_term}.\n"
         f"Faturamento informado: {revenue}.\n"
-        f"Sugestão de suporte ou acompanhamento: {support_range}.\n\n"
+        f"Serviços adicionais sugeridos: {additional_services}.\n\n"
         f"Resumo registrado: {meeting_summary}\n\n"
         f"Pelo que vi aqui, o valor ficaria {pricing_text}. Quanto você deseja gerar a proposta?\n\n"
         "Exemplos de resposta: R$ 8.500; R$ 10.000; R$ 12.000; sob consulta. "
@@ -7380,7 +7397,7 @@ def _pricing_report_summary(company_name: str) -> dict:
         "company_size": company_size,
         "suggested_price": suggested_price,
         "ideal_term": ideal_term,
-        "support_range": OPPI_SUPPORT_TABLE[profile],
+        "additional_services": _pricing_additional_services(profile),
         "confirmed_value": _pricing_get_confirmed_value(company_name) or "Não informado",
     }
 
@@ -7447,7 +7464,7 @@ def _pricing_generate_pdf(company_name: str, df: pd.DataFrame, columns: dict) ->
         )
     except Exception as error:
         raise RuntimeError(
-            "A biblioteca reportlab não está instalada. Adicione reportlab ao requirements.txt e publique novamente."
+            "A biblioteca reportlab não está instalada. Adicione a linha reportlab no requirements.txt, salve e faça o deploy novamente."
         ) from error
 
     report = _pricing_report_summary(company_name)
@@ -7556,7 +7573,7 @@ def _pricing_generate_pdf(company_name: str, df: pd.DataFrame, columns: dict) ->
         ("Faixa sugerida", report["suggested_price"]),
         ("Valor confirmado", report["confirmed_value"]),
         ("Prazo ideal", report["ideal_term"]),
-        ("Suporte sugerido", report["support_range"]),
+        ("Serviços adicionais", report["additional_services"]),
     ]
     summary_data = []
     for label, value in summary_cells:
