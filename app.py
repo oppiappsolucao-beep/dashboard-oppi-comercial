@@ -6515,19 +6515,19 @@ OPPI_PRICING_STEPS = [
 
 OPPI_PRODUCT_PRICE_TABLE = {
     "Oppi Vision": {
-        "pequena": ("R$ 3.000", "R$ 5.000", "3 meses"),
-        "media": ("R$ 5.000", "R$ 8.000", "3 a 6 meses"),
-        "estruturada": ("R$ 8.000", "R$ 15.000", "6 meses"),
+        "pequena": ("R$ 3.000", "R$ 5.000", "1 mês"),
+        "media": ("R$ 5.000", "R$ 8.000", "1 mês"),
+        "estruturada": ("R$ 8.000", "R$ 15.000", "1 mês"),
     },
     "Oppi Flow": {
-        "pequena": ("R$ 4.000", "R$ 7.000", "3 meses"),
-        "media": ("R$ 7.000", "R$ 12.000", "3 a 6 meses"),
-        "estruturada": ("R$ 12.000", "R$ 20.000", "6 meses"),
+        "pequena": ("R$ 4.000", "R$ 7.000", "1 mês"),
+        "media": ("R$ 7.000", "R$ 12.000", "1 mês"),
+        "estruturada": ("R$ 12.000", "R$ 20.000", "1 mês"),
     },
     "Oppi Track": {
-        "pequena": ("R$ 5.000", "R$ 8.000", "3 meses"),
-        "media": ("R$ 8.000", "R$ 15.000", "3 a 6 meses"),
-        "estruturada": ("R$ 15.000", "Sob consulta", "6 meses"),
+        "pequena": ("R$ 5.000", "R$ 8.000", "1 mês"),
+        "media": ("R$ 8.000", "R$ 15.000", "1 mês"),
+        "estruturada": ("R$ 15.000", "Sob consulta", "1 mês"),
     },
 }
 
@@ -7462,6 +7462,7 @@ def _pricing_result_message(company_name: str) -> str:
     product = _pricing_product(answer_map)
     company_size = _pricing_company_size(answer_map)
     price_from, price_to, ideal_term = OPPI_PRODUCT_PRICE_TABLE[product][company_size]
+    ideal_term = "1 mês"
     additional_services = _pricing_additional_services(profile)
     revenue = normalize_text(answer_map.get("faturamento", {}).get("answer")) or "Não informado"
     meeting_summary = normalize_text(answer_map.get("resumo_cliente", {}).get("answer")) or "Não informado"
@@ -7513,6 +7514,7 @@ def _pricing_report_summary(company_name: str) -> dict:
     product = _pricing_product(answer_map)
     company_size = _pricing_company_size(answer_map)
     price_from, price_to, ideal_term = OPPI_PRODUCT_PRICE_TABLE[product][company_size]
+    ideal_term = "1 mês"
 
     if price_to == "Sob consulta":
         suggested_price = f"A partir de {price_from}"
@@ -7537,7 +7539,12 @@ def _pricing_company_registration_data(df: pd.DataFrame, columns: dict, company_
     selected_rows = df[df["_empresa"].astype(str) == normalize_text(company_name)].copy()
 
     if selected_rows.empty:
-        return [("Empresa", normalize_text(company_name) or "Não informado")]
+        return [
+            ("Nome da empresa", normalize_text(company_name) or "Não informado"),
+            ("Telefone", "Não informado"),
+            ("CNPJ", "Não informado"),
+            ("Endereço", "Não informado"),
+        ]
 
     if "_sheet_row" in selected_rows.columns:
         selected_rows = selected_rows.sort_values("_sheet_row", ascending=False)
@@ -7551,32 +7558,10 @@ def _pricing_company_registration_data(df: pd.DataFrame, columns: dict, company_
 
     return [
         ("Nome da empresa", value("empresa", normalize_text(company_name) or "Não informado")),
-        ("Data de abertura", value("data_abertura")),
+        ("Telefone", value("telefone_b2b")),
         ("CNPJ", value("cnpj")),
-        ("Capital social", value("capital")),
         ("Endereço", value("endereco")),
-        ("E-mail da empresa", value("email")),
-        ("Site da empresa", value("site")),
-        ("Telefone B2B", value("telefone_b2b")),
-        ("Telefone fixo", value("telefone_fixo")),
-        ("Telefone alternativo", value("telefone_alternativo")),
-        ("Sócio 1", value("socio_1")),
-        ("CPF do sócio 1", value("cpf_socio_1")),
-        ("E-mail do sócio 1", value("email_socio_1")),
-        ("Telefone do sócio 1", value("telefone_socio_1")),
-        ("Sócio 2", value("socio_2")),
-        ("CPF do sócio 2", value("cpf_socio_2")),
-        ("Sócio 3", value("socio_3")),
-        ("CPF do sócio 3", value("cpf_socio_3")),
-        ("Instagram", value("instagram")),
-        ("LinkedIn", value("linkedin")),
-        ("Vendedor", value("vendedor")),
-        ("Status comercial", value("status")),
-        ("Data do chamado", value("data_chamado")),
-        ("Observações do cadastro", value("observacoes")),
     ]
-
-
 
 def _pricing_answer_label_for_pdf(step: dict, answer_data: dict) -> str:
     """Mostra no PDF a opção completa escolhida, não apenas o número digitado."""
@@ -7626,6 +7611,7 @@ def _pricing_generate_pdf(company_name: str, df: pd.DataFrame, columns: dict) ->
     report = _pricing_report_summary(company_name)
     answer_map = report["answer_map"]
     registration_rows = _pricing_company_registration_data(df, columns, company_name)
+    proposal_number = f"OPPI-{pd.Timestamp.now(tz='America/Sao_Paulo').strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:4].upper()}"
     buffer = io.BytesIO()
 
     page_width, page_height = A4
@@ -7726,8 +7712,8 @@ def _pricing_generate_pdf(company_name: str, df: pd.DataFrame, columns: dict) ->
     header = Table([
         [Paragraph("OPPI COMERCIAL", styles["OppiSubtitle"])],
         [Paragraph("Diagnóstico de precificação", styles["OppiTitle"])],
-        [Paragraph(f"Cliente: {html.escape(normalize_text(company_name))}", styles["OppiSubtitle"])],
         [Paragraph(f"Gerado em: {pd.Timestamp.now(tz='America/Sao_Paulo').strftime('%d/%m/%Y %H:%M')}", styles["OppiSubtitle"])],
+        [Paragraph(f"Número da proposta: {html.escape(proposal_number)}", styles["OppiSubtitle"])],
     ], colWidths=[page_width - (2 * margin) - 10])
     header.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#160C2D")),
@@ -7739,45 +7725,6 @@ def _pricing_generate_pdf(company_name: str, df: pd.DataFrame, columns: dict) ->
     ]))
     story.append(header)
     story.append(Spacer(1, 10))
-
-    summary_cells = [
-        ("Perfil do projeto", report["profile"]),
-        ("Solução indicada", report["product"]),
-        ("Soma dos pesos", str(report["total_score"])),
-        ("Faixa sugerida", report["suggested_price"]),
-        ("Valor confirmado", report["confirmed_value"]),
-        ("Prazo ideal", report["ideal_term"]),
-        ("Serviços adicionais", report["additional_services"]),
-    ]
-    summary_data = []
-    for label, value in summary_cells:
-        summary_data.append([
-            Paragraph(label, styles["OppiLabel"]),
-            Paragraph(html.escape(normalize_text(value)), styles["OppiValue"]),
-        ])
-
-    summary_table = Table(summary_data, colWidths=[48 * mm, 128 * mm])
-    summary_table.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#F5F2FA")),
-        ("ROWBACKGROUNDS", (0, 0), (-1, -1), [colors.HexColor("#F8F6FC"), colors.HexColor("#EEE9F6")]),
-        ("BOX", (0, 0), (-1, -1), 0.7, colors.HexColor("#E24AA8")),
-        ("INNERGRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#D8CBE6")),
-        ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 8),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
-        ("TOPPADDING", (0, 0), (-1, -1), 6),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-    ]))
-
-    summary_header = Table([[Paragraph("RESUMO DA PRECIFICAÇÃO", styles["OppiSection"]) ]], colWidths=[176 * mm])
-    summary_header.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#3B174D")),
-        ("BOX", (0, 0), (-1, -1), 0.7, colors.HexColor("#FF4BAA")),
-        ("LEFTPADDING", (0, 0), (-1, -1), 9),
-        ("TOPPADDING", (0, 0), (-1, -1), 7),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
-    ]))
-    story.extend([summary_header, summary_table, Spacer(1, 10)])
 
     registration_header = Table([[Paragraph("DADOS CADASTRAIS DA EMPRESA", styles["OppiSection"]) ]], colWidths=[176 * mm])
     registration_header.setStyle(TableStyle([
@@ -7809,51 +7756,7 @@ def _pricing_generate_pdf(company_name: str, df: pd.DataFrame, columns: dict) ->
     ]))
     story.extend([registration_table, Spacer(1, 10)])
 
-    diagnostics_header = Table([[Paragraph("RESPOSTAS DO DIAGNÓSTICO", styles["OppiSection"]) ]], colWidths=[176 * mm])
-    diagnostics_header.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#3B174D")),
-        ("BOX", (0, 0), (-1, -1), 0.7, colors.HexColor("#FF4BAA")),
-        ("LEFTPADDING", (0, 0), (-1, -1), 9),
-        ("TOPPADDING", (0, 0), (-1, -1), 7),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
-    ]))
-    story.append(diagnostics_header)
-
-    diagnostics_data = [[
-        Paragraph("Pergunta", styles["OppiLabel"]),
-        Paragraph("Resposta do vendedor", styles["OppiLabel"]),
-        Paragraph("Peso", styles["OppiLabel"]),
-    ]]
-    for step in OPPI_PRICING_STEPS:
-        answer_data = answer_map.get(step["id"], {})
-        answer = _pricing_answer_label_for_pdf(step, answer_data)
-        weight = answer_data.get("weight")
-        diagnostics_data.append([
-            Paragraph(html.escape(step["question"]), styles["OppiSmall"]),
-            Paragraph(html.escape(answer), styles["OppiValue"]),
-            Paragraph("-" if weight is None else str(weight), styles["OppiSmall"]),
-        ])
-
-    diagnostics_data.append([
-        Paragraph("Valor confirmado para a proposta", styles["OppiLabel"]),
-        Paragraph(html.escape(report["confirmed_value"]), styles["OppiValue"]),
-        Paragraph("-", styles["OppiSmall"]),
-    ])
-
-    diagnostics_table = Table(diagnostics_data, colWidths=[62 * mm, 100 * mm, 14 * mm], repeatRows=1)
-    diagnostics_table.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#E9D8F5")),
-        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.HexColor("#FFFFFF"), colors.HexColor("#F4F1F8")]),
-        ("BOX", (0, 0), (-1, -1), 0.7, colors.HexColor("#E24AA8")),
-        ("INNERGRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#D8CBE6")),
-        ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 7),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 7),
-        ("TOPPADDING", (0, 0), (-1, -1), 5),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-    ]))
-    story.append(diagnostics_table)
-    story.append(Spacer(1, 12))
+    story.append(Spacer(1, 10))
 
     def _proposal_header(title: str):
         section = Table([[Paragraph(html.escape(title), styles["OppiSection"])]], colWidths=[176 * mm])
@@ -7889,7 +7792,7 @@ def _pricing_generate_pdf(company_name: str, df: pd.DataFrame, columns: dict) ->
     selected_profile = normalize_text(report["profile"]) or "Não informado"
     selected_price = normalize_text(report["confirmed_value"]) or "Não informado"
     selected_range = normalize_text(report["suggested_price"]) or "Não informado"
-    selected_term = normalize_text(report["ideal_term"]) or "A definir"
+    selected_term = "1 mês"
     selected_additional_services = normalize_text(report["additional_services"]) or "Contratos digitais e disparos pelo WhatsApp, conforme necessidade."
 
     solution_focus = {
@@ -7968,7 +7871,6 @@ def _pricing_generate_pdf(company_name: str, df: pd.DataFrame, columns: dict) ->
 
     _proposal_section("9. INVESTIMENTO", [
         f"Implantação sugerida pelo diagnóstico: <b>{html.escape(selected_range)}</b>.",
-        f"Valor confirmado para gerar a proposta: <b>{html.escape(selected_price)}</b>.",
         "Forma de pagamento: a definir em proposta comercial ou contrato.",
         f"Serviços adicionais sugeridos: <b>{html.escape(selected_additional_services)}</b>.",
         "Os serviços adicionais podem envolver contratos digitais, propostas, documentos operacionais e pacotes de disparos pelo WhatsApp, conforme o cenário identificado.",
@@ -7995,7 +7897,7 @@ def _pricing_generate_pdf(company_name: str, df: pd.DataFrame, columns: dict) ->
     ])
 
     footer = Table([[Paragraph(
-        "Documento gerado automaticamente pelo Dashboard Oppi Comercial. Revise as informações antes de enviar ao cliente.",
+        "Documento gerado automaticamente pelo Dashboard Oppi Comercial.",
         styles["OppiSmall"],
     )]], colWidths=[176 * mm])
     footer.setStyle(TableStyle([
