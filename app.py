@@ -4580,6 +4580,11 @@ def render_latest_calls_section(
     def choose_status(status_name: str) -> None:
         st.session_state[selected_card_key] = status_name
 
+    status_filter_value = normalize_text(st.session_state.get("dashboard_filter_status", "Todos os status"))
+
+    if status_filter_value != "Todos os status":
+        st.session_state[selected_card_key] = status_filter_value
+
     selected_status = st.session_state.get(selected_card_key)
     card_columns = st.columns(len(statuses), gap="small")
 
@@ -4614,12 +4619,12 @@ def render_latest_calls_section(
 
     selected_status = st.session_state.get(selected_card_key)
     search_term = normalize_text(st.session_state.get("dashboard_filter_search", ""))
-    global_search_active = bool(search_term)
+    status_filter_value = normalize_text(st.session_state.get("dashboard_filter_status", "Todos os status"))
 
-    # Quando o campo de busca estiver preenchido, a tabela exibe todos os
-    # registros encontrados na planilha inteira, independentemente do card de
-    # status que estava selecionado anteriormente.
-    if global_search_active:
+    # Quando o usuário combina filtros, a tabela respeita todos eles.
+    # Se o filtro de Status já estiver selecionado, não aplica o card novamente
+    # para evitar conflito entre filtros.
+    if search_term or status_filter_value != "Todos os status":
         selected_df = filtered_df.copy()
     else:
         if not selected_status:
@@ -4873,31 +4878,9 @@ def prepare_filters(df: pd.DataFrame) -> pd.DataFrame:
     selected_state = st.session_state.dashboard_filter_state
     search_term = st.session_state.dashboard_filter_search
 
-    # A busca por empresa ou telefone é global: quando o usuário digita algo
-    # nesse campo, pesquisamos a planilha inteira e ignoramos os filtros de
-    # vendedor, status e período. Dessa forma, nenhum registro fica oculto por
-    # um filtro aplicado anteriormente.
-    if normalize_text(search_term):
-        term = normalize_search_text(search_term)
-        global_search_df = df.copy()
-
-        global_search_df = global_search_df[
-            global_search_df.apply(
-                lambda row: term
-                in normalize_search_text(
-                    " | ".join(
-                        [
-                            normalize_text(row.get("_empresa", "")),
-                            normalize_text(row.get("_telefone", "")),
-                        ]
-                    )
-                ),
-                axis=1,
-            )
-        ].copy()
-
-        return global_search_df
-
+    # Os filtros da Visão Geral agora são cumulativos.
+    # Assim, ao combinar Período + Status + Nicho + Estado + Busca,
+    # o dashboard retorna somente os registros que atendem todos os critérios.
     filtered_df = df.copy()
 
     if selected_seller != "Todos os vendedores":
@@ -4917,6 +4900,23 @@ def prepare_filters(df: pd.DataFrame) -> pd.DataFrame:
         "_data_chamado",
         selected_range,
     )
+
+    if normalize_text(search_term):
+        term = normalize_search_text(search_term)
+        filtered_df = filtered_df[
+            filtered_df.apply(
+                lambda row: term
+                in normalize_search_text(
+                    " | ".join(
+                        [
+                            normalize_text(row.get("_empresa", "")),
+                            normalize_text(row.get("_telefone", "")),
+                        ]
+                    )
+                ),
+                axis=1,
+            )
+        ].copy()
 
     return filtered_df
 
