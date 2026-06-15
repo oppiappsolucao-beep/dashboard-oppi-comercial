@@ -305,6 +305,33 @@ def first_existing_column(
     return None
 
 
+
+def existing_column_by_occurrence(
+    df: pd.DataFrame,
+    possible_names: list[str],
+    occurrence: int = 1,
+) -> Optional[str]:
+    """
+    Encontra uma coluna considerando cabeçalhos repetidos da planilha.
+    Exemplo: se a planilha tiver várias colunas chamadas "Telefone",
+    o pandas recebe "Telefone", "Telefone_2", "Telefone_3".
+    """
+    normalized_aliases = {normalize_search_text(name) for name in possible_names}
+    found = 0
+
+    for column in df.columns:
+        normalized_column = normalize_search_text(column)
+        normalized_column_base = re.sub(r"_\d+$", "", normalized_column)
+
+        if normalized_column in normalized_aliases or normalized_column_base in normalized_aliases:
+            found += 1
+
+            if found == occurrence:
+                return column
+
+    return None
+
+
 def safe_series(
     df: pd.DataFrame,
     column: Optional[str],
@@ -784,6 +811,8 @@ def validate_unique_company_registration(payload: dict, worksheet, ignore_sheet_
             "telefone_fixo",
             "telefone_alternativo",
             "telefone_socio_1",
+            "telefone_socio_2",
+            "telefone_socio_3",
         ]
     }
     submitted_phones.discard("")
@@ -892,9 +921,11 @@ def append_company_to_sheet(payload: dict) -> None:
     _set_sheet_value_by_header(row_values, headers, ["Telefone"], payload.get("telefone_socio_1"), occurrence=1)
 
     _set_sheet_value_by_header(row_values, headers, ["Sócio 2", "Socio 2", "Sócio2", "Socio2"], payload.get("socio_2"))
+    _set_sheet_value_by_header(row_values, headers, ["Telefone sócio 2", "Telefone socio 2", "Telefone do sócio 2", "Telefone do socio 2", "Telefone"], payload.get("telefone_socio_2"), occurrence=2)
     _set_sheet_value_by_header(row_values, headers, ["CPF"], payload.get("cpf_socio_2"), occurrence=2)
 
     _set_sheet_value_by_header(row_values, headers, ["Sócio 3", "Socio 3", "Sócio3", "Socio3"], payload.get("socio_3"))
+    _set_sheet_value_by_header(row_values, headers, ["Telefone sócio 3", "Telefone socio 3", "Telefone do sócio 3", "Telefone do socio 3", "Telefone"], payload.get("telefone_socio_3"), occurrence=3)
     _set_sheet_value_by_header(row_values, headers, ["CPF"], payload.get("cpf_socio_3"), occurrence=3)
 
     _set_sheet_value_by_header(row_values, headers, ["Instagram"], payload.get("instagram"))
@@ -952,9 +983,11 @@ def update_company_in_sheet(sheet_row: int, payload: dict) -> None:
     _set_sheet_value_by_header(row_values, headers, ["Telefone"], payload.get("telefone_socio_1"), occurrence=1)
 
     _set_sheet_value_by_header(row_values, headers, ["Sócio 2", "Socio 2", "Sócio2", "Socio2"], payload.get("socio_2"))
+    _set_sheet_value_by_header(row_values, headers, ["Telefone sócio 2", "Telefone socio 2", "Telefone do sócio 2", "Telefone do socio 2", "Telefone"], payload.get("telefone_socio_2"), occurrence=2)
     _set_sheet_value_by_header(row_values, headers, ["CPF"], payload.get("cpf_socio_2"), occurrence=2)
 
     _set_sheet_value_by_header(row_values, headers, ["Sócio 3", "Socio 3", "Sócio3", "Socio3"], payload.get("socio_3"))
+    _set_sheet_value_by_header(row_values, headers, ["Telefone sócio 3", "Telefone socio 3", "Telefone do sócio 3", "Telefone do socio 3", "Telefone"], payload.get("telefone_socio_3"), occurrence=3)
     _set_sheet_value_by_header(row_values, headers, ["CPF"], payload.get("cpf_socio_3"), occurrence=3)
 
     _set_sheet_value_by_header(row_values, headers, ["Instagram"], payload.get("instagram"))
@@ -997,10 +1030,21 @@ def identify_columns(df: pd.DataFrame) -> dict:
         "socio_1": first_existing_column(df, ["Sócio 1", "Socio 1", "Sócio1", "Socio1"]),
         "cpf_socio_1": first_existing_column(df, ["CPF"]),
         "email_socio_1": first_existing_column(df, ["E-mail Sócio 1", "Email Sócio 1", "E-mail Socio 1", "Email Socio 1"]),
-        "telefone_socio_1": first_existing_column(df, ["Telefone sócio 1", "Telefone socio 1", "Telefone cliente", "Telefone"]),
+        "telefone_socio_1": (
+            first_existing_column(df, ["Telefone sócio 1", "Telefone socio 1", "Telefone cliente"])
+            or existing_column_by_occurrence(df, ["Telefone"], occurrence=1)
+        ),
         "socio_2": first_existing_column(df, ["Sócio 2", "Socio 2", "Sócio2", "Socio2"]),
+        "telefone_socio_2": (
+            first_existing_column(df, ["Telefone sócio 2", "Telefone socio 2", "Telefone do sócio 2", "Telefone do socio 2"])
+            or existing_column_by_occurrence(df, ["Telefone"], occurrence=2)
+        ),
         "cpf_socio_2": first_existing_column(df, ["CPF_2"]),
         "socio_3": first_existing_column(df, ["Sócio 3", "Socio 3", "Sócio3", "Socio3"]),
+        "telefone_socio_3": (
+            first_existing_column(df, ["Telefone sócio 3", "Telefone socio 3", "Telefone do sócio 3", "Telefone do socio 3"])
+            or existing_column_by_occurrence(df, ["Telefone"], occurrence=3)
+        ),
         "cpf_socio_3": first_existing_column(df, ["CPF_3"]),
         "instagram": first_existing_column(df, ["Instagram"]),
         "linkedin": first_existing_column(df, ["Linkedin", "LinkedIn"]),
@@ -5102,7 +5146,7 @@ def render_proposals_page(df: pd.DataFrame, columns: dict) -> None:
             """
         )
 
-        socio_1_col, cpf_1_col = st.columns([1.55, 0.85], gap="medium")
+        socio_1_col, telefone_socio_1_col = st.columns([1.45, 0.95], gap="medium")
 
         with socio_1_col:
             socio_1 = st.text_input(
@@ -5110,13 +5154,19 @@ def render_proposals_page(df: pd.DataFrame, columns: dict) -> None:
                 placeholder="Nome completo do primeiro sócio",
             )
 
+        with telefone_socio_1_col:
+            telefone_socio_1 = st.text_input(
+                "Telefone do sócio 1",
+                placeholder="(00) 00000-0000",
+            )
+
+        cpf_1_col, email_socio_col = st.columns([0.95, 1.45], gap="medium")
+
         with cpf_1_col:
             cpf_socio_1 = st.text_input(
                 "CPF do sócio 1",
                 placeholder="000.000.000-00",
             )
-
-        email_socio_col, telefone_socio_col = st.columns(2, gap="medium")
 
         with email_socio_col:
             email_socio_1 = st.text_input(
@@ -5124,13 +5174,7 @@ def render_proposals_page(df: pd.DataFrame, columns: dict) -> None:
                 placeholder="socio@empresa.com.br",
             )
 
-        with telefone_socio_col:
-            telefone_socio_1 = st.text_input(
-                "Telefone do sócio 1",
-                placeholder="(00) 00000-0000",
-            )
-
-        socio_2_col, cpf_2_col = st.columns([1.55, 0.85], gap="medium")
+        socio_2_col, telefone_socio_2_col = st.columns([1.45, 0.95], gap="medium")
 
         with socio_2_col:
             socio_2 = st.text_input(
@@ -5138,13 +5182,24 @@ def render_proposals_page(df: pd.DataFrame, columns: dict) -> None:
                 placeholder="Nome completo do segundo sócio",
             )
 
+        with telefone_socio_2_col:
+            telefone_socio_2 = st.text_input(
+                "Telefone do sócio 2",
+                placeholder="(00) 00000-0000",
+            )
+
+        cpf_2_col, cpf_2_spacer = st.columns([0.95, 1.45], gap="medium")
+
         with cpf_2_col:
             cpf_socio_2 = st.text_input(
                 "CPF do sócio 2",
                 placeholder="000.000.000-00",
             )
 
-        socio_3_col, cpf_3_col = st.columns([1.55, 0.85], gap="medium")
+        with cpf_2_spacer:
+            st.write("")
+
+        socio_3_col, telefone_socio_3_col = st.columns([1.45, 0.95], gap="medium")
 
         with socio_3_col:
             socio_3 = st.text_input(
@@ -5152,11 +5207,22 @@ def render_proposals_page(df: pd.DataFrame, columns: dict) -> None:
                 placeholder="Nome completo do terceiro sócio",
             )
 
+        with telefone_socio_3_col:
+            telefone_socio_3 = st.text_input(
+                "Telefone do sócio 3",
+                placeholder="(00) 00000-0000",
+            )
+
+        cpf_3_col, cpf_3_spacer = st.columns([0.95, 1.45], gap="medium")
+
         with cpf_3_col:
             cpf_socio_3 = st.text_input(
                 "CPF do sócio 3",
                 placeholder="000.000.000-00",
             )
+
+        with cpf_3_spacer:
+            st.write("")
 
         render_html(
             """
@@ -5268,8 +5334,10 @@ def render_proposals_page(df: pd.DataFrame, columns: dict) -> None:
                     "email_socio_1": email_socio_1,
                     "telefone_socio_1": telefone_socio_1,
                     "socio_2": socio_2,
+                    "telefone_socio_2": telefone_socio_2,
                     "cpf_socio_2": cpf_socio_2,
                     "socio_3": socio_3,
+                    "telefone_socio_3": telefone_socio_3,
                     "cpf_socio_3": cpf_socio_3,
                     "instagram": instagram,
                     "linkedin": linkedin,
@@ -5454,37 +5522,53 @@ def render_contract_edit_form(df: pd.DataFrame, columns: dict, row: pd.Series, s
             """
         )
 
-        socio_1_col, cpf_1_col = st.columns([1.55, 0.85], gap="medium")
+        socio_1_col, telefone_socio_1_col = st.columns([1.45, 0.95], gap="medium")
 
         with socio_1_col:
             socio_1 = st.text_input("Sócio 1", value=_contract_edit_value(row, columns, "socio_1"))
 
+        with telefone_socio_1_col:
+            telefone_socio_1 = st.text_input("Telefone do sócio 1", value=_contract_edit_value(row, columns, "telefone_socio_1"))
+
+        cpf_1_col, email_socio_col = st.columns([0.95, 1.45], gap="medium")
+
         with cpf_1_col:
             cpf_socio_1 = st.text_input("CPF do sócio 1", value=_contract_edit_value(row, columns, "cpf_socio_1"))
-
-        email_socio_col, telefone_socio_col = st.columns(2, gap="medium")
 
         with email_socio_col:
             email_socio_1 = st.text_input("E-mail do sócio 1", value=_contract_edit_value(row, columns, "email_socio_1"))
 
-        with telefone_socio_col:
-            telefone_socio_1 = st.text_input("Telefone do sócio 1", value=_contract_edit_value(row, columns, "telefone_socio_1"))
-
-        socio_2_col, cpf_2_col = st.columns([1.55, 0.85], gap="medium")
+        socio_2_col, telefone_socio_2_col = st.columns([1.45, 0.95], gap="medium")
 
         with socio_2_col:
             socio_2 = st.text_input("Sócio 2", value=_contract_edit_value(row, columns, "socio_2"))
 
+        with telefone_socio_2_col:
+            telefone_socio_2 = st.text_input("Telefone do sócio 2", value=_contract_edit_value(row, columns, "telefone_socio_2"))
+
+        cpf_2_col, cpf_2_spacer = st.columns([0.95, 1.45], gap="medium")
+
         with cpf_2_col:
             cpf_socio_2 = st.text_input("CPF do sócio 2", value=_contract_edit_value(row, columns, "cpf_socio_2"))
 
-        socio_3_col, cpf_3_col = st.columns([1.55, 0.85], gap="medium")
+        with cpf_2_spacer:
+            st.write("")
+
+        socio_3_col, telefone_socio_3_col = st.columns([1.45, 0.95], gap="medium")
 
         with socio_3_col:
             socio_3 = st.text_input("Sócio 3", value=_contract_edit_value(row, columns, "socio_3"))
 
+        with telefone_socio_3_col:
+            telefone_socio_3 = st.text_input("Telefone do sócio 3", value=_contract_edit_value(row, columns, "telefone_socio_3"))
+
+        cpf_3_col, cpf_3_spacer = st.columns([0.95, 1.45], gap="medium")
+
         with cpf_3_col:
             cpf_socio_3 = st.text_input("CPF do sócio 3", value=_contract_edit_value(row, columns, "cpf_socio_3"))
+
+        with cpf_3_spacer:
+            st.write("")
 
         render_html(
             """
@@ -5552,6 +5636,8 @@ def render_contract_edit_form(df: pd.DataFrame, columns: dict, row: pd.Series, s
         ("Telefone fixo", telefone_fixo),
         ("Telefone alternativo", telefone_alternativo),
         ("Telefone do sócio 1", telefone_socio_1),
+        ("Telefone do sócio 2", telefone_socio_2),
+        ("Telefone do sócio 3", telefone_socio_3),
     ]:
         if normalize_text(phone_value) and not normalize_phone_for_duplicate(phone_value):
             st.error(f"Digite um número válido no campo {phone_label} ou deixe o campo vazio.")
@@ -5673,12 +5759,14 @@ def render_contract_detail_page(df: pd.DataFrame, columns: dict, sheet_row: int)
     partner_fields = "".join(
         [
             _contract_detail_field("Sócio 1", _contract_detail_value(row, columns, "socio_1")),
+            _contract_detail_field("Telefone do sócio 1", _contract_detail_value(row, columns, "telefone_socio_1")),
             _contract_detail_field("CPF do sócio 1", _contract_detail_value(row, columns, "cpf_socio_1")),
             _contract_detail_field("E-mail do sócio 1", _contract_detail_value(row, columns, "email_socio_1")),
-            _contract_detail_field("Telefone do sócio 1", _contract_detail_value(row, columns, "telefone_socio_1")),
             _contract_detail_field("Sócio 2", _contract_detail_value(row, columns, "socio_2")),
+            _contract_detail_field("Telefone do sócio 2", _contract_detail_value(row, columns, "telefone_socio_2")),
             _contract_detail_field("CPF do sócio 2", _contract_detail_value(row, columns, "cpf_socio_2")),
             _contract_detail_field("Sócio 3", _contract_detail_value(row, columns, "socio_3")),
+            _contract_detail_field("Telefone do sócio 3", _contract_detail_value(row, columns, "telefone_socio_3")),
             _contract_detail_field("CPF do sócio 3", _contract_detail_value(row, columns, "cpf_socio_3")),
         ]
     )
