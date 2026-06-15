@@ -7446,6 +7446,31 @@ def _pricing_company_registration_data(df: pd.DataFrame, columns: dict, company_
     ]
 
 
+
+def _pricing_answer_label_for_pdf(step: dict, answer_data: dict) -> str:
+    """Mostra no PDF a opção completa escolhida, não apenas o número digitado."""
+    answer = normalize_text(answer_data.get("answer"))
+
+    if not step.get("weighted"):
+        return answer or "Não informado"
+
+    weight = answer_data.get("weight")
+
+    try:
+        weight_int = int(weight)
+    except Exception:
+        weight_int = _pricing_weight_from_answer(step.get("id", ""), answer) or 0
+
+    if weight_int:
+        for option in step.get("options", []):
+            option_text = normalize_text(option)
+            if re.match(rf"^\s*{weight_int}\s*[—-]", option_text):
+                return option_text
+
+        return f"Peso {weight_int}"
+
+    return answer or "Não informado"
+
 def _pricing_generate_pdf(company_name: str, df: pd.DataFrame, columns: dict) -> bytes:
     """Gera um PDF de diagnóstico com os dados cadastrais e todas as respostas do vendedor."""
     try:
@@ -7652,7 +7677,7 @@ def _pricing_generate_pdf(company_name: str, df: pd.DataFrame, columns: dict) ->
     ]]
     for step in OPPI_PRICING_STEPS:
         answer_data = answer_map.get(step["id"], {})
-        answer = normalize_text(answer_data.get("answer")) or "Não informado"
+        answer = _pricing_answer_label_for_pdf(step, answer_data)
         weight = answer_data.get("weight")
         diagnostics_data.append([
             Paragraph(html.escape(step["question"]), styles["OppiSmall"]),
