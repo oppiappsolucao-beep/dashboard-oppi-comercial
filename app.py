@@ -266,6 +266,56 @@ def parse_date(value):
     return pd.to_datetime(text, errors="coerce", dayfirst=True)
 
 
+def normalize_period_filter(value):
+    """
+    Normaliza o retorno do st.date_input.
+    Quando o usuário escolhe apenas um dia, o Streamlit pode retornar um único
+    date em vez de uma tupla. Nesse caso, filtramos exatamente aquele dia.
+    """
+    if isinstance(value, (tuple, list)):
+        cleaned_dates = [item for item in value if item is not None]
+
+        if len(cleaned_dates) >= 2:
+            start_date = cleaned_dates[0]
+            end_date = cleaned_dates[1]
+        elif len(cleaned_dates) == 1:
+            start_date = cleaned_dates[0]
+            end_date = cleaned_dates[0]
+        else:
+            return None, None
+    elif isinstance(value, date):
+        start_date = value
+        end_date = value
+    else:
+        return None, None
+
+    if start_date > end_date:
+        start_date, end_date = end_date, start_date
+
+    return start_date, end_date
+
+
+def apply_period_filter(df: pd.DataFrame, date_column: str, period_value) -> pd.DataFrame:
+    """
+    Aplica o filtro por período respeitando a coluna Data do chamado.
+    Para datas específicas, retorna somente registros daquele dia.
+    Para intervalos, retorna somente registros entre início e fim.
+    Linhas sem data não entram quando o usuário escolhe um período.
+    """
+    start_date, end_date = normalize_period_filter(period_value)
+
+    if start_date is None or end_date is None or date_column not in df.columns:
+        return df.copy()
+
+    valid_dates = df[date_column].notna()
+
+    return df[
+        valid_dates
+        & (df[date_column].dt.date >= start_date)
+        & (df[date_column].dt.date <= end_date)
+    ].copy()
+
+
 def make_unique_headers(headers: list[str]) -> list[str]:
     result = []
     counter = {}
@@ -4494,6 +4544,7 @@ def render_latest_calls_section(
         with filter_3:
             st.date_input(
                 "Período",
+                value=st.session_state.dashboard_filter_period,
                 min_value=date_min,
                 max_value=max(date_max, date.today()),
                 key="dashboard_filter_period",
@@ -4861,16 +4912,11 @@ def prepare_filters(df: pd.DataFrame) -> pd.DataFrame:
     if selected_state != "Todos os estados":
         filtered_df = filtered_df[filtered_df["_estado"] == selected_state].copy()
 
-    if isinstance(selected_range, (tuple, list)) and len(selected_range) == 2:
-        start_date, end_date = selected_range
-
-        filtered_df = filtered_df[
-            filtered_df["_data_chamado"].isna()
-            | (
-                (filtered_df["_data_chamado"].dt.date >= start_date)
-                & (filtered_df["_data_chamado"].dt.date <= end_date)
-            )
-        ].copy()
+    filtered_df = apply_period_filter(
+        filtered_df,
+        "_data_chamado",
+        selected_range,
+    )
 
     return filtered_df
 
@@ -5925,6 +5971,7 @@ def render_all_contracts_page(df: pd.DataFrame, columns: dict) -> None:
         with filter_col_3:
             selected_period = st.date_input(
                 "Período",
+                value=st.session_state.contracts_names_filter_period,
                 min_value=date_min,
                 max_value=max(date_max, date.today()),
                 key="contracts_names_filter_period",
@@ -5965,15 +6012,11 @@ def render_all_contracts_page(df: pd.DataFrame, columns: dict) -> None:
     if selected_state != "Todos os estados":
         filtered_df = filtered_df[filtered_df["_estado"] == selected_state].copy()
 
-    if isinstance(selected_period, (tuple, list)) and len(selected_period) == 2:
-        start_date, end_date = selected_period
-        filtered_df = filtered_df[
-            filtered_df["_data_chamado"].isna()
-            | (
-                (filtered_df["_data_chamado"].dt.date >= start_date)
-                & (filtered_df["_data_chamado"].dt.date <= end_date)
-            )
-        ].copy()
+    filtered_df = apply_period_filter(
+        filtered_df,
+        "_data_chamado",
+        selected_period,
+    )
 
     if normalize_text(search_term):
         term = normalize_search_text(search_term)
