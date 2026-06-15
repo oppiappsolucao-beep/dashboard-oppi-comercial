@@ -7686,6 +7686,24 @@ def _pricing_generate_pdf(company_name: str, df: pd.DataFrame, columns: dict) ->
         textColor=colors.HexColor("#2B2237"),
     ))
     styles.add(ParagraphStyle(
+        name="OppiProposalText",
+        parent=styles["BodyText"],
+        fontName="Helvetica",
+        fontSize=8.4,
+        leading=12,
+        textColor=colors.HexColor("#2B2237"),
+        spaceAfter=3,
+    ))
+    styles.add(ParagraphStyle(
+        name="OppiProposalBold",
+        parent=styles["BodyText"],
+        fontName="Helvetica-Bold",
+        fontSize=8.8,
+        leading=12,
+        textColor=colors.HexColor("#271B35"),
+        spaceAfter=3,
+    ))
+    styles.add(ParagraphStyle(
         name="OppiSmall",
         parent=styles["BodyText"],
         fontName="Helvetica",
@@ -7836,6 +7854,145 @@ def _pricing_generate_pdf(company_name: str, df: pd.DataFrame, columns: dict) ->
     ]))
     story.append(diagnostics_table)
     story.append(Spacer(1, 12))
+
+    def _proposal_header(title: str):
+        section = Table([[Paragraph(html.escape(title), styles["OppiSection"])]], colWidths=[176 * mm])
+        section.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#3B174D")),
+            ("BOX", (0, 0), (-1, -1), 0.7, colors.HexColor("#FF4BAA")),
+            ("LEFTPADDING", (0, 0), (-1, -1), 9),
+            ("TOPPADDING", (0, 0), (-1, -1), 7),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
+        ]))
+        return section
+
+    def _proposal_box(paragraphs: list[str]):
+        data = [[Paragraph(paragraph, styles["OppiProposalText"])] for paragraph in paragraphs if normalize_text(paragraph)]
+        box = Table(data, colWidths=[176 * mm])
+        box.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#FFFFFF")),
+            ("BOX", (0, 0), (-1, -1), 0.7, colors.HexColor("#E24AA8")),
+            ("LEFTPADDING", (0, 0), (-1, -1), 9),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 9),
+            ("TOPPADDING", (0, 0), (-1, -1), 6),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ]))
+        return box
+
+    def _proposal_section(title: str, paragraphs: list[str]):
+        story.append(_proposal_header(title))
+        story.append(_proposal_box(paragraphs))
+        story.append(Spacer(1, 8))
+
+    selected_product = normalize_text(report["product"]) or "Oppi"
+    selected_profile = normalize_text(report["profile"]) or "Não informado"
+    selected_price = normalize_text(report["confirmed_value"]) or "Não informado"
+    selected_range = normalize_text(report["suggested_price"]) or "Não informado"
+    selected_term = normalize_text(report["ideal_term"]) or "A definir"
+    selected_additional_services = normalize_text(report["additional_services"]) or "Contratos digitais e disparos pelo WhatsApp, conforme necessidade."
+
+    solution_focus = {
+        "Oppi Vision": "acompanhamento estratégico da operação, gestão da equipe e dashboards de performance.",
+        "Oppi Flow": "organização do fluxo comercial, pipeline, propostas e acompanhamento das etapas de atendimento.",
+        "Oppi Track": "acompanhamento operacional, execução dos processos internos e controle das etapas da operação.",
+    }.get(selected_product, "organização operacional, automação de processos e acompanhamento visual da operação.")
+
+    _proposal_section("1. CONTEXTO IDENTIFICADO", [
+        "Após análise inicial da operação da empresa, identificamos oportunidades relacionadas à organização operacional, acompanhamento da equipe e centralização das informações internas.",
+        "Atualmente, muitos processos ainda podem depender de controles manuais, dificultando o acompanhamento em tempo real da operação e reduzindo a previsibilidade dos resultados.",
+        "Nosso objetivo é estruturar uma operação mais organizada, acompanhável e automatizada, proporcionando maior controle operacional e melhor acompanhamento dos processos internos.",
+        f"Com base nas respostas registradas, o perfil identificado foi <b>{html.escape(selected_profile)}</b> e a solução mais adequada inicialmente é <b>{html.escape(selected_product)}</b>, com foco em {html.escape(solution_focus)}",
+    ])
+
+    _proposal_section("2. PRINCIPAIS DESAFIOS IDENTIFICADOS", [
+        "Durante a análise inicial, foram considerados desafios como:",
+        "- processos realizados manualmente;",
+        "- informações descentralizadas;",
+        "- dificuldade no acompanhamento operacional;",
+        "- falta de visibilidade da equipe;",
+        "- ausência de fluxo estruturado;",
+        "- retrabalho operacional;",
+        "- perda de acompanhamento de clientes e processos.",
+        f"<b>Resumo registrado pelo vendedor:</b> {html.escape(normalize_text(answer_map.get('resumo_cliente', {}).get('answer')) or 'Não informado')}",
+    ])
+
+    _proposal_section("3. SOLUÇÃO PROPOSTA — ECOSSISTEMA OPPI", [
+        "A OPPI desenvolve soluções voltadas à organização operacional, automação de processos e acompanhamento estratégico da operação.",
+        "Conforme a necessidade da empresa, a solução poderá envolver:",
+        "<b>A) OPPI VISION — Gestão & Performance</b><br/>Sistema voltado ao acompanhamento estratégico da operação e gestão da equipe.<br/>Funcionalidades: dashboards estratégicos; indicadores operacionais; acompanhamento da equipe; análise de produtividade; centralização de informações; gestão visual da operação.",
+        "<b>B) OPPI FLOW — Pipeline & Propostas</b><br/>Sistema voltado ao gerenciamento comercial e fluxo operacional de atendimento.<br/>Funcionalidades: pipeline operacional; geração de propostas; acompanhamento de etapas; histórico operacional; gestão visual do fluxo; acompanhamento comercial.",
+        "<b>C) OPPI TRACK — Operação & Execução</b><br/>Sistema voltado ao acompanhamento operacional e execução dos processos internos.<br/>Funcionalidades: acompanhamento operacional; organização de etapas; gestão de responsáveis; controle de execução; acompanhamento de status; centralização operacional.",
+        f"<b>Solução indicada para este diagnóstico:</b> {html.escape(selected_product)}.",
+    ])
+
+    _proposal_section("4. COMO FUNCIONA A OPERAÇÃO", [
+        "Fluxo operacional simplificado:",
+        "<b>Cliente → Atendimento → Processo → Automação → Dashboard → Acompanhamento → Gestão Operacional</b>",
+        "A proposta da OPPI não é apenas implementar tecnologia, mas estruturar um fluxo operacional mais inteligente, organizado e acompanhável para a empresa.",
+    ])
+
+    _proposal_section("5. BENEFÍCIOS OPERACIONAIS", [
+        "Com a implantação da solução OPPI, a empresa terá:",
+        "- maior organização operacional;",
+        "- centralização das informações;",
+        "- redução de retrabalho;",
+        "- acompanhamento da equipe em tempo real;",
+        "- redução de perda de informações;",
+        "- maior previsibilidade operacional;",
+        "- acompanhamento estratégico da operação;",
+        "- melhoria no fluxo interno de trabalho.",
+    ])
+
+    _proposal_section("6. EXEMPLO DE TRANSFORMAÇÃO OPERACIONAL", [
+        "<b>Antes da OPPI</b><br/>- processos espalhados;<br/>- equipe sem acompanhamento visual;<br/>- controles manuais;<br/>- dificuldade na gestão operacional;<br/>- falta de visibilidade dos processos.",
+        "<b>Depois da OPPI</b><br/>- operação centralizada;<br/>- acompanhamento em tempo real;<br/>- dashboards operacionais;<br/>- automações integradas;<br/>- maior controle e previsibilidade.",
+    ])
+
+    _proposal_section("7. IMPLANTAÇÃO", [
+        "A implantação contempla:",
+        "- análise operacional inicial;",
+        "- estruturação do fluxo;",
+        "- configuração da solução;",
+        "- parametrização das etapas;",
+        "- automações operacionais;",
+        "- treinamento inicial da equipe;",
+        "- acompanhamento de implantação;",
+        "- suporte operacional inicial.",
+    ])
+
+    _proposal_section("8. PRAZO ESTIMADO", [
+        f"Prazo ideal estimado: <b>{html.escape(selected_term)}</b>.",
+        "O prazo poderá variar conforme: complexidade da operação; quantidade de usuários; quantidade de setores envolvidos; disponibilidade das informações; e nível de personalização definido no projeto.",
+    ])
+
+    _proposal_section("9. INVESTIMENTO", [
+        f"Implantação sugerida pelo diagnóstico: <b>{html.escape(selected_range)}</b>.",
+        f"Valor confirmado para gerar a proposta: <b>{html.escape(selected_price)}</b>.",
+        "Forma de pagamento: a definir em proposta comercial ou contrato.",
+        f"Serviços adicionais sugeridos: <b>{html.escape(selected_additional_services)}</b>.",
+        "Os serviços adicionais podem envolver contratos digitais, propostas, documentos operacionais e pacotes de disparos pelo WhatsApp, conforme o cenário identificado.",
+    ])
+
+    _proposal_section("10. SUPORTE E ACOMPANHAMENTO", [
+        "O suporte contempla:",
+        "- acompanhamento operacional inicial;",
+        "- suporte remoto;",
+        "- ajustes simples;",
+        "- orientações de utilização;",
+        "- acompanhamento estratégico inicial.",
+        "Horário de atendimento: Segunda a sexta-feira — 08h às 18h.",
+    ])
+
+    _proposal_section("11. DIFERENCIAL OPPI", [
+        "A OPPI não atua apenas como fornecedora de tecnologia.",
+        "Nosso foco é estruturar operações mais organizadas, previsíveis e acompanháveis, utilizando automação, gestão visual e inteligência operacional para reduzir o caos operacional e melhorar o controle interno da empresa.",
+    ])
+
+    _proposal_section("12. CONSIDERAÇÕES FINAIS", [
+        "Agradecemos pela oportunidade de apresentar nossa proposta comercial.",
+        "Estamos à disposição para alinhamentos, demonstrações e esclarecimentos adicionais.",
+    ])
 
     footer = Table([[Paragraph(
         "Documento gerado automaticamente pelo Dashboard Oppi Comercial. Revise as informações antes de enviar ao cliente.",
