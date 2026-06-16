@@ -122,10 +122,10 @@ def normalize_search_text(value) -> str:
 
 def flexible_search_match(search_value, target_value) -> bool:
     """
-    Busca mais flexível para nomes de empresas e telefones.
-    Encontra pelo texto completo, por todos os termos digitados ou por qualquer
-    termo relevante. Assim, buscas como "Mega Stone Marmoraria" ainda encontram
-    cadastros que tenham "Mega", "Stone" ou "Marmoraria" no nome.
+    Busca por empresa/telefone sem trazer empresas erradas.
+    - Se digitar uma frase, precisa encontrar a frase inteira ou todos os termos.
+    - Se digitar uma palavra só, encontra por essa palavra.
+    - Se digitar telefone/CNPJ, compara pelos números.
     """
     term = normalize_search_text(search_value)
     target = normalize_search_text(target_value)
@@ -154,11 +154,13 @@ def flexible_search_match(search_value, target_value) -> bool:
     if not tokens:
         return False
 
-    if all(token in target for token in tokens):
-        return True
+    # Uma palavra só: pode encontrar por essa palavra.
+    if len(tokens) == 1:
+        return tokens[0] in target
 
-    relevant_tokens = [token for token in tokens if len(token) >= 4]
-    return any(token in target for token in relevant_tokens)
+    # Mais de uma palavra: precisa bater todos os termos digitados.
+    # Isso evita que "Marmoraria Topazio" traga qualquer outra marmoraria.
+    return all(token in target for token in tokens)
 
 
 def infer_niche_from_company_name(value) -> str:
