@@ -994,7 +994,7 @@ def append_company_to_sheet(payload: dict) -> None:
 
     row_values = [""] * len(headers)
 
-    _set_sheet_value_by_header(row_values, headers, ["Nome da empresa", "Empresa", "Nome Empresa"], payload.get("empresa"))
+    _set_sheet_value_by_header(row_values, headers, ["Nome Empresas", "Nome da empresa", "Empresa", "Nome Empresa", "Nome empresas", "Nome Empresa(s)"], payload.get("empresa"))
     _set_sheet_value_by_header(row_values, headers, ["Data de abertura", "Data abertura"], payload.get("data_abertura"))
     _set_sheet_value_by_header(row_values, headers, ["Capital", "Capital social"], payload.get("capital"))
     _set_sheet_value_by_header(row_values, headers, ["CNPJ"], payload.get("cnpj"))
@@ -1056,7 +1056,7 @@ def update_company_in_sheet(sheet_row: int, payload: dict) -> None:
     row_values = list(current_row) + [""] * max(0, len(headers) - len(current_row))
     row_values = row_values[:len(headers)]
 
-    _set_sheet_value_by_header(row_values, headers, ["Nome da empresa", "Empresa", "Nome Empresa"], payload.get("empresa"))
+    _set_sheet_value_by_header(row_values, headers, ["Nome Empresas", "Nome da empresa", "Empresa", "Nome Empresa", "Nome empresas", "Nome Empresa(s)"], payload.get("empresa"))
     _set_sheet_value_by_header(row_values, headers, ["Data de abertura", "Data abertura"], payload.get("data_abertura"))
     _set_sheet_value_by_header(row_values, headers, ["Capital", "Capital social"], payload.get("capital"))
     _set_sheet_value_by_header(row_values, headers, ["CNPJ"], payload.get("cnpj"))
@@ -1108,7 +1108,7 @@ def update_company_in_sheet(sheet_row: int, payload: dict) -> None:
 # =========================================================
 def identify_columns(df: pd.DataFrame) -> dict:
     return {
-        "empresa": first_existing_column(df, ["Nome da empresa", "Empresa", "Nome Empresa"]),
+        "empresa": first_existing_column(df, ["Nome Empresas", "Nome da empresa", "Empresa", "Nome Empresa", "Nome empresas", "Nome Empresa(s)"]),
         "data_abertura": first_existing_column(df, ["Data de abertura", "Data abertura"]),
         "capital": first_existing_column(df, ["Capital", "Capital social"]),
         "cnpj": first_existing_column(df, ["CNPJ"]),
@@ -1150,7 +1150,8 @@ def identify_columns(df: pd.DataFrame) -> dict:
 def prepare_data(df: pd.DataFrame, columns: dict) -> pd.DataFrame:
     result = df.copy()
 
-    result["_empresa"] = safe_series(result, columns.get("empresa"))
+    empresa_column = columns.get("empresa") or first_existing_column(result, ["Nome Empresas", "Nome da empresa", "Empresa", "Nome Empresa"])
+    result["_empresa"] = safe_series(result, empresa_column)
     result["_capital_num"] = safe_series(result, columns.get("capital")).apply(parse_money)
     result["_status_original"] = safe_series(result, columns.get("status")).replace("", "Novo Lead")
     result["_status_grupo"] = result["_status_original"].apply(status_group)
