@@ -4919,9 +4919,31 @@ def prepare_filters(df: pd.DataFrame) -> pd.DataFrame:
     selected_state = st.session_state.dashboard_filter_state
     search_term = st.session_state.dashboard_filter_search
 
-    # Os filtros da Visão Geral são cumulativos.
-    # A busca por empresa/telefone é mais flexível e, se o período selecionado
-    # esconder o cadastro encontrado, fazemos fallback ignorando somente o período.
+    # Quando existe busca digitada, ela precisa localizar a empresa na base inteira.
+    # Isso evita o problema de o período/status/vendedor ocultarem um cadastro antigo
+    # ou com status diferente. A busca considera nome, telefone, CNPJ, endereço e demais colunas.
+    if normalize_text(search_term):
+        def row_matches_search(row) -> bool:
+            searchable_values = []
+
+            for value in row.tolist():
+                searchable_values.append(normalize_text(value))
+
+            searchable_values.extend([
+                normalize_text(row.get("_empresa", "")),
+                normalize_text(row.get("_telefone", "")),
+                normalize_text(row.get("_status_grupo", "")),
+                normalize_text(row.get("_vendedor", "")),
+                normalize_text(row.get("_nicho", "")),
+                normalize_text(row.get("_estado", "")),
+            ])
+
+            search_target = " | ".join(searchable_values)
+            return flexible_search_match(search_term, search_target)
+
+        return df[df.apply(row_matches_search, axis=1)].copy()
+
+    # Sem busca digitada, os filtros seguem cumulativos normalmente.
     filtered_df = df.copy()
 
     if selected_seller != "Todos os vendedores":
@@ -4936,36 +4958,11 @@ def prepare_filters(df: pd.DataFrame) -> pd.DataFrame:
     if selected_state != "Todos os estados":
         filtered_df = filtered_df[filtered_df["_estado"] == selected_state].copy()
 
-    before_period_df = filtered_df.copy()
-
     filtered_df = apply_period_filter(
         filtered_df,
         "_data_chamado",
         selected_range,
     )
-
-    if normalize_text(search_term):
-        def row_matches_search(row) -> bool:
-            search_target = " | ".join(
-                [
-                    normalize_text(row.get("_empresa", "")),
-                    normalize_text(row.get("_telefone", "")),
-                ]
-            )
-            return flexible_search_match(search_term, search_target)
-
-        searched_df = filtered_df[
-            filtered_df.apply(row_matches_search, axis=1)
-        ].copy()
-
-        # Se não encontrou nada por causa do período, mantém vendedor/status/nicho/estado
-        # e ignora apenas o período para a busca localizar o cadastro.
-        if searched_df.empty:
-            searched_df = before_period_df[
-                before_period_df.apply(row_matches_search, axis=1)
-            ].copy()
-
-        filtered_df = searched_df
 
     return filtered_df
 
