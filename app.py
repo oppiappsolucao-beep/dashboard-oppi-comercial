@@ -5000,13 +5000,15 @@ def render_overview_page(df: pd.DataFrame, columns: dict) -> None:
 
     filtered_df = prepare_filters(df, columns)
 
-    today = date.today()
-    start_week = today - timedelta(days=today.weekday())
+    today = pd.Timestamp.now(tz="America/Sao_Paulo").normalize().tz_localize(None)
+    start_week = today - pd.Timedelta(days=today.weekday())
     start_month = today.replace(day=1)
 
-    called_today = int((filtered_df["_data_chamado"].dt.date == today).sum())
-    called_week = int((filtered_df["_data_chamado"].dt.date >= start_week).sum())
-    called_month = int((filtered_df["_data_chamado"].dt.date >= start_month).sum())
+    called_dates = pd.to_datetime(filtered_df["_data_chamado"], errors="coerce")
+
+    called_today = int((called_dates.dt.normalize() == today).sum())
+    called_week = int((called_dates >= start_week).sum())
+    called_month = int((called_dates >= start_month).sum())
     companies = int(filtered_df["_empresa"].replace("", pd.NA).dropna().nunique())
 
     card_1, card_2, card_3, card_4 = st.columns(4, gap="medium")
@@ -5035,7 +5037,9 @@ def render_overview_page(df: pd.DataFrame, columns: dict) -> None:
             """
         )
 
-        chart_df = filtered_df.dropna(subset=["_data_chamado"]).copy()
+        chart_df = filtered_df.copy()
+        chart_df["_data_chamado"] = pd.to_datetime(chart_df["_data_chamado"], errors="coerce")
+        chart_df = chart_df.dropna(subset=["_data_chamado"]).copy()
 
         if chart_df.empty:
             current_week_start = (
