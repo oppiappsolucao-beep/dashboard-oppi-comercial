@@ -120,6 +120,47 @@ def normalize_search_text(value) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
+def flexible_search_match(search_value, target_value) -> bool:
+    """
+    Busca mais flexível para nomes de empresas e telefones.
+    Encontra pelo texto completo, por todos os termos digitados ou por qualquer
+    termo relevante. Assim, buscas como "Mega Stone Marmoraria" ainda encontram
+    cadastros que tenham "Mega", "Stone" ou "Marmoraria" no nome.
+    """
+    term = normalize_search_text(search_value)
+    target = normalize_search_text(target_value)
+
+    if not term:
+        return True
+
+    if not target:
+        return False
+
+    if term in target:
+        return True
+
+    term_digits = normalize_digits(term)
+    target_digits = normalize_digits(target)
+
+    if term_digits and term_digits in target_digits:
+        return True
+
+    tokens = [
+        token
+        for token in re.split(r"\s+", term)
+        if len(token) >= 3
+    ]
+
+    if not tokens:
+        return False
+
+    if all(token in target for token in tokens):
+        return True
+
+    relevant_tokens = [token for token in tokens if len(token) >= 4]
+    return any(token in target for token in relevant_tokens)
+
+
 def infer_niche_from_company_name(value) -> str:
     """Identifica automaticamente o nicho usando palavras presentes no nome da empresa."""
     company_name = normalize_search_text(value)
@@ -4878,9 +4919,9 @@ def prepare_filters(df: pd.DataFrame) -> pd.DataFrame:
     selected_state = st.session_state.dashboard_filter_state
     search_term = st.session_state.dashboard_filter_search
 
-    # Os filtros da Visão Geral agora são cumulativos.
-    # Assim, ao combinar Período + Status + Nicho + Estado + Busca,
-    # o dashboard retorna somente os registros que atendem todos os critérios.
+    # Os filtros da Visão Geral são cumulativos.
+    # A busca por empresa/telefone é mais flexível e, se o período selecionado
+    # esconder o cadastro encontrado, fazemos fallback ignorando somente o período.
     filtered_df = df.copy()
 
     if selected_seller != "Todos os vendedores":
@@ -4895,6 +4936,8 @@ def prepare_filters(df: pd.DataFrame) -> pd.DataFrame:
     if selected_state != "Todos os estados":
         filtered_df = filtered_df[filtered_df["_estado"] == selected_state].copy()
 
+    before_period_df = filtered_df.copy()
+
     filtered_df = apply_period_filter(
         filtered_df,
         "_data_chamado",
@@ -4902,21 +4945,27 @@ def prepare_filters(df: pd.DataFrame) -> pd.DataFrame:
     )
 
     if normalize_text(search_term):
-        term = normalize_search_text(search_term)
-        filtered_df = filtered_df[
-            filtered_df.apply(
-                lambda row: term
-                in normalize_search_text(
-                    " | ".join(
-                        [
-                            normalize_text(row.get("_empresa", "")),
-                            normalize_text(row.get("_telefone", "")),
-                        ]
-                    )
-                ),
-                axis=1,
+        def row_matches_search(row) -> bool:
+            search_target = " | ".join(
+                [
+                    normalize_text(row.get("_empresa", "")),
+                    normalize_text(row.get("_telefone", "")),
+                ]
             )
+            return flexible_search_match(search_term, search_target)
+
+        searched_df = filtered_df[
+            filtered_df.apply(row_matches_search, axis=1)
         ].copy()
+
+        # Se não encontrou nada por causa do período, mantém vendedor/status/nicho/estado
+        # e ignora apenas o período para a busca localizar o cadastro.
+        if searched_df.empty:
+            searched_df = before_period_df[
+                before_period_df.apply(row_matches_search, axis=1)
+            ].copy()
+
+        filtered_df = searched_df
 
     return filtered_df
 
