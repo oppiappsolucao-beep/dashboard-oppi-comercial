@@ -4829,7 +4829,7 @@ def render_latest_calls_section(
                     f'<div class="premium-inline-cell date">{html.escape(normalize_text(row["Data"]))}</div>'
                 )
 
-def prepare_filters(df: pd.DataFrame) -> pd.DataFrame:
+def prepare_filters(df: pd.DataFrame, columns: dict) -> pd.DataFrame:
     title_column, refresh_column = st.columns([3.8, 1.0], gap="large")
 
     with title_column:
@@ -4919,29 +4919,48 @@ def prepare_filters(df: pd.DataFrame) -> pd.DataFrame:
     selected_state = st.session_state.dashboard_filter_state
     search_term = st.session_state.dashboard_filter_search
 
-    # Quando existe busca digitada, ela precisa localizar a empresa na base inteira.
-    # Isso evita o problema de o período/status/vendedor ocultarem um cadastro antigo
-    # ou com status diferente. A busca considera nome, telefone, CNPJ, endereço e demais colunas.
+    # Quando existe busca digitada, ela procura na base inteira, mas somente em
+    # campos reais do cadastro. Não usamos nicho/status/vendedor como alvo da busca,
+    # porque isso fazia aparecer linhas sem nome de empresa quando o termo digitado
+    # continha palavras genéricas como "marmoraria" ou "granitos".
     if normalize_text(search_term):
+        searchable_column_keys = [
+            "empresa",
+            "telefone_b2b",
+            "telefone_fixo",
+            "telefone_alternativo",
+            "cnpj",
+            "endereco",
+            "email",
+            "site",
+            "socio_1",
+            "socio_2",
+            "socio_3",
+        ]
+
         def row_matches_search(row) -> bool:
-            searchable_values = []
-
-            for value in row.tolist():
-                searchable_values.append(normalize_text(value))
-
-            searchable_values.extend([
+            searchable_values = [
                 normalize_text(row.get("_empresa", "")),
                 normalize_text(row.get("_telefone", "")),
-                normalize_text(row.get("_status_grupo", "")),
-                normalize_text(row.get("_vendedor", "")),
-                normalize_text(row.get("_nicho", "")),
-                normalize_text(row.get("_estado", "")),
-            ])
+            ]
+
+            for column_key in searchable_column_keys:
+                column_name = columns.get(column_key)
+
+                if column_name and column_name in row.index:
+                    searchable_values.append(normalize_text(row.get(column_name, "")))
 
             search_target = " | ".join(searchable_values)
             return flexible_search_match(search_term, search_target)
 
-        return df[df.apply(row_matches_search, axis=1)].copy()
+        searched_df = df[df.apply(row_matches_search, axis=1)].copy()
+
+        # Evita exibir linhas sem nome quando o usuário está procurando empresa.
+        searched_df = searched_df[
+            searched_df["_empresa"].apply(lambda value: normalize_text(value) != "")
+        ].copy()
+
+        return searched_df
 
     # Sem busca digitada, os filtros seguem cumulativos normalmente.
     filtered_df = df.copy()
@@ -4976,7 +4995,7 @@ def render_overview_page(df: pd.DataFrame, columns: dict) -> None:
     if registration_success:
         st.success(registration_success)
 
-    filtered_df = prepare_filters(df)
+    filtered_df = prepare_filters(df, columns)
 
     today = date.today()
     start_week = today - timedelta(days=today.weekday())
