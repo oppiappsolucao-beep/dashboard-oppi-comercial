@@ -539,6 +539,28 @@ def dashboard_status_from_rows(status_whatsapp: str, status_ligacao: str) -> str
     return "Novo Lead"
 
 
+def row_matches_status_filter(row, selected_status: str) -> bool:
+    """
+    Filtro único de Status: procura o status escolhido nas duas colunas da planilha,
+    sem somar e sem agrupar.
+
+    Exemplo: se escolher "Proposta", retorna linhas com:
+    - Status WhatsApp = Proposta
+    OU
+    - Status Ligação = Proposta
+    """
+    status_value = normalize_text(selected_status)
+
+    if not status_value or status_value == "Todos os status":
+        return True
+
+    normalized_filter = normalize_search_text(status_value)
+    whatsapp_status = normalize_search_text(row.get("_status_whatsapp_original", ""))
+    ligacao_status = normalize_search_text(row.get("_status_ligacao_original", ""))
+
+    return whatsapp_status == normalized_filter or ligacao_status == normalized_filter
+
+
 def calculate_score(row: pd.Series, columns: dict) -> int:
     score = 0
 
@@ -4665,7 +4687,7 @@ def render_latest_calls_section(
         with filter_2:
             st.selectbox(
                 "Status",
-                ["Todos os status"] + DASHBOARD_STATUS_OPTIONS,
+                ["Todos os status"] + STATUS_OPTIONS,
                 key="dashboard_filter_status",
                 label_visibility="collapsed",
             )
@@ -5010,7 +5032,7 @@ def prepare_filters(df: pd.DataFrame, columns: dict) -> pd.DataFrame:
     if "dashboard_filter_status" not in st.session_state:
         st.session_state.dashboard_filter_status = "Todos os status"
 
-    if st.session_state.dashboard_filter_status not in ["Todos os status"] + DASHBOARD_STATUS_OPTIONS:
+    if st.session_state.dashboard_filter_status not in ["Todos os status"] + STATUS_OPTIONS:
         st.session_state.dashboard_filter_status = "Todos os status"
 
     if "dashboard_filter_period" not in st.session_state:
@@ -5106,7 +5128,7 @@ def prepare_filters(df: pd.DataFrame, columns: dict) -> pd.DataFrame:
         filtered_df = filtered_df[filtered_df["_vendedor"] == selected_seller].copy()
 
     if selected_status != "Todos os status":
-        filtered_df = filtered_df[filtered_df["_status_grupo"] == selected_status].copy()
+        filtered_df = filtered_df[filtered_df.apply(lambda row: row_matches_status_filter(row, selected_status), axis=1)].copy()
 
     if selected_niche != "Todos os nichos":
         filtered_df = filtered_df[filtered_df["_nicho"] == selected_niche].copy()
@@ -6170,7 +6192,7 @@ def render_all_contracts_page(df: pd.DataFrame, columns: dict) -> None:
         with filter_col_2:
             selected_status = st.selectbox(
                 "Status",
-                ["Todos os status"] + DASHBOARD_STATUS_OPTIONS,
+                ["Todos os status"] + STATUS_OPTIONS,
                 key="contracts_names_filter_status",
             )
 
@@ -6210,7 +6232,7 @@ def render_all_contracts_page(df: pd.DataFrame, columns: dict) -> None:
         filtered_df = filtered_df[filtered_df["_vendedor"] == selected_seller].copy()
 
     if selected_status != "Todos os status":
-        filtered_df = filtered_df[filtered_df["_status_grupo"] == selected_status].copy()
+        filtered_df = filtered_df[filtered_df.apply(lambda row: row_matches_status_filter(row, selected_status), axis=1)].copy()
 
     if selected_niche != "Todos os nichos":
         filtered_df = filtered_df[filtered_df["_nicho"] == selected_niche].copy()
