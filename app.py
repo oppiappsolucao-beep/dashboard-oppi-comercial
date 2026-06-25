@@ -52,7 +52,13 @@ STATUS_OPTIONS = [
     "Sem Resposta",
     "Sem interesse",
     "Fechado",
+    "Ligação retornar",
+    "Ligação não atende/cx",
+    "Ligação - Conversando Whats",
+    "Ligação Numero errado",
 ]
+
+STATUS_SELECT_OPTIONS = ["Sem status"] + STATUS_OPTIONS
 
 DASHBOARD_STATUS_OPTIONS = [
     "Novo Lead",
@@ -840,7 +846,10 @@ def update_statuses_in_sheet(
         sheet_row = int(change["sheet_row"])
         new_status = normalize_text(change["status"])
 
-        if new_status not in STATUS_OPTIONS and new_status not in DASHBOARD_STATUS_OPTIONS:
+        if new_status == "Sem status":
+            new_status = ""
+
+        if new_status and new_status not in STATUS_OPTIONS and new_status not in DASHBOARD_STATUS_OPTIONS:
             raise RuntimeError(f"Status inválido: {new_status}")
 
         cells.append(gspread.Cell(sheet_row, status_column_index, new_status))
@@ -4755,7 +4764,9 @@ def render_latest_calls_section(
             "Telefone": selected_df["_telefone"],
             "E-mail": safe_series(selected_df, columns.get("email")),
             "CNPJ": safe_series(selected_df, columns.get("cnpj")),
-            "Status": selected_df["_status_grupo"],
+            "Status WhatsApp": selected_df["_status_whatsapp_original"],
+            "Status Ligação": selected_df["_status_ligacao_original"],
+            "Status Geral": selected_df["_status_grupo"],
             "Vendedor": selected_df["_vendedor"],
             "Data": selected_df["_data_chamado"].dt.strftime("%d/%m/%Y").fillna(""),
         }
@@ -4779,14 +4790,14 @@ def render_latest_calls_section(
     render_html(
         """
         <div class="premium-inline-hint">
-            Altere o <strong>Status</strong> pelo seletor ou use <strong>Copiar</strong> para copiar o telefone.
+            Altere o <strong>Status WhatsApp</strong> ou o <strong>Status Ligação</strong> pelo seletor. Use <strong>Copiar</strong> para copiar o telefone.
         </div>
         """
     )
 
     with st.container(key="compact_inline_table"):
         header_columns = st.columns(
-            [3.15, 1.45, 0.92, 1.65, 1.35, 0.90],
+            [2.75, 1.25, 0.78, 1.45, 1.55, 1.15, 0.80],
             gap="small",
         )
 
@@ -4794,7 +4805,8 @@ def render_latest_calls_section(
             "Empresa",
             "Telefone",
             "Copiar",
-            "Status",
+            "Status WhatsApp",
+            "Status Ligação",
             "Vendedor",
             "Data",
         ]
@@ -4803,17 +4815,22 @@ def render_latest_calls_section(
             with column:
                 render_html(f'<div class="premium-inline-table-header">{html.escape(label)}</div>')
 
-        status_column_name = columns.get("status")
+        status_whatsapp_column_name = columns.get("status_whatsapp") or columns.get("status")
+        status_ligacao_column_name = columns.get("status_ligacao")
 
         for _, row in editor_df.iterrows():
             sheet_row = int(row["_sheet_row"])
-            original_status = normalize_text(row["Status"])
+            original_status_whatsapp = normalize_text(row["Status WhatsApp"]) or "Sem status"
+            original_status_ligacao = normalize_text(row["Status Ligação"]) or "Sem status"
 
-            if original_status not in STATUS_OPTIONS:
-                original_status = "Novo Lead"
+            if original_status_whatsapp not in STATUS_SELECT_OPTIONS:
+                original_status_whatsapp = "Sem status"
+
+            if original_status_ligacao not in STATUS_SELECT_OPTIONS:
+                original_status_ligacao = "Sem status"
 
             row_columns = st.columns(
-                [3.15, 1.45, 0.92, 1.65, 1.35, 0.90],
+                [2.75, 1.25, 0.78, 1.45, 1.55, 1.15, 0.80],
                 gap="small",
             )
 
@@ -4833,62 +4850,91 @@ def render_latest_calls_section(
                     row_key=f"phone-{sheet_row}",
                 )
 
-            status_widget_key = f"inline_status_{sheet_row}_{normalize_search_text(original_status).replace(' ', '_')}"
+            whatsapp_widget_key = f"inline_status_whatsapp_{sheet_row}_{normalize_search_text(original_status_whatsapp).replace(' ', '_')}"
+            ligacao_widget_key = f"inline_status_ligacao_{sheet_row}_{normalize_search_text(original_status_ligacao).replace(' ', '_')}"
 
-            def save_inline_status(
+            def save_inline_status_whatsapp(
                 sheet_row_value: int = sheet_row,
-                widget_key: str = status_widget_key,
-                previous_status: str = original_status,
+                widget_key: str = whatsapp_widget_key,
+                previous_status: str = original_status_whatsapp,
             ) -> None:
                 new_status = normalize_text(st.session_state.get(widget_key, previous_status))
 
                 if new_status == previous_status:
                     return
 
-                if not status_column_name:
-                    st.session_state["status_auto_save_error"] = (
-                        "Não encontrei a coluna Status na planilha."
-                    )
+                if not status_whatsapp_column_name:
+                    st.session_state["status_auto_save_error"] = "Não encontrei a coluna Status WhatsApp na planilha."
                     return
 
                 try:
                     update_statuses_in_sheet(
-                        changes=[
-                            {
-                                "sheet_row": sheet_row_value,
-                                "status": new_status,
-                            }
-                        ],
-                        status_column_name=status_column_name,
+                        changes=[{"sheet_row": sheet_row_value, "status": new_status}],
+                        status_column_name=status_whatsapp_column_name,
                         updated_at_column_name=columns.get("ultima_atualizacao"),
                     )
-
+                    display_status = "Sem status" if new_status == "Sem status" else new_status
                     st.session_state["status_auto_save_success"] = (
-                        f"Status alterado para “{new_status}” e salvo diretamente na planilha."
+                        f"Status WhatsApp alterado para “{display_status}” e salvo diretamente na planilha."
                     )
                 except Exception as error:
-                    st.session_state["status_auto_save_error"] = (
-                        "Não consegui atualizar o status diretamente na planilha: "
-                        f"{error}"
+                    st.session_state["status_auto_save_error"] = f"Não consegui atualizar o Status WhatsApp: {error}"
+                    st.session_state[widget_key] = previous_status
+
+            def save_inline_status_ligacao(
+                sheet_row_value: int = sheet_row,
+                widget_key: str = ligacao_widget_key,
+                previous_status: str = original_status_ligacao,
+            ) -> None:
+                new_status = normalize_text(st.session_state.get(widget_key, previous_status))
+
+                if new_status == previous_status:
+                    return
+
+                if not status_ligacao_column_name:
+                    st.session_state["status_auto_save_error"] = "Não encontrei a coluna Status Ligação na planilha."
+                    return
+
+                try:
+                    update_statuses_in_sheet(
+                        changes=[{"sheet_row": sheet_row_value, "status": new_status}],
+                        status_column_name=status_ligacao_column_name,
+                        updated_at_column_name=columns.get("ultima_atualizacao"),
                     )
+                    display_status = "Sem status" if new_status == "Sem status" else new_status
+                    st.session_state["status_auto_save_success"] = (
+                        f"Status Ligação alterado para “{display_status}” e salvo diretamente na planilha."
+                    )
+                except Exception as error:
+                    st.session_state["status_auto_save_error"] = f"Não consegui atualizar o Status Ligação: {error}"
                     st.session_state[widget_key] = previous_status
 
             with row_columns[3]:
                 st.selectbox(
-                    "Status",
-                    STATUS_OPTIONS,
-                    index=STATUS_OPTIONS.index(original_status),
-                    key=status_widget_key,
+                    "Status WhatsApp",
+                    STATUS_SELECT_OPTIONS,
+                    index=STATUS_SELECT_OPTIONS.index(original_status_whatsapp),
+                    key=whatsapp_widget_key,
                     label_visibility="collapsed",
-                    on_change=save_inline_status,
+                    on_change=save_inline_status_whatsapp,
                 )
 
             with row_columns[4]:
+                st.selectbox(
+                    "Status Ligação",
+                    STATUS_SELECT_OPTIONS,
+                    index=STATUS_SELECT_OPTIONS.index(original_status_ligacao),
+                    key=ligacao_widget_key,
+                    label_visibility="collapsed",
+                    on_change=save_inline_status_ligacao,
+                )
+
+            with row_columns[5]:
                 render_html(
                     f'<div class="premium-inline-cell muted">{html.escape(normalize_text(row["Vendedor"]) or "Sem vendedor")}</div>'
                 )
 
-            with row_columns[5]:
+            with row_columns[6]:
                 render_html(
                     f'<div class="premium-inline-cell date">{html.escape(normalize_text(row["Data"]))}</div>'
                 )
