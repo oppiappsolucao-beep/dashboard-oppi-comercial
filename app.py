@@ -38,26 +38,47 @@ SCOPES = [
     "https://www.googleapis.com/auth/drive",
 ]
 
+# Status usados no dashboard já organizados para a nova estrutura da planilha.
+# A coluna T da planilha é o Status WhatsApp e a coluna V é o Status Ligação.
 STATUS_OPTIONS = [
     "Novo Lead",
+    "Chamado Whats",
     "Conversando",
-    "Sem interesse",
-    "Não responde",
     "Proposta",
     "Reunião",
     "Ligação",
+    "Sem Whatsapp",
+    "Não responde",
+    "Sem Resposta",
+    "Sem interesse",
+    "Fechado",
+]
+
+DASHBOARD_STATUS_OPTIONS = [
+    "Novo Lead",
+    "Chamado Whats",
+    "Conversando",
+    "Proposta",
+    "Reunião",
+    "Ligação",
+    "Sem Whatsapp",
+    "Não responde",
+    "Sem interesse",
     "Fechado",
 ]
 
 STATUS_COLORS = {
     "Novo Lead": ("#E8F0FF", "#5C8BFF"),
+    "Chamado Whats": ("#E8FFF0", "#00C853"),
     "Conversando": ("#F8EFE6", "#B37A2A"),
     "Sem interesse": ("#E9F8FA", "#2F9FB3"),
     "Não responde": ("#FBECEF", "#DA5C78"),
+    "Sem Resposta": ("#FBECEF", "#DA5C78"),
     "Fechado": ("#EAF8EF", "#58B97A"),
     "Proposta": ("#EAF2FF", "#5C9DFF"),
     "Reunião": ("#F3EAFE", "#A65BDB"),
     "Ligação": ("#EAF8FF", "#3C92A8"),
+    "Sem Whatsapp": ("#FFF3E6", "#8B4A00"),
 }
 
 
@@ -440,12 +461,19 @@ def safe_series(
 
 
 def status_group(value: str) -> str:
+    """Agrupa os status da nova planilha nos cards principais do dashboard."""
     status = normalize_search_text(value)
 
     if not status:
         return "Novo Lead"
 
-    if "reuniao" in status:
+    if any(word in status for word in ["chamado whats", "chamado whatsapp", "chamando whats", "chamando whatsapp"]):
+        return "Chamado Whats"
+
+    if any(word in status for word in ["sem whatsapp", "sem whats", "sem whats app"]):
+        return "Sem Whatsapp"
+
+    if any(word in status for word in ["reuniao", "reuniao marcada", "reuniao agendada"]):
         return "Reunião"
 
     if "proposta" in status:
@@ -454,22 +482,41 @@ def status_group(value: str) -> str:
     if any(word in status for word in ["fechado", "ganho", "cliente"]):
         return "Fechado"
 
-    if any(word in status for word in ["nao responde", "sem resposta"]):
+    if any(word in status for word in ["nao responde", "sem resposta", "nao atendeu", "nao atende"]):
         return "Não responde"
 
-    if any(word in status for word in ["sem interesse", "nao tem interesse"]):
+    if any(word in status for word in ["sem interesse", "nao tem interesse", "não tem interesse"]):
         return "Sem interesse"
 
     if any(word in status for word in ["ligacao", "ligando", "telefonema", "telefone"]):
         return "Ligação"
 
-    if any(word in status for word in ["chamando", "conversando", "contato", "negoci", "andamento"]):
+    if any(word in status for word in ["conversando", "contato", "negoci", "andamento"]):
         return "Conversando"
 
     if any(word in status for word in ["novo", "lead"]):
         return "Novo Lead"
 
     return normalize_text(value)
+
+
+def dashboard_status_from_rows(status_whatsapp: str, status_ligacao: str) -> str:
+    """
+    Define o status principal do dashboard usando as duas colunas novas:
+    1. Status WhatsApp, quando preenchido.
+    2. Status Ligação, quando o WhatsApp ainda está vazio.
+    3. Novo Lead, quando ambos estão vazios.
+    """
+    whatsapp_text = normalize_text(status_whatsapp)
+    ligacao_text = normalize_text(status_ligacao)
+
+    if whatsapp_text:
+        return status_group(whatsapp_text)
+
+    if ligacao_text:
+        return "Ligação"
+
+    return "Novo Lead"
 
 
 def calculate_score(row: pd.Series, columns: dict) -> int:
@@ -793,7 +840,7 @@ def update_statuses_in_sheet(
         sheet_row = int(change["sheet_row"])
         new_status = normalize_text(change["status"])
 
-        if new_status not in STATUS_OPTIONS:
+        if new_status not in STATUS_OPTIONS and new_status not in DASHBOARD_STATUS_OPTIONS:
             raise RuntimeError(f"Status inválido: {new_status}")
 
         cells.append(gspread.Cell(sheet_row, status_column_index, new_status))
@@ -1142,7 +1189,9 @@ def identify_columns(df: pd.DataFrame) -> dict:
         "instagram": first_existing_column(df, ["Instagram"]),
         "linkedin": first_existing_column(df, ["Linkedin", "LinkedIn"]),
         "vendedor": first_existing_column(df, ["Vendedor", "Responsável", "Responsavel"]),
-        "status": first_existing_column(df, ["Status", "Etapa"]),
+        "status_whatsapp": first_existing_column(df, ["Status WhatsApp", "Status Whatsapp", "Status Whats", "Status Whats App"]),
+        "status_ligacao": first_existing_column(df, ["Status Ligação", "Status Ligacao", "Status da Ligação", "Status da Ligacao"]),
+        "status": first_existing_column(df, ["Status WhatsApp", "Status Whatsapp", "Status Whats", "Status Whats App", "Status", "Etapa"]),
         "data_chamado": first_existing_column(df, ["Data do chamado", "Data chamado"]),
         "ultima_atualizacao": first_existing_column(df, ["Última atualização", "Ultima atualização", "Ultima atualizacao"]),
         "observacoes": first_existing_column(df, ["Observações", "Observacoes", "Observação", "Observacao"]),
@@ -1155,8 +1204,16 @@ def prepare_data(df: pd.DataFrame, columns: dict) -> pd.DataFrame:
     empresa_column = columns.get("empresa") or first_existing_column(result, ["Nome Empresas", "Nome da empresa", "Empresa", "Nome Empresa"])
     result["_empresa"] = safe_series(result, empresa_column)
     result["_capital_num"] = safe_series(result, columns.get("capital")).apply(parse_money)
-    result["_status_original"] = safe_series(result, columns.get("status")).replace("", "Novo Lead")
-    result["_status_grupo"] = result["_status_original"].apply(status_group)
+    result["_status_whatsapp_original"] = safe_series(result, columns.get("status_whatsapp") or columns.get("status"))
+    result["_status_ligacao_original"] = safe_series(result, columns.get("status_ligacao"))
+    result["_status_original"] = result["_status_whatsapp_original"].replace("", "Novo Lead")
+    result["_status_grupo"] = result.apply(
+        lambda row: dashboard_status_from_rows(
+            row.get("_status_whatsapp_original", ""),
+            row.get("_status_ligacao_original", ""),
+        ),
+        axis=1,
+    )
     result["_vendedor"] = safe_series(result, columns.get("vendedor")).replace("", "Sem vendedor")
     result["_telefone"] = safe_series(result, columns.get("telefone_b2b"))
     result["_nicho"] = result["_empresa"].apply(infer_niche_from_company_name)
@@ -4317,12 +4374,14 @@ def render_metric_card(
 def render_status_summary(filtered_df: pd.DataFrame) -> None:
     statuses = [
         ("Novo Lead", "#697BFF"),
+        ("Chamado Whats", "#00C853"),
         ("Conversando", "#C67A25"),
-        ("Sem interesse", "#45B6C6"),
-        ("Não responde", "#DF5578"),
         ("Proposta", "#5C9DFF"),
         ("Reunião", "#A65BDB"),
         ("Ligação", "#3C92A8"),
+        ("Sem Whatsapp", "#8B4A00"),
+        ("Não responde", "#DF5578"),
+        ("Sem interesse", "#45B6C6"),
         ("Fechado", "#70C854"),
     ]
 
@@ -4478,12 +4537,14 @@ def render_latest_calls_section(
 ) -> None:
     statuses = [
         ("Novo Lead", "✦", "#E8F0FF", "#5C8BFF"),
+        ("Chamado Whats", "☘", "#E8FFF0", "#00C853"),
         ("Conversando", "•", "#F8EFE6", "#B37A2A"),
-        ("Sem interesse", "⊘", "#E9F8FA", "#2F9FB3"),
-        ("Não responde", "⚑", "#FBECEF", "#DA5C78"),
         ("Proposta", "▤", "#EAF2FF", "#5C9DFF"),
         ("Reunião", "◉", "#F3EAFE", "#A65BDB"),
         ("Ligação", "☎", "#EAF8FF", "#3C92A8"),
+        ("Sem Whatsapp", "–", "#FFF3E6", "#8B4A00"),
+        ("Não responde", "⚑", "#FBECEF", "#DA5C78"),
+        ("Sem interesse", "⊘", "#E9F8FA", "#2F9FB3"),
         ("Fechado", "✓", "#EAF8EF", "#58B97A"),
     ]
 
@@ -4580,7 +4641,7 @@ def render_latest_calls_section(
         with filter_2:
             st.selectbox(
                 "Status",
-                ["Todos os status"] + STATUS_OPTIONS,
+                ["Todos os status"] + DASHBOARD_STATUS_OPTIONS,
                 key="dashboard_filter_status",
                 label_visibility="collapsed",
             )
@@ -4876,7 +4937,7 @@ def prepare_filters(df: pd.DataFrame, columns: dict) -> pd.DataFrame:
     if "dashboard_filter_status" not in st.session_state:
         st.session_state.dashboard_filter_status = "Todos os status"
 
-    if st.session_state.dashboard_filter_status not in ["Todos os status"] + STATUS_OPTIONS:
+    if st.session_state.dashboard_filter_status not in ["Todos os status"] + DASHBOARD_STATUS_OPTIONS:
         st.session_state.dashboard_filter_status = "Todos os status"
 
     if "dashboard_filter_period" not in st.session_state:
@@ -6036,7 +6097,7 @@ def render_all_contracts_page(df: pd.DataFrame, columns: dict) -> None:
         with filter_col_2:
             selected_status = st.selectbox(
                 "Status",
-                ["Todos os status"] + STATUS_OPTIONS,
+                ["Todos os status"] + DASHBOARD_STATUS_OPTIONS,
                 key="contracts_names_filter_status",
             )
 
