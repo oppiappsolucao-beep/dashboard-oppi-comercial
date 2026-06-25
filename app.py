@@ -69,18 +69,23 @@ STATUS_WHATSAPP_SELECT_OPTIONS = ["Sem status"] + STATUS_WHATSAPP_OPTIONS
 STATUS_LIGACAO_SELECT_OPTIONS = ["Sem status"] + STATUS_LIGACAO_OPTIONS
 STATUS_SELECT_OPTIONS = ["Sem status"] + STATUS_OPTIONS
 
+# Cards da Visão Geral seguindo exatamente os status do filtro único.
+# Não agrupa os status de ligação e não soma categorias diferentes.
 DASHBOARD_STATUS_OPTIONS = [
     "Novo Lead",
     "Chamado Whats",
     "Conversando",
-    "Proposta",
     "Reunião",
-    "Ligação",
-    "Retornar",
-    "Sem Whatsapp",
-    "Não responde",
+    "Proposta",
     "Sem interesse",
     "Fechado",
+    "Sem Resposta",
+    "Sem Whatsapp",
+    "Retornar",
+    "Ligação - Conversando Whats",
+    "Ligação não atende/cx",
+    "Ligação Numero errado",
+    "Ligação retornar",
 ]
 
 STATUS_COLORS = {
@@ -94,6 +99,10 @@ STATUS_COLORS = {
     "Proposta": ("#EAF2FF", "#5C9DFF"),
     "Reunião": ("#F3EAFE", "#A65BDB"),
     "Ligação": ("#EAF8FF", "#3C92A8"),
+    "Ligação - Conversando Whats": ("#E8FFF0", "#3C92A8"),
+    "Ligação não atende/cx": ("#EAF8FF", "#1F6B7A"),
+    "Ligação Numero errado": ("#FFE8E8", "#C40000"),
+    "Ligação retornar": ("#EAF2FF", "#2F6BBA"),
     "Retornar": ("#EAF2FF", "#2F6BBA"),
     "Sem Whatsapp": ("#FFF3E6", "#8B4A00"),
 }
@@ -559,6 +568,36 @@ def row_matches_status_filter(row, selected_status: str) -> bool:
     ligacao_status = normalize_search_text(row.get("_status_ligacao_original", ""))
 
     return whatsapp_status == normalized_filter or ligacao_status == normalized_filter
+
+
+
+
+def row_matches_dashboard_card(row, selected_status: str) -> bool:
+    """
+    Cards da Visão Geral: usa o mesmo filtro único das duas colunas.
+    A única exceção é Novo Lead, que também considera linhas sem nenhum status preenchido.
+    """
+    status_value = normalize_text(selected_status)
+
+    if not status_value:
+        return True
+
+    if row_matches_status_filter(row, status_value):
+        return True
+
+    if normalize_search_text(status_value) == "novo lead":
+        whatsapp_status = normalize_text(row.get("_status_whatsapp_original", ""))
+        ligacao_status = normalize_text(row.get("_status_ligacao_original", ""))
+        return not whatsapp_status and not ligacao_status
+
+    return False
+
+
+def count_dashboard_status(df: pd.DataFrame, status_name: str) -> int:
+    if df.empty:
+        return 0
+
+    return int(df.apply(lambda row: row_matches_dashboard_card(row, status_name), axis=1).sum())
 
 
 def calculate_score(row: pd.Series, columns: dict) -> int:
@@ -4418,23 +4457,15 @@ def render_metric_card(
 
 def render_status_summary(filtered_df: pd.DataFrame) -> None:
     statuses = [
-        ("Novo Lead", "#697BFF"),
-        ("Chamado Whats", "#00C853"),
-        ("Conversando", "#C67A25"),
-        ("Proposta", "#5C9DFF"),
-        ("Reunião", "#A65BDB"),
-        ("Ligação", "#3C92A8"),
-        ("Sem Whatsapp", "#8B4A00"),
-        ("Não responde", "#DF5578"),
-        ("Sem interesse", "#45B6C6"),
-        ("Fechado", "#70C854"),
+        (status_name, STATUS_COLORS.get(status_name, ("#EAF2FF", "#5C9DFF"))[1])
+        for status_name in DASHBOARD_STATUS_OPTIONS
     ]
 
     total = max(len(filtered_df), 1)
     rows_html = ""
 
     for status_name, color in statuses:
-        count = int((filtered_df["_status_grupo"] == status_name).sum())
+        count = count_dashboard_status(filtered_df, status_name)
         percent = round((count / total) * 100)
 
         rows_html += (
@@ -4580,18 +4611,31 @@ def render_latest_calls_section(
     columns: dict,
     source_df: pd.DataFrame,
 ) -> None:
+    status_icons = {
+        "Novo Lead": "✦",
+        "Chamado Whats": "☘",
+        "Conversando": "•",
+        "Reunião": "◉",
+        "Proposta": "▤",
+        "Sem interesse": "⊘",
+        "Fechado": "✓",
+        "Sem Resposta": "⚑",
+        "Sem Whatsapp": "–",
+        "Retornar": "↩",
+        "Ligação - Conversando Whats": "☎",
+        "Ligação não atende/cx": "☎",
+        "Ligação Numero errado": "!",
+        "Ligação retornar": "↩",
+    }
+
     statuses = [
-        ("Novo Lead", "✦", "#E8F0FF", "#5C8BFF"),
-        ("Chamado Whats", "☘", "#E8FFF0", "#00C853"),
-        ("Conversando", "•", "#F8EFE6", "#B37A2A"),
-        ("Proposta", "▤", "#EAF2FF", "#5C9DFF"),
-        ("Reunião", "◉", "#F3EAFE", "#A65BDB"),
-        ("Ligação", "☎", "#EAF8FF", "#3C92A8"),
-        ("Retornar", "↩", "#EAF2FF", "#2F6BBA"),
-        ("Sem Whatsapp", "–", "#FFF3E6", "#8B4A00"),
-        ("Não responde", "⚑", "#FBECEF", "#DA5C78"),
-        ("Sem interesse", "⊘", "#E9F8FA", "#2F9FB3"),
-        ("Fechado", "✓", "#EAF8EF", "#58B97A"),
+        (
+            status_name,
+            status_icons.get(status_name, "•"),
+            STATUS_COLORS.get(status_name, ("#EAF2FF", "#5C9DFF"))[0],
+            STATUS_COLORS.get(status_name, ("#EAF2FF", "#5C9DFF"))[1],
+        )
+        for status_name in DASHBOARD_STATUS_OPTIONS
     ]
 
     selected_card_key = "ultimos_chamados_status_selecionado"
@@ -4749,7 +4793,7 @@ def render_latest_calls_section(
         card_columns = st.columns(len(status_row), gap="small")
 
         for column, (status_name, icon, bg_color, icon_color) in zip(card_columns, status_row):
-            count = int((filtered_df["_status_grupo"] == status_name).sum())
+            count = count_dashboard_status(filtered_df, status_name)
             active = selected_status == status_name
 
             border = "1px solid rgba(255, 75, 170, 0.85)" if active else "1px solid rgba(255,255,255,0.06)"
@@ -4800,7 +4844,7 @@ def render_latest_calls_section(
             )
             return
 
-        selected_df = filtered_df[filtered_df["_status_grupo"] == selected_status].copy()
+        selected_df = filtered_df[filtered_df.apply(lambda row: row_matches_dashboard_card(row, selected_status), axis=1)].copy()
 
     selected_df = selected_df.sort_values(
         ["_data_chamado", "_empresa"],
