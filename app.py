@@ -8340,11 +8340,159 @@ def apply_restore_right_chat_only_css() -> None:
         """
     )
 
+
+def apply_chat_controls_and_pdf_visibility_fix() -> None:
+    """Mantém o campo de resposta, botões e PDF visíveis no painel direito do chat."""
+    render_html(
+        """
+        <style>
+            /* Correção aplicada SOMENTE no lado direito do Pesos e Medidas. */
+            .st-key-diagnostic_chat_panel {
+                display: flex !important;
+                flex-direction: column !important;
+                height: calc(100dvh - 24px) !important;
+                min-height: calc(100dvh - 24px) !important;
+                max-height: calc(100dvh - 24px) !important;
+                overflow: hidden !important;
+                background: #E4E7EE !important;
+            }
+
+            .st-key-diagnostic_chat_panel > div[data-testid="stVerticalBlock"] {
+                display: flex !important;
+                flex-direction: column !important;
+                height: 100% !important;
+                min-height: 100% !important;
+                max-height: 100% !important;
+                overflow: hidden !important;
+                gap: 0 !important;
+                background: #E4E7EE !important;
+            }
+
+            /* O histórico do chat rola internamente e deixa espaço para barra, botões e campo de digitação. */
+            .st-key-diagnostic_chat_panel .oppi-chat-messages {
+                flex: 1 1 auto !important;
+                height: auto !important;
+                min-height: 230px !important;
+                max-height: calc(100dvh - 304px) !important;
+                overflow-y: auto !important;
+                overflow-x: hidden !important;
+                padding-bottom: 16px !important;
+            }
+
+            .st-key-diagnostic_chat_panel .oppi-chat-progress-wrap {
+                flex: 0 0 auto !important;
+                min-height: 42px !important;
+                display: block !important;
+                visibility: visible !important;
+                opacity: 1 !important;
+                background: #F7F7FB !important;
+                position: relative !important;
+                z-index: 20 !important;
+            }
+
+            .st-key-diagnostic_chat_toolbar {
+                flex: 0 0 auto !important;
+                display: block !important;
+                visibility: visible !important;
+                opacity: 1 !important;
+                background: #F7F0FA !important;
+                border-top: 1px solid rgba(80,69,105,0.10) !important;
+                border-bottom: 1px solid rgba(80,69,105,0.10) !important;
+                padding: 8px 14px !important;
+                position: relative !important;
+                z-index: 30 !important;
+            }
+
+            .st-key-diagnostic_chat_toolbar div[data-testid="stHorizontalBlock"] {
+                gap: 8px !important;
+            }
+
+            .st-key-diagnostic_chat_toolbar button,
+            .st-key-diagnostic_chat_toolbar [data-testid="stDownloadButton"] button {
+                min-height: 42px !important;
+                border-radius: 999px !important;
+                border: 0 !important;
+                color: #FFFFFF !important;
+                font-weight: 850 !important;
+                background: linear-gradient(90deg, #FF4BAA 0%, #A91CFF 100%) !important;
+                box-shadow: 0 8px 18px rgba(169,28,255,0.18) !important;
+            }
+
+            .st-key-diagnostic_chat_form {
+                flex: 0 0 auto !important;
+                display: block !important;
+                visibility: visible !important;
+                opacity: 1 !important;
+                padding: 10px 14px 14px 14px !important;
+                background: #FFFFFF !important;
+                border-top: 1px solid rgba(80,69,105,0.14) !important;
+                position: relative !important;
+                z-index: 40 !important;
+            }
+
+            .st-key-diagnostic_chat_form [data-testid="stForm"] {
+                display: block !important;
+                visibility: visible !important;
+                opacity: 1 !important;
+                max-width: none !important;
+                width: 100% !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                border: 0 !important;
+                background: transparent !important;
+                box-shadow: none !important;
+            }
+
+            .st-key-diagnostic_chat_form [data-testid="stForm"]::before,
+            .st-key-diagnostic_chat_form [data-testid="stForm"]::after {
+                display: none !important;
+            }
+
+            .st-key-diagnostic_chat_form div[data-testid="stHorizontalBlock"] {
+                gap: 8px !important;
+                align-items: center !important;
+            }
+
+            .st-key-diagnostic_chat_form div[data-baseweb="input"] > div {
+                min-height: 48px !important;
+                height: 48px !important;
+                border-radius: 999px !important;
+                background: #FFFFFF !important;
+                border: 1px solid rgba(80,69,105,0.18) !important;
+            }
+
+            .st-key-diagnostic_chat_form input {
+                min-height: 48px !important;
+                color: #211A30 !important;
+                -webkit-text-fill-color: #211A30 !important;
+            }
+
+            .st-key-diagnostic_chat_form input::placeholder {
+                color: rgba(33,26,48,0.46) !important;
+                -webkit-text-fill-color: rgba(33,26,48,0.46) !important;
+            }
+
+            .st-key-diagnostic_chat_form button[kind="secondaryFormSubmit"] {
+                width: 48px !important;
+                min-width: 48px !important;
+                height: 48px !important;
+                min-height: 48px !important;
+                border-radius: 50% !important;
+                border: 0 !important;
+                color: #FFFFFF !important;
+                background: linear-gradient(135deg, #FF4BAA 0%, #A91CFF 100%) !important;
+                box-shadow: 0 8px 18px rgba(169,28,255,0.22) !important;
+            }
+        </style>
+        """
+    )
+
 def render_scoring_page(df: pd.DataFrame, columns: dict) -> None:
     apply_chat_css()
     apply_global_sidebar_toggle_css()
     apply_pesos_chat_visibility_fix()
     apply_restore_right_chat_only_css()
+    apply_chat_controls_and_pdf_visibility_fix()
 
     companies = sorted(
         {
