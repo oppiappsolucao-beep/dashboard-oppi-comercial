@@ -7348,6 +7348,14 @@ def _diagnostic_now() -> str:
     return pd.Timestamp.now(tz="America/Sao_Paulo").strftime("%H:%M")
 
 
+def _pricing_safe_key_fragment(value: str) -> str:
+    """Cria um fragmento de key único e estável para evitar StreamlitDuplicateElementKey."""
+    clean = normalize_search_text(value)
+    clean = re.sub(r"[^a-z0-9]+", "_", clean).strip("_") or "empresa"
+    unique = uuid.uuid5(uuid.NAMESPACE_DNS, normalize_text(value)).hex[:10]
+    return f"{clean[:42]}_{unique}"
+
+
 def _diagnostic_get_threads() -> dict:
     key = f"oppi_pricing_threads_{PRICING_SCRIPT_VERSION}"
 
@@ -8399,7 +8407,7 @@ def render_scoring_page(df: pd.DataFrame, columns: dict) -> None:
 
                     if st.button(
                         label,
-                        key=f"pricing_contact_{normalize_search_text(company).replace(' ', '_')}_{len(company)}",
+                        key=f"pricing_contact_{_pricing_safe_key_fragment(company)}",
                         use_container_width=True,
                         type="primary" if selected else "secondary",
                     ):
@@ -8447,7 +8455,7 @@ def render_scoring_page(df: pd.DataFrame, columns: dict) -> None:
                     if st.button(
                         "↻ Reiniciar precificação",
                         use_container_width=True,
-                        key=f"reset_pricing_{normalize_search_text(selected_company)}",
+                        key=f"reset_pricing_{_pricing_safe_key_fragment(selected_company)}",
                     ):
                         _diagnostic_reset(selected_company)
                         st.rerun()
@@ -8462,7 +8470,7 @@ def render_scoring_page(df: pd.DataFrame, columns: dict) -> None:
                                 file_name=f"diagnostico_oppi_{_pricing_pdf_safe_filename(selected_company)}.pdf",
                                 mime="application/pdf",
                                 use_container_width=True,
-                                key=f"download_pricing_pdf_{normalize_search_text(selected_company)}",
+                                key=f"download_pricing_pdf_{_pricing_safe_key_fragment(selected_company)}",
                             )
                         except Exception as error:
                             st.error(f"Não consegui gerar o PDF: {error}")
@@ -8472,12 +8480,12 @@ def render_scoring_page(df: pd.DataFrame, columns: dict) -> None:
                         "✓ Perguntas fixas da Oppi",
                         use_container_width=True,
                         disabled=True,
-                        key=f"fixed_pricing_script_{normalize_search_text(selected_company)}",
+                        key=f"fixed_pricing_script_{_pricing_safe_key_fragment(selected_company)}",
                     )
 
             with st.container(key="diagnostic_chat_form"):
                 with st.form(
-                    f"pricing_form_{normalize_search_text(selected_company)}",
+                    f"pricing_form_{_pricing_safe_key_fragment(selected_company)}",
                     clear_on_submit=True,
                 ):
                     input_column, send_column = st.columns([8.4, 1.0], gap="small")
@@ -8487,6 +8495,7 @@ def render_scoring_page(df: pd.DataFrame, columns: dict) -> None:
                             "Mensagem",
                             placeholder="Digite a resposta do vendedor...",
                             label_visibility="collapsed",
+                            key=f"pricing_answer_{_pricing_safe_key_fragment(selected_company)}",
                         )
 
                     with send_column:
