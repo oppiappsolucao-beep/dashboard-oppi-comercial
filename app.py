@@ -8129,6 +8129,101 @@ def _diagnostic_render_messages(messages: list[dict]) -> str:
     return "".join(rows)
 
 
+
+def apply_pesos_chat_visibility_fix() -> None:
+    """Garante que o painel da consultoria em Pesos e Medidas fique visível."""
+    render_html(
+        """
+        <style>
+            /* Força o painel da direita a ocupar a tela e aparecer claro. */
+            .st-key-diagnostic_chat_panel {
+                display: flex !important;
+                flex-direction: column !important;
+                visibility: visible !important;
+                opacity: 1 !important;
+                background: #E4E7EE !important;
+                background-color: #E4E7EE !important;
+                min-height: 100dvh !important;
+                height: 100dvh !important;
+                max-height: 100dvh !important;
+                overflow: hidden !important;
+                position: relative !important;
+                z-index: 1 !important;
+            }
+
+            .st-key-diagnostic_chat_panel > div[data-testid="stVerticalBlock"],
+            .st-key-diagnostic_chat_panel div[data-testid="stVerticalBlock"] {
+                display: flex !important;
+                flex-direction: column !important;
+                visibility: visible !important;
+                opacity: 1 !important;
+                height: 100% !important;
+                max-height: 100% !important;
+                min-height: 0 !important;
+                background: transparent !important;
+                overflow: hidden !important;
+            }
+
+            .oppi-chat-window-header {
+                display: flex !important;
+                visibility: visible !important;
+                opacity: 1 !important;
+                min-height: 82px !important;
+                background: rgba(255,255,255,0.96) !important;
+                color: #111827 !important;
+                border-bottom: 1px solid rgba(80,69,105,0.16) !important;
+                position: relative !important;
+                z-index: 3 !important;
+            }
+
+            .oppi-chat-window-name {
+                color: #111827 !important;
+                -webkit-text-fill-color: #111827 !important;
+            }
+
+            .oppi-chat-window-status {
+                color: #16A34A !important;
+                -webkit-text-fill-color: #16A34A !important;
+            }
+
+            .oppi-chat-messages {
+                display: block !important;
+                visibility: visible !important;
+                opacity: 1 !important;
+                flex: 1 1 auto !important;
+                min-height: 260px !important;
+                height: auto !important;
+                max-height: none !important;
+                overflow-y: auto !important;
+                background:
+                    radial-gradient(circle at 78% 8%, rgba(190, 72, 255, 0.17), transparent 24%),
+                    linear-gradient(180deg, #ECEEF4 0%, #DCE0E9 100%) !important;
+                padding: 22px 26px !important;
+                position: relative !important;
+                z-index: 2 !important;
+            }
+
+            .oppi-chat-bubble {
+                display: block !important;
+                visibility: visible !important;
+                opacity: 1 !important;
+            }
+
+            .oppi-chat-progress-wrap,
+            .st-key-diagnostic_chat_toolbar,
+            .st-key-diagnostic_chat_form {
+                display: block !important;
+                visibility: visible !important;
+                opacity: 1 !important;
+                position: relative !important;
+                z-index: 4 !important;
+                background: #F7F8FC !important;
+            }
+        </style>
+        """
+    )
+
+
 def render_scoring_page(df: pd.DataFrame, columns: dict) -> None:
     apply_chat_css()
     apply_global_sidebar_toggle_css()
@@ -8139,6 +8234,7 @@ def render_scoring_page(df: pd.DataFrame, columns: dict) -> None:
     apply_chat_sidebar_toggle_slot_css()
     apply_chat_contacts_top_slot_real_css()
     install_chat_contacts_top_slot_runtime_fix()
+    apply_pesos_chat_visibility_fix()
 
     companies = sorted(
         {
