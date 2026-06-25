@@ -40,24 +40,33 @@ SCOPES = [
 
 # Status usados no dashboard já organizados para a nova estrutura da planilha.
 # A coluna T da planilha é o Status WhatsApp e a coluna V é o Status Ligação.
-STATUS_OPTIONS = [
+# Cada coluna tem sua própria lista, igual aos filtros configurados no Google Sheets.
+STATUS_WHATSAPP_OPTIONS = [
     "Novo Lead",
     "Chamado Whats",
     "Conversando",
-    "Proposta",
     "Reunião",
-    "Ligação",
-    "Sem Whatsapp",
-    "Não responde",
-    "Sem Resposta",
+    "Proposta",
     "Sem interesse",
     "Fechado",
-    "Ligação retornar",
-    "Ligação não atende/cx",
-    "Ligação - Conversando Whats",
-    "Ligação Numero errado",
+    "Sem Resposta",
+    "Sem Whatsapp",
+    "Retornar",
 ]
 
+STATUS_LIGACAO_OPTIONS = [
+    "Ligação - Conversando Whats",
+    "Ligação não atende/cx",
+    "Ligação Numero errado",
+    "Ligação retornar",
+    "Proposta",
+    "Reunião",
+    "Sem interesse",
+]
+
+STATUS_OPTIONS = list(dict.fromkeys(STATUS_WHATSAPP_OPTIONS + STATUS_LIGACAO_OPTIONS))
+STATUS_WHATSAPP_SELECT_OPTIONS = ["Sem status"] + STATUS_WHATSAPP_OPTIONS
+STATUS_LIGACAO_SELECT_OPTIONS = ["Sem status"] + STATUS_LIGACAO_OPTIONS
 STATUS_SELECT_OPTIONS = ["Sem status"] + STATUS_OPTIONS
 
 DASHBOARD_STATUS_OPTIONS = [
@@ -67,6 +76,7 @@ DASHBOARD_STATUS_OPTIONS = [
     "Proposta",
     "Reunião",
     "Ligação",
+    "Retornar",
     "Sem Whatsapp",
     "Não responde",
     "Sem interesse",
@@ -84,6 +94,7 @@ STATUS_COLORS = {
     "Proposta": ("#EAF2FF", "#5C9DFF"),
     "Reunião": ("#F3EAFE", "#A65BDB"),
     "Ligação": ("#EAF8FF", "#3C92A8"),
+    "Retornar": ("#EAF2FF", "#2F6BBA"),
     "Sem Whatsapp": ("#FFF3E6", "#8B4A00"),
 }
 
@@ -488,11 +499,14 @@ def status_group(value: str) -> str:
     if any(word in status for word in ["fechado", "ganho", "cliente"]):
         return "Fechado"
 
-    if any(word in status for word in ["nao responde", "sem resposta", "nao atendeu", "nao atende"]):
+    if any(word in status for word in ["sem resposta", "nao responde", "nao respondeu", "nao atendeu", "nao atende"]):
         return "Não responde"
 
     if any(word in status for word in ["sem interesse", "nao tem interesse", "não tem interesse"]):
         return "Sem interesse"
+
+    if status == "retornar" or "ligacao retornar" in status or "retornar" in status:
+        return "Retornar"
 
     if any(word in status for word in ["ligacao", "ligando", "telefonema", "telefone"]):
         return "Ligação"
@@ -520,7 +534,7 @@ def dashboard_status_from_rows(status_whatsapp: str, status_ligacao: str) -> str
         return status_group(whatsapp_text)
 
     if ligacao_text:
-        return "Ligação"
+        return status_group(ligacao_text)
 
     return "Novo Lead"
 
@@ -4551,6 +4565,7 @@ def render_latest_calls_section(
         ("Proposta", "▤", "#EAF2FF", "#5C9DFF"),
         ("Reunião", "◉", "#F3EAFE", "#A65BDB"),
         ("Ligação", "☎", "#EAF8FF", "#3C92A8"),
+        ("Retornar", "↩", "#EAF2FF", "#2F6BBA"),
         ("Sem Whatsapp", "–", "#FFF3E6", "#8B4A00"),
         ("Não responde", "⚑", "#FBECEF", "#DA5C78"),
         ("Sem interesse", "⊘", "#E9F8FA", "#2F9FB3"),
@@ -4823,10 +4838,10 @@ def render_latest_calls_section(
             original_status_whatsapp = normalize_text(row["Status WhatsApp"]) or "Sem status"
             original_status_ligacao = normalize_text(row["Status Ligação"]) or "Sem status"
 
-            if original_status_whatsapp not in STATUS_SELECT_OPTIONS:
+            if original_status_whatsapp not in STATUS_WHATSAPP_SELECT_OPTIONS:
                 original_status_whatsapp = "Sem status"
 
-            if original_status_ligacao not in STATUS_SELECT_OPTIONS:
+            if original_status_ligacao not in STATUS_LIGACAO_SELECT_OPTIONS:
                 original_status_ligacao = "Sem status"
 
             row_columns = st.columns(
@@ -4912,8 +4927,8 @@ def render_latest_calls_section(
             with row_columns[3]:
                 st.selectbox(
                     "Status WhatsApp",
-                    STATUS_SELECT_OPTIONS,
-                    index=STATUS_SELECT_OPTIONS.index(original_status_whatsapp),
+                    STATUS_WHATSAPP_SELECT_OPTIONS,
+                    index=STATUS_WHATSAPP_SELECT_OPTIONS.index(original_status_whatsapp),
                     key=whatsapp_widget_key,
                     label_visibility="collapsed",
                     on_change=save_inline_status_whatsapp,
@@ -4922,8 +4937,8 @@ def render_latest_calls_section(
             with row_columns[4]:
                 st.selectbox(
                     "Status Ligação",
-                    STATUS_SELECT_OPTIONS,
-                    index=STATUS_SELECT_OPTIONS.index(original_status_ligacao),
+                    STATUS_LIGACAO_SELECT_OPTIONS,
+                    index=STATUS_LIGACAO_SELECT_OPTIONS.index(original_status_ligacao),
                     key=ligacao_widget_key,
                     label_visibility="collapsed",
                     on_change=save_inline_status_ligacao,
