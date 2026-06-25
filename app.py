@@ -5245,13 +5245,13 @@ def render_proposals_page(df: pd.DataFrame, columns: dict) -> None:
 
         with phone_2:
             telefone_fixo = st.text_input(
-                "Telefone fixo *",
+                "Telefone fixo",
                 placeholder="(00) 0000-0000",
             )
 
         with phone_3:
             telefone_alternativo = st.text_input(
-                "Telefone alternativo *",
+                "Telefone alternativo",
                 placeholder="(00) 00000-0000",
             )
 
