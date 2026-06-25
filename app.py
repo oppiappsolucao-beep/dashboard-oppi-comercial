@@ -4715,36 +4715,48 @@ def render_latest_calls_section(
         st.session_state[selected_card_key] = status_filter_value
 
     selected_status = st.session_state.get(selected_card_key)
-    card_columns = st.columns(len(statuses), gap="small")
 
-    for column, (status_name, icon, bg_color, icon_color) in zip(card_columns, statuses):
-        count = int((filtered_df["_status_grupo"] == status_name).sum())
-        active = selected_status == status_name
+    # Cards em duas fileiras para não espremer os textos quando houver muitos status.
+    first_row_count = (len(statuses) + 1) // 2
+    status_rows = [statuses[:first_row_count], statuses[first_row_count:]]
 
-        border = "1px solid rgba(255, 75, 170, 0.85)" if active else "1px solid rgba(255,255,255,0.06)"
-        shadow = "0 0 0 1px rgba(169, 28, 255, 0.18), 0 18px 46px rgba(0,0,0,0.28), 0 0 22px rgba(255, 75, 170, 0.14)" if active else "0 18px 46px rgba(0,0,0,0.22)"
+    for row_index, status_row in enumerate(status_rows, start=1):
+        if not status_row:
+            continue
 
-        with column:
-            render_html(
-                f"""
-                <div class="latest-status-card" style="border:{border}; box-shadow:{shadow};">
-                    <div class="latest-status-top">
-                        <div class="latest-status-icon" style="background:{bg_color}; color:{icon_color};">{icon}</div>
-                        <div class="latest-status-name">{html.escape(status_name)}</div>
+        card_columns = st.columns(len(status_row), gap="small")
+
+        for column, (status_name, icon, bg_color, icon_color) in zip(card_columns, status_row):
+            count = int((filtered_df["_status_grupo"] == status_name).sum())
+            active = selected_status == status_name
+
+            border = "1px solid rgba(255, 75, 170, 0.85)" if active else "1px solid rgba(255,255,255,0.06)"
+            shadow = "0 0 0 1px rgba(169, 28, 255, 0.18), 0 18px 46px rgba(0,0,0,0.28), 0 0 22px rgba(255, 75, 170, 0.14)" if active else "0 18px 46px rgba(0,0,0,0.22)"
+
+            with column:
+                render_html(
+                    f"""
+                    <div class="latest-status-card" style="border:{border}; box-shadow:{shadow};">
+                        <div class="latest-status-top">
+                            <div class="latest-status-icon" style="background:{bg_color}; color:{icon_color};">{icon}</div>
+                            <div class="latest-status-name">{html.escape(status_name)}</div>
+                        </div>
+                        <div class="latest-status-number">{count}</div>
+                        <div class="latest-status-caption">registros nesta sessão</div>
                     </div>
-                    <div class="latest-status-number">{count}</div>
-                    <div class="latest-status-caption">registros nesta sessão</div>
-                </div>
-                """
-            )
+                    """
+                )
 
-            st.button(
-                "Ver nomes",
-                key=f"btn_ultimos_{status_name}",
-                use_container_width=True,
-                on_click=choose_status,
-                args=(status_name,),
-            )
+                st.button(
+                    "Ver nomes",
+                    key=f"btn_ultimos_linha_{row_index}_{normalize_search_text(status_name)}",
+                    use_container_width=True,
+                    on_click=choose_status,
+                    args=(status_name,),
+                )
+
+        if row_index == 1:
+            st.write("")
 
     selected_status = st.session_state.get(selected_card_key)
     search_term = normalize_text(st.session_state.get("dashboard_filter_search", ""))
