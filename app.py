@@ -8350,9 +8350,9 @@ def apply_chat_controls_and_pdf_visibility_fix() -> None:
             .st-key-diagnostic_chat_panel {
                 display: flex !important;
                 flex-direction: column !important;
-                height: calc(100dvh - 24px) !important;
-                min-height: calc(100dvh - 24px) !important;
-                max-height: calc(100dvh - 24px) !important;
+                height: 100dvh !important;
+                min-height: 100dvh !important;
+                max-height: 100dvh !important;
                 overflow: hidden !important;
                 background: #E4E7EE !important;
             }
@@ -8373,7 +8373,7 @@ def apply_chat_controls_and_pdf_visibility_fix() -> None:
                 flex: 1 1 auto !important;
                 height: auto !important;
                 min-height: 230px !important;
-                max-height: calc(100dvh - 304px) !important;
+                max-height: calc(100dvh - 280px) !important;
                 overflow-y: auto !important;
                 overflow-x: hidden !important;
                 padding-bottom: 16px !important;
@@ -8423,7 +8423,7 @@ def apply_chat_controls_and_pdf_visibility_fix() -> None:
                 display: block !important;
                 visibility: visible !important;
                 opacity: 1 !important;
-                padding: 10px 14px 14px 14px !important;
+                padding: 10px 14px 0 14px !important;
                 background: #FFFFFF !important;
                 border-top: 1px solid rgba(80,69,105,0.14) !important;
                 position: relative !important;
@@ -8487,12 +8487,75 @@ def apply_chat_controls_and_pdf_visibility_fix() -> None:
         """
     )
 
+
+
+
+def apply_pesos_bottom_alignment_fix() -> None:
+    """Remove a faixa preta inferior e alinha o painel do chat até a base da tela."""
+    render_html(
+        """
+        <style>
+            html, body,
+            .stApp,
+            [data-testid="stAppViewContainer"],
+            [data-testid="stMain"],
+            [data-testid="stMainBlockContainer"] {
+                background: #E4E7EE !important;
+            }
+
+            [data-testid="stMainBlockContainer"] {
+                padding-top: 0 !important;
+                padding-bottom: 0 !important;
+                margin-top: 0 !important;
+                margin-bottom: 0 !important;
+                min-height: 100dvh !important;
+                height: 100dvh !important;
+                max-height: 100dvh !important;
+                overflow: hidden !important;
+            }
+
+            [data-testid="stMainBlockContainer"] > div[data-testid="stVerticalBlock"] {
+                min-height: 100dvh !important;
+                height: 100dvh !important;
+                max-height: 100dvh !important;
+                gap: 0 !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                overflow: hidden !important;
+            }
+
+            .st-key-diagnostic_contacts_panel,
+            .st-key-diagnostic_chat_panel {
+                min-height: 100dvh !important;
+                height: 100dvh !important;
+                max-height: 100dvh !important;
+                margin-bottom: 0 !important;
+                padding-bottom: 0 !important;
+                overflow: hidden !important;
+            }
+
+            .st-key-diagnostic_chat_form {
+                margin-bottom: 0 !important;
+                padding-bottom: 0 !important;
+                border-bottom: 0 !important;
+            }
+
+            .st-key-diagnostic_chat_form [data-testid="stForm"],
+            .st-key-diagnostic_chat_form div[data-testid="stElementContainer"] {
+                margin-bottom: 0 !important;
+                padding-bottom: 0 !important;
+            }
+        </style>
+        """
+    )
+
 def render_scoring_page(df: pd.DataFrame, columns: dict) -> None:
     apply_chat_css()
     apply_global_sidebar_toggle_css()
     apply_pesos_chat_visibility_fix()
     apply_restore_right_chat_only_css()
     apply_chat_controls_and_pdf_visibility_fix()
+    apply_pesos_bottom_alignment_fix()
 
     companies = sorted(
         {
