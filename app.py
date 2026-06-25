@@ -8226,88 +8226,107 @@ def apply_pesos_chat_visibility_fix() -> None:
 
 
 # =========================================================
-# CORREÇÃO REAL: PAINEL DIREITO DO CHAT EM PESOS E MEDIDAS
+# CORREÇÃO FINAL: RESTAURAR CHAT DO PAINEL DIREITO
 # =========================================================
-def apply_force_right_chat_panel_css() -> None:
-    """Força somente o painel direito do chat a ficar visível, sem alterar a lista de empresas."""
+def apply_restore_right_chat_only_css() -> None:
+    """Restaura somente o painel direito da página Pesos e Medidas, sem mexer na lista de empresas."""
     render_html(
         """
         <style>
-            @media (min-width: 900px) {
-                .st-key-diagnostic_chat_panel {
-                    display: flex !important;
-                    flex-direction: column !important;
-                    visibility: visible !important;
-                    opacity: 1 !important;
-                    position: fixed !important;
-                    top: 0 !important;
-                    right: 0 !important;
-                    bottom: 0 !important;
-                    left: 675px !important;
-                    z-index: 20 !important;
-                    width: auto !important;
-                    min-width: 360px !important;
-                    height: 100vh !important;
-                    min-height: 100vh !important;
-                    max-height: 100vh !important;
-                    margin: 0 !important;
-                    padding: 0 !important;
-                    overflow: hidden !important;
-                    background: #E4E7EE !important;
-                    background-color: #E4E7EE !important;
-                    border-left: 1px solid rgba(80,69,105,0.16) !important;
-                    border-radius: 0 !important;
-                    box-shadow: none !important;
-                }
+            /* Painel direito: precisa existir, ficar acima do fundo roxo/preto e ocupar a altura toda. */
+            .st-key-diagnostic_chat_panel {
+                display: flex !important;
+                flex-direction: column !important;
+                visibility: visible !important;
+                opacity: 1 !important;
+                position: relative !important;
+                z-index: 999 !important;
+                width: 100% !important;
+                min-width: 100% !important;
+                min-height: 100dvh !important;
+                height: 100dvh !important;
+                max-height: 100dvh !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                overflow: hidden !important;
+                background: #E4E7EE !important;
+                background-color: #E4E7EE !important;
+                border-left: 1px solid rgba(80,69,105,0.16) !important;
+                border-radius: 0 !important;
+                box-shadow: none !important;
+            }
 
-                .st-key-diagnostic_chat_panel > div[data-testid="stVerticalBlock"] {
-                    display: flex !important;
-                    flex-direction: column !important;
-                    width: 100% !important;
-                    height: 100% !important;
-                    min-height: 100% !important;
-                    max-height: 100% !important;
-                    margin: 0 !important;
-                    padding: 0 !important;
-                    gap: 0 !important;
-                    overflow: hidden !important;
-                    background: #E4E7EE !important;
-                    visibility: visible !important;
-                    opacity: 1 !important;
-                }
+            .st-key-diagnostic_chat_panel > div[data-testid="stVerticalBlock"],
+            .st-key-diagnostic_chat_panel div[data-testid="stVerticalBlock"] {
+                display: flex !important;
+                flex-direction: column !important;
+                visibility: visible !important;
+                opacity: 1 !important;
+                width: 100% !important;
+                height: 100% !important;
+                min-height: 100% !important;
+                max-height: 100% !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                gap: 0 !important;
+                overflow: hidden !important;
+                background: #E4E7EE !important;
+            }
 
-                .st-key-diagnostic_chat_panel .oppi-chat-window-header {
-                    flex: 0 0 76px !important;
-                    display: flex !important;
-                    visibility: visible !important;
-                    opacity: 1 !important;
-                    background: rgba(255,255,255,0.96) !important;
-                    color: #111827 !important;
-                    z-index: 2 !important;
-                }
+            .st-key-diagnostic_chat_panel .oppi-chat-window-header {
+                display: flex !important;
+                visibility: visible !important;
+                opacity: 1 !important;
+                flex: 0 0 76px !important;
+                min-height: 76px !important;
+                background: rgba(255,255,255,0.96) !important;
+                color: #111827 !important;
+                border-bottom: 1px solid rgba(80,69,105,0.14) !important;
+            }
 
-                .st-key-diagnostic_chat_panel .oppi-chat-messages {
-                    display: block !important;
-                    visibility: visible !important;
-                    opacity: 1 !important;
-                    flex: 1 1 auto !important;
-                    min-height: 0 !important;
-                    height: auto !important;
-                    max-height: none !important;
-                    overflow-y: auto !important;
-                    background: linear-gradient(180deg, #E8EAF0 0%, #DCE0E9 100%) !important;
-                }
+            .st-key-diagnostic_chat_panel .oppi-chat-window-name {
+                color: #111827 !important;
+                -webkit-text-fill-color: #111827 !important;
+            }
 
-                .st-key-diagnostic_chat_panel .oppi-chat-progress-wrap,
-                .st-key-diagnostic_chat_toolbar,
-                .st-key-diagnostic_chat_form {
-                    display: block !important;
-                    visibility: visible !important;
-                    opacity: 1 !important;
-                    flex: 0 0 auto !important;
-                    position: relative !important;
-                    z-index: 3 !important;
-                }
+            .st-key-diagnostic_chat_panel .oppi-chat-window-status {
+                color: #16A34A !important;
+                -webkit-text-fill-color: #16A34A !important;
+            }
+
+            .st-key-diagnostic_chat_panel .oppi-chat-messages {
+                display: block !important;
+                visibility: visible !important;
+                opacity: 1 !important;
+                flex: 1 1 auto !important;
+                min-height: 260px !important;
+                height: auto !important;
+                max-height: none !important;
+                overflow-y: auto !important;
+                padding: 20px 22px 16px 22px !important;
+                background: linear-gradient(180deg, #E8EAF0 0%, #DCE0E9 100%) !important;
+            }
+
+            .st-key-diagnostic_chat_panel .oppi-chat-progress-wrap,
+            .st-key-diagnostic_chat_toolbar,
+            .st-key-diagnostic_chat_form {
+                display: block !important;
+                visibility: visible !important;
+                opacity: 1 !important;
+                flex: 0 0 auto !important;
+                background: #F8F8FB !important;
+                position: relative !important;
+                z-index: 1000 !important;
+            }
+
+            .st-key-diagnostic_chat_form {
+                padding: 10px 14px 12px 14px !important;
+                border-top: 1px solid rgba(80,69,105,0.12) !important;
+            }
+
+            .st-key-diagnostic_chat_form input {
+                color: #211A30 !important;
+                -webkit-text-fill-color: #211A30 !important;
             }
         </style>
         """
@@ -8316,15 +8335,8 @@ def apply_force_right_chat_panel_css() -> None:
 def render_scoring_page(df: pd.DataFrame, columns: dict) -> None:
     apply_chat_css()
     apply_global_sidebar_toggle_css()
-    apply_chat_position_and_scroll_css()
-    apply_final_sidebar_toggle_override_css()
-    apply_final_chat_layout_override_css()
-    apply_requested_sidebar_and_chat_fix_css()
-    apply_chat_sidebar_toggle_slot_css()
-    apply_chat_contacts_top_slot_real_css()
-    install_chat_contacts_top_slot_runtime_fix()
     apply_pesos_chat_visibility_fix()
-    apply_force_right_chat_panel_css()
+    apply_restore_right_chat_only_css()
 
     companies = sorted(
         {
