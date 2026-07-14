@@ -1,0 +1,176 @@
+<form id="activities-filters"
+  hx-post="/atividades/filtros"
+  hx-target="#activities-root"
+  hx-swap="innerHTML"
+>
+  <input type="hidden" name="tab" value="{{ activities_params.tab }}" id="activities-tab-input">
+  <input type="hidden" name="page" value="{{ table.page }}" id="activities-page-input">
+
+  <div class="funnel-kpi-grid activities-kpi-grid">
+    {% for card in kpi_cards %}
+    <div class="funnel-kpi-card panel">
+      <div class="funnel-kpi-icon tone-{{ card.tone }}">{{ card.icon }}</div>
+      <div class="funnel-kpi-body">
+        <div class="funnel-kpi-label">{{ card.label }}</div>
+        <div class="funnel-kpi-value">{{ card.value }}</div>
+        <div class="funnel-kpi-note">{{ card.note }}</div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="activities-toolbar">
+    <div class="activities-tabs">
+      {% for tab_id, tab_label in [
+        ('todas', 'Todas'),
+        ('pendentes', 'Pendentes'),
+        ('concluidas', 'Concluídas'),
+        ('atrasadas', 'Atrasadas')
+      ] %}
+      <button type="button"
+        class="activities-tab {% if activities_params.tab == tab_id %}active{% endif %}"
+        onclick="document.getElementById('activities-tab-input').value='{{ tab_id }}'; document.getElementById('activities-page-input').value='1'; document.getElementById('activities-filters').requestSubmit();">
+        {{ tab_label }}
+      </button>
+      {% endfor %}
+    </div>
+
+    <div class="activities-toolbar-right">
+      <select name="activity_type" onchange="document.getElementById('activities-page-input').value='1'; document.getElementById('activities-filters').requestSubmit();">
+        {% for option in type_options %}
+        <option value="{{ option }}" {% if activities_params.activity_type == option %}selected{% endif %}>{{ option }}</option>
+        {% endfor %}
+      </select>
+      <select name="responsible" onchange="document.getElementById('activities-page-input').value='1'; document.getElementById('activities-filters').requestSubmit();">
+        {% for option in responsible_options %}
+        <option value="{{ option }}" {% if activities_params.responsible == option %}selected{% endif %}>{{ option }}</option>
+        {% endfor %}
+      </select>
+      <div class="activities-date-range">
+        <span class="activities-date-icon">📅</span>
+        <input type="date" name="period_start" value="{{ filters.period_start }}"
+          onchange="document.getElementById('activities-page-input').value='1'; document.getElementById('activities-filters').requestSubmit();">
+        <span class="activities-date-sep">—</span>
+        <input type="date" name="period_end" value="{{ filters.period_end }}"
+          onchange="document.getElementById('activities-page-input').value='1'; document.getElementById('activities-filters').requestSubmit();">
+      </div>
+      <div class="search-wrap activities-search-wrap">
+        <span class="search-icon">⌕</span>
+        <input type="text" name="search" value="{{ filters.search }}"
+          placeholder="Buscar atividade, lead ou empresa..."
+          hx-trigger="keyup changed delay:400ms"
+          hx-post="/atividades/filtros"
+          hx-target="#activities-root"
+          hx-swap="innerHTML"
+          hx-include="#activities-filters">
+      </div>
+    </div>
+  </div>
+
+  <div class="panel-card panel activities-table-card">
+    {% if table.rows %}
+    <table class="data-table activities-table">
+      <thead>
+        <tr>
+          <th>Atividade</th>
+          <th>Lead / Empresa</th>
+          <th>Tipo</th>
+          <th>Responsável</th>
+          <th>Data / Hora</th>
+          <th>Status</th>
+          <th>Próxima ação</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in table.rows %}
+        <tr>
+          <td>
+            <div class="activity-cell">
+              <span class="activity-cell-icon">{{ row.icon }}</span>
+              <div>
+                <div class="activity-cell-title">{{ row.title }}</div>
+                <div class="activity-cell-desc">{{ row.description }}</div>
+              </div>
+            </div>
+          </td>
+          <td>
+            <div class="activity-lead">
+              <div class="activity-lead-company">{{ row.empresa }}</div>
+              <div class="activity-lead-contact">{{ row.contato }}</div>
+            </div>
+          </td>
+          <td>
+            <span class="activity-type-badge {{ row.tipo_class }}">{{ row.tipo }}</span>
+          </td>
+          <td>
+            <div class="owner-cell">
+              <span class="owner-avatar">{{ row.vendedor_initials }}</span>
+              <span>{{ row.vendedor }}</span>
+            </div>
+          </td>
+          <td>
+            <div class="activity-when">
+              <div class="activity-when-label">{{ row.when_label }}</div>
+              <div class="activity-when-date">{{ row.when_date }}</div>
+            </div>
+          </td>
+          <td>
+            <span class="activity-status-badge {{ row.status }}">
+              {% if row.status == 'concluida' %}✓{% elif row.status == 'atrasada' %}!{% else %}◷{% endif %}
+              {{ row.status_label }}
+            </span>
+          </td>
+          <td>{{ row.proxima_acao }}</td>
+          <td class="table-actions">
+            {% if row.sheet_row %}
+            <a href="/cadastro/todos/{{ row.sheet_row }}" class="table-menu-btn" title="Ver cadastro">⋯</a>
+            {% else %}
+            <span class="table-menu-btn muted">⋯</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <div class="activities-pagination">
+      <div class="activities-pagination-info">
+        Mostrando {{ table.from_record }} a {{ table.to_record }} de {{ table.total }} atividades
+      </div>
+      <div class="activities-pagination-controls">
+        {% if table.page > 1 %}
+        <button type="button" class="page-btn"
+          onclick="document.getElementById('activities-page-input').value='{{ table.page - 1 }}'; document.getElementById('activities-filters').requestSubmit();">‹</button>
+        {% endif %}
+        {% for p in range(1, table.total_pages + 1) %}
+          {% if p == table.page %}
+          <span class="page-btn active">{{ p }}</span>
+          {% elif p <= 3 or p > table.total_pages - 1 or (p >= table.page - 1 and p <= table.page + 1) %}
+          <button type="button" class="page-btn"
+            onclick="document.getElementById('activities-page-input').value='{{ p }}'; document.getElementById('activities-filters').requestSubmit();">{{ p }}</button>
+          {% elif p == 4 and table.page > 5 %}
+          <span class="page-ellipsis">…</span>
+          {% endif %}
+        {% endfor %}
+        {% if table.page < table.total_pages %}
+        <button type="button" class="page-btn"
+          onclick="document.getElementById('activities-page-input').value='{{ table.page + 1 }}'; document.getElementById('activities-filters').requestSubmit();">›</button>
+        {% endif %}
+      </div>
+      <div class="activities-per-page">
+        <label>Registros por página:</label>
+        <select name="per_page" onchange="document.getElementById('activities-page-input').value='1'; document.getElementById('activities-filters').requestSubmit();">
+          {% for size in [10, 25, 50] %}
+          <option value="{{ size }}" {% if table.per_page == size %}selected{% endif %}>{{ size }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    {% else %}
+    <div class="activities-empty">
+      Nenhuma atividade encontrada para os filtros selecionados.
+    </div>
+    {% endif %}
+  </div>
+</form>

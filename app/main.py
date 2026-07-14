@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import settings
-from app.routers import auth, contracts, funnel, leads, overview, pricing, registration
+from app.routers import auth, activities, contracts, funnel, leads, overview, pricing, registration
 from app.templating import render
 
 app = FastAPI(title="Dashboard Oppi Comercial")
@@ -25,6 +25,7 @@ app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 app.include_router(auth.router)
 app.include_router(overview.router)
 app.include_router(funnel.router)
+app.include_router(activities.router)
 app.include_router(leads.router)
 app.include_router(registration.router)
 app.include_router(contracts.router)
@@ -36,6 +37,12 @@ from app.routers.leads import leads_filters, leads_page, leads_refresh  # noqa: 
 app.add_api_route("/leads-e-empresas", leads_page, methods=["GET"], tags=["leads"])
 app.add_api_route("/leads-e-empresas/filtros", leads_filters, methods=["POST"], tags=["leads"])
 app.add_api_route("/leads-e-empresas/atualizar", leads_refresh, methods=["POST"], tags=["leads"])
+
+from app.routers.activities import activities_filters, activities_page, activities_refresh  # noqa: E402
+
+app.add_api_route("/atividades", activities_page, methods=["GET"], tags=["activities"])
+app.add_api_route("/atividades/filtros", activities_filters, methods=["POST"], tags=["activities"])
+app.add_api_route("/atividades/atualizar", activities_refresh, methods=["POST"], tags=["activities"])
 
 
 @app.get("/health")
