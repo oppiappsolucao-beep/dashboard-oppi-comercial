@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import settings
-from app.routers import auth, activities, contracts, funnel, leads, overview, pricing, proposals, registration
+from app.routers import auth, activities, contracts, funnel, goals_reports, leads, overview, pricing, proposals, registration
 from app.templating import render
 
 app = FastAPI(title="Dashboard Oppi Comercial")
@@ -27,6 +27,7 @@ app.include_router(overview.router)
 app.include_router(funnel.router)
 app.include_router(activities.router)
 app.include_router(proposals.router)
+app.include_router(goals_reports.router)
 app.include_router(leads.router)
 app.include_router(registration.router)
 app.include_router(contracts.router)
@@ -52,6 +53,12 @@ app.add_api_route("/propostas/filtros", proposals_filters, methods=["POST"], tag
 app.add_api_route("/propostas/chat", proposals_chat, methods=["POST"], tags=["proposals"])
 app.add_api_route("/propostas/atualizar", proposals_refresh, methods=["POST"], tags=["proposals"])
 app.add_api_route("/propostas/chat/reset", proposals_chat_reset, methods=["POST"], tags=["proposals"])
+
+from app.routers.goals_reports import goals_filters, goals_page, goals_refresh  # noqa: E402
+
+app.add_api_route("/metas-e-relatorios", goals_page, methods=["GET"], tags=["goals"])
+app.add_api_route("/metas-e-relatorios/filtros", goals_filters, methods=["POST"], tags=["goals"])
+app.add_api_route("/metas-e-relatorios/atualizar", goals_refresh, methods=["POST"], tags=["goals"])
 
 
 @app.get("/health")

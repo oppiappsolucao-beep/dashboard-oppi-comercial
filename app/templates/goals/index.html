@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block content %}
+<link rel="stylesheet" href="/static/css/goals.css?v=1">
+<div class="page-header">
+  <div>
+    <div class="page-title">Metas e Relatórios</div>
+    <div class="page-subtitle">Acompanhe performance comercial e indicadores financeiros em um só lugar.</div>
+  </div>
+  <div class="page-actions">
+    <form method="post" action="/metas-e-relatorios/atualizar">
+      <button type="submit" class="btn btn-secondary">↻ Atualizar</button>
+    </form>
+  </div>
+</div>
+
+<div id="goals-root">
+  {% include "partials/goals_content.html" %}
+</div>
+{% endblock %}

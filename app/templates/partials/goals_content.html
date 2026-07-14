@@ -1,0 +1,186 @@
+<form id="goals-filters"
+  hx-post="/metas-e-relatorios/filtros"
+  hx-target="#goals-root"
+  hx-swap="innerHTML"
+>
+  <div class="goals-toolbar panel">
+    <div class="goals-toolbar-left">
+      <div class="filter-field filter-field-sm">
+        <label>Período</label>
+        <select name="month" onchange="document.getElementById('goals-filters').requestSubmit();">
+          {% for option in month_options %}
+          <option value="{{ option.value }}" {% if goals_params.month == option.value %}selected{% endif %}>{{ option.label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="filter-field filter-field-sm">
+        <label>Ano</label>
+        <input type="number" name="year" min="2020" max="2100" value="{{ goals_params.year }}"
+          onchange="document.getElementById('goals-filters').requestSubmit();">
+      </div>
+      <div class="filter-field filter-field-sm">
+        <label>Vendedor</label>
+        <select name="seller" onchange="document.getElementById('goals-filters').requestSubmit();">
+          {% for option in seller_options %}
+          <option value="{{ option }}" {% if goals_params.seller == option %}selected{% endif %}>{{ option }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    <div class="goals-toolbar-note">Referência: {{ month_label }}</div>
+  </div>
+
+  <div class="goals-kpi-grid">
+    {% for card in kpi_cards %}
+    <div class="funnel-kpi-card panel goals-kpi-card">
+      <div class="funnel-kpi-icon tone-{{ card.tone }}">{{ card.icon }}</div>
+      <div class="funnel-kpi-body">
+        <div class="funnel-kpi-label">{{ card.label }}</div>
+        <div class="funnel-kpi-value goals-kpi-value">{{ card.value }}</div>
+        <div class="funnel-kpi-trend {% if card.get('is_period') %}flat{% elif card.trend_flat %}flat{% elif card.trend_up %}up{% else %}down{% endif %}">
+          {{ card.trend_label }}
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="goals-grid-top">
+    <div class="panel goals-chart-card">
+      <div class="section-heading">Evolução de faturamento</div>
+      <div class="section-subtitle">Meta vs realizado nos últimos 6 meses.</div>
+      <div id="goals-revenue-chart" class="goals-chart" data-chart='{{ revenue_chart_json | safe }}'></div>
+    </div>
+
+    <div class="panel goals-summary-card">
+      <div class="section-heading">Resumo financeiro</div>
+      <div class="section-subtitle">Indicadores do mês selecionado.</div>
+      <div class="goals-summary-grid">
+        {% for item in financial_summary %}
+        <div class="goals-summary-item">
+          <div class="goals-summary-icon tone-{{ item.tone }}">{{ item.icon }}</div>
+          <div>
+            <div class="goals-summary-label">{{ item.label }}</div>
+            <div class="goals-summary-value">{{ item.value }}</div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <div class="goals-grid-middle">
+    <div class="panel goals-chart-card">
+      <div class="section-heading">Performance por vendedor</div>
+      <div class="section-subtitle">Faturamento realizado no período.</div>
+      <div id="goals-seller-chart" class="goals-chart goals-chart-compact" data-chart='{{ seller_chart_json | safe }}'></div>
+    </div>
+
+    <div class="panel goals-conversion-card">
+      <div class="section-heading">Conversão por etapa</div>
+      <div class="section-subtitle">Percentual em relação ao topo do funil.</div>
+      <div class="goals-conversion-list">
+        {% for stage in conversion_stages %}
+        <div class="goals-conversion-row">
+          <div class="goals-conversion-label">{{ stage.name }}</div>
+          <div class="goals-conversion-bar-wrap">
+            <div class="goals-conversion-bar {{ stage.tone }}" style="width: {{ stage.width }}%;"></div>
+          </div>
+          <div class="goals-conversion-percent">{{ stage.percent }}%</div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="panel goals-individual-card">
+      <div class="section-heading">Metas individuais</div>
+      <div class="section-subtitle">Atingimento por vendedor.</div>
+      <div class="goals-individual-list">
+        {% for row in individual_goals %}
+        <div class="goals-individual-row">
+          <div class="owner-cell">
+            <span class="owner-avatar">{{ row.vendedor_initials }}</span>
+            <span>{{ row.vendedor }}</span>
+          </div>
+          <div class="goals-individual-meta">{{ row.meta_label }}</div>
+          <div class="goals-individual-meta">{{ row.realizado_label }}</div>
+          <div class="goals-progress-wrap">
+            <div class="goals-progress-bar {{ row.progress_tone }}" style="width: {{ row.progress_width }}%;"></div>
+          </div>
+          <div class="goals-individual-percent">{{ row.atingimento_label }}</div>
+        </div>
+        {% else %}
+        <div class="goals-empty">Sem metas individuais para o período.</div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <div class="panel goals-report-card">
+    <div class="section-heading">Relatório consolidado</div>
+    <div class="section-subtitle">Visão completa da equipe comercial.</div>
+
+    {% if consolidated_report.rows %}
+    <table class="data-table goals-report-table">
+      <thead>
+        <tr>
+          <th>Vendedor</th>
+          <th>Meta (R$)</th>
+          <th>Realizado (R$)</th>
+          <th>Propostas enviadas</th>
+          <th>Fechados</th>
+          <th>Conversão</th>
+          <th>Comissão (R$)</th>
+          <th>Status</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in consolidated_report.rows %}
+        <tr>
+          <td>
+            <div class="owner-cell">
+              <span class="owner-avatar">{{ row.vendedor_initials }}</span>
+              <span>{{ row.vendedor }}</span>
+            </div>
+          </td>
+          <td>{{ row.meta_label }}</td>
+          <td>{{ row.realizado_label }}</td>
+          <td>{{ row.propostas }}</td>
+          <td>{{ row.fechados }}</td>
+          <td>{{ row.conversao }}</td>
+          <td>{{ row.comissao_label }}</td>
+          <td>
+            <span class="goals-status-badge {{ row.status_class }}">{{ row.status_label }}</span>
+          </td>
+          <td class="table-actions">
+            <span class="table-menu-btn muted">⋯</span>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr class="goals-report-total">
+          <td><strong>Total</strong></td>
+          <td><strong>{{ consolidated_report.totals.meta_label }}</strong></td>
+          <td><strong>{{ consolidated_report.totals.realizado_label }}</strong></td>
+          <td><strong>{{ consolidated_report.totals.propostas }}</strong></td>
+          <td><strong>{{ consolidated_report.totals.fechados }}</strong></td>
+          <td><strong>{{ consolidated_report.totals.conversao }}</strong></td>
+          <td><strong>{{ consolidated_report.totals.comissao_label }}</strong></td>
+          <td></td>
+          <td></td>
+        </tr>
+      </tfoot>
+    </table>
+    {% else %}
+    <div class="goals-empty">Nenhum dado consolidado para o período selecionado.</div>
+    {% endif %}
+  </div>
+</form>
+
+<script>
+  if (typeof renderGoalsCharts === "function") {
+    renderGoalsCharts();
+  }
+</script>

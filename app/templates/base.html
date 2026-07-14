@@ -12,7 +12,7 @@
   <link rel="stylesheet" href="/static/css/pricing.css?v=7">
   <script src="https://unpkg.com/htmx.org@2.0.4"></script>
   <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
-  <script src="/static/js/app.js?v=7" defer></script>
+  <script src="/static/js/app.js?v=8" defer></script>
 </head>
 <body class="app-body">
   <div class="app-shell">
@@ -39,6 +39,9 @@
         </a>
         <a href="/propostas" class="sidebar-link {% if active_page == 'proposals' %}active{% endif %}">
           <span class="sidebar-link-icon">📄</span> Propostas
+        </a>
+        <a href="/metas-e-relatorios" class="sidebar-link {% if active_page == 'goals' %}active{% endif %}">
+          <span class="sidebar-link-icon">📊</span> Metas e Relatórios
         </a>
         <a href="/cadastro/novo" class="sidebar-link {% if active_page == 'registration_new' %}active{% endif %}">
           <span class="sidebar-link-icon">＋</span> Novo cadastro

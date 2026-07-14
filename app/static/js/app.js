@@ -22,10 +22,25 @@ function copyPhone(button, phone) {
   });
 }
 
+function renderPlotlyChart(elementId) {
+  const el = document.getElementById(elementId);
+  if (!el || !el.dataset.chart) return;
+  const figure = JSON.parse(el.dataset.chart);
+  Plotly.newPlot(el, figure.data, figure.layout, { responsive: true, displayModeBar: false });
+}
+
+function renderGoalsCharts() {
+  renderPlotlyChart("goals-revenue-chart");
+  renderPlotlyChart("goals-seller-chart");
+}
+
 document.addEventListener("DOMContentLoaded", () => {
-  const chartEl = document.getElementById("weekly-chart");
-  if (chartEl && chartEl.dataset.chart) {
-    const figure = JSON.parse(chartEl.dataset.chart);
-    Plotly.newPlot(chartEl, figure.data, figure.layout, { responsive: true, displayModeBar: false });
+  renderPlotlyChart("weekly-chart");
+  renderGoalsCharts();
+});
+
+document.body.addEventListener("htmx:afterSwap", (event) => {
+  if (event.detail.target?.id === "goals-root") {
+    renderGoalsCharts();
   }
 });
