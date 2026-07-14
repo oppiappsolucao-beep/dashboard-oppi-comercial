@@ -7,7 +7,10 @@ from app.templating import render
 from app.services.filters import DashboardFilters, apply_dashboard_filters, get_filter_options
 from app.services.legacy_core import invalidate_sheet_cache
 from app.services.overview import (
+    build_action_items,
     build_calls_table,
+    build_funnel_steps,
+    build_kpi_cards,
     build_status_cards,
     build_status_summary,
     build_weekly_chart_json,
@@ -62,6 +65,9 @@ def _overview_context(request: Request, filters: DashboardFilters, success: str 
         "filters": filters,
         "options": options,
         "metrics": metrics,
+        "kpi_cards": build_kpi_cards(filtered_df),
+        "funnel_steps": build_funnel_steps(filtered_df),
+        "action_items": build_action_items(filtered_df),
         "chart_json": build_weekly_chart_json(filtered_df),
         "status_summary": build_status_summary(filtered_df),
         "status_cards": build_status_cards(filtered_df),

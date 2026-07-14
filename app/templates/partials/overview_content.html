@@ -3,83 +3,135 @@
   hx-target="#overview-root"
   hx-swap="innerHTML"
 >
-  <div class="filters-grid">
-    <div>
-      <label>Vendedor</label>
-      <select name="seller" onchange="document.getElementById('overview-filters').requestSubmit()">
-        <option value="Todos os vendedores">Todos os vendedores</option>
-        {% for seller in options.seller_options %}
-        <option value="{{ seller }}" {% if filters.seller == seller %}selected{% endif %}>{{ seller }}</option>
-        {% endfor %}
-      </select>
+  <div class="toolbar-card">
+    <div class="filters-grid">
+      <div>
+        <label>Vendedor</label>
+        <select name="seller" onchange="document.getElementById('overview-filters').requestSubmit()">
+          <option value="Todos os vendedores">Todos os vendedores</option>
+          {% for seller in options.seller_options %}
+          <option value="{{ seller }}" {% if filters.seller == seller %}selected{% endif %}>{{ seller }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label>Status</label>
+        <select name="status" onchange="document.getElementById('overview-filters').requestSubmit()">
+          <option value="Todos os status">Todos os status</option>
+          {% for status in options.status_options %}
+          <option value="{{ status }}" {% if filters.status == status %}selected{% endif %}>{{ status }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label>Período início</label>
+        <input type="date" name="period_start" value="{{ filters.period_start }}" onchange="document.getElementById('overview-filters').requestSubmit()">
+      </div>
+      <div>
+        <label>Período fim</label>
+        <input type="date" name="period_end" value="{{ filters.period_end }}" onchange="document.getElementById('overview-filters').requestSubmit()">
+      </div>
+      <div class="search-field">
+        <label>Buscar empresas, leads ou negócios</label>
+        <input type="text" name="search" value="{{ filters.search }}" placeholder="Buscar empresas, leads ou negócios..."
+          hx-trigger="keyup changed delay:400ms" hx-post="/visao-geral/filtros" hx-target="#overview-root" hx-swap="innerHTML">
+      </div>
+      <div>
+        <button type="button" class="btn btn-secondary" style="width:100%;margin-top:22px">⌕ Filtros</button>
+      </div>
     </div>
-    <div>
-      <label>Status</label>
-      <select name="status" onchange="document.getElementById('overview-filters').requestSubmit()">
-        <option value="Todos os status">Todos os status</option>
-        {% for status in options.status_options %}
-        <option value="{{ status }}" {% if filters.status == status %}selected{% endif %}>{{ status }}</option>
-        {% endfor %}
-      </select>
-    </div>
-    <div>
-      <label>Período início</label>
-      <input type="date" name="period_start" value="{{ filters.period_start }}" onchange="document.getElementById('overview-filters').requestSubmit()">
-    </div>
-    <div>
-      <label>Período fim</label>
-      <input type="date" name="period_end" value="{{ filters.period_end }}" onchange="document.getElementById('overview-filters').requestSubmit()">
-    </div>
-    <div>
-      <label>Nichos</label>
-      <select name="niche" onchange="document.getElementById('overview-filters').requestSubmit()">
-        <option value="Todos os nichos">Todos os nichos</option>
-        {% for niche in options.niche_options %}
-        <option value="{{ niche }}" {% if filters.niche == niche %}selected{% endif %}>{{ niche }}</option>
-        {% endfor %}
-      </select>
-    </div>
-    <div>
-      <label>Estados</label>
-      <select name="state" onchange="document.getElementById('overview-filters').requestSubmit()">
-        <option value="Todos os estados">Todos os estados</option>
-        {% for state in options.state_options %}
-        <option value="{{ state }}" {% if filters.state == state %}selected{% endif %}>{{ state }}</option>
-        {% endfor %}
-      </select>
-    </div>
-    <div class="full">
-      <label>Buscar empresa ou telefone</label>
-      <input type="text" name="search" value="{{ filters.search }}" placeholder="Digite para buscar..."
-        hx-trigger="keyup changed delay:400ms" hx-post="/visao-geral/filtros" hx-target="#overview-root" hx-swap="innerHTML">
+
+    <div class="hidden-filters">
+      <div>
+        <label>Nichos</label>
+        <select name="niche" onchange="document.getElementById('overview-filters').requestSubmit()">
+          <option value="Todos os nichos">Todos os nichos</option>
+          {% for niche in options.niche_options %}
+          <option value="{{ niche }}" {% if filters.niche == niche %}selected{% endif %}>{{ niche }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label>Estados</label>
+        <select name="state" onchange="document.getElementById('overview-filters').requestSubmit()">
+          <option value="Todos os estados">Todos os estados</option>
+          {% for state in options.state_options %}
+          <option value="{{ state }}" {% if filters.state == state %}selected{% endif %}>{{ state }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label>Chamados hoje</label>
+        <input type="text" value="{{ metrics.called_today }}" readonly>
+      </div>
+      <div>
+        <label>Empresas no mês</label>
+        <input type="text" value="{{ metrics.companies }}" readonly>
+      </div>
     </div>
     <input type="hidden" name="selected_card_status" id="selected-card-status" value="{{ filters.selected_card_status or '' }}">
   </div>
 
   <div class="metric-grid">
+    {% for card in kpi_cards %}
     <div class="metric-card">
-      <div class="metric-icon" style="background:linear-gradient(135deg,#FF4BAA,#C223FF)">☎</div>
-      <div class="metric-label">Chamados hoje</div>
-      <div class="metric-value">{{ metrics.called_today }}</div>
-      <div class="metric-note">Base atual</div>
+      <div class="metric-top">
+        <div class="metric-icon tone-{{ card.tone }}">{{ card.icon }}</div>
+      </div>
+      <div class="metric-label">{{ card.label }}</div>
+      <div class="metric-value">{{ card.value }}</div>
+      <div class="metric-note">{{ card.note }}</div>
     </div>
-    <div class="metric-card">
-      <div class="metric-icon" style="background:linear-gradient(135deg,#AE4BFF,#6E23FF)">🗓</div>
-      <div class="metric-label">Chamados na semana</div>
-      <div class="metric-value">{{ metrics.called_week }}</div>
-      <div class="metric-note">Base atual</div>
+    {% endfor %}
+  </div>
+
+  <div class="overview-grid">
+    <div class="funnel-card">
+      <div class="section-heading">Funil de Vendas</div>
+      <div class="section-subtitle">Distribuição dos leads por etapa comercial.</div>
+      <div class="funnel-layout">
+        <div class="funnel-steps">
+          {% for step in funnel_steps %}
+          <div class="funnel-step level-{{ step.level }}" style="width: {{ step.width }}%;">
+            <span>{{ step.name }}</span>
+            <strong>{{ step.count }}</strong>
+          </div>
+          {% endfor %}
+        </div>
+        <div class="funnel-conversions">
+          {% for step in funnel_steps %}
+          {% if step.conversion is not none %}
+          <div class="funnel-conversion">
+            Conversão para próxima etapa
+            <strong>{{ step.conversion }}%</strong>
+          </div>
+          {% endif %}
+          {% endfor %}
+        </div>
+      </div>
     </div>
-    <div class="metric-card">
-      <div class="metric-icon" style="background:linear-gradient(135deg,#FF4BAA,#8F2BFF)">📊</div>
-      <div class="metric-label">Chamados no mês</div>
-      <div class="metric-value">{{ metrics.called_month }}</div>
-      <div class="metric-note">Base atual</div>
-    </div>
-    <div class="metric-card">
-      <div class="metric-icon" style="background:linear-gradient(135deg,#8F2BFF,#C94AFF)">🏢</div>
-      <div class="metric-label">Empresas cadastradas no mês</div>
-      <div class="metric-value">{{ metrics.companies }}</div>
-      <div class="metric-note">Base atual filtrada</div>
+
+    <div class="actions-card">
+      <div class="section-heading">Ações de Hoje</div>
+      <div class="section-subtitle">Prioridades com base nos status atuais.</div>
+      <div class="action-list">
+        {% for item in action_items %}
+        <div class="action-item">
+          <div class="action-item-left">
+            <span class="action-dot {{ item.tone }}"></span>
+            <span class="action-label">{{ item.label }}</span>
+          </div>
+          <span class="action-count">{{ item.count }}</span>
+        </div>
+        {% else %}
+        <div class="action-item">
+          <div class="action-item-left">
+            <span class="action-dot action-green"></span>
+            <span class="action-label">Nenhuma ação pendente no filtro atual</span>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
     </div>
   </div>
 
@@ -102,12 +154,12 @@
     </div>
   </div>
 
-  <div class="panel-card" style="margin-top:24px;">
-    <div class="section-heading">Últimos chamados</div>
-    <div class="section-subtitle">Selecione um status para visualizar os registros.</div>
+  <div class="panel-card">
+    <div class="section-heading">Oportunidades em andamento</div>
+    <div class="section-subtitle">Empresas ativas no funil comercial.</div>
 
     <div class="status-cards-grid">
-      {% for card in status_cards %}
+      {% for card in status_cards[:8] %}
       <div class="latest-status-card">
         <div class="latest-status-top">
           <div class="latest-status-icon" style="background:{{ card.bg_color }};color:{{ card.icon_color }}">{{ card.icon }}</div>
@@ -115,7 +167,7 @@
         </div>
         <div class="latest-status-number">{{ card.count }}</div>
         <div class="latest-status-caption">registros nesta sessão</div>
-        <button type="button" class="btn btn-small" style="margin-top:8px;width:100%"
+        <button type="button" class="btn btn-small btn-secondary" style="margin-top:8px;width:100%"
           onclick="document.getElementById('selected-card-status').value='{{ card.name }}'; document.getElementById('overview-filters').requestSubmit();">
           Ver nomes
         </button>
@@ -127,27 +179,42 @@
     <table class="data-table">
       <thead>
         <tr>
-          <th>Empresa</th><th>Telefone</th><th>E-mail</th><th>Vendedor</th>
-          <th>Status WhatsApp</th><th>Status Ligação</th><th>Data</th><th></th>
+          <th>Empresa</th>
+          <th>Etapa</th>
+          <th>Responsável</th>
+          <th>Contato</th>
+          <th>Próxima ação</th>
+          <th></th>
         </tr>
       </thead>
       <tbody>
         {% for row in calls_table %}
         <tr>
-          <td>{{ row.empresa }}</td>
-          <td>{{ row.telefone }}</td>
-          <td>{{ row.email }}</td>
+          <td>
+            <div class="table-company">
+              <span class="table-company-icon">{{ row.empresa[:2] | upper }}</span>
+              <span>{{ row.empresa }}</span>
+            </div>
+          </td>
+          <td>
+            <span class="stage-badge {% if row.etapa == 'Proposta' %}proposta{% elif row.etapa == 'Fechado' %}fechado{% elif row.etapa == 'Reunião' %}reuniao{% endif %}">
+              {{ row.etapa }}
+            </span>
+          </td>
           <td>{{ row.vendedor }}</td>
-          <td>{{ row.status_whatsapp }}</td>
-          <td>{{ row.status_ligacao }}</td>
+          <td>{{ row.telefone }}</td>
           <td>{{ row.data_chamado }}</td>
-          <td><button type="button" class="copy-btn" onclick="copyPhone(this, '{{ row.telefone }}')">Copiar</button></td>
+          <td>
+            <a href="/cadastro/todos/{{ row.sheet_row }}" class="btn btn-small btn-secondary">Ver</a>
+            <button type="button" class="copy-btn" onclick="copyPhone(this, '{{ row.telefone }}')">Copiar</button>
+          </td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
+    <a href="/cadastro/todos" class="panel-footer-link">Ver todas as oportunidades →</a>
     {% else %}
-    <p style="color:rgba(255,255,255,0.6);margin-top:16px;">Selecione um status clicando em "Ver nomes" para visualizar os registros.</p>
+    <p style="color:var(--oppi-muted);margin-top:16px;">Nenhuma oportunidade encontrada com os filtros atuais.</p>
     {% endif %}
   </div>
 </form>

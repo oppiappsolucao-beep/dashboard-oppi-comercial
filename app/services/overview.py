@@ -11,7 +11,74 @@ from app.services.legacy_core import (
     count_dashboard_status,
     row_matches_dashboard_card,
     safe_series,
+    status_group,
 )
+
+FUNNEL_STAGES = [
+    ("Novo Lead", ["Novo Lead"]),
+    ("Primeiro Contato", ["Chamado Whats", "Conversando", "Ligação - Conversando Whats"]),
+    ("Reunião", ["Reunião"]),
+    ("Proposta", ["Proposta"]),
+    ("Fechado", ["Fechado"]),
+]
+
+ACTION_STATUS_MAP = [
+    ("Retornar contatos hoje", ["Retornar", "Ligação retornar"], "action-purple"),
+    ("Responder propostas", ["Proposta"], "action-pink"),
+    ("Agendar reuniões", ["Reunião"], "action-indigo"),
+    ("Enviar propostas", ["Proposta"], "action-rose"),
+    ("Acompanhar no WhatsApp", ["Chamado Whats", "Conversando"], "action-green"),
+]
+
+
+def _count_statuses(filtered_df: pd.DataFrame, names: list[str]) -> int:
+    return sum(count_dashboard_status(filtered_df, name) for name in names)
+
+
+def build_kpi_cards(filtered_df: pd.DataFrame) -> list[dict]:
+    novos = count_dashboard_status(filtered_df, "Novo Lead")
+    contato = _count_statuses(filtered_df, ["Chamado Whats", "Conversando", "Ligação - Conversando Whats"])
+    propostas = count_dashboard_status(filtered_df, "Proposta")
+    fechados = count_dashboard_status(filtered_df, "Fechado")
+    total = max(len(filtered_df), 1)
+    conversao = round((fechados / total) * 100)
+
+    return [
+        {"label": "Novos Leads", "value": novos, "note": "no período filtrado", "icon": "✦", "tone": "pink"},
+        {"label": "Em Contato", "value": contato, "note": "WhatsApp e ligação", "icon": "☎", "tone": "purple"},
+        {"label": "Propostas Enviadas", "value": propostas, "note": "em negociação", "icon": "▤", "tone": "violet"},
+        {"label": "Fechados", "value": fechados, "note": "convertidos", "icon": "✓", "tone": "green"},
+        {"label": "Taxa de Conversão", "value": f"{conversao}%", "note": "sobre a base filtrada", "icon": "%", "tone": "blue"},
+    ]
+
+
+def build_funnel_steps(filtered_df: pd.DataFrame) -> list[dict]:
+    counts = [_count_statuses(filtered_df, statuses) for _, statuses in FUNNEL_STAGES]
+    max_count = max(counts) or 1
+    steps = []
+
+    for index, ((name, _), count) in enumerate(zip(FUNNEL_STAGES, counts)):
+        width = max(34, round((count / max_count) * 100))
+        conversion = None
+        if index < len(counts) - 1 and counts[index] > 0:
+            conversion = round((counts[index + 1] / counts[index]) * 100)
+        steps.append({
+            "name": name,
+            "count": count,
+            "width": width,
+            "conversion": conversion,
+            "level": index,
+        })
+    return steps
+
+
+def build_action_items(filtered_df: pd.DataFrame) -> list[dict]:
+    items = []
+    for label, statuses, tone in ACTION_STATUS_MAP:
+        count = _count_statuses(filtered_df, statuses)
+        if count:
+            items.append({"label": label, "count": count, "tone": tone})
+    return items[:5]
 
 
 def compute_overview_metrics(filtered_df: pd.DataFrame) -> dict:
@@ -65,18 +132,18 @@ def build_weekly_chart_json(filtered_df: pd.DataFrame) -> str:
 
     figure = px.area(plot_df, x="InicioSemana", y="Quantidade", markers=True, custom_data=["Semana"])
     figure.update_traces(
-        line=dict(color="#E14BFF", width=4, shape="spline"),
-        marker=dict(size=9, color="#FFFFFF", line=dict(width=3, color="#D74BFF")),
+        line=dict(color="#C026D3", width=3, shape="spline"),
+        marker=dict(size=8, color="#FFFFFF", line=dict(width=2, color="#A855F7")),
         fill="tozeroy",
-        fillcolor="rgba(224,67,255,0.34)",
+        fillcolor="rgba(192,38,211,0.12)",
         hovertemplate="Semana: %{customdata[0]}<br>Chamados: %{y}<extra></extra>",
     )
     figure.update_layout(
-        height=370,
-        margin=dict(l=20, r=20, t=8, b=8),
+        height=320,
+        margin=dict(l=12, r=12, t=8, b=8),
         plot_bgcolor="rgba(0,0,0,0)",
         paper_bgcolor="rgba(0,0,0,0)",
-        font=dict(color="#FFFFFF"),
+        font=dict(color="#475569"),
         xaxis_title="",
         yaxis_title="",
     )
@@ -85,8 +152,9 @@ def build_weekly_chart_json(filtered_df: pd.DataFrame) -> str:
         tickmode="array",
         tickvals=chart_df["InicioSemana"].tolist(),
         ticktext=chart_df["Semana"].tolist(),
+        tickfont=dict(color="#64748B"),
     )
-    figure.update_yaxes(gridcolor="rgba(255,255,255,0.08)")
+    figure.update_yaxes(gridcolor="rgba(148,163,184,0.18)", tickfont=dict(color="#64748B"))
     return figure.to_json()
 
 
@@ -137,13 +205,13 @@ def build_calls_table(
     if search_term or status_filter != "Todos os status":
         selected_df = filtered_df.copy()
     elif not selected_status:
-        return []
+        selected_df = filtered_df.copy()
     else:
         selected_df = filtered_df[
             filtered_df.apply(lambda row: row_matches_dashboard_card(row, selected_status), axis=1)
         ].copy()
 
-    selected_df = selected_df.sort_values(["_data_chamado", "_empresa"], ascending=[False, True])
+    selected_df = selected_df.sort_values(["_data_chamado", "_empresa"], ascending=[False, True]).head(25)
 
     rows = []
     for _, row in selected_df.iterrows():
@@ -155,6 +223,7 @@ def build_calls_table(
             "status_whatsapp": row.get("_status_whatsapp_original", ""),
             "status_ligacao": row.get("_status_ligacao_original", ""),
             "data_chamado": row.get("_data_chamado", ""),
+            "etapa": status_group(row.get("_status_original", row.get("_status_grupo", "Novo Lead"))),
             "sheet_row": int(row.get("_sheet_row", 0)),
         })
     return rows

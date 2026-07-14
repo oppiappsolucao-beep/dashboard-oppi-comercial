@@ -4,6 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Dashboard Oppi Comercial</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/css/dashboard.css">
   <link rel="stylesheet" href="/static/css/registration.css">
   <link rel="stylesheet" href="/static/css/pricing.css">
@@ -14,15 +17,46 @@
 <body>
   <div class="app-shell">
     <aside class="sidebar">
-      <div class="sidebar-brand">Dashboard Oppi Comercial</div>
-      <nav class="sidebar-nav">
-        <a href="/visao-geral" class="sidebar-link {% if active_page == 'overview' %}active{% endif %}">Visão Geral</a>
-        <div class="sidebar-sub">
-          <a href="/cadastro/novo" class="sidebar-link {% if active_page == 'registration_new' %}active{% endif %}">Novo cadastro</a>
-          <a href="/cadastro/todos" class="sidebar-link {% if active_page == 'contracts' %}active{% endif %}">Todos os cadastros</a>
+      <div class="sidebar-brand">
+        {% if logo_uri %}
+        <img src="{{ logo_uri }}" alt="Oppi Tech" class="sidebar-logo">
+        {% else %}
+        <div class="sidebar-logo">O</div>
+        {% endif %}
+        <div class="sidebar-brand-text">
+          Oppi Comercial
+          <span>Dashboard</span>
         </div>
-        <a href="/pesos-medidas" class="sidebar-link {% if active_page == 'pricing' %}active{% endif %}">Pesos e Medidas</a>
+      </div>
+
+      <nav class="sidebar-nav">
+        <a href="/visao-geral" class="sidebar-link {% if active_page == 'overview' %}active{% endif %}">
+          <span class="sidebar-link-icon">▦</span> Visão Geral
+        </a>
+        <a href="/cadastro/novo" class="sidebar-link {% if active_page == 'registration_new' %}active{% endif %}">
+          <span class="sidebar-link-icon">＋</span> Novo cadastro
+        </a>
+        <a href="/cadastro/todos" class="sidebar-link {% if active_page == 'contracts' %}active{% endif %}">
+          <span class="sidebar-link-icon">☰</span> Todos os cadastros
+        </a>
+        <a href="/pesos-medidas" class="sidebar-link {% if active_page == 'pricing' %}active{% endif %}">
+          <span class="sidebar-link-icon">◫</span> Pesos e Medidas
+        </a>
       </nav>
+
+      <div class="sidebar-tip">
+        <div class="sidebar-tip-title">Dica de performance</div>
+        <div class="sidebar-tip-text">Use os filtros por vendedor e período para acompanhar o funil com mais precisão.</div>
+      </div>
+
+      <div class="sidebar-user">
+        <div class="sidebar-user-avatar">{{ app_username[:2] | upper }}</div>
+        <div>
+          <div class="sidebar-user-name">{{ app_username }}</div>
+          <div class="sidebar-user-role">Comercial</div>
+        </div>
+      </div>
+
       <form class="logout-form" method="post" action="/logout">
         <button type="submit" class="btn btn-secondary" style="width:100%">Sair</button>
       </form>
