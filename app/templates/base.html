@@ -7,25 +7,20 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/dashboard.css">
-  <link rel="stylesheet" href="/static/css/registration.css">
-  <link rel="stylesheet" href="/static/css/pricing.css">
+  <link rel="stylesheet" href="/static/css/dashboard.css?v=3">
+  <link rel="stylesheet" href="/static/css/registration.css?v=3">
+  <link rel="stylesheet" href="/static/css/pricing.css?v=3">
   <script src="https://unpkg.com/htmx.org@2.0.4"></script>
   <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
-  <script src="/static/js/app.js" defer></script>
+  <script src="/static/js/app.js?v=3" defer></script>
 </head>
-<body>
+<body class="app-body">
   <div class="app-shell">
     <aside class="sidebar">
       <div class="sidebar-brand">
-        {% if logo_uri %}
-        <img src="{{ logo_uri }}" alt="Oppi Tech" class="sidebar-logo">
-        {% else %}
-        <div class="sidebar-logo">O</div>
-        {% endif %}
+        <div class="brand-mark" aria-hidden="true"></div>
         <div class="sidebar-brand-text">
           Oppi Comercial
-          <span>Dashboard</span>
         </div>
       </div>
 
@@ -44,22 +39,18 @@
         </a>
       </nav>
 
-      <div class="sidebar-tip">
-        <div class="sidebar-tip-title">Dica de performance</div>
-        <div class="sidebar-tip-text">Use os filtros por vendedor e período para acompanhar o funil com mais precisão.</div>
-      </div>
-
-      <div class="sidebar-user">
-        <div class="sidebar-user-avatar">{{ app_username[:2] | upper }}</div>
-        <div>
-          <div class="sidebar-user-name">{{ app_username }}</div>
-          <div class="sidebar-user-role">Comercial</div>
+      <div class="sidebar-footer">
+        <div class="sidebar-user">
+          <div class="sidebar-user-avatar">{{ app_username[:2] | upper }}</div>
+          <div>
+            <div class="sidebar-user-name">{{ app_username }}</div>
+            <div class="sidebar-user-role">Comercial</div>
+          </div>
         </div>
+        <form class="logout-form" method="post" action="/logout">
+          <button type="submit" class="btn btn-secondary btn-block">Sair</button>
+        </form>
       </div>
-
-      <form class="logout-form" method="post" action="/logout">
-        <button type="submit" class="btn btn-secondary" style="width:100%">Sair</button>
-      </form>
     </aside>
     <main class="main-content">
       {% block content %}{% endblock %}

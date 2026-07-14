@@ -4,8 +4,8 @@
   hx-swap="innerHTML"
 >
   <div class="toolbar-card">
-    <div class="filters-grid">
-      <div>
+    <div class="filters-row filters-row-main">
+      <div class="filter-field filter-field-sm">
         <label>Vendedor</label>
         <select name="seller" onchange="document.getElementById('overview-filters').requestSubmit()">
           <option value="Todos os vendedores">Todos os vendedores</option>
@@ -14,7 +14,7 @@
           {% endfor %}
         </select>
       </div>
-      <div>
+      <div class="filter-field filter-field-sm">
         <label>Status</label>
         <select name="status" onchange="document.getElementById('overview-filters').requestSubmit()">
           <option value="Todos os status">Todos os status</option>
@@ -23,26 +23,15 @@
           {% endfor %}
         </select>
       </div>
-      <div>
+      <div class="filter-field filter-field-sm">
         <label>Período início</label>
         <input type="date" name="period_start" value="{{ filters.period_start }}" onchange="document.getElementById('overview-filters').requestSubmit()">
       </div>
-      <div>
+      <div class="filter-field filter-field-sm">
         <label>Período fim</label>
         <input type="date" name="period_end" value="{{ filters.period_end }}" onchange="document.getElementById('overview-filters').requestSubmit()">
       </div>
-      <div class="search-field">
-        <label>Buscar empresas, leads ou negócios</label>
-        <input type="text" name="search" value="{{ filters.search }}" placeholder="Buscar empresas, leads ou negócios..."
-          hx-trigger="keyup changed delay:400ms" hx-post="/visao-geral/filtros" hx-target="#overview-root" hx-swap="innerHTML">
-      </div>
-      <div>
-        <button type="button" class="btn btn-secondary" style="width:100%;margin-top:22px">⌕ Filtros</button>
-      </div>
-    </div>
-
-    <div class="hidden-filters">
-      <div>
+      <div class="filter-field filter-field-sm">
         <label>Nichos</label>
         <select name="niche" onchange="document.getElementById('overview-filters').requestSubmit()">
           <option value="Todos os nichos">Todos os nichos</option>
@@ -51,7 +40,7 @@
           {% endfor %}
         </select>
       </div>
-      <div>
+      <div class="filter-field filter-field-sm">
         <label>Estados</label>
         <select name="state" onchange="document.getElementById('overview-filters').requestSubmit()">
           <option value="Todos os estados">Todos os estados</option>
@@ -60,13 +49,16 @@
           {% endfor %}
         </select>
       </div>
-      <div>
-        <label>Chamados hoje</label>
-        <input type="text" value="{{ metrics.called_today }}" readonly>
-      </div>
-      <div>
-        <label>Empresas no mês</label>
-        <input type="text" value="{{ metrics.companies }}" readonly>
+    </div>
+
+    <div class="filters-row filters-row-search">
+      <div class="filter-field filter-field-search">
+        <label>Buscar</label>
+        <div class="search-wrap">
+          <span class="search-icon">⌕</span>
+          <input type="text" name="search" value="{{ filters.search }}" placeholder="Buscar empresas, leads ou negócios..."
+            hx-trigger="keyup changed delay:400ms" hx-post="/visao-geral/filtros" hx-target="#overview-root" hx-swap="innerHTML">
+        </div>
       </div>
     </div>
     <input type="hidden" name="selected_card_status" id="selected-card-status" value="{{ filters.selected_card_status or '' }}">
@@ -86,7 +78,7 @@
   </div>
 
   <div class="overview-grid">
-    <div class="funnel-card">
+    <div class="funnel-card panel">
       <div class="section-heading">Funil de Vendas</div>
       <div class="section-subtitle">Distribuição dos leads por etapa comercial.</div>
       <div class="funnel-layout">
@@ -102,7 +94,7 @@
           {% for step in funnel_steps %}
           {% if step.conversion is not none %}
           <div class="funnel-conversion">
-            Conversão para próxima etapa
+            Conversão
             <strong>{{ step.conversion }}%</strong>
           </div>
           {% endif %}
@@ -111,7 +103,7 @@
       </div>
     </div>
 
-    <div class="actions-card">
+    <div class="actions-card panel">
       <div class="section-heading">Ações de Hoje</div>
       <div class="section-subtitle">Prioridades com base nos status atuais.</div>
       <div class="action-list">
@@ -135,18 +127,18 @@
     </div>
   </div>
 
-  <div class="overview-grid">
-    <div class="chart-card">
+  <div class="overview-grid overview-grid-secondary">
+    <div class="chart-card panel">
       <div class="section-heading">Chamados por semana</div>
-      <div class="section-subtitle">Volume de chamados agrupado por semana conforme o período selecionado.</div>
+      <div class="section-subtitle">Volume de chamados agrupado por semana.</div>
       <div id="weekly-chart" data-chart='{{ chart_json | safe }}'></div>
     </div>
-    <div class="status-card">
+    <div class="status-card panel">
       <div class="section-heading">Resumo por status</div>
-      <div class="section-subtitle">Distribuição atual dos leads no comercial.</div>
+      <div class="section-subtitle">Distribuição atual dos leads.</div>
       {% for row in status_summary %}
       <div class="status-row">
-        <div><span style="color:{{ row.color }}">●</span> {{ row.name }}</div>
+        <div><span class="status-dot" style="background:{{ row.color }}"></span> {{ row.name }}</div>
         <div class="status-count">{{ row.count }}</div>
         <div class="status-percent">{{ row.percent }}%</div>
       </div>
@@ -154,26 +146,9 @@
     </div>
   </div>
 
-  <div class="panel-card">
+  <div class="panel-card panel">
     <div class="section-heading">Oportunidades em andamento</div>
     <div class="section-subtitle">Empresas ativas no funil comercial.</div>
-
-    <div class="status-cards-grid">
-      {% for card in status_cards[:8] %}
-      <div class="latest-status-card">
-        <div class="latest-status-top">
-          <div class="latest-status-icon" style="background:{{ card.bg_color }};color:{{ card.icon_color }}">{{ card.icon }}</div>
-          <div class="latest-status-name">{{ card.name }}</div>
-        </div>
-        <div class="latest-status-number">{{ card.count }}</div>
-        <div class="latest-status-caption">registros nesta sessão</div>
-        <button type="button" class="btn btn-small btn-secondary" style="margin-top:8px;width:100%"
-          onclick="document.getElementById('selected-card-status').value='{{ card.name }}'; document.getElementById('overview-filters').requestSubmit();">
-          Ver nomes
-        </button>
-      </div>
-      {% endfor %}
-    </div>
 
     {% if calls_table %}
     <table class="data-table">
@@ -183,7 +158,7 @@
           <th>Etapa</th>
           <th>Responsável</th>
           <th>Contato</th>
-          <th>Próxima ação</th>
+          <th>Data</th>
           <th></th>
         </tr>
       </thead>
@@ -204,9 +179,8 @@
           <td>{{ row.vendedor }}</td>
           <td>{{ row.telefone }}</td>
           <td>{{ row.data_chamado }}</td>
-          <td>
+          <td class="table-actions">
             <a href="/cadastro/todos/{{ row.sheet_row }}" class="btn btn-small btn-secondary">Ver</a>
-            <button type="button" class="copy-btn" onclick="copyPhone(this, '{{ row.telefone }}')">Copiar</button>
           </td>
         </tr>
         {% endfor %}
@@ -214,17 +188,17 @@
     </table>
     <a href="/cadastro/todos" class="panel-footer-link">Ver todas as oportunidades →</a>
     {% else %}
-    <p style="color:var(--oppi-muted);margin-top:16px;">Nenhuma oportunidade encontrada com os filtros atuais.</p>
+    <p class="empty-note">Nenhuma oportunidade encontrada com os filtros atuais.</p>
     {% endif %}
   </div>
 </form>
 
 <script>
-  document.addEventListener("DOMContentLoaded", () => {
+  (function () {
     const chartEl = document.getElementById("weekly-chart");
     if (chartEl && chartEl.dataset.chart) {
       const figure = JSON.parse(chartEl.dataset.chart);
       Plotly.newPlot(chartEl, figure.data, figure.layout, { responsive: true, displayModeBar: false });
     }
-  });
+  })();
 </script>
