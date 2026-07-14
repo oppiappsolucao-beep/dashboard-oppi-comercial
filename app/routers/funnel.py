@@ -30,7 +30,7 @@ def _funnel_context(request: Request, filters):
         "active_page": "funnel",
         "filters": filters,
         "options": options,
-        "kpi_cards": build_funnel_page_kpi_cards(filtered_df),
+        "kpi_cards": build_funnel_page_kpi_cards(df, columns, filters),
         "funnel_steps": build_funnel_page_steps(filtered_df),
         "action_items": build_funnel_page_actions(filtered_df),
         "calls_table": build_calls_table(

@@ -1,10 +1,13 @@
 """Métricas, gráficos e componentes da Visão Geral."""
 import html
 import json
+from dataclasses import replace
+from datetime import date, timedelta
 
 import pandas as pd
 import plotly.express as px
 
+from app.services.filters import DashboardFilters, apply_dashboard_filters
 from app.services.legacy_core import (
     DASHBOARD_STATUS_OPTIONS,
     STATUS_COLORS,
@@ -97,25 +100,64 @@ def _build_steps_from_stages(filtered_df: pd.DataFrame, stages: list) -> list[di
     return steps
 
 
-def build_funnel_page_kpi_cards(filtered_df: pd.DataFrame) -> list[dict]:
-    tones = ["pink", "purple", "violet", "indigo", "green"]
-    icons = ["✦", "☎", "◉", "▤", "✓"]
-    labels = ["Novos Leads", "Primeiro Contato", "Reuniões", "Propostas", "Fechados"]
-    status_groups = [
-        ["Novo Lead"],
-        ["Chamado Whats", "Ligação - Conversando Whats"],
-        ["Reunião"],
-        ["Proposta"],
-        ["Fechado"],
+def _previous_period_filters(filters: DashboardFilters) -> DashboardFilters:
+    if filters.period_start and filters.period_end:
+        delta_days = (filters.period_end - filters.period_start).days + 1
+        prev_end = filters.period_start - timedelta(days=1)
+        prev_start = prev_end - timedelta(days=delta_days - 1)
+    else:
+        today = date.today()
+        prev_end = today - timedelta(days=7)
+        prev_start = prev_end - timedelta(days=6)
+
+    return replace(
+        filters,
+        period_start=prev_start,
+        period_end=prev_end,
+        selected_card_status=None,
+    )
+
+
+def _week_over_week_trend(current: int, previous: int) -> dict:
+    if previous == 0:
+        pct = 100 if current > 0 else 0
+    else:
+        pct = round(((current - previous) / previous) * 100)
+
+    return {
+        "trend_pct": abs(pct),
+        "trend_up": pct >= 0,
+        "trend_flat": pct == 0,
+    }
+
+
+def build_funnel_page_kpi_cards(
+    df: pd.DataFrame,
+    columns: dict,
+    filters: DashboardFilters,
+) -> list[dict]:
+    filtered_current = apply_dashboard_filters(df, columns, filters)
+    filtered_prev = apply_dashboard_filters(df, columns, _previous_period_filters(filters))
+
+    card_defs = [
+        ("Novos Leads", ["Novo Lead"], "purple", "👥"),
+        ("Primeiro Contato", ["Chamado Whats", "Ligação - Conversando Whats"], "pink", "☎"),
+        ("Reuniões", ["Reunião"], "blue", "📅"),
+        ("Propostas", ["Proposta"], "rose", "📄"),
+        ("Fechados", ["Fechado"], "green", "✓"),
     ]
+
     cards = []
-    for label, statuses, tone, icon in zip(labels, status_groups, tones, icons):
+    for label, statuses, tone, icon in card_defs:
+        current = _count_statuses(filtered_current, statuses)
+        previous = _count_statuses(filtered_prev, statuses)
+        trend = _week_over_week_trend(current, previous)
         cards.append({
             "label": label,
-            "value": _count_statuses(filtered_df, statuses),
-            "note": "no período filtrado",
+            "value": current,
             "icon": icon,
             "tone": tone,
+            **trend,
         })
     return cards
 

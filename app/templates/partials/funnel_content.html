@@ -62,15 +62,18 @@
     </div>
   </div>
 
-  <div class="metric-grid metric-grid-funnel">
+  <div class="funnel-kpi-grid">
     {% for card in kpi_cards %}
-    <div class="metric-card">
-      <div class="metric-top">
-        <div class="metric-icon tone-{{ card.tone }}">{{ card.icon }}</div>
+    <div class="funnel-kpi-card panel">
+      <div class="funnel-kpi-icon tone-{{ card.tone }}">{{ card.icon }}</div>
+      <div class="funnel-kpi-body">
+        <div class="funnel-kpi-label">{{ card.label }}</div>
+        <div class="funnel-kpi-value">{{ card.value }}</div>
+        <div class="funnel-kpi-trend {% if card.trend_flat %}flat{% elif card.trend_up %}up{% else %}down{% endif %}">
+          {% if card.trend_flat %}→{% elif card.trend_up %}↑{% else %}↓{% endif %}
+          {{ card.trend_pct }}% vs semana anterior
+        </div>
       </div>
-      <div class="metric-label">{{ card.label }}</div>
-      <div class="metric-value">{{ card.value }}</div>
-      <div class="metric-note">{{ card.note }}</div>
     </div>
     {% endfor %}
   </div>
