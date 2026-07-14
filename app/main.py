@@ -4,14 +4,13 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import HTTPException
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import settings
 from app.routers import auth, contracts, overview, pricing, registration
+from app.templating import render
 
 app = FastAPI(title="Dashboard Oppi Comercial")
-templates = Jinja2Templates(directory="app/templates")
 
 app.add_middleware(
     SessionMiddleware,
@@ -43,9 +42,10 @@ async def root():
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
     if exc.status_code == 503:
-        return templates.TemplateResponse(
+        return render(
+            request,
             "error.html",
-            {"request": request, "message": exc.detail},
+            {"message": exc.detail},
             status_code=503,
         )
     raise exc

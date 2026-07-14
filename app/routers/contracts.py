@@ -2,9 +2,7 @@ from datetime import date
 
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
-
-from app.dependencies import get_prepared_data, require_auth
+from app.templating import render
 from app.services.filters import DashboardFilters, apply_dashboard_filters
 from app.services.filters import get_filter_options as get_dashboard_filter_options
 from app.services.legacy_core import (
@@ -18,7 +16,6 @@ from app.services.legacy_core import (
 from app.services.registration import get_seller_options, save_company_edit
 
 router = APIRouter()
-templates = Jinja2Templates(directory="app/templates")
 
 
 def _contract_value(row, columns, key):
@@ -88,10 +85,10 @@ async def contracts_list(request: Request, order: str = "recentes"):
         for _, row in names_df.iterrows()
     ]
 
-    return templates.TemplateResponse(
+    return render(
+        request,
         "contracts/list.html",
         {
-            "request": request,
             "active_page": "contracts",
             "companies": companies,
             "count": len(companies),
@@ -147,10 +144,10 @@ async def contract_detail(request: Request, sheet_row: int):
         "classificacao": normalize_text(row.get("_classificacao", "")),
     }
 
-    return templates.TemplateResponse(
+    return render(
+        request,
         "contracts/detail.html",
         {
-            "request": request,
             "active_page": "contracts",
             "sheet_row": sheet_row,
             "fields": fields,
@@ -179,10 +176,10 @@ async def contract_edit_page(request: Request, sheet_row: int):
     except ValueError:
         parsed_date = date.today()
 
-    return templates.TemplateResponse(
+    return render(
+        request,
         "contracts/edit.html",
         {
-            "request": request,
             "active_page": "contracts",
             "sheet_row": sheet_row,
             "seller_options": get_seller_options(df),

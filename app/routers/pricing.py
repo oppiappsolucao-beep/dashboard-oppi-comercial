@@ -2,9 +2,7 @@ from urllib.parse import quote
 
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
-from fastapi.templating import Jinja2Templates
-
-from app.dependencies import get_prepared_data, get_pricing_store, require_auth
+from app.templating import render
 from app.services.legacy_core import (
     OPPI_PRICING_STEPS,
     _diagnostic_add_answer,
@@ -21,7 +19,6 @@ from app.services.legacy_core import (
 )
 
 router = APIRouter()
-templates = Jinja2Templates(directory="app/templates")
 
 
 def _company_list(df, search: str = "") -> list[dict]:
@@ -67,10 +64,10 @@ async def pricing_page(request: Request, empresa: str = "", search: str = ""):
     companies = _company_list(df, search)
 
     if not companies:
-        return templates.TemplateResponse(
+        return render(
+            request,
             "pricing/index.html",
             {
-                "request": request,
                 "active_page": "pricing",
                 "companies": [],
                 "selected_company": "",
@@ -86,10 +83,10 @@ async def pricing_page(request: Request, empresa: str = "", search: str = ""):
 
     messages = _diagnostic_ensure_thread(selected)
 
-    return templates.TemplateResponse(
+    return render(
+        request,
         "pricing/index.html",
         {
-            "request": request,
             "active_page": "pricing",
             "companies": companies,
             "selected_company": selected,
@@ -111,10 +108,10 @@ async def pricing_message(request: Request, empresa: str, message: str = Form(..
     _diagnostic_add_answer(empresa, message)
     messages = _diagnostic_ensure_thread(empresa)
 
-    return templates.TemplateResponse(
+    return render(
+        request,
         "partials/pricing_chat.html",
         {
-            "request": request,
             "selected_company": empresa,
             "messages_html": _diagnostic_render_messages(messages),
             "progress": _pricing_progress(empresa),

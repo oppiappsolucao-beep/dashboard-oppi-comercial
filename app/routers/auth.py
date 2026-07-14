@@ -1,22 +1,21 @@
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
 
 from app.dependencies import check_credentials
 from app.services.legacy_core import get_logo_data_uri
+from app.templating import render
 
 router = APIRouter()
-templates = Jinja2Templates(directory="app/templates")
 
 
 @router.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request):
     if request.session.get("authenticated"):
         return RedirectResponse(url="/visao-geral", status_code=303)
-    return templates.TemplateResponse(
+    return render(
+        request,
         "login.html",
         {
-            "request": request,
             "logo_uri": get_logo_data_uri(),
             "error": request.session.pop("auth_error", ""),
         },

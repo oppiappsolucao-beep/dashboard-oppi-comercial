@@ -2,9 +2,7 @@ from datetime import date
 
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
-
-from app.dependencies import get_prepared_data, require_auth
+from app.templating import render
 from app.services.filters import DashboardFilters, apply_dashboard_filters, get_filter_options
 from app.services.legacy_core import invalidate_sheet_cache
 from app.services.overview import (
@@ -16,7 +14,6 @@ from app.services.overview import (
 )
 
 router = APIRouter()
-templates = Jinja2Templates(directory="app/templates")
 
 
 def _parse_filters(request: Request, form: dict | None = None) -> DashboardFilters:
@@ -59,7 +56,6 @@ def _overview_context(request: Request, filters: DashboardFilters, success: str 
     metrics = compute_overview_metrics(filtered_df)
 
     return {
-        "request": request,
         "active_page": "overview",
         "success": success or request.session.pop("company_registration_success", ""),
         "filters": filters,
@@ -85,7 +81,7 @@ async def overview_page(request: Request):
     if redirect:
         return redirect
     filters = _parse_filters(request)
-    return templates.TemplateResponse("overview.html", _overview_context(request, filters))
+    return render(request, "overview.html", _overview_context(request, filters))
 
 
 @router.post("/visao-geral/filtros", response_class=HTMLResponse)
@@ -111,7 +107,7 @@ async def overview_filters(
         "selected_card_status": selected_card_status or None,
     })
     ctx = _overview_context(request, filters)
-    return templates.TemplateResponse("partials/overview_content.html", ctx)
+    return render(request, "partials/overview_content.html", ctx)
 
 
 @router.post("/visao-geral/atualizar")
