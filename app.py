@@ -3,8 +3,8 @@ import streamlit as st
 from auth.authentication import get_current_user, is_authenticated, render_login
 from components.sidebar import load_css, render_sidebar
 from database.connection import init_db
-from pages import PAGE_RENDERERS
-from pages.lead_details import render as render_lead_details
+from views import PAGE_RENDERERS
+from views.lead_details import render as render_lead_details
 
 
 def main():

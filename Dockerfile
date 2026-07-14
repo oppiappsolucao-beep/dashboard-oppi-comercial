@@ -16,8 +16,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-RUN mkdir -p generated/proposals && chmod +x start.sh
+RUN mkdir -p generated/proposals
 
 EXPOSE 8501
 
-CMD ["sh", "start.sh"]
+CMD ["sh", "-c", "echo Starting Streamlit on port ${PORT:-8501} && streamlit run app.py --server.address=0.0.0.0 --server.port=${PORT:-8501} --browser.gatherUsageStats=false"]

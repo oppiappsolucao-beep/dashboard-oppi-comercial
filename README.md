@@ -32,7 +32,7 @@ app.py                 # Entrada Streamlit
 config/                # Settings e tema
 database/              # Models, conexão, repositories, seed
 auth/                  # Login, senhas, permissões
-pages/                 # Telas do CRM
+pages/                 → views/ (telas do CRM — evita conflito com Streamlit)
 services/              # Regras de negócio e integrações
 components/            # UI reutilizável
 utils/                 # Formatadores e validadores
