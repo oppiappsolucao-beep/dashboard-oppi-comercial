@@ -16,7 +16,13 @@ def main():
     )
 
     load_css()
-    init_db()
+    try:
+        init_db()
+    except Exception as exc:
+        st.error("Não foi possível conectar ao banco de dados.")
+        st.caption("Verifique DATABASE_URL no Easypanel e redeploy.")
+        st.code(str(exc))
+        return
 
     if not is_authenticated():
         render_login()

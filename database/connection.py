@@ -39,6 +39,18 @@ def init_db():
         from database.seed import run_seed
 
         run_seed()
+        return
+
+    db = SessionLocal()
+    try:
+        from database.models import Tenant
+
+        if not db.query(Tenant).first():
+            from database.seed import run_seed
+
+            run_seed()
+    finally:
+        db.close()
 
 
 if settings.database_url.startswith("sqlite"):

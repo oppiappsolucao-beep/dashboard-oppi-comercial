@@ -11,7 +11,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 class Settings:
     app_name: str = os.getenv("APP_NAME", "Oppi CRM Comercial")
     app_secret_key: str = os.getenv("APP_SECRET_KEY", "change-me-in-production")
-    database_url: str = os.getenv("DATABASE_URL", f"sqlite:///{BASE_DIR / 'oppi_crm.db'}")
+    database_url: str = os.getenv("DATABASE_URL") or f"sqlite:///{BASE_DIR / 'oppi_crm.db'}"
     session_timeout_minutes: int = int(os.getenv("SESSION_TIMEOUT_MINUTES", "480"))
     timezone: str = os.getenv("APP_TIMEZONE", "America/Sao_Paulo")
     currency: str = os.getenv("APP_CURRENCY", "BRL")
