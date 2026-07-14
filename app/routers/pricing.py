@@ -2,6 +2,7 @@ from urllib.parse import quote
 
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from app.dependencies import get_prepared_data, get_pricing_store, require_auth
 from app.templating import render
 from app.services.legacy_core import (
     OPPI_PRICING_STEPS,

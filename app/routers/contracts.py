@@ -2,6 +2,7 @@ from datetime import date
 
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
+from app.dependencies import get_prepared_data, require_auth
 from app.templating import render
 from app.services.filters import DashboardFilters, apply_dashboard_filters
 from app.services.filters import get_filter_options as get_dashboard_filter_options

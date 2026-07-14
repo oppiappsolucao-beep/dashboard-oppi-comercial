@@ -2,6 +2,7 @@ from datetime import date
 
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
+from app.dependencies import get_prepared_data, require_auth
 from app.templating import render
 from app.services.legacy_core import DuplicateRegistrationError, STATUS_OPTIONS, normalize_text
 from app.services.registration import get_seller_options, save_new_company
