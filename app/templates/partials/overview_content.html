@@ -3,202 +3,214 @@
   hx-target="#overview-root"
   hx-swap="innerHTML"
 >
-  <div class="toolbar-card">
-    <div class="filters-row filters-row-main">
-      <div class="filter-field filter-field-sm">
-        <label>Vendedor</label>
-        <select name="seller" onchange="document.getElementById('overview-filters').requestSubmit()">
-          <option value="Todos os vendedores">Todos os vendedores</option>
-          {% for seller in options.seller_options %}
-          <option value="{{ seller }}" {% if filters.seller == seller %}selected{% endif %}>{{ seller }}</option>
-          {% endfor %}
-        </select>
+  <details class="overview-filters-toggle panel">
+    <summary>Filtros avançados</summary>
+    <div class="toolbar-card overview-filters-inner">
+      <div class="filters-row filters-row-main">
+        <div class="filter-field filter-field-sm">
+          <label>Vendedor</label>
+          <select name="seller" onchange="document.getElementById('overview-filters').requestSubmit()">
+            <option value="Todos os vendedores">Todos os vendedores</option>
+            {% for seller in options.seller_options %}
+            <option value="{{ seller }}" {% if filters.seller == seller %}selected{% endif %}>{{ seller }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="filter-field filter-field-sm">
+          <label>Status</label>
+          <select name="status" onchange="document.getElementById('overview-filters').requestSubmit()">
+            <option value="Todos os status">Todos os status</option>
+            {% for status in options.status_options %}
+            <option value="{{ status }}" {% if filters.status == status %}selected{% endif %}>{{ status }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="filter-field filter-field-sm">
+          <label>Período início</label>
+          <input type="date" name="period_start" value="{{ filters.period_start }}" onchange="document.getElementById('overview-filters').requestSubmit()">
+        </div>
+        <div class="filter-field filter-field-sm">
+          <label>Período fim</label>
+          <input type="date" name="period_end" value="{{ filters.period_end }}" onchange="document.getElementById('overview-filters').requestSubmit()">
+        </div>
+        <div class="filter-field filter-field-sm">
+          <label>Nichos</label>
+          <select name="niche" onchange="document.getElementById('overview-filters').requestSubmit()">
+            <option value="Todos os nichos">Todos os nichos</option>
+            {% for niche in options.niche_options %}
+            <option value="{{ niche }}" {% if filters.niche == niche %}selected{% endif %}>{{ niche }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="filter-field filter-field-sm">
+          <label>Estados</label>
+          <select name="state" onchange="document.getElementById('overview-filters').requestSubmit()">
+            <option value="Todos os estados">Todos os estados</option>
+            {% for state in options.state_options %}
+            <option value="{{ state }}" {% if filters.state == state %}selected{% endif %}>{{ state }}</option>
+            {% endfor %}
+          </select>
+        </div>
       </div>
-      <div class="filter-field filter-field-sm">
-        <label>Status</label>
-        <select name="status" onchange="document.getElementById('overview-filters').requestSubmit()">
-          <option value="Todos os status">Todos os status</option>
-          {% for status in options.status_options %}
-          <option value="{{ status }}" {% if filters.status == status %}selected{% endif %}>{{ status }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="filter-field filter-field-sm">
-        <label>Período início</label>
-        <input type="date" name="period_start" value="{{ filters.period_start }}" onchange="document.getElementById('overview-filters').requestSubmit()">
-      </div>
-      <div class="filter-field filter-field-sm">
-        <label>Período fim</label>
-        <input type="date" name="period_end" value="{{ filters.period_end }}" onchange="document.getElementById('overview-filters').requestSubmit()">
-      </div>
-      <div class="filter-field filter-field-sm">
-        <label>Nichos</label>
-        <select name="niche" onchange="document.getElementById('overview-filters').requestSubmit()">
-          <option value="Todos os nichos">Todos os nichos</option>
-          {% for niche in options.niche_options %}
-          <option value="{{ niche }}" {% if filters.niche == niche %}selected{% endif %}>{{ niche }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="filter-field filter-field-sm">
-        <label>Estados</label>
-        <select name="state" onchange="document.getElementById('overview-filters').requestSubmit()">
-          <option value="Todos os estados">Todos os estados</option>
-          {% for state in options.state_options %}
-          <option value="{{ state }}" {% if filters.state == state %}selected{% endif %}>{{ state }}</option>
-          {% endfor %}
-        </select>
-      </div>
-    </div>
-
-    <div class="filters-row filters-row-search">
-      <div class="filter-field filter-field-search">
-        <label>Buscar</label>
-        <div class="search-wrap">
-          <span class="search-icon">⌕</span>
-          <input type="text" name="search" value="{{ filters.search }}" placeholder="Buscar empresas, leads ou negócios..."
-            hx-trigger="keyup changed delay:400ms" hx-post="/visao-geral/filtros" hx-target="#overview-root" hx-swap="innerHTML">
+      <div class="filters-row filters-row-search">
+        <div class="filter-field filter-field-search">
+          <label>Buscar</label>
+          <div class="search-wrap">
+            <span class="search-icon">⌕</span>
+            <input type="text" name="search" value="{{ filters.search }}" placeholder="Buscar empresas, leads ou negócios..."
+              hx-trigger="keyup changed delay:400ms" hx-post="/visao-geral/filtros" hx-target="#overview-root" hx-swap="innerHTML">
+          </div>
         </div>
       </div>
     </div>
-    <input type="hidden" name="selected_card_status" id="selected-card-status" value="{{ filters.selected_card_status or '' }}">
-  </div>
+  </details>
 
-  <div class="metric-grid">
+  <div class="funnel-kpi-grid overview-kpi-grid">
     {% for card in kpi_cards %}
-    <div class="metric-card">
-      <div class="metric-top">
-        <div class="metric-icon tone-{{ card.tone }}">{{ card.icon }}</div>
+    <div class="funnel-kpi-card panel">
+      <div class="funnel-kpi-icon tone-{{ card.tone }}">{{ card.icon }}</div>
+      <div class="funnel-kpi-body">
+        <div class="funnel-kpi-label">{{ card.label }}</div>
+        <div class="funnel-kpi-value">{{ card.value }}</div>
+        <div class="funnel-kpi-trend {% if card.trend_flat %}flat{% elif card.trend_up %}up{% else %}down{% endif %}">
+          {{ card.trend_label }}
+        </div>
       </div>
-      <div class="metric-label">{{ card.label }}</div>
-      <div class="metric-value">{{ card.value }}</div>
-      <div class="metric-note">{{ card.note }}</div>
     </div>
     {% endfor %}
   </div>
 
   <div class="overview-grid">
-    <div class="funnel-card panel">
+    <div class="overview-funnel-card panel">
       <div class="section-heading">Funil de Vendas</div>
       <div class="section-subtitle">Distribuição dos leads por etapa comercial.</div>
-      <div class="funnel-layout">
-        <div class="funnel-steps">
-          {% for step in funnel_steps %}
-          <div class="funnel-step level-{{ step.level }}" style="width: {{ step.width }}%;">
-            <span>{{ step.name }}</span>
-            <strong>{{ step.count }}</strong>
+
+      <div class="overview-funnel-layout">
+        <div class="overview-funnel-legend">
+          {% for stage in overview_funnel.stages %}
+          <div class="overview-funnel-legend-row">
+            <span class="overview-funnel-dot" style="background: {{ stage.color }};"></span>
+            <span class="overview-funnel-legend-name">{{ stage.name }}</span>
+            <span class="overview-funnel-legend-count">{{ stage.count }}</span>
           </div>
           {% endfor %}
         </div>
-        <div class="funnel-conversions">
-          {% for step in funnel_steps %}
-          {% if step.conversion is not none %}
-          <div class="funnel-conversion">
-            Conversão
-            <strong>{{ step.conversion }}%</strong>
+
+        <div class="overview-funnel-visual">
+          {% for stage in overview_funnel.stages %}
+          <div class="overview-funnel-layer" style="width: {{ stage.width }}%; background: {{ stage.color }};">
+            <span>{{ stage.name }}</span>
+            <strong>{{ stage.count }}</strong>
           </div>
-          {% endif %}
           {% endfor %}
+        </div>
+
+        <div class="overview-funnel-conversion">
+          <div class="overview-funnel-conversion-title">Taxa de Conversão Geral</div>
+          <div id="overview-conversion-donut" class="overview-conversion-donut" data-chart='{{ conversion_donut_json | safe }}'></div>
+          <div class="overview-funnel-conversion-value">{{ overview_funnel.conversion_label }}</div>
+          <div class="funnel-kpi-trend up">{{ kpi_cards[3].trend_label }}</div>
         </div>
       </div>
+
+      <a href="/funil-de-vendas" class="overview-funnel-link">Ver funil completo →</a>
     </div>
 
-    <div class="actions-card panel">
-      <div class="section-heading">Ações de Hoje</div>
-      <div class="section-subtitle">Prioridades com base nos status atuais.</div>
-      <div class="action-list">
-        {% for item in action_items %}
-        <div class="action-item">
-          <div class="action-item-left">
-            <span class="action-dot {{ item.tone }}"></span>
-            <span class="action-label">{{ item.label }}</span>
+    <div class="overview-actions-card panel">
+      <div class="overview-card-header">
+        <div>
+          <div class="section-heading">Ações do dia</div>
+          <div class="section-subtitle">Prioridades com base nos status atuais.</div>
+        </div>
+        <a href="/atividades" class="overview-card-link">Ver todas</a>
+      </div>
+      <div class="overview-daily-actions">
+        {% for action in daily_actions %}
+        <div class="overview-daily-action">
+          <span class="overview-action-icon {{ action.tone }}">
+            {% if action.icon == 'phone' %}☎{% elif action.icon == 'whatsapp' %}💬{% elif action.icon == 'email' %}✉{% elif action.icon == 'calendar' %}📅{% else %}✓{% endif %}
+          </span>
+          <div class="overview-daily-action-body">
+            <div class="overview-daily-action-label">{{ action.label }}</div>
           </div>
-          <span class="action-count">{{ item.count }}</span>
+          <div class="overview-daily-action-time">{{ action.time }}</div>
         </div>
         {% else %}
-        <div class="action-item">
-          <div class="action-item-left">
-            <span class="action-dot action-green"></span>
-            <span class="action-label">Nenhuma ação pendente no filtro atual</span>
-          </div>
+        <div class="overview-empty-note">Nenhuma ação pendente no filtro atual.</div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <div class="overview-grid overview-grid-bottom">
+    <div class="overview-hot-card panel">
+      <div class="overview-card-header">
+        <div>
+          <div class="section-heading">Oportunidades quentes</div>
+          <div class="section-subtitle">Negócios com maior potencial no funil.</div>
         </div>
+        <a href="/leads-e-empresas" class="overview-card-link">Ver todas</a>
+      </div>
+
+      {% if hot_opportunities %}
+      <table class="data-table overview-hot-table">
+        <thead>
+          <tr>
+            <th>Empresa</th>
+            <th>Etapa</th>
+            <th>Valor</th>
+            <th>Urgência</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in hot_opportunities %}
+          <tr>
+            <td>
+              <div class="table-company">
+                <span class="table-company-icon">{{ row.empresa_initials }}</span>
+                <span class="table-company-name">{{ row.empresa }}</span>
+              </div>
+            </td>
+            <td><span class="stage-badge {{ row.etapa_class }}">{{ row.etapa }}</span></td>
+            <td class="value-cell">{{ row.valor }}</td>
+            <td><span class="overview-urgency {{ row.urgencia_class }}">{{ row.urgencia }}</span></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <div class="overview-empty-note">Nenhuma oportunidade quente encontrada.</div>
+      {% endif %}
+    </div>
+
+    <div class="overview-overdue-card panel">
+      <div class="overview-card-header">
+        <div>
+          <div class="section-heading">Atividades em atraso</div>
+          <div class="section-subtitle">Itens que precisam de follow-up imediato.</div>
+        </div>
+        <a href="/atividades" class="overview-card-link">Ver todas</a>
+      </div>
+
+      <div class="overview-overdue-list">
+        {% for item in overdue_activities %}
+        <div class="overview-overdue-item">
+          <span class="overview-overdue-icon">
+            {% if item.icon == 'phone' %}☎{% elif item.icon == 'email' %}✉{% else %}✓{% endif %}
+          </span>
+          <div class="overview-overdue-label">{{ item.label }}</div>
+          <div class="overview-overdue-days">{{ item.days_label }}</div>
+        </div>
+        {% else %}
+        <div class="overview-empty-note">Nenhuma atividade em atraso no filtro atual.</div>
         {% endfor %}
       </div>
     </div>
-  </div>
-
-  <div class="overview-grid overview-grid-secondary">
-    <div class="chart-card panel">
-      <div class="section-heading">Chamados por semana</div>
-      <div class="section-subtitle">Volume de chamados agrupado por semana.</div>
-      <div id="weekly-chart" data-chart='{{ chart_json | safe }}'></div>
-    </div>
-    <div class="status-card panel">
-      <div class="section-heading">Resumo por status</div>
-      <div class="section-subtitle">Distribuição atual dos leads.</div>
-      {% for row in status_summary %}
-      <div class="status-row">
-        <div><span class="status-dot" style="background:{{ row.color }}"></span> {{ row.name }}</div>
-        <div class="status-count">{{ row.count }}</div>
-        <div class="status-percent">{{ row.percent }}%</div>
-      </div>
-      {% endfor %}
-    </div>
-  </div>
-
-  <div class="panel-card panel">
-    <div class="section-heading">Oportunidades em andamento</div>
-    <div class="section-subtitle">Empresas ativas no funil comercial.</div>
-
-    {% if calls_table %}
-    <table class="data-table">
-      <thead>
-        <tr>
-          <th>Empresa</th>
-          <th>Etapa</th>
-          <th>Responsável</th>
-          <th>Contato</th>
-          <th>Data</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for row in calls_table %}
-        <tr>
-          <td>
-            <div class="table-company">
-              <span class="table-company-icon">{{ row.empresa[:2] | upper }}</span>
-              <span>{{ row.empresa }}</span>
-            </div>
-          </td>
-          <td>
-            <span class="stage-badge {% if row.etapa == 'Proposta' %}proposta{% elif row.etapa == 'Fechado' %}fechado{% elif row.etapa == 'Reunião' %}reuniao{% endif %}">
-              {{ row.etapa }}
-            </span>
-          </td>
-          <td>{{ row.vendedor }}</td>
-          <td>{{ row.telefone }}</td>
-          <td>{{ row.data_chamado }}</td>
-          <td class="table-actions">
-            <a href="/cadastro/todos/{{ row.sheet_row }}" class="btn btn-small btn-secondary">Ver</a>
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-    <a href="/cadastro/todos" class="panel-footer-link">Ver todas as oportunidades →</a>
-    {% else %}
-    <p class="empty-note">Nenhuma oportunidade encontrada com os filtros atuais.</p>
-    {% endif %}
   </div>
 </form>
 
 <script>
-  (function () {
-    const chartEl = document.getElementById("weekly-chart");
-    if (chartEl && chartEl.dataset.chart) {
-      const figure = JSON.parse(chartEl.dataset.chart);
-      Plotly.newPlot(chartEl, figure.data, figure.layout, { responsive: true, displayModeBar: false });
-    }
-  })();
+  if (typeof renderOverviewCharts === "function") {
+    renderOverviewCharts();
+  }
 </script>

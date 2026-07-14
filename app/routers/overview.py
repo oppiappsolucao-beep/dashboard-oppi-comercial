@@ -12,14 +12,12 @@ from app.services.filters import (
 )
 from app.services.legacy_core import invalidate_sheet_cache
 from app.services.overview import (
-    build_action_items,
-    build_calls_table,
-    build_funnel_steps,
-    build_kpi_cards,
-    build_status_cards,
-    build_status_summary,
-    build_weekly_chart_json,
-    compute_overview_metrics,
+    build_conversion_donut_json,
+    build_daily_actions,
+    build_hot_opportunities,
+    build_overdue_activities,
+    build_overview_funnel,
+    build_overview_kpi_cards,
 )
 
 router = APIRouter()
@@ -35,27 +33,20 @@ def _overview_context(request: Request, filters: DashboardFilters, success: str 
         filters.period_end = options["date_max"]
 
     filtered_df = apply_dashboard_filters(df, columns, filters)
-    metrics = compute_overview_metrics(filtered_df)
+
+    overview_funnel = build_overview_funnel(filtered_df)
 
     return {
         "active_page": "overview",
         "success": success or request.session.pop("company_registration_success", ""),
         "filters": filters,
         "options": options,
-        "metrics": metrics,
-        "kpi_cards": build_kpi_cards(filtered_df),
-        "funnel_steps": build_funnel_steps(filtered_df),
-        "action_items": build_action_items(filtered_df),
-        "chart_json": build_weekly_chart_json(filtered_df),
-        "status_summary": build_status_summary(filtered_df),
-        "status_cards": build_status_cards(filtered_df),
-        "calls_table": build_calls_table(
-            filtered_df,
-            columns,
-            filters.selected_card_status,
-            filters.search,
-            filters.status,
-        ),
+        "kpi_cards": build_overview_kpi_cards(df, columns, filters),
+        "overview_funnel": overview_funnel,
+        "conversion_donut_json": build_conversion_donut_json(overview_funnel["conversion"]),
+        "daily_actions": build_daily_actions(filtered_df, columns),
+        "hot_opportunities": build_hot_opportunities(filtered_df),
+        "overdue_activities": build_overdue_activities(filtered_df, columns),
         "columns": columns,
     }
 

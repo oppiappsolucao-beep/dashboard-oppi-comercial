@@ -2,15 +2,18 @@
 import html
 import json
 from dataclasses import replace
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 
 from app.services.filters import DashboardFilters, apply_dashboard_filters
+from app.services.leads import ETAPA_BADGE, map_etapa
 from app.services.legacy_core import (
     DASHBOARD_STATUS_OPTIONS,
     STATUS_COLORS,
+    apply_period_filter,
     count_dashboard_status,
     row_matches_dashboard_card,
     safe_series,
@@ -41,6 +44,34 @@ FUNNEL_PAGE_ACTIONS = [
     ("Contatos sem follow-up", ["Sem Resposta"], "action-green"),
 ]
 
+OVERVIEW_FUNNEL_STAGES = [
+    ("Novo Lead", ["Novo Lead"], "#8B5CF6"),
+    ("Primeiro Contato", ["Chamado Whats", "Ligação - Conversando Whats", "Ligação"], "#EC4899"),
+    ("Qualificação", ["Conversando"], "#3B82F6"),
+    ("Reunião", ["Reunião"], "#10B981"),
+    ("Proposta", ["Proposta"], "#F59E0B"),
+    ("Negociação", ["Retornar", "Ligação retornar"], "#EA580C"),
+    ("Fechado", ["Fechado"], "#EF4444"),
+]
+
+OPPORTUNITY_STATUSES = {"Conversando", "Reunião", "Proposta", "Retornar", "Ligação - Conversando Whats", "Ligação retornar"}
+COMPLETED_STATUSES = {"Fechado", "Sem interesse"}
+
+DAILY_ACTION_SLOTS = ["09:00", "10:30", "14:00", "16:00", "18:30"]
+DAILY_ACTION_DEFS = [
+    ("Ligar para", ["Ligação", "Ligação - Conversando Whats", "Ligação retornar", "Retornar"], "phone", "action-purple"),
+    ("Retornar WhatsApp -", ["Chamado Whats", "Conversando"], "whatsapp", "action-pink"),
+    ("Enviar proposta -", ["Proposta"], "email", "action-blue"),
+    ("Confirmar reunião -", ["Reunião"], "calendar", "action-green"),
+    ("Acompanhar negociação -", ["Retornar", "Ligação retornar", "Proposta"], "check", "action-orange"),
+]
+
+OVERDUE_ACTION_DEFS = [
+    ("Ligar para (WhatsApp) -", ["Chamado Whats", "Conversando", "Sem Resposta"], "phone"),
+    ("Enviar proposta -", ["Proposta"], "email"),
+    ("Acompanhar negociação -", ["Retornar", "Ligação retornar"], "check"),
+]
+
 ACTION_STATUS_MAP = [
     ("Retornar contatos hoje", ["Retornar", "Ligação retornar"], "action-purple"),
     ("Responder propostas", ["Proposta"], "action-pink"),
@@ -54,21 +85,340 @@ def _count_statuses(filtered_df: pd.DataFrame, names: list[str]) -> int:
     return sum(count_dashboard_status(filtered_df, name) for name in names)
 
 
-def build_kpi_cards(filtered_df: pd.DataFrame) -> list[dict]:
-    novos = count_dashboard_status(filtered_df, "Novo Lead")
-    contato = _count_statuses(filtered_df, ["Chamado Whats", "Conversando", "Ligação - Conversando Whats"])
-    propostas = count_dashboard_status(filtered_df, "Proposta")
-    fechados = count_dashboard_status(filtered_df, "Fechado")
-    total = max(len(filtered_df), 1)
-    conversao = round((fechados / total) * 100)
+def _format_money(value) -> str:
+    try:
+        number = float(value or 0)
+    except (TypeError, ValueError):
+        number = 0.0
+    if number <= 0:
+        return "R$ 0"
+    formatted = f"{number:,.0f}".replace(",", ".")
+    return f"R$ {formatted}"
+
+
+def _initials(name: str) -> str:
+    parts = [p for p in str(name or "").split() if p]
+    if not parts:
+        return "—"
+    if len(parts) == 1:
+        return parts[0][:1].upper()
+    return (parts[0][0] + parts[-1][0]).upper()
+
+
+def _as_date(value) -> date | None:
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return None
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    try:
+        return pd.to_datetime(value).date()
+    except Exception:
+        return None
+
+
+def _period_trend(current: float, previous: float, is_points: bool = False) -> dict:
+    if is_points:
+        delta = round(current - previous, 1)
+        sign = "+" if delta >= 0 else "-"
+        return {
+            "trend_label": f"{sign} {abs(delta):,.1f} p.p. vs período anterior".replace(",", "."),
+            "trend_up": delta >= 0,
+            "trend_flat": delta == 0,
+        }
+    if previous == 0:
+        pct = 100 if current > 0 else 0
+    else:
+        pct = round(((current - previous) / previous) * 100)
+    sign = "+" if pct >= 0 else "-"
+    return {
+        "trend_label": f"{sign} {abs(pct)}% vs período anterior",
+        "trend_up": pct >= 0,
+        "trend_flat": pct == 0,
+    }
+
+
+def _month_bounds(reference: date) -> tuple[date, date]:
+    start = reference.replace(day=1)
+    if start.month == 12:
+        end = date(start.year + 1, 1, 1) - timedelta(days=1)
+    else:
+        end = date(start.year, start.month + 1, 1) - timedelta(days=1)
+    return start, end
+
+
+def _count_opportunities(filtered_df: pd.DataFrame) -> int:
+    if filtered_df.empty:
+        return 0
+    return int(
+        filtered_df.apply(
+            lambda row: status_group(row.get("_status_grupo") or row.get("_status_original", "")) in OPPORTUNITY_STATUSES,
+            axis=1,
+        ).sum()
+    )
+
+
+def _negotiation_value(filtered_df: pd.DataFrame) -> float:
+    if filtered_df.empty:
+        return 0.0
+    total = 0.0
+    for _, row in filtered_df.iterrows():
+        grouped = status_group(row.get("_status_grupo") or row.get("_status_original", ""))
+        if grouped in OPPORTUNITY_STATUSES or grouped == "Novo Lead":
+            total += float(row.get("_capital_num") or 0)
+    return total
+
+
+def build_overview_kpi_cards(
+    df: pd.DataFrame,
+    columns: dict,
+    filters: DashboardFilters,
+) -> list[dict]:
+    filtered_current = apply_dashboard_filters(df, columns, filters)
+    filtered_prev = apply_dashboard_filters(df, columns, _previous_period_filters(filters))
+
+    novos = count_dashboard_status(filtered_current, "Novo Lead")
+    novos_prev = count_dashboard_status(filtered_prev, "Novo Lead")
+
+    oportunidades = _count_opportunities(filtered_current)
+    oportunidades_prev = _count_opportunities(filtered_prev)
+
+    valor = _negotiation_value(filtered_current)
+    valor_prev = _negotiation_value(filtered_prev)
+
+    total = max(len(filtered_current), 1)
+    total_prev = max(len(filtered_prev), 1)
+    fechados = count_dashboard_status(filtered_current, "Fechado")
+    fechados_prev = count_dashboard_status(filtered_prev, "Fechado")
+    conversao = round((fechados / total) * 100, 1)
+    conversao_prev = round((fechados_prev / total_prev) * 100, 1)
+
+    month_start, month_end = _month_bounds(date.today())
+    month_df = apply_period_filter(filtered_current.copy(), "_data_chamado", (month_start, month_end))
+    month_prev_start, month_prev_end = _month_bounds((month_start - timedelta(days=1)))
+    prev_month_df = apply_period_filter(filtered_current.copy(), "_data_chamado", (month_prev_start, month_prev_end))
+    fechados_mes = count_dashboard_status(month_df, "Fechado")
+    fechados_mes_prev = count_dashboard_status(prev_month_df, "Fechado")
+
+    conversao_label = f"{str(conversao).replace('.', ',')}%"
 
     return [
-        {"label": "Novos Leads", "value": novos, "note": "no período filtrado", "icon": "✦", "tone": "pink"},
-        {"label": "Em Contato", "value": contato, "note": "WhatsApp e ligação", "icon": "☎", "tone": "purple"},
-        {"label": "Propostas Enviadas", "value": propostas, "note": "em negociação", "icon": "▤", "tone": "violet"},
-        {"label": "Fechados", "value": fechados, "note": "convertidos", "icon": "✓", "tone": "green"},
-        {"label": "Taxa de Conversão", "value": f"{conversao}%", "note": "sobre a base filtrada", "icon": "%", "tone": "blue"},
+        {
+            "label": "Novos Leads",
+            "value": novos,
+            "icon": "👥",
+            "tone": "purple",
+            **_period_trend(novos, novos_prev),
+        },
+        {
+            "label": "Oportunidades",
+            "value": oportunidades,
+            "icon": "📅",
+            "tone": "pink",
+            **_period_trend(oportunidades, oportunidades_prev),
+        },
+        {
+            "label": "Valor em Negociação",
+            "value": _format_money(valor),
+            "icon": "💰",
+            "tone": "blue",
+            **_period_trend(valor, valor_prev),
+        },
+        {
+            "label": "Taxa de Conversão",
+            "value": conversao_label,
+            "icon": "📈",
+            "tone": "green",
+            **_period_trend(conversao, conversao_prev, is_points=True),
+        },
+        {
+            "label": "Fechados no mês",
+            "value": fechados_mes,
+            "icon": "✓",
+            "tone": "orange",
+            **_period_trend(fechados_mes, fechados_mes_prev),
+        },
     ]
+
+
+def build_kpi_cards(filtered_df: pd.DataFrame) -> list[dict]:
+    """Compatibilidade legada — preferir build_overview_kpi_cards."""
+    total = max(len(filtered_df), 1)
+    fechados = count_dashboard_status(filtered_df, "Fechado")
+    conversao = round((fechados / total) * 100)
+    return [
+        {"label": "Novos Leads", "value": count_dashboard_status(filtered_df, "Novo Lead"), "note": "", "icon": "👥", "tone": "purple"},
+        {"label": "Oportunidades", "value": _count_opportunities(filtered_df), "note": "", "icon": "📅", "tone": "pink"},
+        {"label": "Valor em Negociação", "value": _format_money(_negotiation_value(filtered_df)), "note": "", "icon": "💰", "tone": "blue"},
+        {"label": "Taxa de Conversão", "value": f"{conversao}%", "note": "", "icon": "📈", "tone": "green"},
+        {"label": "Fechados no mês", "value": fechados, "note": "", "icon": "✓", "tone": "orange"},
+    ]
+
+
+def build_overview_funnel(filtered_df: pd.DataFrame) -> dict:
+    counts = [_count_statuses(filtered_df, statuses) for _, statuses, _ in OVERVIEW_FUNNEL_STAGES]
+    max_count = max(counts) or 1
+    stages = []
+    for index, ((name, _, color), count) in enumerate(zip(OVERVIEW_FUNNEL_STAGES, counts)):
+        width = max(34, round((count / max_count) * 100))
+        stages.append({
+            "name": name,
+            "count": count,
+            "color": color,
+            "width": width,
+            "level": index,
+        })
+
+    first_count = counts[0] or max(len(filtered_df), 1)
+    closed_count = counts[-1]
+    conversion = round((closed_count / first_count) * 100, 1) if first_count else 0.0
+
+    return {
+        "stages": stages,
+        "conversion": conversion,
+        "conversion_label": f"{str(conversion).replace('.', ',')}%",
+    }
+
+
+def build_conversion_donut_json(conversion: float) -> str:
+    value = min(max(conversion, 0), 100)
+    figure = go.Figure(go.Pie(
+        values=[value, max(0, 100 - value)],
+        hole=0.72,
+        marker={"colors": ["#7C3AED", "#E5E7EB"]},
+        textinfo="none",
+        hoverinfo="skip",
+    ))
+    figure.update_layout(
+        height=150,
+        width=150,
+        margin=dict(l=8, r=8, t=8, b=8),
+        showlegend=False,
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+    )
+    return figure.to_json()
+
+
+def _contact_label(row, columns: dict) -> str:
+    for key in ("socio_1", "socio_2", "socio_3"):
+        column = columns.get(key)
+        if column:
+            value = safe_series(pd.DataFrame([row]), column).iloc[0]
+            if value and str(value).strip():
+                return str(value).strip()
+    return row.get("_empresa", "") or "Lead"
+
+
+def build_daily_actions(filtered_df: pd.DataFrame, columns: dict) -> list[dict]:
+    if filtered_df.empty:
+        return []
+
+    actionable = []
+    for _, row in filtered_df.iterrows():
+        grouped = status_group(row.get("_status_grupo") or row.get("_status_original", ""))
+        if grouped in COMPLETED_STATUSES:
+            continue
+        for prefix, statuses, icon, tone in DAILY_ACTION_DEFS:
+            if grouped in statuses:
+                contact = _contact_label(row, columns)
+                empresa = row.get("_empresa") or "—"
+                actionable.append({
+                    "label": f"{prefix} {contact} ({empresa})" if prefix.endswith("para") else f"{prefix} {empresa}",
+                    "icon": icon,
+                    "tone": tone,
+                    "sort_date": _as_date(row.get("_ultima_atualizacao") or row.get("_data_chamado")) or date.min,
+                    "sheet_row": int(row.get("_sheet_row", 0) or 0),
+                })
+                break
+
+    actionable.sort(key=lambda item: item["sort_date"], reverse=True)
+    items = []
+    for index, item in enumerate(actionable[:5]):
+        items.append({
+            "label": item["label"],
+            "icon": item["icon"],
+            "tone": item["tone"],
+            "time": DAILY_ACTION_SLOTS[index] if index < len(DAILY_ACTION_SLOTS) else "19:00",
+            "sheet_row": item["sheet_row"],
+        })
+    return items
+
+
+def build_hot_opportunities(filtered_df: pd.DataFrame) -> list[dict]:
+    if filtered_df.empty:
+        return []
+
+    rows = []
+    for _, row in filtered_df.iterrows():
+        grouped = status_group(row.get("_status_grupo") or row.get("_status_original", ""))
+        if grouped not in OPPORTUNITY_STATUSES and map_etapa(grouped) not in ("Proposta Enviada", "Negociação", "Reunião", "Qualificação"):
+            continue
+        capital = float(row.get("_capital_num") or 0)
+        etapa = map_etapa(grouped)
+        if etapa == "Proposta Enviada":
+            etapa = "Proposta"
+        activity_date = _as_date(row.get("_ultima_atualizacao") or row.get("_data_chamado"))
+        days_idle = (date.today() - activity_date).days if activity_date else 0
+        if capital >= 20000 or days_idle >= 5 or grouped == "Proposta":
+            urgency = "Alta"
+            urgency_class = "high"
+        elif capital >= 10000 or days_idle >= 2:
+            urgency = "Média"
+            urgency_class = "medium"
+        else:
+            urgency = "Baixa"
+            urgency_class = "low"
+
+        rows.append({
+            "empresa": row.get("_empresa") or "—",
+            "empresa_initials": _initials(row.get("_empresa", "")),
+            "etapa": etapa,
+            "etapa_class": ETAPA_BADGE.get(etapa, "novo-lead"),
+            "valor": _format_money(capital),
+            "valor_num": capital,
+            "urgencia": urgency,
+            "urgencia_class": urgency_class,
+            "sheet_row": int(row.get("_sheet_row", 0) or 0),
+        })
+
+    rows.sort(key=lambda item: (item["urgencia_class"] != "high", -item["valor_num"]))
+    return rows[:5]
+
+
+def build_overdue_activities(filtered_df: pd.DataFrame, columns: dict) -> list[dict]:
+    if filtered_df.empty:
+        return []
+
+    today = date.today()
+    overdue = []
+    for _, row in filtered_df.iterrows():
+        grouped = status_group(row.get("_status_grupo") or row.get("_status_original", ""))
+        if grouped in COMPLETED_STATUSES:
+            continue
+        activity_date = _as_date(row.get("_ultima_atualizacao") or row.get("_data_chamado"))
+        if not activity_date or activity_date >= today:
+            continue
+
+        days = (today - activity_date).days
+        if days <= 0:
+            continue
+
+        for prefix, statuses, icon in OVERDUE_ACTION_DEFS:
+            if grouped in statuses:
+                empresa = row.get("_empresa") or "—"
+                overdue.append({
+                    "label": f"{prefix} {empresa}",
+                    "icon": icon,
+                    "days_label": f"{days} dia{'s' if days != 1 else ''}",
+                    "days": days,
+                    "sheet_row": int(row.get("_sheet_row", 0) or 0),
+                })
+                break
+
+    overdue.sort(key=lambda item: item["days"], reverse=True)
+    return overdue[:5]
 
 
 def build_action_items(filtered_df: pd.DataFrame) -> list[dict]:

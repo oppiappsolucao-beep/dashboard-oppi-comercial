@@ -22,6 +22,10 @@ function copyPhone(button, phone) {
   });
 }
 
+function renderOverviewCharts() {
+  renderPlotlyChart("overview-conversion-donut");
+}
+
 function renderPlotlyChart(elementId) {
   const el = document.getElementById(elementId);
   if (!el || !el.dataset.chart) return;
@@ -36,11 +40,15 @@ function renderGoalsCharts() {
 
 document.addEventListener("DOMContentLoaded", () => {
   renderPlotlyChart("weekly-chart");
+  renderOverviewCharts();
   renderGoalsCharts();
 });
 
 document.body.addEventListener("htmx:afterSwap", (event) => {
   if (event.detail.target?.id === "goals-root") {
     renderGoalsCharts();
+  }
+  if (event.detail.target?.id === "overview-root") {
+    renderOverviewCharts();
   }
 });

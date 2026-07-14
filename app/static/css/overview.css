@@ -1,0 +1,285 @@
+.overview-kpi-grid {
+  margin-bottom: 16px;
+}
+
+.funnel-kpi-icon.tone-orange { background: #FFEDD5; color: #EA580C; }
+
+.overview-filters-toggle {
+  margin-bottom: 16px;
+  padding: 0;
+  overflow: hidden;
+}
+
+.overview-filters-toggle summary {
+  cursor: pointer;
+  padding: 12px 16px;
+  font-weight: 700;
+  color: var(--muted);
+  list-style: none;
+}
+
+.overview-filters-toggle summary::-webkit-details-marker {
+  display: none;
+}
+
+.overview-filters-inner {
+  border: none;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  margin: 0;
+}
+
+.overview-funnel-card {
+  min-height: 420px;
+}
+
+.overview-funnel-layout {
+  display: grid;
+  grid-template-columns: 180px 1fr 170px;
+  gap: 18px;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.overview-funnel-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.overview-funnel-legend-row {
+  display: grid;
+  grid-template-columns: 12px 1fr auto;
+  gap: 8px;
+  align-items: center;
+  font-size: 0.78rem;
+}
+
+.overview-funnel-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+}
+
+.overview-funnel-legend-name {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.overview-funnel-legend-count {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.overview-funnel-visual {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-height: 280px;
+  justify-content: center;
+}
+
+.overview-funnel-layer {
+  min-height: 34px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 14px;
+  color: #fff;
+  font-size: 0.76rem;
+  font-weight: 700;
+  transition: width 0.2s ease;
+}
+
+.overview-funnel-conversion {
+  text-align: center;
+}
+
+.overview-funnel-conversion-title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+.overview-conversion-donut {
+  width: 150px;
+  height: 150px;
+  margin: 0 auto;
+}
+
+.overview-funnel-conversion-value {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--text);
+  margin-top: -8px;
+}
+
+.overview-funnel-link {
+  display: inline-block;
+  margin-top: 16px;
+  color: var(--violet);
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.overview-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.overview-card-link {
+  color: var(--violet);
+  font-size: 0.82rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.overview-daily-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.overview-daily-action {
+  display: grid;
+  grid-template-columns: 38px 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #FAFBFC;
+}
+
+.overview-action-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+}
+
+.overview-action-icon.action-purple { background: #F3E8FF; color: #7C3AED; }
+.overview-action-icon.action-pink { background: #FCE7F3; color: #DB2777; }
+.overview-action-icon.action-blue { background: #DBEAFE; color: #2563EB; }
+.overview-action-icon.action-green { background: #DCFCE7; color: #16A34A; }
+.overview-action-icon.action-orange { background: #FFEDD5; color: #EA580C; }
+
+.overview-daily-action-label {
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.35;
+}
+
+.overview-daily-action-time {
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: var(--muted);
+}
+
+.overview-grid-bottom {
+  margin-bottom: 0;
+}
+
+.overview-hot-table {
+  margin-top: 4px;
+}
+
+.overview-hot-table th {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.overview-urgency {
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.overview-urgency.high { color: #DC2626; }
+.overview-urgency.medium { color: #D97706; }
+.overview-urgency.low { color: #64748B; }
+
+.overview-overdue-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.overview-overdue-item {
+  display: grid;
+  grid-template-columns: 38px 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid #FECACA;
+  border-radius: 12px;
+  background: #FEF2F2;
+}
+
+.overview-overdue-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  background: #FEE2E2;
+  color: #DC2626;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+}
+
+.overview-overdue-label {
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: #991B1B;
+  line-height: 1.35;
+}
+
+.overview-overdue-days {
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: #DC2626;
+}
+
+.overview-empty-note {
+  padding: 24px 12px;
+  text-align: center;
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 0.86rem;
+}
+
+.stage-badge.negociacao { background: #FFEDD5; color: #C2410C; }
+
+@media (max-width: 1200px) {
+  .overview-funnel-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .overview-funnel-visual {
+    min-height: auto;
+  }
+}
+
+@media (max-width: 900px) {
+  .overview-kpi-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .overview-kpi-grid {
+    grid-template-columns: 1fr;
+  }
+}
