@@ -40,7 +40,7 @@ a { color: inherit; text-decoration: none; }
   width: var(--sidebar-w);
   min-width: var(--sidebar-w);
   max-width: var(--sidebar-w);
-  height: auto;
+  height: 100vh;
   max-height: 100vh;
   background: var(--surface);
   border-right: 1px solid var(--border);
@@ -48,7 +48,7 @@ a { color: inherit; text-decoration: none; }
   display: flex;
   flex-direction: column;
   gap: 8px;
-  overflow-y: auto;
+  overflow: hidden;
 }
 
 .sidebar-brand {
@@ -90,6 +90,8 @@ a { color: inherit; text-decoration: none; }
   display: flex;
   flex-direction: column;
   gap: 2px;
+  flex: 1;
+  min-height: 0;
 }
 
 .sidebar-link {
@@ -117,12 +119,13 @@ a { color: inherit; text-decoration: none; }
 }
 
 .sidebar-footer {
-  margin-top: 10px;
+  margin-top: auto;
   padding-top: 10px;
   border-top: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   gap: 6px;
+  flex-shrink: 0;
 }
 
 .sidebar-user {
