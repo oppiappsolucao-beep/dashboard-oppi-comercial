@@ -42,8 +42,90 @@
 }
 
 .settings-main {
+  min-width: 0;
+}
+
+.settings-users-panel {
   padding: 0;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.settings-users-table {
+  margin: 0;
+  width: 100%;
+}
+
+.settings-table-wrap {
+  overflow-x: auto;
+}
+
+.settings-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 16px;
+  padding: 14px 18px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+  flex-wrap: wrap;
+}
+
+.settings-pagination-info {
+  font-size: 0.88rem;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.settings-pagination-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.settings-per-page {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.88rem;
+  color: var(--muted);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.settings-per-page select {
+  height: 36px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0 10px;
+  background: var(--surface);
+  font-size: 0.88rem;
+  color: var(--text);
+}
+
+.settings-page-btn {
+  min-width: 36px;
+  height: 36px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 10px;
+}
+
+.settings-page-btn.active {
+  background: var(--violet);
+  border-color: var(--violet);
+  color: #fff;
 }
 
 .settings-section-header {
@@ -74,10 +156,6 @@
   padding: 0 10px;
   background: var(--surface);
   font-size: 0.82rem;
-}
-
-.settings-users-table {
-  margin: 0;
 }
 
 .settings-users-table th {
@@ -319,6 +397,15 @@
   .settings-layout,
   .settings-bottom-grid {
     grid-template-columns: 1fr;
+  }
+
+  .settings-pagination {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .settings-per-page {
+    width: 100%;
   }
 
   .settings-company-grid-wide,

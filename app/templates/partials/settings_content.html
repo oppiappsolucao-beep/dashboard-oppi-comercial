@@ -33,92 +33,96 @@
 
   {% if settings_params.tab == 'usuarios' %}
   <div class="settings-layout">
-    <div class="settings-main panel">
-      <div class="settings-section-header">
-        <div class="section-heading">Usuários da conta</div>
-        <div class="settings-table-controls">
-          <div class="search-wrap settings-search-wrap">
-            <span class="search-icon">⌕</span>
-            <input type="text" name="search" value="{{ settings_params.search }}" placeholder="Buscar usuário..."
-              hx-trigger="keyup changed delay:400ms"
-              hx-post="/configuracoes/filtros"
-              hx-target="#settings-root"
-              hx-swap="innerHTML"
-              hx-include="#settings-filters">
+    <div class="settings-main">
+      <div class="panel settings-users-panel">
+        <div class="settings-section-header">
+          <div class="section-heading">Usuários da conta</div>
+          <div class="settings-table-controls">
+            <div class="search-wrap settings-search-wrap">
+              <span class="search-icon">⌕</span>
+              <input type="text" name="search" value="{{ settings_params.search }}" placeholder="Buscar usuário..."
+                hx-trigger="keyup changed delay:400ms"
+                hx-post="/configuracoes/filtros"
+                hx-target="#settings-root"
+                hx-swap="innerHTML"
+                hx-include="#settings-filters">
+            </div>
+            <select name="role" onchange="document.getElementById('settings-page-input').value='1'; document.getElementById('settings-filters').requestSubmit();">
+              {% for option in role_options %}
+              <option value="{{ option }}" {% if settings_params.role == option %}selected{% endif %}>{{ option }}</option>
+              {% endfor %}
+            </select>
           </div>
-          <select name="role" onchange="document.getElementById('settings-page-input').value='1'; document.getElementById('settings-filters').requestSubmit();">
-            {% for option in role_options %}
-            <option value="{{ option }}" {% if settings_params.role == option %}selected{% endif %}>{{ option }}</option>
-            {% endfor %}
-          </select>
         </div>
-      </div>
 
-      {% if users_table.rows %}
-      <table class="data-table settings-users-table">
-        <thead>
-          <tr>
-            <th>Nome</th>
-            <th>E-mail</th>
-            <th>Perfil</th>
-            <th>Status</th>
-            <th>Último acesso</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for row in users_table.rows %}
-          <tr>
-            <td>
-              <div class="owner-cell">
-                <span class="owner-avatar">{{ row.initials }}</span>
-                <span>{{ row.name }}</span>
-              </div>
-            </td>
-            <td>{{ row.email }}</td>
-            <td><span class="settings-role-badge {{ row.role_class }}">{{ row.role }}</span></td>
-            <td><span class="settings-status-badge {{ row.status_class }}">{{ row.status_label }}</span></td>
-            <td>{{ row.last_access }}</td>
-            <td class="table-actions"><span class="table-menu-btn muted">⋯</span></td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-
-      <div class="activities-pagination">
-        <div class="activities-pagination-info">
-          Mostrando {{ users_table.from_record }} a {{ users_table.to_record }} de {{ users_table.total }} usuários
+        {% if users_table.rows %}
+        <div class="settings-table-wrap">
+          <table class="data-table settings-users-table">
+            <thead>
+              <tr>
+                <th>Nome</th>
+                <th>E-mail</th>
+                <th>Perfil</th>
+                <th>Status</th>
+                <th>Último acesso</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in users_table.rows %}
+              <tr>
+                <td>
+                  <div class="owner-cell">
+                    <span class="owner-avatar">{{ row.initials }}</span>
+                    <span>{{ row.name }}</span>
+                  </div>
+                </td>
+                <td>{{ row.email }}</td>
+                <td><span class="settings-role-badge {{ row.role_class }}">{{ row.role }}</span></td>
+                <td><span class="settings-status-badge {{ row.status_class }}">{{ row.status_label }}</span></td>
+                <td>{{ row.last_access }}</td>
+                <td class="table-actions"><span class="table-menu-btn muted">⋯</span></td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
         </div>
-        <div class="activities-pagination-controls">
-          {% if users_table.page > 1 %}
-          <button type="button" class="page-btn"
-            onclick="document.getElementById('settings-page-input').value='{{ users_table.page - 1 }}'; document.getElementById('settings-filters').requestSubmit();">‹</button>
-          {% endif %}
-          {% for p in range(1, users_table.total_pages + 1) %}
-            {% if p == users_table.page %}
-            <span class="page-btn active">{{ p }}</span>
-            {% elif p <= 3 or p > users_table.total_pages - 1 %}
-            <button type="button" class="page-btn"
-              onclick="document.getElementById('settings-page-input').value='{{ p }}'; document.getElementById('settings-filters').requestSubmit();">{{ p }}</button>
+
+        <div class="settings-pagination">
+          <div class="settings-pagination-info">
+            Mostrando {{ users_table.from_record }} a {{ users_table.to_record }} de {{ users_table.total }} usuários
+          </div>
+          <div class="settings-pagination-controls">
+            {% if users_table.page > 1 %}
+            <button type="button" class="settings-page-btn"
+              onclick="document.getElementById('settings-page-input').value='{{ users_table.page - 1 }}'; document.getElementById('settings-filters').requestSubmit();">‹</button>
             {% endif %}
-          {% endfor %}
-          {% if users_table.page < users_table.total_pages %}
-          <button type="button" class="page-btn"
-            onclick="document.getElementById('settings-page-input').value='{{ users_table.page + 1 }}'; document.getElementById('settings-filters').requestSubmit();">›</button>
-          {% endif %}
-        </div>
-        <div class="activities-per-page">
-          <label>Registros por página:</label>
-          <select name="per_page" onchange="document.getElementById('settings-page-input').value='1'; document.getElementById('settings-filters').requestSubmit();">
-            {% for size in [10, 25, 50] %}
-            <option value="{{ size }}" {% if users_table.per_page == size %}selected{% endif %}>{{ size }}</option>
+            {% for p in range(1, users_table.total_pages + 1) %}
+              {% if p == users_table.page %}
+              <span class="settings-page-btn active">{{ p }}</span>
+              {% elif p <= 3 or p > users_table.total_pages - 1 %}
+              <button type="button" class="settings-page-btn"
+                onclick="document.getElementById('settings-page-input').value='{{ p }}'; document.getElementById('settings-filters').requestSubmit();">{{ p }}</button>
+              {% endif %}
             {% endfor %}
-          </select>
+            {% if users_table.page < users_table.total_pages %}
+            <button type="button" class="settings-page-btn"
+              onclick="document.getElementById('settings-page-input').value='{{ users_table.page + 1 }}'; document.getElementById('settings-filters').requestSubmit();">›</button>
+            {% endif %}
+          </div>
+          <div class="settings-per-page">
+            <label for="settings-per-page-select">Registros por página:</label>
+            <select id="settings-per-page-select" name="per_page" onchange="document.getElementById('settings-page-input').value='1'; document.getElementById('settings-filters').requestSubmit();">
+              {% for size in [10, 25, 50] %}
+              <option value="{{ size }}" {% if users_table.per_page == size %}selected{% endif %}>{{ size }}</option>
+              {% endfor %}
+            </select>
+          </div>
         </div>
+        {% else %}
+        <div class="settings-empty">Nenhum usuário encontrado.</div>
+        {% endif %}
       </div>
-      {% else %}
-      <div class="settings-empty">Nenhum usuário encontrado.</div>
-      {% endif %}
     </div>
 
     <div class="settings-side">
