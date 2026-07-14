@@ -81,10 +81,32 @@ async def contracts_list(request: Request, order: str = "recentes"):
     else:
         names_df = names_df.sort_values("_sheet_row", ascending=False)
 
-    companies = [
-        {"name": row["Empresa"], "sheet_row": int(row["_sheet_row"])}
-        for _, row in names_df.iterrows()
-    ]
+    companies = []
+    for _, row in names_df.iterrows():
+        full_row = _get_row_by_sheet(filtered_df, int(row["_sheet_row"]))
+        if full_row is None:
+            full_row = _get_row_by_sheet(df, int(row["_sheet_row"]))
+        status = "Novo Lead"
+        vendedor = "Sem vendedor"
+        nicho = "—"
+        estado = "—"
+        if full_row is not None:
+            status = status_group(full_row.get("_status_original", full_row.get("_status_grupo", "Novo Lead")))
+            vendedor = normalize_text(full_row.get("_vendedor", "")) or "Sem vendedor"
+            nicho = normalize_text(full_row.get("_nicho", "")) or "—"
+            estado = normalize_text(full_row.get("_estado", "")) or "—"
+
+        empresa = row["Empresa"]
+        initials = "".join(part[0] for part in empresa.split()[:2]).upper() if empresa else "—"
+        companies.append({
+            "name": empresa,
+            "sheet_row": int(row["_sheet_row"]),
+            "initials": initials[:2],
+            "vendedor": vendedor,
+            "status": status,
+            "nicho": nicho,
+            "estado": estado,
+        })
 
     return render(
         request,

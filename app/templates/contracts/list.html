@@ -1,60 +1,134 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="registration-header-card">
-  <div class="registration-kicker">OPPI COMERCIAL • CADASTROS</div>
-  <div class="registration-title">Empresas cadastradas</div>
-  <div class="registration-subtitle">Consulte os nomes de todas as empresas cadastradas na planilha comercial.</div>
+<div class="page-header contracts-page-header">
+  <div>
+    <div class="registration-kicker">OPPI COMERCIAL • CADASTROS</div>
+    <div class="page-title">Empresas cadastradas</div>
+    <div class="page-subtitle">Consulte os nomes de todas as empresas cadastradas na planilha comercial.</div>
+  </div>
+  <div class="page-actions">
+    <a href="/cadastro/novo" class="btn">＋ Novo cadastro</a>
+  </div>
 </div>
 
-<form method="get" action="/cadastro/todos" class="filters-grid">
-  <div><label>Vendedor</label>
-    <select name="seller">
-      <option value="Todos os vendedores">Todos os vendedores</option>
-      {% for seller in options.seller_options %}
-      <option value="{{ seller }}" {% if filters.seller == seller %}selected{% endif %}>{{ seller }}</option>
-      {% endfor %}
-    </select>
+<form method="get" action="/cadastro/todos" class="contracts-filters-form">
+  <div class="toolbar-card">
+    <div class="filters-row filters-row-main">
+      <div class="filter-field filter-field-sm">
+        <label>Vendedor</label>
+        <select name="seller">
+          <option value="Todos os vendedores">Todos os vendedores</option>
+          {% for seller in options.seller_options %}
+          <option value="{{ seller }}" {% if filters.seller == seller %}selected{% endif %}>{{ seller }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="filter-field filter-field-sm">
+        <label>Status</label>
+        <select name="status">
+          <option value="Todos os status">Todos os status</option>
+          {% for status in options.status_options %}
+          <option value="{{ status }}" {% if filters.status == status %}selected{% endif %}>{{ status }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="filter-field filter-field-sm">
+        <label>Período início</label>
+        <input type="date" name="period_start" value="{{ filters.period_start }}">
+      </div>
+      <div class="filter-field filter-field-sm">
+        <label>Período fim</label>
+        <input type="date" name="period_end" value="{{ filters.period_end }}">
+      </div>
+      <div class="filter-field filter-field-sm">
+        <label>Nichos</label>
+        <select name="niche">
+          <option value="Todos os nichos">Todos os nichos</option>
+          {% for niche in options.niche_options %}
+          <option value="{{ niche }}" {% if filters.niche == niche %}selected{% endif %}>{{ niche }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="filter-field filter-field-sm">
+        <label>Estados</label>
+        <select name="state">
+          <option value="Todos os estados">Todos os estados</option>
+          {% for state in options.state_options %}
+          <option value="{{ state }}" {% if filters.state == state %}selected{% endif %}>{{ state }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    <div class="filters-row filters-row-search">
+      <div class="filter-field filter-field-search">
+        <label>Buscar empresa</label>
+        <div class="search-wrap">
+          <span class="search-icon">⌕</span>
+          <input type="text" name="search" value="{{ filters.search }}" placeholder="Digite o nome da empresa...">
+        </div>
+      </div>
+      <div class="filter-field contracts-filter-actions">
+        <label>&nbsp;</label>
+        <button type="submit" class="btn">Aplicar filtros</button>
+      </div>
+    </div>
+    <input type="hidden" name="order" value="{{ sort_mode }}">
   </div>
-  <div><label>Status</label>
-    <select name="status">
-      <option value="Todos os status">Todos os status</option>
-      {% for status in options.status_options %}
-      <option value="{{ status }}" {% if filters.status == status %}selected{% endif %}>{{ status }}</option>
-      {% endfor %}
-    </select>
+
+  <div class="contracts-toolbar">
+    <div class="contracts-count">
+      Exibindo <strong>{{ count }}</strong> empresa(s) cadastrada(s) na planilha.
+    </div>
+    <a href="/cadastro/todos?order={{ next_order }}&seller={{ filters.seller | urlencode }}&status={{ filters.status | urlencode }}&period_start={{ filters.period_start }}&period_end={{ filters.period_end }}&niche={{ filters.niche | urlencode }}&state={{ filters.state | urlencode }}&search={{ filters.search | urlencode }}"
+      class="contracts-sort-link">
+      Ordenar {{ 'A-Z' if next_order == 'alfabetica' else 'mais recentes' }}
+    </a>
   </div>
-  <div><label>Período início</label><input type="date" name="period_start" value="{{ filters.period_start }}"></div>
-  <div><label>Período fim</label><input type="date" name="period_end" value="{{ filters.period_end }}"></div>
-  <div><label>Nichos</label>
-    <select name="niche">
-      <option value="Todos os nichos">Todos os nichos</option>
-      {% for niche in options.niche_options %}
-      <option value="{{ niche }}" {% if filters.niche == niche %}selected{% endif %}>{{ niche }}</option>
-      {% endfor %}
-    </select>
+
+  <div class="panel-card panel contracts-table-card">
+    {% if companies %}
+    <table class="data-table contracts-table">
+      <thead>
+        <tr>
+          <th>Empresa</th>
+          <th>Responsável</th>
+          <th>Status</th>
+          <th>Nicho</th>
+          <th>Estado</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for company in companies %}
+        <tr>
+          <td>
+            <div class="table-company">
+              <span class="table-company-icon">{{ company.initials }}</span>
+              <div>
+                <div class="table-company-name">{{ company.name }}</div>
+                <div class="table-company-meta">Cadastro #{{ company.sheet_row }}</div>
+              </div>
+            </div>
+          </td>
+          <td>
+            <div class="owner-cell">
+              <span class="owner-avatar">{{ company.vendedor[:2] | upper }}</span>
+              <span>{{ company.vendedor }}</span>
+            </div>
+          </td>
+          <td><span class="stage-badge contracts-status-badge">{{ company.status }}</span></td>
+          <td>{{ company.nicho }}</td>
+          <td>{{ company.estado }}</td>
+          <td class="table-actions">
+            <a href="/cadastro/todos/{{ company.sheet_row }}" class="btn btn-small btn-secondary">Ver</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="contracts-empty">Nenhuma empresa encontrada com os filtros informados.</div>
+    {% endif %}
   </div>
-  <div><label>Estados</label>
-    <select name="state">
-      <option value="Todos os estados">Todos os estados</option>
-      {% for state in options.state_options %}
-      <option value="{{ state }}" {% if filters.state == state %}selected{% endif %}>{{ state }}</option>
-      {% endfor %}
-    </select>
-  </div>
-  <div class="full"><label>Buscar empresa</label><input type="text" name="search" value="{{ filters.search }}" placeholder="Digite o nome da empresa..."></div>
-  <input type="hidden" name="order" value="{{ sort_mode }}">
-  <div class="full"><button type="submit" class="btn">Aplicar filtros</button></div>
 </form>
-
-<p style="margin:16px 0;">Exibindo <strong>{{ count }}</strong> empresa(s) cadastrada(s) na planilha.
-  <a href="/cadastro/todos?order={{ next_order }}">Ordenar {{ 'A-Z' if next_order == 'alfabetica' else 'recentes' }}</a>
-</p>
-
-<div class="contracts-list">
-  {% for company in companies %}
-  <a class="contract-item" href="/cadastro/todos/{{ company.sheet_row }}">{{ company.name }}</a>
-  {% else %}
-  <p>Nenhuma empresa encontrada com os filtros informados.</p>
-  {% endfor %}
-</div>
 {% endblock %}

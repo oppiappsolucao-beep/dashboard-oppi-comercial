@@ -65,3 +65,122 @@
   .form-grid,
   .form-grid.cols-3 { grid-template-columns: 1fr; }
 }
+
+.contracts-page-header .registration-kicker {
+  margin-bottom: 4px;
+}
+
+.contracts-filters-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.contracts-filter-actions .btn {
+  width: 100%;
+  min-height: 42px;
+}
+
+.contracts-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.contracts-count {
+  font-size: 0.95rem;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.contracts-count strong {
+  color: var(--text);
+  font-size: 1.05rem;
+}
+
+.contracts-sort-link {
+  color: var(--violet);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.contracts-table-card {
+  padding: 0;
+  overflow: hidden;
+}
+
+.contracts-table {
+  margin: 0;
+}
+
+.contracts-table th {
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.contracts-table th:first-child,
+.contracts-table td:first-child {
+  padding-left: 18px;
+}
+
+.contracts-table td {
+  font-size: 0.92rem;
+  vertical-align: middle;
+}
+
+.contracts-table .table-company-name {
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.contracts-table .table-company-meta {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.contracts-table .table-company-icon {
+  width: 42px;
+  height: 42px;
+  min-width: 42px;
+  font-size: 0.9rem;
+}
+
+.contracts-table .owner-cell {
+  font-size: 0.92rem;
+}
+
+.contracts-table .owner-avatar {
+  width: 32px;
+  height: 32px;
+  font-size: 0.78rem;
+}
+
+.contracts-status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: #F3E8FF;
+  color: #7C3AED;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.contracts-empty {
+  padding: 48px 24px;
+  text-align: center;
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+@media (max-width: 900px) {
+  .contracts-filter-actions {
+    width: 100%;
+  }
+}
