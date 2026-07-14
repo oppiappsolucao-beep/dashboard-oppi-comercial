@@ -8,7 +8,12 @@
   --text: #111827;
   --muted: #6B7280;
   --soft: #F9FAFB;
-  --sidebar-w: 196px;
+  --sidebar-w: 220px;
+  --sidebar-bg: #10122E;
+  --sidebar-active: #22225a;
+  --sidebar-text: #E2E8F0;
+  --sidebar-muted: #94A3B8;
+  --sidebar-border: rgba(255, 255, 255, 0.08);
   --radius: 16px;
   --shadow: 0 8px 24px rgba(17, 24, 39, 0.06);
 }
@@ -42,9 +47,9 @@ a { color: inherit; text-decoration: none; }
   max-width: var(--sidebar-w);
   height: 100vh;
   max-height: 100vh;
-  background: var(--surface);
-  border-right: 1px solid var(--border);
-  padding: 14px 10px;
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--sidebar-border);
+  padding: 18px 12px 14px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -54,95 +59,106 @@ a { color: inherit; text-decoration: none; }
 .sidebar-brand {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 2px 4px;
+  gap: 10px;
+  padding: 4px 6px 14px;
   min-height: 32px;
 }
 
 .brand-mark {
-  width: 28px;
-  height: 28px;
-  min-width: 28px;
-  min-height: 28px;
-  border-radius: 9px;
-  background: linear-gradient(135deg, #F472B6 0%, #C084FC 55%, #A855F7 100%);
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  min-height: 32px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #EC4899 0%, #A855F7 55%, #7C3AED 100%);
   position: relative;
   flex-shrink: 0;
+  box-shadow: 0 4px 14px rgba(168, 85, 247, 0.35);
 }
 
 .brand-mark::after {
   content: "";
   position: absolute;
-  inset: 7px;
+  inset: 9px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 0.95);
 }
 
 .sidebar-brand-text {
-  font-size: 0.84rem;
+  font-size: 1rem;
   font-weight: 800;
   line-height: 1.15;
-  color: var(--text);
+  color: #FFFFFF;
   white-space: nowrap;
 }
 
 .sidebar-nav {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
   flex: 1;
   min-height: 0;
+  overflow-y: auto;
+  padding-right: 2px;
 }
 
 .sidebar-link {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
+  gap: 10px;
+  padding: 10px 12px;
   border-radius: 10px;
-  color: var(--muted);
+  color: var(--sidebar-muted);
   font-weight: 600;
-  font-size: 0.82rem;
+  font-size: 0.86rem;
+  transition: background 0.15s ease, color 0.15s ease;
 }
 
-.sidebar-link:hover,
+.sidebar-link:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--sidebar-text);
+}
+
 .sidebar-link.active {
-  background: #F5F3FF;
-  color: var(--violet);
+  background: var(--sidebar-active);
+  color: #FFFFFF;
 }
 
 .sidebar-link-icon {
-  width: 14px;
+  width: 18px;
   text-align: center;
   flex-shrink: 0;
-  font-size: 0.78rem;
+  font-size: 0.9rem;
+  opacity: 0.95;
 }
 
 .sidebar-footer {
   margin-top: auto;
-  padding-top: 10px;
-  border-top: 1px solid var(--border);
+  padding-top: 12px;
+  border-top: 1px solid var(--sidebar-border);
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   flex-shrink: 0;
 }
 
 .sidebar-user {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 4px;
+  gap: 10px;
+  padding: 10px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .sidebar-user-avatar {
-  width: 28px;
-  height: 28px;
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.68rem;
+  font-size: 0.72rem;
   font-weight: 800;
   color: #fff;
   background: linear-gradient(135deg, var(--pink), var(--purple));
@@ -150,19 +166,31 @@ a { color: inherit; text-decoration: none; }
 }
 
 .sidebar-user-name {
-  font-size: 0.78rem;
+  font-size: 0.82rem;
   font-weight: 700;
+  color: #FFFFFF;
 }
 
 .sidebar-user-role {
-  font-size: 0.68rem;
-  color: var(--muted);
+  font-size: 0.72rem;
+  color: var(--sidebar-muted);
 }
 
 .logout-form .btn {
-  padding: 7px 10px;
-  font-size: 0.78rem;
+  padding: 9px 10px;
+  font-size: 0.8rem;
   border-radius: 10px;
+}
+
+.sidebar .btn-secondary {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--sidebar-text);
+  border: 1px solid var(--sidebar-border);
+}
+
+.sidebar .btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #FFFFFF;
 }
 
 .main-content {
