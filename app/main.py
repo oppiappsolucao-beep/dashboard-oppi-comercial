@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import settings
-from app.routers import auth, activities, contracts, funnel, goals_reports, leads, overview, pricing, proposals, registration
+from app.routers import auth, activities, contracts, funnel, goals_reports, leads, overview, pricing, proposals, registration, settings
 from app.templating import render
 
 app = FastAPI(title="Dashboard Oppi Comercial")
@@ -32,6 +32,7 @@ app.include_router(leads.router)
 app.include_router(registration.router)
 app.include_router(contracts.router)
 app.include_router(pricing.router)
+app.include_router(settings.router)
 
 # Leads e Empresas (registro explícito para garantir rota no deploy)
 from app.routers.leads import leads_filters, leads_page, leads_refresh  # noqa: E402
@@ -59,6 +60,13 @@ from app.routers.goals_reports import goals_filters, goals_page, goals_refresh  
 app.add_api_route("/metas-e-relatorios", goals_page, methods=["GET"], tags=["goals"])
 app.add_api_route("/metas-e-relatorios/filtros", goals_filters, methods=["POST"], tags=["goals"])
 app.add_api_route("/metas-e-relatorios/atualizar", goals_refresh, methods=["POST"], tags=["goals"])
+
+from app.routers.settings import settings_filters, settings_page, settings_permissions_toggle, settings_refresh  # noqa: E402
+
+app.add_api_route("/configuracoes", settings_page, methods=["GET"], tags=["settings"])
+app.add_api_route("/configuracoes/filtros", settings_filters, methods=["POST"], tags=["settings"])
+app.add_api_route("/configuracoes/permissoes", settings_permissions_toggle, methods=["POST"], tags=["settings"])
+app.add_api_route("/configuracoes/atualizar", settings_refresh, methods=["POST"], tags=["settings"])
 
 
 @app.get("/health")

@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block content %}
+<link rel="stylesheet" href="/static/css/settings.css?v=1">
+<div class="page-header">
+  <div>
+    <div class="page-title">Configurações</div>
+    <div class="page-subtitle">Gerencie usuários, serviços, permissões e dados da operação SaaS.</div>
+  </div>
+  <div class="page-actions">
+    <form method="post" action="/configuracoes/atualizar">
+      <button type="submit" class="btn btn-secondary">↻ Atualizar</button>
+    </form>
+    <a href="/cadastro/novo" class="btn">＋ Novo usuário</a>
+  </div>
+</div>
+
+<div id="settings-root">
+  {% include "partials/settings_content.html" %}
+</div>
+{% endblock %}

@@ -1,0 +1,253 @@
+<form id="settings-filters"
+  hx-post="/configuracoes/filtros"
+  hx-target="#settings-root"
+  hx-swap="innerHTML"
+>
+  <input type="hidden" name="tab" value="{{ settings_params.tab }}" id="settings-tab-input">
+  <input type="hidden" name="page" value="{{ users_table.page }}" id="settings-page-input">
+
+  <div class="funnel-kpi-grid settings-kpi-grid">
+    {% for card in kpi_cards %}
+    <div class="funnel-kpi-card panel">
+      <div class="funnel-kpi-icon tone-{{ card.tone }}">{{ card.icon }}</div>
+      <div class="funnel-kpi-body">
+        <div class="funnel-kpi-label">{{ card.label }}</div>
+        <div class="funnel-kpi-value settings-kpi-value">{{ card.value }}</div>
+        <div class="funnel-kpi-trend {% if card.get('is_period') %}flat{% elif card.trend_flat %}flat{% elif card.trend_up %}up{% else %}down{% endif %}">
+          {{ card.trend_label }}
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="settings-tabs">
+    {% for tab_id, tab_label in settings_tabs %}
+    <button type="button"
+      class="settings-tab {% if settings_params.tab == tab_id %}active{% endif %}"
+      onclick="document.getElementById('settings-tab-input').value='{{ tab_id }}'; document.getElementById('settings-page-input').value='1'; document.getElementById('settings-filters').requestSubmit();">
+      {{ tab_label }}
+    </button>
+    {% endfor %}
+  </div>
+
+  {% if settings_params.tab == 'usuarios' %}
+  <div class="settings-layout">
+    <div class="settings-main panel">
+      <div class="settings-section-header">
+        <div class="section-heading">Usuários da conta</div>
+        <div class="settings-table-controls">
+          <div class="search-wrap settings-search-wrap">
+            <span class="search-icon">⌕</span>
+            <input type="text" name="search" value="{{ settings_params.search }}" placeholder="Buscar usuário..."
+              hx-trigger="keyup changed delay:400ms"
+              hx-post="/configuracoes/filtros"
+              hx-target="#settings-root"
+              hx-swap="innerHTML"
+              hx-include="#settings-filters">
+          </div>
+          <select name="role" onchange="document.getElementById('settings-page-input').value='1'; document.getElementById('settings-filters').requestSubmit();">
+            {% for option in role_options %}
+            <option value="{{ option }}" {% if settings_params.role == option %}selected{% endif %}>{{ option }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      {% if users_table.rows %}
+      <table class="data-table settings-users-table">
+        <thead>
+          <tr>
+            <th>Nome</th>
+            <th>E-mail</th>
+            <th>Perfil</th>
+            <th>Status</th>
+            <th>Último acesso</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in users_table.rows %}
+          <tr>
+            <td>
+              <div class="owner-cell">
+                <span class="owner-avatar">{{ row.initials }}</span>
+                <span>{{ row.name }}</span>
+              </div>
+            </td>
+            <td>{{ row.email }}</td>
+            <td><span class="settings-role-badge {{ row.role_class }}">{{ row.role }}</span></td>
+            <td><span class="settings-status-badge {{ row.status_class }}">{{ row.status_label }}</span></td>
+            <td>{{ row.last_access }}</td>
+            <td class="table-actions"><span class="table-menu-btn muted">⋯</span></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+      <div class="activities-pagination">
+        <div class="activities-pagination-info">
+          Mostrando {{ users_table.from_record }} a {{ users_table.to_record }} de {{ users_table.total }} usuários
+        </div>
+        <div class="activities-pagination-controls">
+          {% if users_table.page > 1 %}
+          <button type="button" class="page-btn"
+            onclick="document.getElementById('settings-page-input').value='{{ users_table.page - 1 }}'; document.getElementById('settings-filters').requestSubmit();">‹</button>
+          {% endif %}
+          {% for p in range(1, users_table.total_pages + 1) %}
+            {% if p == users_table.page %}
+            <span class="page-btn active">{{ p }}</span>
+            {% elif p <= 3 or p > users_table.total_pages - 1 %}
+            <button type="button" class="page-btn"
+              onclick="document.getElementById('settings-page-input').value='{{ p }}'; document.getElementById('settings-filters').requestSubmit();">{{ p }}</button>
+            {% endif %}
+          {% endfor %}
+          {% if users_table.page < users_table.total_pages %}
+          <button type="button" class="page-btn"
+            onclick="document.getElementById('settings-page-input').value='{{ users_table.page + 1 }}'; document.getElementById('settings-filters').requestSubmit();">›</button>
+          {% endif %}
+        </div>
+        <div class="activities-per-page">
+          <label>Registros por página:</label>
+          <select name="per_page" onchange="document.getElementById('settings-page-input').value='1'; document.getElementById('settings-filters').requestSubmit();">
+            {% for size in [10, 25, 50] %}
+            <option value="{{ size }}" {% if users_table.per_page == size %}selected{% endif %}>{{ size }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      {% else %}
+      <div class="settings-empty">Nenhum usuário encontrado.</div>
+      {% endif %}
+    </div>
+
+    <div class="settings-side">
+      <div class="panel settings-widget">
+        <div class="section-heading">Serviços cadastrados</div>
+        <div class="settings-service-list">
+          {% for service in services[:6] %}
+          <div class="settings-service-row">
+            <span>{{ service.name }}</span>
+            <span class="settings-service-badge {{ service.status_class }}">{{ service.status_label }}</span>
+          </div>
+          {% endfor %}
+        </div>
+        <button type="button" class="settings-link-btn"
+          onclick="document.getElementById('settings-tab-input').value='servicos'; document.getElementById('settings-filters').requestSubmit();">
+          Ver todos os serviços →
+        </button>
+      </div>
+
+      <div class="panel settings-widget">
+        <div class="section-heading">Permissões e módulos</div>
+        <div class="settings-permissions-list">
+          {% for perm in permissions %}
+          <div class="settings-permission-row">
+            <span>{{ perm.label }}</span>
+            <label class="settings-toggle">
+              <input type="checkbox" {% if perm.enabled %}checked{% endif %} tabindex="-1" aria-hidden="true">
+              <span class="settings-toggle-slider"
+                hx-post="/configuracoes/permissoes"
+                hx-target="#settings-root"
+                hx-swap="innerHTML"
+                hx-include="#settings-filters"
+                hx-vals='{"permission_key": "{{ perm.key }}"}'></span>
+            </label>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="settings-bottom-grid">
+    <div class="panel settings-company-card">
+      <div class="section-heading">Dados da empresa / Assinatura</div>
+      <div class="settings-company-grid">
+        <div><span class="settings-company-label">Nome da empresa</span><strong>{{ company.company_name }}</strong></div>
+        <div><span class="settings-company-label">CNPJ</span><strong>{{ company.cnpj }}</strong></div>
+        <div><span class="settings-company-label">Plano contratado</span><strong>{{ company.plan_name }}</strong></div>
+        <div><span class="settings-company-label">Limite de usuários</span><strong>{{ company.user_limit }} usuários</strong></div>
+        <div><span class="settings-company-label">Cobrança recorrente</span><strong>{{ company.billing_cycle }}</strong></div>
+        <div><span class="settings-company-label">Próxima renovação</span><strong>{{ company.renewal_date }}</strong></div>
+      </div>
+      <button type="button" class="btn btn-secondary settings-outline-btn"
+        onclick="document.getElementById('settings-tab-input').value='faturamento'; document.getElementById('settings-filters').requestSubmit();">
+        Gerenciar assinatura →
+      </button>
+    </div>
+
+    <div class="panel settings-integrations-card">
+      <div class="section-heading">Integrações conectadas</div>
+      <div class="settings-integrations-grid">
+        {% for item in integrations %}
+        <div class="settings-integration-item {% if item.connected %}connected{% endif %}">
+          <div class="settings-integration-icon">{{ item.name[:1] }}</div>
+          <div>
+            <div class="settings-integration-name">{{ item.name }}</div>
+            <div class="settings-integration-status {{ item.status_class }}">{{ item.status_label }}</div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      <button type="button" class="settings-link-btn"
+        onclick="document.getElementById('settings-tab-input').value='integracoes'; document.getElementById('settings-filters').requestSubmit();">
+        Gerenciar integrações →
+      </button>
+    </div>
+  </div>
+
+  {% elif settings_params.tab == 'geral' %}
+  <div class="panel settings-single-card">
+    <div class="section-heading">Dados gerais da operação</div>
+    <div class="settings-company-grid settings-company-grid-wide">
+      <div><span class="settings-company-label">Nome da empresa</span><strong>{{ company.company_name }}</strong></div>
+      <div><span class="settings-company-label">Nome fantasia</span><strong>{{ company.trade_name }}</strong></div>
+      <div><span class="settings-company-label">CNPJ</span><strong>{{ company.cnpj }}</strong></div>
+      <div><span class="settings-company-label">Planilha conectada</span><strong>{{ company.worksheet_name }}</strong></div>
+      <div><span class="settings-company-label">Google Sheets</span><strong>{% if company.sheet_configured %}Conectado{% else %}Pendente{% endif %}</strong></div>
+      <div><span class="settings-company-label">Usuário admin</span><strong>{{ app_username }}</strong></div>
+    </div>
+  </div>
+
+  {% elif settings_params.tab == 'servicos' %}
+  <div class="panel settings-single-card">
+    <div class="section-heading">Serviços cadastrados</div>
+    <div class="settings-service-list settings-service-list-full">
+      {% for service in services %}
+      <div class="settings-service-row">
+        <span>{{ service.name }}</span>
+        <span class="settings-service-badge {{ service.status_class }}">{{ service.status_label }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  {% elif settings_params.tab == 'integracoes' %}
+  <div class="panel settings-single-card">
+    <div class="section-heading">Integrações</div>
+    <div class="settings-integrations-grid settings-integrations-grid-full">
+      {% for item in integrations %}
+      <div class="settings-integration-item {% if item.connected %}connected{% endif %}">
+        <div class="settings-integration-icon">{{ item.name[:1] }}</div>
+        <div>
+          <div class="settings-integration-name">{{ item.name }}</div>
+          <div class="settings-integration-status {{ item.status_class }}">{{ item.status_label }}</div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  {% elif settings_params.tab == 'faturamento' %}
+  <div class="panel settings-single-card">
+    <div class="section-heading">Faturamento e assinatura</div>
+    <div class="settings-company-grid settings-company-grid-wide">
+      <div><span class="settings-company-label">Plano contratado</span><strong>{{ company.plan_name }}</strong></div>
+      <div><span class="settings-company-label">Limite de usuários</span><strong>{{ company.user_limit }} usuários</strong></div>
+      <div><span class="settings-company-label">Cobrança recorrente</span><strong>{{ company.billing_cycle }}</strong></div>
+      <div><span class="settings-company-label">Próxima renovação</span><strong>{{ company.renewal_date }}</strong></div>
+    </div>
+  </div>
+  {% endif %}
+</form>
