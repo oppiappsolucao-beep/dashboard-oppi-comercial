@@ -320,6 +320,11 @@ a { color: inherit; text-decoration: none; }
 .metric-icon.tone-violet { background: #EDE9FE; color: #7C3AED; }
 .metric-icon.tone-green { background: #DCFCE7; color: #16A34A; }
 .metric-icon.tone-blue { background: #DBEAFE; color: #2563EB; }
+.metric-icon.tone-indigo { background: #E0E7FF; color: #4F46E5; }
+
+.metric-grid-funnel {
+  margin-top: 0;
+}
 
 .metric-label {
   color: var(--muted);
@@ -398,6 +403,55 @@ a { color: inherit; text-decoration: none; }
 .funnel-step.level-2 { background: linear-gradient(90deg, #A855F7, #C026D3); }
 .funnel-step.level-3 { background: linear-gradient(90deg, #C026D3, #EC4899); }
 .funnel-step.level-4 { background: linear-gradient(90deg, #EC4899, #F472B6); }
+
+.funnel-horizontal {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.funnel-horizontal-row {
+  display: grid;
+  grid-template-columns: 1fr 56px;
+  gap: 12px;
+  align-items: center;
+}
+
+.funnel-horizontal-bar {
+  min-height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.88rem;
+  transition: width 0.25s ease;
+}
+
+.funnel-horizontal-bar.level-0 { background: linear-gradient(90deg, #7C3AED, #9333EA); }
+.funnel-horizontal-bar.level-1 { background: linear-gradient(90deg, #EC4899, #F472B6); }
+.funnel-horizontal-bar.level-2 { background: linear-gradient(90deg, #3B82F6, #60A5FA); }
+.funnel-horizontal-bar.level-3 { background: linear-gradient(90deg, #22C55E, #4ADE80); }
+.funnel-horizontal-bar.level-4 { background: linear-gradient(90deg, #F97316, #FB923C); }
+.funnel-horizontal-bar.level-5 { background: linear-gradient(90deg, #EF4444, #F87171); }
+
+.funnel-horizontal-rate {
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: var(--text);
+  text-align: right;
+}
+
+.funnel-horizontal-rate.muted {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.funnel-page-chart {
+  min-height: 360px;
+}
 
 .funnel-conversions {
   display: flex;
@@ -547,6 +601,8 @@ a { color: inherit; text-decoration: none; }
 .stage-badge.proposta { background: #FCE7F3; color: #DB2777; }
 .stage-badge.fechado { background: #DCFCE7; color: #16A34A; }
 .stage-badge.reuniao { background: #EDE9FE; color: #6D28D9; }
+.stage-badge.qualificacao { background: #DBEAFE; color: #2563EB; }
+.stage-badge.novo-lead { background: #F3E8FF; color: #7C3AED; }
 
 .btn, button, .button {
   display: inline-flex;

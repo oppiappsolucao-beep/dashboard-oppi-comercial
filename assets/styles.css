@@ -1,0 +1,268 @@
+:root {
+  --bg: #F7F8FC;
+  --card: #FFFFFF;
+  --sidebar: #10122E;
+  --primary: #6D28D9;
+  --primary-light: #8B5CF6;
+  --pink: #EC4899;
+  --blue: #2563EB;
+  --green: #16A34A;
+  --orange: #F59E0B;
+  --red: #EF4444;
+  --text: #111827;
+  --muted: #64748B;
+  --border: #E5E7EB;
+}
+
+html, body, [class*="css"] {
+  font-family: Inter, "Segoe UI", Arial, sans-serif;
+}
+
+.stApp {
+  background: var(--bg) !important;
+}
+
+section[data-testid="stSidebar"] {
+  background: var(--sidebar) !important;
+  border-right: 1px solid rgba(255,255,255,0.06);
+  width: 240px !important;
+  min-width: 240px !important;
+}
+
+section[data-testid="stSidebar"] > div {
+  background: var(--sidebar) !important;
+  padding-top: 1rem;
+}
+
+section[data-testid="stSidebar"] .stMarkdown,
+section[data-testid="stSidebar"] label,
+section[data-testid="stSidebar"] p,
+section[data-testid="stSidebar"] span {
+  color: #E5E7EB !important;
+}
+
+section[data-testid="stSidebar"] .stButton > button {
+  background: transparent !important;
+  color: #CBD5E1 !important;
+  border: none !important;
+  text-align: left !important;
+  justify-content: flex-start !important;
+  padding: 0.65rem 0.85rem !important;
+  border-radius: 10px !important;
+  font-weight: 600 !important;
+  box-shadow: none !important;
+}
+
+section[data-testid="stSidebar"] .stButton > button:hover {
+  background: rgba(139, 92, 246, 0.18) !important;
+  color: #FFFFFF !important;
+}
+
+section[data-testid="stSidebar"] [data-testid="stVerticalBlock"] {
+  gap: 0.35rem;
+}
+
+.block-container {
+  padding-top: 1.5rem !important;
+  max-width: 100% !important;
+  padding-left: 2rem !important;
+  padding-right: 2rem !important;
+}
+
+h1, h2, h3, h4 {
+  color: var(--text) !important;
+  letter-spacing: -0.02em;
+}
+
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 1rem;
+  padding: 0 0.25rem;
+}
+
+.brand-mark {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #EC4899 0%, #8B5CF6 55%, #6D28D9 100%);
+  position: relative;
+  flex-shrink: 0;
+}
+
+.brand-mark::after {
+  content: "";
+  position: absolute;
+  inset: 8px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.92);
+}
+
+.sidebar-title {
+  color: #FFFFFF;
+  font-weight: 800;
+  font-size: 1rem;
+  line-height: 1.1;
+}
+
+.sidebar-subtitle {
+  color: #C084FC;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.sidebar-spacer {
+  height: 12vh;
+}
+
+.sidebar-user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0.75rem;
+  border-radius: 12px;
+  background: rgba(255,255,255,0.05);
+  margin-bottom: 0.5rem;
+}
+
+.sidebar-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #8B5CF6, #EC4899);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.sidebar-user-name {
+  color: #FFFFFF;
+  font-weight: 700;
+  font-size: 0.88rem;
+}
+
+.sidebar-user-role {
+  color: #94A3B8;
+  font-size: 0.75rem;
+}
+
+.metric-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 1.1rem 1.2rem;
+  box-shadow: 0 8px 24px rgba(17, 24, 39, 0.05);
+  min-height: 130px;
+}
+
+.metric-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  font-weight: 800;
+  margin-bottom: 0.75rem;
+}
+
+.metric-card.tone-pink .metric-icon { background: #FCE7F3; color: #DB2777; }
+.metric-card.tone-purple .metric-icon { background: #F3E8FF; color: #9333EA; }
+.metric-card.tone-violet .metric-icon { background: #EDE9FE; color: #7C3AED; }
+.metric-card.tone-blue .metric-icon { background: #DBEAFE; color: #2563EB; }
+.metric-card.tone-green .metric-icon { background: #DCFCE7; color: #16A34A; }
+
+.metric-label {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.metric-value {
+  color: var(--text);
+  font-size: 1.7rem;
+  font-weight: 800;
+  margin-top: 0.15rem;
+}
+
+.metric-note {
+  color: #94A3B8;
+  font-size: 0.74rem;
+  margin-top: 0.35rem;
+}
+
+.empty-state {
+  background: var(--card);
+  border: 1px dashed var(--border);
+  border-radius: 16px;
+  padding: 2rem;
+  text-align: center;
+}
+
+.empty-title {
+  color: var(--text);
+  font-weight: 800;
+  font-size: 1rem;
+}
+
+.empty-message {
+  color: var(--muted);
+  margin-top: 0.35rem;
+  font-size: 0.9rem;
+}
+
+.login-shell {
+  display: flex;
+  justify-content: center;
+  margin-top: 2rem;
+}
+
+.login-card {
+  background: white;
+  border-radius: 16px;
+  padding: 1.5rem;
+  box-shadow: 0 8px 24px rgba(17,24,39,0.08);
+}
+
+.login-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.login-title {
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.login-subtitle {
+  color: var(--primary);
+  font-weight: 700;
+}
+
+.stButton > button[kind="primary"] {
+  background: linear-gradient(135deg, #8B5CF6, #6D28D9) !important;
+  border: none !important;
+  border-radius: 12px !important;
+  font-weight: 700 !important;
+}
+
+div[data-testid="stMetric"] {
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 0.75rem 1rem;
+}
+
+@media (max-width: 900px) {
+  .block-container {
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+  }
+}

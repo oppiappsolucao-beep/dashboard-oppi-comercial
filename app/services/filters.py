@@ -107,3 +107,30 @@ def apply_dashboard_filters(
         filtered_df = apply_period_filter(filtered_df, "_data_chamado", period)
 
     return filtered_df
+
+
+def parse_dashboard_filters(request, form: dict | None = None) -> DashboardFilters:
+    data = form or {}
+    period_start = data.get("period_start") or request.query_params.get("period_start")
+    period_end = data.get("period_end") or request.query_params.get("period_end")
+
+    def to_date(value):
+        if not value:
+            return None
+        if isinstance(value, date):
+            return value
+        try:
+            return date.fromisoformat(str(value))
+        except ValueError:
+            return None
+
+    return DashboardFilters(
+        seller=data.get("seller") or request.query_params.get("seller", "Todos os vendedores"),
+        status=data.get("status") or request.query_params.get("status", "Todos os status"),
+        period_start=to_date(period_start),
+        period_end=to_date(period_end),
+        niche=data.get("niche") or request.query_params.get("niche", "Todos os nichos"),
+        state=data.get("state") or request.query_params.get("state", "Todos os estados"),
+        search=data.get("search") or request.query_params.get("search", ""),
+        selected_card_status=data.get("selected_card_status") or request.query_params.get("selected_card_status"),
+    )

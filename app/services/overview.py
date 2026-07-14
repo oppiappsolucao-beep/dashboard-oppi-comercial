@@ -22,6 +22,22 @@ FUNNEL_STAGES = [
     ("Fechado", ["Fechado"]),
 ]
 
+FUNNEL_PAGE_STAGES = [
+    ("Novo Lead", ["Novo Lead"]),
+    ("Primeiro Contato", ["Chamado Whats", "Ligação - Conversando Whats"]),
+    ("Qualificação", ["Conversando"]),
+    ("Reunião", ["Reunião"]),
+    ("Proposta Enviada", ["Proposta"]),
+    ("Fechado", ["Fechado"]),
+]
+
+FUNNEL_PAGE_ACTIONS = [
+    ("Leads para retornar hoje", ["Retornar", "Ligação retornar"], "action-purple"),
+    ("Propostas aguardando resposta", ["Proposta"], "action-pink"),
+    ("Reuniões agendadas", ["Reunião"], "action-indigo"),
+    ("Contatos sem follow-up", ["Sem Resposta"], "action-green"),
+]
+
 ACTION_STATUS_MAP = [
     ("Retornar contatos hoje", ["Retornar", "Ligação retornar"], "action-purple"),
     ("Responder propostas", ["Proposta"], "action-pink"),
@@ -52,13 +68,22 @@ def build_kpi_cards(filtered_df: pd.DataFrame) -> list[dict]:
     ]
 
 
-def build_funnel_steps(filtered_df: pd.DataFrame) -> list[dict]:
-    counts = [_count_statuses(filtered_df, statuses) for _, statuses in FUNNEL_STAGES]
+def build_action_items(filtered_df: pd.DataFrame) -> list[dict]:
+    items = []
+    for label, statuses, tone in ACTION_STATUS_MAP:
+        count = _count_statuses(filtered_df, statuses)
+        if count:
+            items.append({"label": label, "count": count, "tone": tone})
+    return items[:5]
+
+
+def _build_steps_from_stages(filtered_df: pd.DataFrame, stages: list) -> list[dict]:
+    counts = [_count_statuses(filtered_df, statuses) for _, statuses in stages]
     max_count = max(counts) or 1
     steps = []
 
-    for index, ((name, _), count) in enumerate(zip(FUNNEL_STAGES, counts)):
-        width = max(34, round((count / max_count) * 100))
+    for index, ((name, _), count) in enumerate(zip(stages, counts)):
+        width = max(28, round((count / max_count) * 100))
         conversion = None
         if index < len(counts) - 1 and counts[index] > 0:
             conversion = round((counts[index + 1] / counts[index]) * 100)
@@ -72,13 +97,44 @@ def build_funnel_steps(filtered_df: pd.DataFrame) -> list[dict]:
     return steps
 
 
-def build_action_items(filtered_df: pd.DataFrame) -> list[dict]:
+def build_funnel_page_kpi_cards(filtered_df: pd.DataFrame) -> list[dict]:
+    tones = ["pink", "purple", "violet", "indigo", "green"]
+    icons = ["✦", "☎", "◉", "▤", "✓"]
+    labels = ["Novos Leads", "Primeiro Contato", "Reuniões", "Propostas", "Fechados"]
+    status_groups = [
+        ["Novo Lead"],
+        ["Chamado Whats", "Ligação - Conversando Whats"],
+        ["Reunião"],
+        ["Proposta"],
+        ["Fechado"],
+    ]
+    cards = []
+    for label, statuses, tone, icon in zip(labels, status_groups, tones, icons):
+        cards.append({
+            "label": label,
+            "value": _count_statuses(filtered_df, statuses),
+            "note": "no período filtrado",
+            "icon": icon,
+            "tone": tone,
+        })
+    return cards
+
+
+def build_funnel_page_steps(filtered_df: pd.DataFrame) -> list[dict]:
+    return _build_steps_from_stages(filtered_df, FUNNEL_PAGE_STAGES)
+
+
+def build_funnel_page_actions(filtered_df: pd.DataFrame) -> list[dict]:
     items = []
-    for label, statuses, tone in ACTION_STATUS_MAP:
+    for label, statuses, tone in FUNNEL_PAGE_ACTIONS:
         count = _count_statuses(filtered_df, statuses)
         if count:
             items.append({"label": label, "count": count, "tone": tone})
-    return items[:5]
+    return items
+
+
+def build_funnel_steps(filtered_df: pd.DataFrame) -> list[dict]:
+    return _build_steps_from_stages(filtered_df, FUNNEL_STAGES)
 
 
 def compute_overview_metrics(filtered_df: pd.DataFrame) -> dict:

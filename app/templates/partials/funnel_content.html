@@ -1,0 +1,168 @@
+<form id="funnel-filters"
+  hx-post="/funil-de-vendas/filtros"
+  hx-target="#funnel-root"
+  hx-swap="innerHTML"
+>
+  <div class="toolbar-card">
+    <div class="filters-row filters-row-main">
+      <div class="filter-field filter-field-sm">
+        <label>Vendedor</label>
+        <select name="seller" onchange="document.getElementById('funnel-filters').requestSubmit()">
+          <option value="Todos os vendedores">Todos os vendedores</option>
+          {% for seller in options.seller_options %}
+          <option value="{{ seller }}" {% if filters.seller == seller %}selected{% endif %}>{{ seller }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="filter-field filter-field-sm">
+        <label>Status</label>
+        <select name="status" onchange="document.getElementById('funnel-filters').requestSubmit()">
+          <option value="Todos os status">Todos os status</option>
+          {% for status in options.status_options %}
+          <option value="{{ status }}" {% if filters.status == status %}selected{% endif %}>{{ status }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="filter-field filter-field-sm">
+        <label>Período início</label>
+        <input type="date" name="period_start" value="{{ filters.period_start }}" onchange="document.getElementById('funnel-filters').requestSubmit()">
+      </div>
+      <div class="filter-field filter-field-sm">
+        <label>Período fim</label>
+        <input type="date" name="period_end" value="{{ filters.period_end }}" onchange="document.getElementById('funnel-filters').requestSubmit()">
+      </div>
+      <div class="filter-field filter-field-sm">
+        <label>Nichos</label>
+        <select name="niche" onchange="document.getElementById('funnel-filters').requestSubmit()">
+          <option value="Todos os nichos">Todos os nichos</option>
+          {% for niche in options.niche_options %}
+          <option value="{{ niche }}" {% if filters.niche == niche %}selected{% endif %}>{{ niche }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="filter-field filter-field-sm">
+        <label>Estados</label>
+        <select name="state" onchange="document.getElementById('funnel-filters').requestSubmit()">
+          <option value="Todos os estados">Todos os estados</option>
+          {% for state in options.state_options %}
+          <option value="{{ state }}" {% if filters.state == state %}selected{% endif %}>{{ state }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    <div class="filters-row filters-row-search">
+      <div class="filter-field filter-field-search">
+        <label>Buscar</label>
+        <div class="search-wrap">
+          <span class="search-icon">⌕</span>
+          <input type="text" name="search" value="{{ filters.search }}" placeholder="Buscar empresas, leads ou negócios..."
+            hx-trigger="keyup changed delay:400ms" hx-post="/funil-de-vendas/filtros" hx-target="#funnel-root" hx-swap="innerHTML">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="metric-grid metric-grid-funnel">
+    {% for card in kpi_cards %}
+    <div class="metric-card">
+      <div class="metric-top">
+        <div class="metric-icon tone-{{ card.tone }}">{{ card.icon }}</div>
+      </div>
+      <div class="metric-label">{{ card.label }}</div>
+      <div class="metric-value">{{ card.value }}</div>
+      <div class="metric-note">{{ card.note }}</div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="overview-grid">
+    <div class="funnel-card panel funnel-page-chart">
+      <div class="section-heading">Funil de Vendas</div>
+      <div class="section-subtitle">Etapas do pipeline comercial.</div>
+      <div class="funnel-horizontal">
+        {% for step in funnel_steps %}
+        <div class="funnel-horizontal-row">
+          <div class="funnel-horizontal-bar level-{{ step.level }}" style="width: {{ step.width }}%;">
+            <span>{{ step.name }}</span>
+            <strong>{{ step.count }}</strong>
+          </div>
+          {% if step.conversion is not none %}
+          <div class="funnel-horizontal-rate">{{ step.conversion }}%</div>
+          {% else %}
+          <div class="funnel-horizontal-rate muted">—</div>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="actions-card panel">
+      <div class="section-heading">Ações Prioritárias</div>
+      <div class="section-subtitle">Próximos passos sugeridos.</div>
+      <div class="action-list">
+        {% for item in action_items %}
+        <div class="action-item">
+          <div class="action-item-left">
+            <span class="action-dot {{ item.tone }}"></span>
+            <span class="action-label">{{ item.label }}</span>
+          </div>
+          <span class="action-count">{{ item.count }}</span>
+        </div>
+        {% else %}
+        <div class="action-item">
+          <div class="action-item-left">
+            <span class="action-dot action-green"></span>
+            <span class="action-label">Nenhuma ação pendente no filtro atual</span>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <div class="panel-card panel">
+    <div class="section-heading">Oportunidades quentes</div>
+    <div class="section-subtitle">Empresas com maior potencial de fechamento.</div>
+
+    {% if calls_table %}
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Empresa</th>
+          <th>Etapa</th>
+          <th>Responsável</th>
+          <th>Contato</th>
+          <th>Próxima ação</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in calls_table %}
+        <tr>
+          <td>
+            <div class="table-company">
+              <span class="table-company-icon">{{ row.empresa[:2] | upper }}</span>
+              <span>{{ row.empresa }}</span>
+            </div>
+          </td>
+          <td>
+            <span class="stage-badge {% if row.etapa == 'Proposta' %}proposta{% elif row.etapa == 'Fechado' %}fechado{% elif row.etapa == 'Reunião' %}reuniao{% elif row.etapa == 'Qualificação' %}qualificacao{% elif row.etapa == 'Novo Lead' %}novo-lead{% endif %}">
+              {{ row.etapa }}
+            </span>
+          </td>
+          <td>{{ row.vendedor }}</td>
+          <td>{{ row.telefone }}</td>
+          <td>{{ row.data_chamado }}</td>
+          <td class="table-actions">
+            <a href="/cadastro/todos/{{ row.sheet_row }}" class="btn btn-small btn-secondary">Ver</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <a href="/cadastro/todos" class="panel-footer-link">Ver todas as oportunidades →</a>
+    {% else %}
+    <p class="empty-note">Nenhuma oportunidade encontrada com os filtros atuais.</p>
+    {% endif %}
+  </div>
+</form>

@@ -4,7 +4,12 @@ from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from app.dependencies import get_prepared_data, require_auth
 from app.templating import render
-from app.services.filters import DashboardFilters, apply_dashboard_filters, get_filter_options
+from app.services.filters import (
+    DashboardFilters,
+    apply_dashboard_filters,
+    get_filter_options,
+    parse_dashboard_filters,
+)
 from app.services.legacy_core import invalidate_sheet_cache
 from app.services.overview import (
     build_action_items,
@@ -18,33 +23,6 @@ from app.services.overview import (
 )
 
 router = APIRouter()
-
-
-def _parse_filters(request: Request, form: dict | None = None) -> DashboardFilters:
-    data = form or {}
-    period_start = data.get("period_start") or request.query_params.get("period_start")
-    period_end = data.get("period_end") or request.query_params.get("period_end")
-
-    def to_date(value):
-        if not value:
-            return None
-        if isinstance(value, date):
-            return value
-        try:
-            return date.fromisoformat(str(value))
-        except ValueError:
-            return None
-
-    return DashboardFilters(
-        seller=data.get("seller") or request.query_params.get("seller", "Todos os vendedores"),
-        status=data.get("status") or request.query_params.get("status", "Todos os status"),
-        period_start=to_date(period_start),
-        period_end=to_date(period_end),
-        niche=data.get("niche") or request.query_params.get("niche", "Todos os nichos"),
-        state=data.get("state") or request.query_params.get("state", "Todos os estados"),
-        search=data.get("search") or request.query_params.get("search", ""),
-        selected_card_status=data.get("selected_card_status") or request.query_params.get("selected_card_status"),
-    )
 
 
 def _overview_context(request: Request, filters: DashboardFilters, success: str = ""):
@@ -87,7 +65,7 @@ async def overview_page(request: Request):
     redirect = require_auth(request)
     if redirect:
         return redirect
-    filters = _parse_filters(request)
+    filters = parse_dashboard_filters(request)
     return render(request, "overview.html", _overview_context(request, filters))
 
 
@@ -107,7 +85,7 @@ async def overview_filters(
     if redirect:
         return redirect
 
-    filters = _parse_filters(request, {
+    filters = parse_dashboard_filters(request, {
         "seller": seller, "status": status,
         "period_start": period_start, "period_end": period_end,
         "niche": niche, "state": state, "search": search,
