@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block content %}
+<link rel="stylesheet" href="/static/css/proposals.css?v=1">
+<div class="page-header">
+  <div>
+    <div class="page-title">Propostas</div>
+    <div class="page-subtitle">Gerencie propostas comerciais e conte com o agente de IA para gerar PDFs prontos pelo chat.</div>
+  </div>
+  <div class="page-actions">
+    <form method="post" action="/propostas/atualizar">
+      <button type="submit" class="btn btn-secondary">⛃ Filtros</button>
+    </form>
+    <a href="/pesos-medidas" class="btn">＋ Nova proposta</a>
+  </div>
+</div>
+
+<div id="proposals-root">
+  {% include "partials/proposals_content.html" %}
+</div>
+{% endblock %}

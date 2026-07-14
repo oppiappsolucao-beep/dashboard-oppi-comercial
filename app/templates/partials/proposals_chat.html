@@ -1,0 +1,23 @@
+<div class="proposals-chat-header">
+  <div>
+    <div class="proposals-chat-title">✦ Agente de IA para Propostas</div>
+    <div class="proposals-chat-status">● Online</div>
+  </div>
+  <form method="post" action="/propostas/chat/reset">
+    <button type="submit" class="btn btn-secondary btn-small">Reiniciar</button>
+  </form>
+</div>
+
+<div class="proposals-chat-body" id="proposals-messages">
+  {{ chat_messages_html | safe }}
+</div>
+
+<form
+  class="proposals-chat-input"
+  hx-post="/propostas/chat"
+  hx-target="#proposals-chat-panel"
+  hx-swap="innerHTML"
+>
+  <input type="text" name="message" placeholder="Descreva a proposta que deseja gerar..." required autocomplete="off">
+  <button type="submit" class="btn proposals-send-btn" aria-label="Enviar">➤</button>
+</form>

@@ -1,0 +1,172 @@
+<form id="proposals-filters"
+  hx-post="/propostas/filtros"
+  hx-target="#proposals-root"
+  hx-swap="innerHTML"
+>
+  <input type="hidden" name="page" value="{{ table.page }}" id="proposals-page-input">
+
+  <div class="funnel-kpi-grid proposals-kpi-grid">
+    {% for card in kpi_cards %}
+    <div class="funnel-kpi-card panel">
+      <div class="funnel-kpi-icon tone-{{ card.tone }}">{{ card.icon }}</div>
+      <div class="funnel-kpi-body">
+        <div class="funnel-kpi-label">{{ card.label }}</div>
+        <div class="funnel-kpi-value">{{ card.value }}</div>
+        <div class="funnel-kpi-trend {% if card.trend_flat %}flat{% elif card.trend_up %}up{% else %}down{% endif %}">
+          {% if card.trend_flat %}→{% elif card.trend_up %}↑{% else %}↓{% endif %}
+          {{ card.trend_pct }}% vs mês anterior
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="proposals-layout">
+    <div class="proposals-main panel-card panel">
+      <div class="proposals-table-header">
+        <div class="section-heading">Todas as propostas</div>
+        <div class="proposals-table-controls">
+          <select name="status_filter" onchange="document.getElementById('proposals-page-input').value='1'; document.getElementById('proposals-filters').requestSubmit();">
+            {% for option in status_options %}
+            <option value="{{ option }}" {% if proposals_params.status_filter == option %}selected{% endif %}>{{ option }}</option>
+            {% endfor %}
+          </select>
+          <div class="activities-date-range">
+            <span class="activities-date-icon">📅</span>
+            <input type="date" name="period_start" value="{{ filters.period_start }}"
+              onchange="document.getElementById('proposals-page-input').value='1'; document.getElementById('proposals-filters').requestSubmit();">
+            <span class="activities-date-sep">—</span>
+            <input type="date" name="period_end" value="{{ filters.period_end }}"
+              onchange="document.getElementById('proposals-page-input').value='1'; document.getElementById('proposals-filters').requestSubmit();">
+          </div>
+        </div>
+      </div>
+
+      {% if table.rows %}
+      <table class="data-table proposals-table">
+        <thead>
+          <tr>
+            <th>Código</th>
+            <th>Empresa</th>
+            <th>Responsável</th>
+            <th>Valor</th>
+            <th>Status</th>
+            <th>Vencimento</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in table.rows %}
+          <tr>
+            <td class="proposal-code">{{ row.code }}</td>
+            <td>
+              <div class="table-company">
+                <span class="table-company-icon">{{ row.empresa_initials }}</span>
+                <div class="table-company-name">{{ row.empresa }}</div>
+              </div>
+            </td>
+            <td>
+              <div class="owner-cell">
+                <span class="owner-avatar">{{ row.vendedor_initials }}</span>
+                <span>{{ row.vendedor }}</span>
+              </div>
+            </td>
+            <td class="value-cell">{{ row.valor }}</td>
+            <td>
+              <span class="proposal-status-badge {{ row.status_class }}">{{ row.status_label }}</span>
+            </td>
+            <td>{{ row.vencimento }}</td>
+            <td class="table-actions">
+              {% if row.sheet_row %}
+              <a href="/cadastro/todos/{{ row.sheet_row }}" class="table-menu-btn" title="Ver cadastro">⋯</a>
+              {% else %}
+              <span class="table-menu-btn muted">⋯</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+      <div class="activities-pagination">
+        <div class="activities-pagination-info">
+          Mostrando {{ table.from_record }} a {{ table.to_record }} de {{ table.total }} propostas
+        </div>
+        <div class="activities-pagination-controls">
+          {% if table.page > 1 %}
+          <button type="button" class="page-btn"
+            onclick="document.getElementById('proposals-page-input').value='{{ table.page - 1 }}'; document.getElementById('proposals-filters').requestSubmit();">‹</button>
+          {% endif %}
+          {% for p in range(1, table.total_pages + 1) %}
+            {% if p == table.page %}
+            <span class="page-btn active">{{ p }}</span>
+            {% elif p <= 3 or p > table.total_pages - 1 or (p >= table.page - 1 and p <= table.page + 1) %}
+            <button type="button" class="page-btn"
+              onclick="document.getElementById('proposals-page-input').value='{{ p }}'; document.getElementById('proposals-filters').requestSubmit();">{{ p }}</button>
+            {% elif p == 4 and table.page > 5 %}
+            <span class="page-ellipsis">…</span>
+            {% endif %}
+          {% endfor %}
+          {% if table.page < table.total_pages %}
+          <button type="button" class="page-btn"
+            onclick="document.getElementById('proposals-page-input').value='{{ table.page + 1 }}'; document.getElementById('proposals-filters').requestSubmit();">›</button>
+          {% endif %}
+        </div>
+        <div class="activities-per-page">
+          <label>Registros por página:</label>
+          <select name="per_page" onchange="document.getElementById('proposals-page-input').value='1'; document.getElementById('proposals-filters').requestSubmit();">
+            {% for size in [10, 25, 50] %}
+            <option value="{{ size }}" {% if table.per_page == size %}selected{% endif %}>{{ size }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      {% else %}
+      <div class="proposals-empty">
+        Nenhuma proposta encontrada para os filtros selecionados.
+      </div>
+      {% endif %}
+    </div>
+
+    <aside class="proposals-chat-panel panel-card panel" id="proposals-chat-panel">
+      {% include "partials/proposals_chat.html" %}
+    </aside>
+  </div>
+
+  <div class="proposals-workflow panel-card panel">
+    <div class="section-heading">Fluxo de geração</div>
+    <div class="proposals-workflow-steps">
+      <div class="proposals-workflow-step">
+        <div class="proposals-workflow-icon tone-purple">💬</div>
+        <div>
+          <div class="proposals-workflow-title">Recebe os dados pelo chat</div>
+          <div class="proposals-workflow-desc">Informe empresa, serviços e valor desejado.</div>
+        </div>
+      </div>
+      <div class="proposals-workflow-arrow">→</div>
+      <div class="proposals-workflow-step">
+        <div class="proposals-workflow-icon tone-blue">📋</div>
+        <div>
+          <div class="proposals-workflow-title">Monta a proposta automaticamente</div>
+          <div class="proposals-workflow-desc">A IA organiza os dados em formato comercial.</div>
+        </div>
+      </div>
+      <div class="proposals-workflow-arrow">→</div>
+      <div class="proposals-workflow-step">
+        <div class="proposals-workflow-icon tone-pink">📄</div>
+        <div>
+          <div class="proposals-workflow-title">Gera o PDF pronto</div>
+          <div class="proposals-workflow-desc">Documento profissional pronto para envio.</div>
+        </div>
+      </div>
+      <div class="proposals-workflow-arrow">→</div>
+      <div class="proposals-workflow-step">
+        <div class="proposals-workflow-icon tone-green">📱</div>
+        <div>
+          <div class="proposals-workflow-title">Envia para o cliente</div>
+          <div class="proposals-workflow-desc">Compartilhe via WhatsApp, e-mail ou download.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</form>

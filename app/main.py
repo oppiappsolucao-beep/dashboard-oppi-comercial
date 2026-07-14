@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import settings
-from app.routers import auth, activities, contracts, funnel, leads, overview, pricing, registration
+from app.routers import auth, activities, contracts, funnel, leads, overview, pricing, proposals, registration
 from app.templating import render
 
 app = FastAPI(title="Dashboard Oppi Comercial")
@@ -26,6 +26,7 @@ app.include_router(auth.router)
 app.include_router(overview.router)
 app.include_router(funnel.router)
 app.include_router(activities.router)
+app.include_router(proposals.router)
 app.include_router(leads.router)
 app.include_router(registration.router)
 app.include_router(contracts.router)
@@ -43,6 +44,14 @@ from app.routers.activities import activities_filters, activities_page, activiti
 app.add_api_route("/atividades", activities_page, methods=["GET"], tags=["activities"])
 app.add_api_route("/atividades/filtros", activities_filters, methods=["POST"], tags=["activities"])
 app.add_api_route("/atividades/atualizar", activities_refresh, methods=["POST"], tags=["activities"])
+
+from app.routers.proposals import proposals_chat, proposals_chat_reset, proposals_filters, proposals_page, proposals_refresh  # noqa: E402
+
+app.add_api_route("/propostas", proposals_page, methods=["GET"], tags=["proposals"])
+app.add_api_route("/propostas/filtros", proposals_filters, methods=["POST"], tags=["proposals"])
+app.add_api_route("/propostas/chat", proposals_chat, methods=["POST"], tags=["proposals"])
+app.add_api_route("/propostas/atualizar", proposals_refresh, methods=["POST"], tags=["proposals"])
+app.add_api_route("/propostas/chat/reset", proposals_chat_reset, methods=["POST"], tags=["proposals"])
 
 
 @app.get("/health")
