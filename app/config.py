@@ -4,7 +4,6 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-# Carrega variáveis do arquivo .env na raiz do projeto (desenvolvimento local).
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 
@@ -16,7 +15,6 @@ class Settings:
     app_username: str
     app_password: str
     session_secret: str
-
     gcp_service_account_b64: str = ""
 
     scopes: list[str] = [
@@ -29,27 +27,19 @@ class Settings:
         self.app_password = os.getenv("APP_PASSWORD", "").strip()
         self.session_secret = os.getenv("SESSION_SECRET", "").strip()
         if not self.session_secret and self.app_password:
-            # Compatível com deploys migrados do Streamlit sem SESSION_SECRET.
             self.session_secret = self.app_password
         self.gcp_service_account_b64 = (
             os.getenv("GCP_SERVICE_ACCOUNT_B64", "").strip()
             or os.getenv("GOOGLE_SERVICE_ACCOUNT_B64", "").strip()
         )
 
-        missing = []
-        if not self.app_username:
-            missing.append("APP_USERNAME")
-        if not self.app_password:
-            missing.append("APP_PASSWORD")
-        if not self.session_secret:
-            missing.append("SESSION_SECRET")
-        if not self.gcp_service_account_b64 and not self._has_separate_google_env():
-            missing.append("GCP_SERVICE_ACCOUNT_B64")
+    @property
+    def auth_configured(self) -> bool:
+        return bool(self.app_username and self.app_password and self.session_secret)
 
-        if missing:
-            raise RuntimeError(
-                "Variáveis de ambiente obrigatórias ausentes: " + ", ".join(missing)
-            )
+    @property
+    def sheets_configured(self) -> bool:
+        return bool(self.gcp_service_account_b64) or self._has_separate_google_env()
 
     def _has_separate_google_env(self) -> bool:
         required = [
@@ -66,9 +56,7 @@ class Settings:
         cert = os.getenv("GOOGLE_CLIENT_X509_CERT_URL", "") or os.getenv(
             "_CLIENT_X509_CERT_URL", ""
         )
-        return all(os.getenv(key, "").strip() for key in required) and bool(
-            cert.strip()
-        )
+        return all(os.getenv(key, "").strip() for key in required) and bool(cert.strip())
 
 
 @lru_cache

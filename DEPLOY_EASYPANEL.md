@@ -1,52 +1,45 @@
-# Deploy no Easypanel — checklist
+# Deploy no Easypanel — Dashboard Oppi Comercial (FastAPI)
 
-## 1. Fonte
-- Repositório: `oppiappsolucao-beep/dashboard-oppi-comercial`
-- Branch: `main`
-- Build: **Dockerfile**
+## Porta interna
+**8501**
 
-## 2. Porta (IMPORTANTE)
-- **Porta interna do serviço:** `8501`
-- Deve ser a mesma que o app escuta (`PORT=8501`)
-
-## 3. Comando de início
-Deixe **VAZIO** (usa o Dockerfile).
-
-**Não use:**
-```
-uvicorn app.main:app ...
-streamlit run app.py ...   # se já usa Dockerfile
-sh start.sh                # opcional, Dockerfile já inicia
+## Comando de início
+Deixe **VAZIO** (usa Dockerfile) ou:
+```bash
+uvicorn app.main:app --host 0.0.0.0 --port 8501 --proxy-headers
 ```
 
-## 4. Variáveis de ambiente
-| Variável | Obrigatório | Exemplo |
-|----------|-------------|---------|
-| APP_SECRET_KEY | Sim | chave-longa-aleatoria |
-| DATABASE_URL | Não | vazio = SQLite no container |
-| PORT | Não | 8501 (Easypanel pode definir) |
+**NÃO use** `streamlit run app.py` neste deploy.
 
-Remova variáveis antigas do FastAPI:
-- APP_USERNAME
-- APP_PASSWORD
-- SESSION_SECRET
-- GCP_SERVICE_ACCOUNT_B64 (só se não usar Sheets)
+## Variáveis OBRIGATÓRIAS no Easypanel
 
-## 5. Após deploy
-Acesse: **https://comercial.oppitech.com.br/** (sem `/visao-geral`)
+| Variável | Valor |
+|----------|--------|
+| APP_USERNAME | oppitech |
+| APP_PASSWORD | 100316* |
+| GCP_SERVICE_ACCOUNT_B64 | (sua credencial Google Sheets em base64) |
 
-Login (criado automaticamente na 1ª subida):
-- Usuário: `oppitech`
-- Senha: `100316*`
+Opcional:
+| SESSION_SECRET | chave forte (se vazio, usa APP_PASSWORD) |
 
-## 6. Se aparecer "Service is not reachable"
-1. Abra **Logs** do container no Easypanel
-2. Confirme a porta interna = **8501**
-3. Confirme que o build terminou sem erro
-4. Faça **Rebuild** sem cache
-5. Envie as últimas 30 linhas do log
+## URLs
+- https://comercial.oppitech.com.br/
+- https://comercial.oppitech.com.br/visao-geral
+- https://comercial.oppitech.com.br/funil-de-vendas
+- https://comercial.oppitech.com.br/login
 
-## 7. PostgreSQL (recomendado produção)
-```
-DATABASE_URL=postgresql+psycopg2://usuario:senha@host:5432/oppi_crm
-```
+## Login
+- Usuário: **oppitech**
+- Senha: **100316***
+
+## Após alterar variáveis
+1. Salvar variáveis
+2. **Rebuild** do serviço
+3. Aguardar status verde
+4. Testar `/health` → deve retornar `{"status":"ok"}`
+
+## Se "Service is not reachable"
+1. Porta interna = **8501**
+2. Comando de início vazio ou uvicorn (não streamlit)
+3. APP_USERNAME e APP_PASSWORD definidos
+4. Ver logs do container

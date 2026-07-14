@@ -14,7 +14,7 @@ app = FastAPI(title="Dashboard Oppi Comercial")
 
 app.add_middleware(
     SessionMiddleware,
-    secret_key=settings.session_secret,
+    secret_key=settings.session_secret or "defina-app-password-no-easypanel",
     session_cookie="oppi_session",
     max_age=60 * 60 * 24 * 7,
 )
