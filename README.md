@@ -67,12 +67,26 @@ Acesse: http://localhost:8000
 
 ## Deploy no Easypanel
 
-1. Crie um serviço **App** apontando para este repositório
-2. Use o `Dockerfile` do projeto
+1. Crie um serviço **App** apontando para este repositório (branch `main`)
+2. Use o `Dockerfile` do projeto (não use comando customizado de Streamlit)
 3. Configure as variáveis de ambiente listadas acima
-4. Porta interna: `8000` (antes era `8501` no Streamlit — atualize se necessário)
-5. Comando de start (se não usar Docker): `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
-6. `SESSION_SECRET` é recomendado; se ausente, usa `APP_PASSWORD` como fallback
+4. Em **Domínio e Proxy**, a porta alvo deve ser **`8501`** (padrão herdado do Streamlit) ou a definida em `PORT`
+5. Em **Deploy**, deixe **Comando** e **Argumentos** vazios (o `Dockerfile` inicia sozinho)
+6. Clique em **Implantar**
+
+### Se aparecer "Service is not reachable"
+
+1. **Logs** — procure erro de variável ausente ou `streamlit run app.py` (comando antigo)
+2. **Deploy → Comando** — apague qualquer comando customizado (ex.: `streamlit run app.py`)
+3. **Domínio e Proxy → Porta** — confira se é `8501` (ou a mesma de `PORT`)
+4. Teste `https://seu-dominio/health` — deve retornar `{"status":"ok"}`
+
+### Variáveis obrigatórias no Easypanel
+
+- `APP_USERNAME`, `APP_PASSWORD`
+- `GCP_SERVICE_ACCOUNT_B64` (ou variáveis `GOOGLE_*` separadas)
+- `SESSION_SECRET` (opcional — usa `APP_PASSWORD` como fallback)
+- `PORT` (injetada automaticamente pelo Easypanel)
 
 ## Estrutura
 

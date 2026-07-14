@@ -2,7 +2,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import HTTPException
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
@@ -28,6 +28,11 @@ app.include_router(overview.router)
 app.include_router(registration.router)
 app.include_router(contracts.router)
 app.include_router(pricing.router)
+
+
+@app.get("/health")
+async def health():
+    return JSONResponse({"status": "ok"})
 
 
 @app.get("/")
