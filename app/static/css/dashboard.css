@@ -316,6 +316,7 @@ a { color: inherit; text-decoration: none; }
 }
 
 .metric-icon.tone-pink { background: #FCE7F3; color: #DB2777; }
+.metric-icon.tone-orange { background: #FFEDD5; color: #EA580C; }
 .metric-icon.tone-purple { background: #F3E8FF; color: #9333EA; }
 .metric-icon.tone-violet { background: #EDE9FE; color: #7C3AED; }
 .metric-icon.tone-green { background: #DCFCE7; color: #16A34A; }

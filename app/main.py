@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import settings
-from app.routers import auth, contracts, funnel, overview, pricing, registration
+from app.routers import auth, contracts, funnel, leads, overview, pricing, registration
 from app.templating import render
 
 app = FastAPI(title="Dashboard Oppi Comercial")
@@ -25,6 +25,7 @@ app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 app.include_router(auth.router)
 app.include_router(overview.router)
 app.include_router(funnel.router)
+app.include_router(leads.router)
 app.include_router(registration.router)
 app.include_router(contracts.router)
 app.include_router(pricing.router)

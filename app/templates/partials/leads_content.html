@@ -1,0 +1,149 @@
+<form id="leads-filters"
+  hx-post="/leads-e-empresas/filtros"
+  hx-target="#leads-root"
+  hx-swap="innerHTML"
+>
+  <div class="toolbar-card leads-search-bar">
+    <div class="search-wrap leads-search-wrap">
+      <span class="search-icon">⌕</span>
+      <input type="text" name="search" value="{{ filters.search }}"
+        placeholder="Buscar por nome, empresa, telefone ou e-mail..."
+        hx-trigger="keyup changed delay:400ms"
+        hx-post="/leads-e-empresas/filtros"
+        hx-target="#leads-root"
+        hx-swap="innerHTML"
+        hx-include="#leads-filters">
+    </div>
+    <input type="hidden" name="tab" value="{{ leads_params.tab }}" id="leads-tab-input">
+    <input type="hidden" name="page" value="{{ table.page }}" id="leads-page-input">
+  </div>
+
+  <div class="metric-grid metric-grid-leads">
+    {% for card in kpi_cards %}
+    <div class="metric-card">
+      <div class="metric-top">
+        <div class="metric-icon tone-{{ card.tone }}">{{ card.icon }}</div>
+      </div>
+      <div class="metric-label">{{ card.label }}</div>
+      <div class="metric-value">{{ card.value }}</div>
+      <div class="metric-note">{{ card.note }}</div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="leads-toolbar">
+    <div class="leads-tabs">
+      {% for tab_id, tab_label in [('todos', 'Todos'), ('leads', 'Leads'), ('empresas', 'Empresas')] %}
+      <button type="button"
+        class="leads-tab {% if leads_params.tab == tab_id %}active{% endif %}"
+        onclick="document.getElementById('leads-tab-input').value='{{ tab_id }}'; document.getElementById('leads-page-input').value='1'; document.getElementById('leads-filters').requestSubmit();">
+        {{ tab_label }}
+      </button>
+      {% endfor %}
+    </div>
+    <div class="leads-toolbar-right">
+      <select name="stage" onchange="document.getElementById('leads-page-input').value='1'; document.getElementById('leads-filters').requestSubmit();">
+        {% for stage in stage_options %}
+        <option value="{{ stage }}" {% if leads_params.stage == stage %}selected{% endif %}>{{ stage }}</option>
+        {% endfor %}
+      </select>
+      <select name="sort" onchange="document.getElementById('leads-filters').requestSubmit();">
+        <option value="recent" {% if leads_params.sort == 'recent' %}selected{% endif %}>Ordenar: Mais recentes</option>
+        <option value="name" {% if leads_params.sort == 'name' %}selected{% endif %}>Ordenar: Nome</option>
+        <option value="value" {% if leads_params.sort == 'value' %}selected{% endif %}>Ordenar: Maior valor</option>
+      </select>
+      <span class="leads-count">{{ table.total }} registros encontrados</span>
+    </div>
+  </div>
+
+  <div class="panel-card panel leads-table-card">
+    {% if table.rows %}
+    <table class="data-table leads-table">
+      <thead>
+        <tr>
+          <th>Nome / Empresa</th>
+          <th>Contato</th>
+          <th>Etapa atual</th>
+          <th>Responsável</th>
+          <th>Último contato</th>
+          <th>Próxima ação</th>
+          <th>Valor estimado</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in table.rows %}
+        <tr>
+          <td>
+            <div class="table-company">
+              <span class="table-company-icon">{{ row.empresa_initials }}</span>
+              <div>
+                <div class="table-company-name">{{ row.empresa }}</div>
+                <div class="table-company-meta">{{ row.nicho }}</div>
+              </div>
+            </div>
+          </td>
+          <td>
+            <div class="contact-cell">
+              <div>{{ row.telefone }}</div>
+              <div class="contact-email">{{ row.email }}</div>
+            </div>
+          </td>
+          <td>
+            <span class="stage-badge {{ row.etapa_class }}">{{ row.etapa }}</span>
+          </td>
+          <td>
+            <div class="owner-cell">
+              <span class="owner-avatar">{{ row.vendedor_initials }}</span>
+              <span>{{ row.vendedor }}</span>
+            </div>
+          </td>
+          <td>{{ row.ultimo_contato }}</td>
+          <td>
+            <div class="next-action-cell">
+              <span class="next-action-icon">📞</span>
+              <span>{{ row.proxima_acao }}</span>
+            </div>
+          </td>
+          <td class="value-cell">{{ row.valor }}</td>
+          <td class="table-actions">
+            {% if row.sheet_row %}
+            <a href="/cadastro/todos/{{ row.sheet_row }}" class="btn btn-small btn-secondary">Ver</a>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <div class="leads-pagination">
+      <div class="leads-pagination-info">
+        Mostrando {{ table.from_record }} a {{ table.to_record }} de {{ table.total }} registros
+      </div>
+      <div class="leads-pagination-pages">
+        {% if table.page > 1 %}
+        <button type="button" class="page-btn"
+          onclick="document.getElementById('leads-page-input').value='{{ table.page - 1 }}'; document.getElementById('leads-filters').requestSubmit();">‹</button>
+        {% endif %}
+        <span class="page-current">Página {{ table.page }} de {{ table.total_pages }}</span>
+        {% if table.page < table.total_pages %}
+        <button type="button" class="page-btn"
+          onclick="document.getElementById('leads-page-input').value='{{ table.page + 1 }}'; document.getElementById('leads-filters').requestSubmit();">›</button>
+        {% endif %}
+      </div>
+      <div class="leads-per-page">
+        <label>Registros por página:</label>
+        <select name="per_page" onchange="document.getElementById('leads-page-input').value='1'; document.getElementById('leads-filters').requestSubmit();">
+          <option value="10" {% if table.per_page == 10 %}selected{% endif %}>10</option>
+          <option value="25" {% if table.per_page == 25 %}selected{% endif %}>25</option>
+          <option value="50" {% if table.per_page == 50 %}selected{% endif %}>50</option>
+        </select>
+      </div>
+    </div>
+    {% else %}
+    <div class="empty-note leads-empty">
+      Nenhum lead ou empresa encontrado com os filtros atuais.
+    </div>
+    {% endif %}
+  </div>
+</form>
