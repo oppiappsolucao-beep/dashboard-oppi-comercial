@@ -1,4 +1,10 @@
-streamlit
+fastapi
+uvicorn[standard]
+jinja2
+python-multipart
+python-dotenv
+itsdangerous
+cachetools
 pandas
 plotly
 gspread

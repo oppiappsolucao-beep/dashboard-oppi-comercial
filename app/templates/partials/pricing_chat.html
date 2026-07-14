@@ -1,0 +1,33 @@
+<div class="pricing-chat-header">
+  <div>
+    <div style="font-weight:900;">{{ selected_company }}</div>
+    <div style="font-size:0.78rem;color:#289B50;font-weight:800;">● online</div>
+  </div>
+  <div style="display:flex;gap:8px;">
+    <form method="post" action="/pesos-medidas/{{ selected_company | urlencode }}/reset">
+      <button type="submit" class="btn btn-secondary btn-small">Reiniciar</button>
+    </form>
+    <a href="/pesos-medidas/{{ selected_company | urlencode }}/pdf" class="btn btn-small">Gerar PDF</a>
+  </div>
+</div>
+
+<div class="pricing-chat-body" id="pricing-messages">
+  {{ messages_html | safe }}
+</div>
+
+<div class="pricing-progress">
+  <div style="font-size:0.75rem;font-weight:800;margin-bottom:6px;">Progresso: {{ progress.current }}/{{ progress.total }}</div>
+  <div class="pricing-progress-bar">
+    <div class="pricing-progress-fill" style="width:{{ progress.percent }}%"></div>
+  </div>
+</div>
+
+<form
+  class="pricing-input-row"
+  hx-post="/pesos-medidas/{{ selected_company | urlencode }}/mensagem"
+  hx-target="#pricing-chat-panel"
+  hx-swap="innerHTML"
+>
+  <input type="text" name="message" placeholder="Digite sua resposta..." required autocomplete="off">
+  <button type="submit" class="btn">Enviar</button>
+</form>

@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="registration-header-card">
+  <div class="registration-kicker">OPPI COMERCIAL • EDITAR CADASTRO</div>
+  <div class="registration-title">Editar {{ values.empresa }}</div>
+</div>
+
+{% if error %}<div class="alert-error">{{ error }}</div>{% endif %}
+
+<form method="post" action="/cadastro/todos/{{ sheet_row }}/editar" class="form-card">
+  <div class="form-grid">
+    <div class="form-group"><label>Nome da empresa</label><input name="empresa" value="{{ values.empresa }}"></div>
+    <div class="form-group"><label>Data de abertura</label><input name="data_abertura" value="{{ values.data_abertura }}"></div>
+    <div class="form-group"><label>CNPJ</label><input name="cnpj" value="{{ values.cnpj }}"></div>
+    <div class="form-group"><label>Capital social</label><input name="capital" value="{{ values.capital }}"></div>
+    <div class="form-group full"><label>Endereço</label><input name="endereco" value="{{ values.endereco }}"></div>
+    <div class="form-group"><label>E-mail</label><input name="email" value="{{ values.email }}"></div>
+    <div class="form-group"><label>Site</label><input name="site" value="{{ values.site }}"></div>
+    <div class="form-group"><label>Telefone B2B</label><input name="telefone_b2b" value="{{ values.telefone_b2b }}"></div>
+    <div class="form-group"><label>Telefone fixo</label><input name="telefone_fixo" value="{{ values.telefone_fixo }}"></div>
+    <div class="form-group"><label>Telefone alternativo</label><input name="telefone_alternativo" value="{{ values.telefone_alternativo }}"></div>
+    <div class="form-group"><label>Sócio 1</label><input name="socio_1" value="{{ values.socio_1 }}"></div>
+    <div class="form-group"><label>Telefone sócio 1</label><input name="telefone_socio_1" value="{{ values.telefone_socio_1 }}"></div>
+    <div class="form-group"><label>CPF sócio 1</label><input name="cpf_socio_1" value="{{ values.cpf_socio_1 }}"></div>
+    <div class="form-group"><label>E-mail sócio 1</label><input name="email_socio_1" value="{{ values.email_socio_1 }}"></div>
+    <div class="form-group"><label>Sócio 2</label><input name="socio_2" value="{{ values.socio_2 }}"></div>
+    <div class="form-group"><label>Telefone sócio 2</label><input name="telefone_socio_2" value="{{ values.telefone_socio_2 }}"></div>
+    <div class="form-group"><label>CPF sócio 2</label><input name="cpf_socio_2" value="{{ values.cpf_socio_2 }}"></div>
+    <div class="form-group"><label>Sócio 3</label><input name="socio_3" value="{{ values.socio_3 }}"></div>
+    <div class="form-group"><label>Telefone sócio 3</label><input name="telefone_socio_3" value="{{ values.telefone_socio_3 }}"></div>
+    <div class="form-group"><label>CPF sócio 3</label><input name="cpf_socio_3" value="{{ values.cpf_socio_3 }}"></div>
+    <div class="form-group"><label>Instagram</label><input name="instagram" value="{{ values.instagram }}"></div>
+    <div class="form-group"><label>LinkedIn</label><input name="linkedin" value="{{ values.linkedin }}"></div>
+    <div class="form-group"><label>Vendedor</label>
+      <select name="vendedor">
+        {% for seller in seller_options %}
+        <option value="{{ seller }}" {% if vendedor == seller %}selected{% endif %}>{{ seller }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="form-group"><label>Status</label>
+      <select name="status">
+        {% for status in status_options %}
+        <option value="{{ status }}" {% if current_status == status %}selected{% endif %}>{{ status }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="form-group"><label>Data do chamado</label><input type="date" name="data_chamado" value="{{ data_chamado }}"></div>
+    <div class="form-group full"><label>Observações</label><textarea name="observacoes" rows="4">{{ values.observacoes }}</textarea></div>
+  </div>
+  <div style="display:flex;gap:10px;margin-top:18px;">
+    <button type="submit" name="action" value="save" class="btn">Salvar alterações</button>
+    <button type="submit" name="action" value="cancel" class="btn btn-secondary">Cancelar</button>
+  </div>
+</form>
+{% endblock %}

@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="registration-header-card">
+  <div class="registration-kicker">OPPI COMERCIAL • DETALHE</div>
+  <div class="registration-title">{{ fields.empresa }}</div>
+  <div class="registration-subtitle">Dados completos do cadastro na planilha comercial.</div>
+</div>
+
+<div style="display:flex;gap:10px;margin-bottom:18px;">
+  <a href="/cadastro/todos" class="btn btn-secondary">Voltar</a>
+  <a href="/cadastro/todos/{{ sheet_row }}/editar" class="btn">Editar cadastro</a>
+</div>
+
+<div class="detail-grid">
+  {% for label, value in fields.items() %}
+  <div class="detail-field">
+    <div class="detail-label">{{ label }}</div>
+    <div class="detail-value">{{ value }}</div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

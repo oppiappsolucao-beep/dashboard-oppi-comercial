@@ -1,0 +1,163 @@
+<form id="overview-filters"
+  hx-post="/visao-geral/filtros"
+  hx-target="#overview-root"
+  hx-swap="innerHTML"
+>
+  <div class="filters-grid">
+    <div>
+      <label>Vendedor</label>
+      <select name="seller" onchange="document.getElementById('overview-filters').requestSubmit()">
+        <option value="Todos os vendedores">Todos os vendedores</option>
+        {% for seller in options.seller_options %}
+        <option value="{{ seller }}" {% if filters.seller == seller %}selected{% endif %}>{{ seller }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label>Status</label>
+      <select name="status" onchange="document.getElementById('overview-filters').requestSubmit()">
+        <option value="Todos os status">Todos os status</option>
+        {% for status in options.status_options %}
+        <option value="{{ status }}" {% if filters.status == status %}selected{% endif %}>{{ status }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label>Período início</label>
+      <input type="date" name="period_start" value="{{ filters.period_start }}" onchange="document.getElementById('overview-filters').requestSubmit()">
+    </div>
+    <div>
+      <label>Período fim</label>
+      <input type="date" name="period_end" value="{{ filters.period_end }}" onchange="document.getElementById('overview-filters').requestSubmit()">
+    </div>
+    <div>
+      <label>Nichos</label>
+      <select name="niche" onchange="document.getElementById('overview-filters').requestSubmit()">
+        <option value="Todos os nichos">Todos os nichos</option>
+        {% for niche in options.niche_options %}
+        <option value="{{ niche }}" {% if filters.niche == niche %}selected{% endif %}>{{ niche }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label>Estados</label>
+      <select name="state" onchange="document.getElementById('overview-filters').requestSubmit()">
+        <option value="Todos os estados">Todos os estados</option>
+        {% for state in options.state_options %}
+        <option value="{{ state }}" {% if filters.state == state %}selected{% endif %}>{{ state }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="full">
+      <label>Buscar empresa ou telefone</label>
+      <input type="text" name="search" value="{{ filters.search }}" placeholder="Digite para buscar..."
+        hx-trigger="keyup changed delay:400ms" hx-post="/visao-geral/filtros" hx-target="#overview-root" hx-swap="innerHTML">
+    </div>
+    <input type="hidden" name="selected_card_status" id="selected-card-status" value="{{ filters.selected_card_status or '' }}">
+  </div>
+
+  <div class="metric-grid">
+    <div class="metric-card">
+      <div class="metric-icon" style="background:linear-gradient(135deg,#FF4BAA,#C223FF)">☎</div>
+      <div class="metric-label">Chamados hoje</div>
+      <div class="metric-value">{{ metrics.called_today }}</div>
+      <div class="metric-note">Base atual</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-icon" style="background:linear-gradient(135deg,#AE4BFF,#6E23FF)">🗓</div>
+      <div class="metric-label">Chamados na semana</div>
+      <div class="metric-value">{{ metrics.called_week }}</div>
+      <div class="metric-note">Base atual</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-icon" style="background:linear-gradient(135deg,#FF4BAA,#8F2BFF)">📊</div>
+      <div class="metric-label">Chamados no mês</div>
+      <div class="metric-value">{{ metrics.called_month }}</div>
+      <div class="metric-note">Base atual</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-icon" style="background:linear-gradient(135deg,#8F2BFF,#C94AFF)">🏢</div>
+      <div class="metric-label">Empresas cadastradas no mês</div>
+      <div class="metric-value">{{ metrics.companies }}</div>
+      <div class="metric-note">Base atual filtrada</div>
+    </div>
+  </div>
+
+  <div class="overview-grid">
+    <div class="chart-card">
+      <div class="section-heading">Chamados por semana</div>
+      <div class="section-subtitle">Volume de chamados agrupado por semana conforme o período selecionado.</div>
+      <div id="weekly-chart" data-chart='{{ chart_json | safe }}'></div>
+    </div>
+    <div class="status-card">
+      <div class="section-heading">Resumo por status</div>
+      <div class="section-subtitle">Distribuição atual dos leads no comercial.</div>
+      {% for row in status_summary %}
+      <div class="status-row">
+        <div><span style="color:{{ row.color }}">●</span> {{ row.name }}</div>
+        <div class="status-count">{{ row.count }}</div>
+        <div class="status-percent">{{ row.percent }}%</div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="panel-card" style="margin-top:24px;">
+    <div class="section-heading">Últimos chamados</div>
+    <div class="section-subtitle">Selecione um status para visualizar os registros.</div>
+
+    <div class="status-cards-grid">
+      {% for card in status_cards %}
+      <div class="latest-status-card">
+        <div class="latest-status-top">
+          <div class="latest-status-icon" style="background:{{ card.bg_color }};color:{{ card.icon_color }}">{{ card.icon }}</div>
+          <div class="latest-status-name">{{ card.name }}</div>
+        </div>
+        <div class="latest-status-number">{{ card.count }}</div>
+        <div class="latest-status-caption">registros nesta sessão</div>
+        <button type="button" class="btn btn-small" style="margin-top:8px;width:100%"
+          onclick="document.getElementById('selected-card-status').value='{{ card.name }}'; document.getElementById('overview-filters').requestSubmit();">
+          Ver nomes
+        </button>
+      </div>
+      {% endfor %}
+    </div>
+
+    {% if calls_table %}
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Empresa</th><th>Telefone</th><th>E-mail</th><th>Vendedor</th>
+          <th>Status WhatsApp</th><th>Status Ligação</th><th>Data</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in calls_table %}
+        <tr>
+          <td>{{ row.empresa }}</td>
+          <td>{{ row.telefone }}</td>
+          <td>{{ row.email }}</td>
+          <td>{{ row.vendedor }}</td>
+          <td>{{ row.status_whatsapp }}</td>
+          <td>{{ row.status_ligacao }}</td>
+          <td>{{ row.data_chamado }}</td>
+          <td><button type="button" class="copy-btn" onclick="copyPhone(this, '{{ row.telefone }}')">Copiar</button></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p style="color:rgba(255,255,255,0.6);margin-top:16px;">Selecione um status clicando em "Ver nomes" para visualizar os registros.</p>
+    {% endif %}
+  </div>
+</form>
+
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    const chartEl = document.getElementById("weekly-chart");
+    if (chartEl && chartEl.dataset.chart) {
+      const figure = JSON.parse(chartEl.dataset.chart);
+      Plotly.newPlot(chartEl, figure.data, figure.layout, { responsive: true, displayModeBar: false });
+    }
+  });
+</script>

@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard Oppi Comercial</title>
+  <link rel="stylesheet" href="/static/css/dashboard.css">
+  <link rel="stylesheet" href="/static/css/registration.css">
+  <link rel="stylesheet" href="/static/css/pricing.css">
+  <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <script src="/static/js/app.js" defer></script>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="sidebar-brand">Dashboard Oppi Comercial</div>
+      <nav class="sidebar-nav">
+        <a href="/visao-geral" class="sidebar-link {% if active_page == 'overview' %}active{% endif %}">Visão Geral</a>
+        <div class="sidebar-sub">
+          <a href="/cadastro/novo" class="sidebar-link {% if active_page == 'registration_new' %}active{% endif %}">Novo cadastro</a>
+          <a href="/cadastro/todos" class="sidebar-link {% if active_page == 'contracts' %}active{% endif %}">Todos os cadastros</a>
+        </div>
+        <a href="/pesos-medidas" class="sidebar-link {% if active_page == 'pricing' %}active{% endif %}">Pesos e Medidas</a>
+      </nav>
+      <form class="logout-form" method="post" action="/logout">
+        <button type="submit" class="btn btn-secondary" style="width:100%">Sair</button>
+      </form>
+    </aside>
+    <main class="main-content">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+</body>
+</html>

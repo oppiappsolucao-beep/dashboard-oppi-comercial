@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login - Dashboard Oppi</title>
+  <link rel="stylesheet" href="/static/css/dashboard.css">
+  <link rel="stylesheet" href="/static/css/login.css">
+</head>
+<body class="login-page">
+  <div class="login-layout">
+    <section class="login-brand-panel">
+      {% if logo_uri %}
+      <img src="{{ logo_uri }}" alt="Oppi Tech" class="login-logo-img">
+      {% endif %}
+      <div class="login-brand-title">
+        Dashboard
+        <span class="login-brand-highlight">Oppi Comercial</span>
+      </div>
+      <div class="login-brand-subtitle">Painel de gestão comercial</div>
+      <div class="login-accent-line"></div>
+      <p>Segurança, performance e inteligência para impulsionar seus resultados.</p>
+    </section>
+    <section class="login-card">
+      <h2>Acesse sua conta</h2>
+      <p>Entre com suas credenciais para continuar.</p>
+      {% if error %}
+      <div class="alert-error">{{ error }}</div>
+      {% endif %}
+      <form method="post" action="/login">
+        <label for="username">Usuário</label>
+        <input id="username" name="username" type="text" required autocomplete="username">
+        <label for="password">Senha</label>
+        <input id="password" name="password" type="password" required autocomplete="current-password">
+        <button type="submit">Entrar</button>
+      </form>
+    </section>
+  </div>
+</body>
+</html>
