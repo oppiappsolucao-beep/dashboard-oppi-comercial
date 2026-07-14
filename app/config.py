@@ -28,6 +28,9 @@ class Settings:
         self.app_username = os.getenv("APP_USERNAME", "").strip()
         self.app_password = os.getenv("APP_PASSWORD", "").strip()
         self.session_secret = os.getenv("SESSION_SECRET", "").strip()
+        if not self.session_secret and self.app_password:
+            # Compatível com deploys migrados do Streamlit sem SESSION_SECRET.
+            self.session_secret = self.app_password
         self.gcp_service_account_b64 = (
             os.getenv("GCP_SERVICE_ACCOUNT_B64", "").strip()
             or os.getenv("GOOGLE_SERVICE_ACCOUNT_B64", "").strip()

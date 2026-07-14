@@ -70,8 +70,9 @@ Acesse: http://localhost:8000
 1. Crie um serviço **App** apontando para este repositório
 2. Use o `Dockerfile` do projeto
 3. Configure as variáveis de ambiente listadas acima
-4. Porta interna: `8000` (ou a definida em `PORT`)
+4. Porta interna: `8000` (antes era `8501` no Streamlit — atualize se necessário)
 5. Comando de start (se não usar Docker): `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+6. `SESSION_SECRET` é recomendado; se ausente, usa `APP_PASSWORD` como fallback
 
 ## Estrutura
 
