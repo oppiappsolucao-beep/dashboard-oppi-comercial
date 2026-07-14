@@ -19,9 +19,17 @@ MENU_ITEMS = [
 
 
 def load_css() -> None:
-    css_path = settings.assets_dir / "styles.css"
-    if css_path.exists():
-        st.markdown(f"<style>{css_path.read_text(encoding='utf-8')}</style>", unsafe_allow_html=True)
+    css_parts = []
+    assets = settings.assets_dir
+    for name in ("styles.css", "dashboard.css"):
+        path = assets / name
+        if path.exists():
+            css_parts.append(path.read_text(encoding="utf-8"))
+    legacy = Path(__file__).resolve().parent.parent / "app" / "static" / "css" / "dashboard.css"
+    if legacy.exists():
+        css_parts.append(legacy.read_text(encoding="utf-8"))
+    if css_parts:
+        st.markdown(f"<style>{''.join(css_parts)}</style>", unsafe_allow_html=True)
 
 
 def render_sidebar() -> str:
@@ -43,8 +51,11 @@ def render_sidebar() -> str:
             unsafe_allow_html=True,
         )
 
+        current = st.session_state.current_page
         for label, icon in MENU_ITEMS:
-            if st.button(f"{icon}  {label}", key=f"nav_{label}", use_container_width=True):
+            active = current == label
+            btn_type = "primary" if active else "secondary"
+            if st.button(f"{icon}  {label}", key=f"nav_{label}", use_container_width=True, type=btn_type):
                 st.session_state.current_page = label
                 st.rerun()
 
@@ -56,7 +67,7 @@ def render_sidebar() -> str:
               <div class="sidebar-avatar">{initials(user.get('name', 'OP'))}</div>
               <div>
                 <div class="sidebar-user-name">{user.get('name', '')}</div>
-                <div class="sidebar-user-role">{user.get('role', '')}</div>
+                <div class="sidebar-user-role">{user.get('role', 'Comercial')}</div>
               </div>
             </div>
             """,

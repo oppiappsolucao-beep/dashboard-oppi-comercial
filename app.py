@@ -16,6 +16,7 @@ def main():
     )
 
     load_css()
+
     try:
         init_db()
     except Exception as exc:
@@ -45,5 +46,4 @@ def main():
         st.error("Página não encontrada.")
 
 
-if __name__ == "__main__":
-    main()
+main()

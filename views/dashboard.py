@@ -17,8 +17,17 @@ def render():
     user = get_current_user()
     db = SessionLocal()
     try:
-        st.markdown("## Visão Geral")
-        st.caption("Resumo do desempenho comercial e prioridades do dia.")
+        st.markdown(
+            """
+            <div class="page-header">
+              <div>
+                <div class="page-title">Visão Geral</div>
+                <div class="page-subtitle">Resumo do desempenho comercial e prioridades do dia.</div>
+              </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
         col1, col2, col3 = st.columns([2, 2, 1])
         with col1:

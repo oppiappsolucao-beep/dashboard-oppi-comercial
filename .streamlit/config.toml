@@ -7,3 +7,6 @@ enableXsrfProtection = false
 [browser]
 gatherUsageStats = false
 serverAddress = "0.0.0.0"
+
+[client]
+showSidebarNavigation = false

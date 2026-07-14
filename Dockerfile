@@ -16,7 +16,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-RUN mkdir -p generated/proposals
+RUN mkdir -p generated/proposals && rm -rf pages || true
 
 EXPOSE 8501
 
