@@ -1214,7 +1214,7 @@ def append_company_to_sheet(payload: dict) -> None:
     _set_sheet_value_by_header(row_values, headers, ["Email", "E-mail"], payload.get("email_empresa"))
     _set_sheet_value_by_header(row_values, headers, ["Site empresa", "Site", "Website"], payload.get("site"))
 
-    _set_sheet_value_by_header(row_values, headers, ["Telefone (b2b)", "Telefone b2b"], payload.get("telefone_b2b"))
+    _set_sheet_value_by_header(row_values, headers, ["Celular WhatsApp", "Telefone (b2b)", "Telefone b2b"], payload.get("telefone_b2b"))
     _set_sheet_value_by_header(row_values, headers, ["Telefone fixo", "Fixo"], payload.get("telefone_fixo"))
     _set_sheet_value_by_header(row_values, headers, ["Telefone lemitt", "Telefone alternativo", "Outro telefone"], payload.get("telefone_alternativo"))
 
@@ -1276,7 +1276,7 @@ def update_company_in_sheet(sheet_row: int, payload: dict) -> None:
     _set_sheet_value_by_header(row_values, headers, ["Email", "E-mail"], payload.get("email_empresa"))
     _set_sheet_value_by_header(row_values, headers, ["Site empresa", "Site", "Website"], payload.get("site"))
 
-    _set_sheet_value_by_header(row_values, headers, ["Telefone (b2b)", "Telefone b2b"], payload.get("telefone_b2b"))
+    _set_sheet_value_by_header(row_values, headers, ["Celular WhatsApp", "Telefone (b2b)", "Telefone b2b"], payload.get("telefone_b2b"))
     _set_sheet_value_by_header(row_values, headers, ["Telefone fixo", "Fixo"], payload.get("telefone_fixo"))
     _set_sheet_value_by_header(row_values, headers, ["Telefone lemitt", "Telefone alternativo", "Outro telefone"], payload.get("telefone_alternativo"))
 
@@ -1327,7 +1327,7 @@ def identify_columns(df: pd.DataFrame) -> dict:
         "endereco": first_existing_column(df, ["Endereço", "Endereco"]),
         "email": first_existing_column(df, ["Email", "E-mail"]),
         "site": first_existing_column(df, ["Site empresa", "Site", "Website"]),
-        "telefone_b2b": first_existing_column(df, ["Telefone (b2b)", "Telefone b2b", "Telefone"]),
+        "telefone_b2b": first_existing_column(df, ["Celular WhatsApp", "Telefone (b2b)", "Telefone b2b", "Telefone"]),
         "telefone_fixo": first_existing_column(df, ["Telefone fixo", "Fixo"]),
         "telefone_alternativo": first_existing_column(df, ["Telefone lemitt", "Telefone alternativo", "Outro telefone"]),
         "socio_1": first_existing_column(df, ["Sócio 1", "Socio 1", "Sócio1", "Socio1"]),

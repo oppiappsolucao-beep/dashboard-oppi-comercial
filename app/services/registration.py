@@ -24,7 +24,7 @@ REGISTRATION_FIELDS = [
 ]
 
 
-def validate_registration_form(form: dict, require_all_phones: bool = True) -> str | None:
+def validate_registration_form(form: dict) -> str | None:
     empresa = normalize_text(form.get("empresa"))
     cnpj = normalize_text(form.get("cnpj"))
     telefone_b2b = normalize_text(form.get("telefone_b2b"))
@@ -38,16 +38,8 @@ def validate_registration_form(form: dict, require_all_phones: bool = True) -> s
     if not normalize_cnpj_for_duplicate(cnpj):
         return "Digite um CNPJ válido com 14 números."
 
-    if require_all_phones:
-        if not telefone_b2b:
-            return "Preencha o telefone B2B para concluir o cadastro."
-        if not telefone_fixo:
-            return "Preencha o telefone fixo para concluir o cadastro."
-        if not telefone_alternativo:
-            return "Preencha o telefone alternativo para concluir o cadastro."
-
     for label, phone in [
-        ("Telefone B2B", telefone_b2b),
+        ("Celular WhatsApp", telefone_b2b),
         ("Telefone fixo", telefone_fixo),
         ("Telefone alternativo", telefone_alternativo),
     ]:
@@ -78,7 +70,7 @@ def save_new_company(form: dict) -> None:
 
 
 def save_company_edit(sheet_row: int, form: dict) -> None:
-    error = validate_registration_form(form, require_all_phones=False)
+    error = validate_registration_form(form)
     if error:
         raise ValueError(error)
     update_company_in_sheet(sheet_row, build_registration_payload(form))
