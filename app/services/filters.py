@@ -8,6 +8,7 @@ import pandas as pd
 from app.services.legacy_core import (
     STATUS_OPTIONS,
     apply_period_filter,
+    as_datetime_series,
     flexible_search_match,
     normalize_text,
     normalize_search_text,
@@ -28,7 +29,10 @@ class DashboardFilters:
 
 
 def get_filter_options(df: pd.DataFrame) -> dict:
-    valid_dates = df["_data_chamado"].dropna() if "_data_chamado" in df.columns else pd.Series(dtype="datetime64[ns]")
+    if "_data_chamado" in df.columns:
+        valid_dates = as_datetime_series(df["_data_chamado"]).dropna()
+    else:
+        valid_dates = pd.Series(dtype="datetime64[ns]")
     has_reference_dates = not valid_dates.empty
 
     if has_reference_dates:

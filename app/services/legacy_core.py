@@ -319,7 +319,22 @@ def parse_date(value):
     if not text:
         return pd.NaT
 
-    return pd.to_datetime(text, errors="coerce", dayfirst=True)
+    parsed = pd.to_datetime(text, errors="coerce", dayfirst=True)
+    if pd.isna(parsed) and text.isdigit() and len(text) == 8:
+        parsed = pd.to_datetime(text, errors="coerce", format="%d%m%Y")
+    if pd.isna(parsed) and text.isdigit() and len(text) in (6, 7):
+        parsed = pd.to_datetime(text, errors="coerce", dayfirst=True)
+
+    return parsed
+
+
+def as_datetime_series(series: pd.Series) -> pd.Series:
+    """Normaliza uma coluna para datetime, tolerando object/Timestamp/NaT misturados."""
+    if series is None:
+        return pd.Series(dtype="datetime64[ns]")
+
+    normalized = pd.to_datetime(series, errors="coerce", dayfirst=True)
+    return normalized
 
 
 def normalize_period_filter(value):
@@ -361,11 +376,12 @@ def apply_period_filter(df: pd.DataFrame, date_column: str, period_value) -> pd.
     if start_date is None or end_date is None or date_column not in df.columns:
         return df.copy()
 
-    valid_dates = df[date_column].notna()
+    dates = as_datetime_series(df[date_column])
+    valid_dates = dates.notna()
     dated_rows = df[
         valid_dates
-        & (df[date_column].dt.date >= start_date)
-        & (df[date_column].dt.date <= end_date)
+        & (dates.dt.date >= start_date)
+        & (dates.dt.date <= end_date)
     ].copy()
     undated_rows = df[~valid_dates].copy()
 
@@ -575,25 +591,31 @@ def count_dashboard_status(df: pd.DataFrame, status_name: str) -> int:
 def calculate_score(row: pd.Series, columns: dict) -> int:
     score = 0
 
-    if normalize_text(row.get(columns.get("telefone_b2b", ""), "")):
+    def cell_value(column_key: str) -> str:
+        column_name = columns.get(column_key)
+        if not column_name:
+            return ""
+        return normalize_text(row.get(column_name, ""))
+
+    if cell_value("telefone_b2b"):
         score += 15
 
-    if normalize_text(row.get(columns.get("email", ""), "")):
+    if cell_value("email"):
         score += 10
 
-    if normalize_text(row.get(columns.get("site", ""), "")):
+    if cell_value("site"):
         score += 10
 
-    if normalize_text(row.get(columns.get("instagram", ""), "")):
+    if cell_value("instagram"):
         score += 10
 
-    if normalize_text(row.get(columns.get("linkedin", ""), "")):
+    if cell_value("linkedin"):
         score += 5
 
-    if normalize_text(row.get(columns.get("socio_1", ""), "")):
+    if cell_value("socio_1"):
         score += 10
 
-    capital_value = parse_money(row.get(columns.get("capital", ""), ""))
+    capital_value = parse_money(cell_value("capital"))
 
     if capital_value >= 100000:
         score += 20
@@ -602,7 +624,9 @@ def calculate_score(row: pd.Series, columns: dict) -> int:
     elif capital_value > 0:
         score += 8
 
-    grouped_status = status_group(row.get(columns.get("status", ""), ""))
+    grouped_status = status_group(
+        cell_value("status_whatsapp") or cell_value("status")
+    )
 
     if grouped_status == "Fechado":
         score += 20
@@ -842,13 +866,20 @@ def load_sheet_data() -> pd.DataFrame:
 
     headers = make_unique_headers(values[0])
     rows = values[1:]
+    header_len = len(headers)
+    normalized_rows = []
+    for row in rows:
+        row_values = list(row[:header_len])
+        if len(row_values) < header_len:
+            row_values.extend([""] * (header_len - len(row_values)))
+        normalized_rows.append(row_values)
 
-    df = pd.DataFrame(rows, columns=headers)
-    df["_sheet_row"] = list(range(2, len(rows) + 2))
+    df = pd.DataFrame(normalized_rows, columns=headers)
+    df["_sheet_row"] = list(range(2, len(normalized_rows) + 2))
 
     for column in df.columns:
         if column != "_sheet_row":
-            df[column] = df[column].astype(str).str.strip()
+            df[column] = df[column].fillna("").astype(str).str.strip()
 
     data_columns = [column for column in df.columns if column != "_sheet_row"]
     df = df[
@@ -1305,6 +1336,8 @@ def prepare_data(df: pd.DataFrame, columns: dict) -> pd.DataFrame:
         ),
         axis=1,
     )
+    for date_column in ("_data_abertura", "_ultima_atualizacao", "_data_chamado"):
+        result[date_column] = as_datetime_series(result[date_column])
     result["_pontuacao"] = result.apply(lambda row: calculate_score(row, columns), axis=1)
     result["_classificacao"] = result["_pontuacao"].apply(score_classification)
 

@@ -28,9 +28,15 @@ def get_prepared_data():
     if df.empty:
         return df, {}
 
-    columns = identify_columns(df)
-    prepared = prepare_data(df, columns)
-    return prepared, columns
+    try:
+        columns = identify_columns(df)
+        prepared = prepare_data(df, columns)
+        return prepared, columns
+    except Exception as error:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Erro ao processar dados da planilha: {error}",
+        ) from error
 
 
 def require_auth(request: Request):
