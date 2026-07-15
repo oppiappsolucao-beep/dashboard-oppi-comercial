@@ -72,7 +72,7 @@ def _settings_context(request: Request, settings_params: dict):
         "services": build_services_list(),
         "permissions": build_permissions(_get_permissions(request)),
         "integrations": integrations,
-        "company": build_company_profile(),
+        "company": build_company_profile(df),
     }
 
 

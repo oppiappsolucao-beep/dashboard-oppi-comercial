@@ -7,6 +7,7 @@ from app.templating import render
 from app.services.filters import (
     DashboardFilters,
     apply_dashboard_filters,
+    apply_default_period_filters,
     get_filter_options,
     parse_dashboard_filters,
 )
@@ -26,11 +27,7 @@ router = APIRouter()
 def _overview_context(request: Request, filters: DashboardFilters, success: str = ""):
     df, columns = get_prepared_data()
     options = get_filter_options(df)
-
-    if not filters.period_start:
-        filters.period_start = options["date_min"]
-    if not filters.period_end:
-        filters.period_end = options["date_max"]
+    filters = apply_default_period_filters(filters, df)
 
     filtered_df = apply_dashboard_filters(df, columns, filters)
 

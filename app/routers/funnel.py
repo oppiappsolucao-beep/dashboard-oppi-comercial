@@ -2,7 +2,7 @@ from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from app.dependencies import get_prepared_data, require_auth
-from app.services.filters import apply_dashboard_filters, get_filter_options, parse_dashboard_filters
+from app.services.filters import apply_dashboard_filters, apply_default_period_filters, get_filter_options, parse_dashboard_filters
 from app.services.legacy_core import invalidate_sheet_cache
 from app.services.overview import (
     build_calls_table,
@@ -18,11 +18,7 @@ router = APIRouter()
 def _funnel_context(request: Request, filters):
     df, columns = get_prepared_data()
     options = get_filter_options(df)
-
-    if not filters.period_start:
-        filters.period_start = options["date_min"]
-    if not filters.period_end:
-        filters.period_end = options["date_max"]
+    filters = apply_default_period_filters(filters, df)
 
     filtered_df = apply_dashboard_filters(df, columns, filters)
 

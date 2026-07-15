@@ -23,6 +23,10 @@ class Settings:
     ]
 
     def __init__(self) -> None:
+        self.sheet_id = os.getenv("GOOGLE_SHEET_ID", self.sheet_id).strip() or self.sheet_id
+        self.worksheet_name = (
+            os.getenv("GOOGLE_WORKSHEET_NAME", self.worksheet_name).strip() or self.worksheet_name
+        )
         self.app_username = os.getenv("APP_USERNAME", "").strip()
         self.app_password = os.getenv("APP_PASSWORD", "").strip()
         self.session_secret = os.getenv("SESSION_SECRET", "").strip()

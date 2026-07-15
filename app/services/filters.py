@@ -1,6 +1,6 @@
 """Filtros e transformações de dados do dashboard."""
-from dataclasses import dataclass
-from datetime import date, timedelta
+from dataclasses import dataclass, replace
+from datetime import date
 from typing import Optional
 
 import pandas as pd
@@ -28,17 +28,19 @@ class DashboardFilters:
 
 
 def get_filter_options(df: pd.DataFrame) -> dict:
-    valid_dates = df["_data_chamado"].dropna()
-    if valid_dates.empty:
-        date_max = date.today()
-        date_min = date_max - timedelta(days=30)
-    else:
+    valid_dates = df["_data_chamado"].dropna() if "_data_chamado" in df.columns else pd.Series(dtype="datetime64[ns]")
+    has_reference_dates = not valid_dates.empty
+
+    if has_reference_dates:
         date_min = valid_dates.min().date()
         date_max = valid_dates.max().date()
+    else:
+        date_min = None
+        date_max = None
 
     seller_options = sorted(
         s for s in df["_vendedor"].dropna().astype(str).unique().tolist()
-        if normalize_text(s)
+        if normalize_text(s) and normalize_text(s) != "Sem vendedor"
     )
     niche_options = sorted(
         {n for n in df["_nicho"].dropna().astype(str).unique().tolist() if normalize_text(n)},
@@ -52,11 +54,30 @@ def get_filter_options(df: pd.DataFrame) -> dict:
     return {
         "date_min": date_min,
         "date_max": date_max,
+        "has_reference_dates": has_reference_dates,
         "seller_options": seller_options,
         "niche_options": niche_options,
         "state_options": state_options,
         "status_options": STATUS_OPTIONS,
+        "total_companies": int(df["_empresa"].apply(lambda v: normalize_text(v) != "").sum()) if not df.empty else 0,
+        "total_capital": float(df["_capital_num"].sum()) if not df.empty and "_capital_num" in df.columns else 0.0,
     }
+
+
+def apply_default_period_filters(filters: DashboardFilters, df: pd.DataFrame) -> DashboardFilters:
+    """Preenche o período padrão com base nas datas reais da planilha."""
+    if filters.period_start and filters.period_end:
+        return filters
+
+    options = get_filter_options(df)
+    if not options["has_reference_dates"]:
+        return replace(filters, period_start=None, period_end=None)
+
+    return replace(
+        filters,
+        period_start=filters.period_start or options["date_min"],
+        period_end=filters.period_end or options["date_max"],
+    )
 
 
 def apply_dashboard_filters(

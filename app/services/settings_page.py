@@ -174,17 +174,65 @@ def _month_trend(current: int, previous: int) -> dict:
     }
 
 
+def _count_companies_in_month(df: pd.DataFrame, reference: date) -> int:
+    if df.empty or "_data_chamado" not in df.columns:
+        return 0
+    month_start = reference.replace(day=1)
+    if month_start.month == 12:
+        month_end = date(month_start.year + 1, 1, 1)
+    else:
+        month_end = date(month_start.year, month_start.month + 1, 1)
+    count = 0
+    for value in df["_data_chamado"].tolist():
+        dt = _as_datetime(value)
+        if not dt:
+            continue
+        day = dt.date()
+        if month_start <= day < month_end:
+            count += 1
+    return count
+
+
+def _count_active_sellers_in_month(df: pd.DataFrame, reference: date) -> int:
+    if df.empty:
+        return 0
+    month_start = reference.replace(day=1)
+    if month_start.month == 12:
+        month_end = date(month_start.year + 1, 1, 1)
+    else:
+        month_end = date(month_start.year, month_start.month + 1, 1)
+
+    active = set()
+    for _, row in df.iterrows():
+        seller = normalize_name(row.get("_vendedor", ""))
+        if not seller or seller == "Sem vendedor":
+            continue
+        for column in ("_ultima_atualizacao", "_data_chamado", "_data_abertura"):
+            dt = _as_datetime(row.get(column))
+            if dt and month_start <= dt.date() < month_end:
+                active.add(seller.lower())
+                break
+    return len(active)
+
+
 def build_settings_kpi_cards(df: pd.DataFrame, integrations: list[dict]) -> list[dict]:
     users = _build_users_from_sheet(df, settings.app_username)
     active_users = len([user for user in users if user["status_class"] == "active"])
     active_integrations = len([item for item in integrations if item["connected"]])
     services_count = len(MODULE_SERVICES)
+    companies_count = int(df["_empresa"].apply(lambda v: normalize_name(v) != "").sum()) if not df.empty else 0
+    total_capital = float(df["_capital_num"].sum()) if not df.empty and "_capital_num" in df.columns else 0.0
+
+    today = date.today()
+    prev_month = today.replace(day=1) - timedelta(days=1)
+    companies_this_month = _count_companies_in_month(df, today)
+    companies_prev_month = _count_companies_in_month(df, prev_month)
+    sellers_prev_month = _count_active_sellers_in_month(df, prev_month)
+    active_users_prev = max(1, 1 + sellers_prev_month)
 
     renewal = (date.today().replace(day=1) + timedelta(days=32)).replace(day=18)
     if renewal < date.today():
         renewal = renewal.replace(month=renewal.month + 1 if renewal.month < 12 else 1)
-
-    prev_users = max(active_users - 2, 1)
 
     return [
         {
@@ -192,23 +240,23 @@ def build_settings_kpi_cards(df: pd.DataFrame, integrations: list[dict]) -> list
             "value": active_users,
             "icon": "👥",
             "tone": "purple",
-            **_month_trend(active_users, prev_users),
+            **_month_trend(active_users, active_users_prev if sellers_prev_month else max(active_users - 1, 1)),
         },
         {
-            "label": "Perfis de acesso",
-            "value": len(ROLE_OPTIONS),
-            "icon": "🛡",
+            "label": "Empresas cadastradas",
+            "value": companies_count,
+            "icon": "🏢",
             "tone": "blue",
-            "trend_label": "— Sem alterações",
-            "trend_up": True,
-            "trend_flat": True,
+            **_month_trend(companies_this_month or companies_count, companies_prev_month or max(companies_count - 1, 0)),
         },
         {
-            "label": "Serviços cadastrados",
-            "value": services_count,
-            "icon": "📦",
+            "label": "Capital monitorado",
+            "value": f"R$ {total_capital:,.0f}".replace(",", "."),
+            "icon": "💰",
             "tone": "pink",
-            **_month_trend(services_count, max(services_count - 1, 1)),
+            "trend_label": f"{companies_count} empresa{'s' if companies_count != 1 else ''} na planilha",
+            "trend_up": True,
+            "trend_flat": companies_count == 0,
         },
         {
             "label": "Integrações ativas",
@@ -255,8 +303,14 @@ def build_permissions(session_permissions: dict | None) -> list[dict]:
     return rows
 
 
-def build_company_profile() -> dict:
+def build_company_profile(df: pd.DataFrame | None = None) -> dict:
     renewal = (date.today().replace(day=1) + timedelta(days=32)).replace(day=18)
+    companies_count = 0
+    total_capital = 0.0
+    if df is not None and not df.empty:
+        companies_count = int(df["_empresa"].apply(lambda v: normalize_name(v) != "").sum())
+        total_capital = float(df["_capital_num"].sum()) if "_capital_num" in df.columns else 0.0
+
     return {
         "company_name": os.getenv("COMPANY_NAME", "Oppi Comercial LTDA"),
         "trade_name": os.getenv("COMPANY_TRADE_NAME", "Oppi CRM"),
@@ -266,7 +320,10 @@ def build_company_profile() -> dict:
         "billing_cycle": "Mensal",
         "renewal_date": renewal.strftime("%d/%m/%Y"),
         "worksheet_name": settings.worksheet_name,
+        "sheet_id": settings.sheet_id,
         "sheet_configured": settings.sheets_configured,
+        "companies_count": companies_count,
+        "total_capital_label": f"R$ {total_capital:,.0f}".replace(",", "."),
     }
 
 

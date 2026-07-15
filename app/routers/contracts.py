@@ -4,7 +4,7 @@ from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from app.dependencies import get_prepared_data, require_auth
 from app.templating import render
-from app.services.filters import DashboardFilters, apply_dashboard_filters
+from app.services.filters import DashboardFilters, apply_dashboard_filters, apply_default_period_filters
 from app.services.filters import get_filter_options as get_dashboard_filter_options
 from app.services.legacy_core import (
     DuplicateRegistrationError,
@@ -51,16 +51,19 @@ async def contracts_list(request: Request, order: str = "recentes"):
     df, columns = get_prepared_data()
     options = get_dashboard_filter_options(df)
 
-    filters = DashboardFilters(
-        seller=request.query_params.get("seller", "Todos os vendedores"),
-        status=request.query_params.get("status", "Todos os status"),
-        period_start=date.fromisoformat(request.query_params["period_start"])
-        if request.query_params.get("period_start") else options["date_min"],
-        period_end=date.fromisoformat(request.query_params["period_end"])
-        if request.query_params.get("period_end") else options["date_max"],
-        niche=request.query_params.get("niche", "Todos os nichos"),
-        state=request.query_params.get("state", "Todos os estados"),
-        search=request.query_params.get("search", ""),
+    filters = apply_default_period_filters(
+        DashboardFilters(
+            seller=request.query_params.get("seller", "Todos os vendedores"),
+            status=request.query_params.get("status", "Todos os status"),
+            period_start=date.fromisoformat(request.query_params["period_start"])
+            if request.query_params.get("period_start") else None,
+            period_end=date.fromisoformat(request.query_params["period_end"])
+            if request.query_params.get("period_end") else None,
+            niche=request.query_params.get("niche", "Todos os nichos"),
+            state=request.query_params.get("state", "Todos os estados"),
+            search=request.query_params.get("search", ""),
+        ),
+        df,
     )
 
     filtered_df = apply_dashboard_filters(df, columns, filters)

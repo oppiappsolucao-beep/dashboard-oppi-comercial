@@ -209,6 +209,8 @@
       <div><span class="settings-company-label">Nome fantasia</span><strong>{{ company.trade_name }}</strong></div>
       <div><span class="settings-company-label">CNPJ</span><strong>{{ company.cnpj }}</strong></div>
       <div><span class="settings-company-label">Planilha conectada</span><strong>{{ company.worksheet_name }}</strong></div>
+      <div><span class="settings-company-label">Empresas na planilha</span><strong>{{ company.companies_count }}</strong></div>
+      <div><span class="settings-company-label">Capital monitorado</span><strong>{{ company.total_capital_label }}</strong></div>
       <div><span class="settings-company-label">Google Sheets</span><strong>{% if company.sheet_configured %}Conectado{% else %}Pendente{% endif %}</strong></div>
       <div><span class="settings-company-label">Usuário admin</span><strong>{{ app_username }}</strong></div>
     </div>

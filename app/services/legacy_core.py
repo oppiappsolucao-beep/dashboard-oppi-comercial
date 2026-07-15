@@ -353,10 +353,8 @@ def normalize_period_filter(value):
 
 def apply_period_filter(df: pd.DataFrame, date_column: str, period_value) -> pd.DataFrame:
     """
-    Aplica o filtro por período respeitando a coluna Data do chamado.
-    Para datas específicas, retorna somente registros daquele dia.
-    Para intervalos, retorna somente registros entre início e fim.
-    Linhas sem data não entram quando o usuário escolhe um período.
+    Aplica o filtro por período respeitando a coluna de referência.
+    Linhas sem data permanecem visíveis para não ocultar cadastros incompletos.
     """
     start_date, end_date = normalize_period_filter(period_value)
 
@@ -364,12 +362,20 @@ def apply_period_filter(df: pd.DataFrame, date_column: str, period_value) -> pd.
         return df.copy()
 
     valid_dates = df[date_column].notna()
-
-    return df[
+    dated_rows = df[
         valid_dates
         & (df[date_column].dt.date >= start_date)
         & (df[date_column].dt.date <= end_date)
     ].copy()
+    undated_rows = df[~valid_dates].copy()
+
+    if undated_rows.empty:
+        return dated_rows
+
+    if dated_rows.empty:
+        return undated_rows
+
+    return pd.concat([dated_rows, undated_rows], ignore_index=True)
 
 
 def make_unique_headers(headers: list[str]) -> list[str]:
@@ -820,8 +826,15 @@ def load_sheet_data() -> pd.DataFrame:
     if cache_key in _sheet_cache:
         return _sheet_cache[cache_key].copy()
     client = get_gsheet_client()
-    spreadsheet = client.open_by_key(settings.sheet_id)
-    worksheet = spreadsheet.worksheet(settings.worksheet_name)
+    try:
+        spreadsheet = client.open_by_key(settings.sheet_id)
+    except SpreadsheetNotFound as error:
+        raise RuntimeError(
+            f"Planilha não encontrada (ID: {settings.sheet_id}). "
+            "Verifique se a conta de serviço tem acesso à planilha."
+        ) from error
+
+    worksheet = _open_worksheet(spreadsheet, settings.worksheet_name)
     values = worksheet.get_all_values()
 
     if not values:
@@ -850,6 +863,24 @@ def load_sheet_data() -> pd.DataFrame:
     return result
 
 
+def _open_worksheet(spreadsheet, worksheet_name: str):
+    """Abre a aba configurada; se não existir, usa a primeira aba da planilha."""
+    candidates = [worksheet_name]
+    for fallback_name in ("Folha1", "Sheet1", "Página1", "Pagina1"):
+        if fallback_name not in candidates:
+            candidates.append(fallback_name)
+
+    for name in candidates:
+        if not normalize_text(name):
+            continue
+        try:
+            return spreadsheet.worksheet(name)
+        except WorksheetNotFound:
+            continue
+
+    return spreadsheet.sheet1
+
+
 def update_statuses_in_sheet(
     changes: list[dict],
     status_column_name: str,
@@ -861,7 +892,7 @@ def update_statuses_in_sheet(
 
     client = get_gsheet_client()
     spreadsheet = client.open_by_key(settings.sheet_id)
-    worksheet = spreadsheet.worksheet(settings.worksheet_name)
+    worksheet = _open_worksheet(spreadsheet, settings.worksheet_name)
     headers = worksheet.row_values(1)
 
     if status_column_name not in headers:
@@ -1078,7 +1109,7 @@ def append_company_to_sheet(payload: dict) -> None:
     """Adiciona uma nova empresa na aba principal respeitando a estrutura atual da planilha."""
     client = get_gsheet_client()
     spreadsheet = client.open_by_key(settings.sheet_id)
-    worksheet = spreadsheet.worksheet(settings.worksheet_name)
+    worksheet = _open_worksheet(spreadsheet, settings.worksheet_name)
     headers = worksheet.row_values(1)
 
     validate_unique_company_registration(payload, worksheet)
@@ -1134,7 +1165,7 @@ def update_company_in_sheet(sheet_row: int, payload: dict) -> None:
     """Atualiza uma empresa diretamente na planilha, preservando as demais colunas da linha."""
     client = get_gsheet_client()
     spreadsheet = client.open_by_key(settings.sheet_id)
-    worksheet = spreadsheet.worksheet(settings.worksheet_name)
+    worksheet = _open_worksheet(spreadsheet, settings.worksheet_name)
     headers = worksheet.row_values(1)
 
     if not headers:
@@ -1263,12 +1294,34 @@ def prepare_data(df: pd.DataFrame, columns: dict) -> pd.DataFrame:
     result["_telefone"] = safe_series(result, columns.get("telefone_b2b"))
     result["_nicho"] = result["_empresa"].apply(infer_niche_from_company_name)
     result["_estado"] = safe_series(result, columns.get("endereco")).apply(infer_state_from_address)
-    result["_data_chamado"] = safe_series(result, columns.get("data_chamado")).apply(parse_date)
+    result["_data_abertura"] = safe_series(result, columns.get("data_abertura")).apply(parse_date)
     result["_ultima_atualizacao"] = safe_series(result, columns.get("ultima_atualizacao")).apply(parse_date)
+    result["_data_chamado"] = safe_series(result, columns.get("data_chamado")).apply(parse_date)
+    result["_data_chamado"] = result.apply(
+        lambda row: _coalesce_dates(
+            row.get("_data_chamado"),
+            row.get("_data_abertura"),
+            row.get("_ultima_atualizacao"),
+        ),
+        axis=1,
+    )
     result["_pontuacao"] = result.apply(lambda row: calculate_score(row, columns), axis=1)
     result["_classificacao"] = result["_pontuacao"].apply(score_classification)
 
     return result
+
+
+def _coalesce_dates(*values):
+    for value in values:
+        if value is None or (isinstance(value, float) and pd.isna(value)):
+            continue
+        try:
+            if pd.isna(value):
+                continue
+        except Exception:
+            pass
+        return value
+    return pd.NaT
 
 
 

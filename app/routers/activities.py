@@ -3,7 +3,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 
 from app.dependencies import get_prepared_data, require_auth
 from app.services.activities import ACTIVITY_TYPES, build_activities_kpi_cards, build_activities_list, build_activities_table
-from app.services.filters import apply_dashboard_filters, get_filter_options, parse_dashboard_filters
+from app.services.filters import apply_dashboard_filters, apply_default_period_filters, get_filter_options, parse_dashboard_filters
 from app.services.legacy_core import invalidate_sheet_cache
 from app.templating import render
 
@@ -39,11 +39,7 @@ def _parse_activities_params(request: Request, form: dict | None = None) -> dict
 def _activities_context(request: Request, filters, activities_params: dict):
     df, columns = get_prepared_data()
     options = get_filter_options(df)
-
-    if not filters.period_start:
-        filters.period_start = options["date_min"]
-    if not filters.period_end:
-        filters.period_end = options["date_max"]
+    filters = apply_default_period_filters(filters, df)
 
     filtered_df = apply_dashboard_filters(df, columns, filters)
     activities = build_activities_list(filtered_df, columns)
