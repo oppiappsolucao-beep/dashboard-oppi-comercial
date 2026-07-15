@@ -37,6 +37,24 @@ a { color: inherit; text-decoration: none; }
   background: var(--bg);
 }
 
+.main-column {
+  flex: 1;
+  min-width: 0;
+  margin-left: var(--sidebar-w);
+  display: flex;
+  flex-direction: column;
+}
+
+.mobile-topbar,
+.sidebar-overlay,
+.sidebar-close-btn {
+  display: none;
+}
+
+.sidebar-top {
+  display: contents;
+}
+
 .sidebar {
   position: fixed;
   top: 0;
@@ -196,7 +214,6 @@ a { color: inherit; text-decoration: none; }
 .main-content {
   flex: 1;
   min-width: 0;
-  margin-left: var(--sidebar-w);
   padding: 24px 28px 32px;
   background: var(--bg);
 }
@@ -772,20 +789,284 @@ a { color: inherit; text-decoration: none; }
 }
 
 @media (max-width: 900px) {
-  .app-shell { flex-direction: column; }
+  .main-column {
+    margin-left: 0;
+  }
+
+  .mobile-topbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    position: sticky;
+    top: 0;
+    z-index: 90;
+    min-height: 56px;
+    padding: 10px 14px;
+    padding-top: calc(10px + env(safe-area-inset-top, 0px));
+    background: rgba(255, 255, 255, 0.96);
+    border-bottom: 1px solid var(--border);
+    backdrop-filter: blur(10px);
+  }
+
+  .mobile-menu-btn {
+    width: 42px;
+    height: 42px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+    padding: 0;
+  }
+
+  .mobile-menu-icon,
+  .mobile-menu-icon::before,
+  .mobile-menu-icon::after {
+    display: block;
+    width: 18px;
+    height: 2px;
+    border-radius: 999px;
+    background: var(--text);
+    position: relative;
+  }
+
+  .mobile-menu-icon::before,
+  .mobile-menu-icon::after {
+    content: "";
+    position: absolute;
+    left: 0;
+  }
+
+  .mobile-menu-icon::before { top: -6px; }
+  .mobile-menu-icon::after { top: 6px; }
+
+  .mobile-topbar-brand {
+    flex: 1;
+    font-size: 1rem;
+    font-weight: 800;
+    color: var(--text);
+    letter-spacing: -0.02em;
+  }
+
+  .mobile-topbar-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.72rem;
+    font-weight: 800;
+    color: #fff;
+    background: linear-gradient(135deg, var(--pink), var(--purple));
+    flex-shrink: 0;
+  }
+
+  .sidebar-overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 110;
+    background: rgba(15, 23, 42, 0.45);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.22s ease;
+  }
+
+  body.sidebar-open {
+    overflow: hidden;
+  }
+
+  body.sidebar-open .sidebar-overlay {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .sidebar-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding-bottom: 8px;
+    flex-shrink: 0;
+  }
+
+  .sidebar-top .sidebar-brand {
+    padding-bottom: 0;
+    min-width: 0;
+  }
+
+  .sidebar-close-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border: 1px solid var(--sidebar-border);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--sidebar-text);
+    cursor: pointer;
+    flex-shrink: 0;
+    font-size: 1rem;
+    line-height: 1;
+  }
+
   .sidebar {
-    position: static;
-    width: 100%;
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 120;
+    width: min(290px, 88vw);
     min-width: 0;
     max-width: none;
-    height: auto;
-    max-height: none;
+    height: 100vh;
+    max-height: 100vh;
+    transform: translateX(-105%);
+    transition: transform 0.24s ease;
+    box-shadow: 12px 0 40px rgba(0, 0, 0, 0.18);
+    padding-top: calc(18px + env(safe-area-inset-top, 0px));
+    padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px));
   }
+
+  body.sidebar-open .sidebar {
+    transform: translateX(0);
+  }
+
   .main-content {
-    margin-left: 0;
-    padding: 16px;
+    padding: 16px 14px 28px;
   }
-  .metric-grid { grid-template-columns: 1fr 1fr; }
-  .funnel-kpi-grid { grid-template-columns: 1fr 1fr; }
-  .filter-field-sm { max-width: none; flex: 1 1 100%; }
+
+  .page-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .page-title {
+    font-size: 1.45rem;
+  }
+
+  .page-subtitle {
+    font-size: 0.88rem;
+  }
+
+  .page-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .page-actions .btn,
+  .page-actions form {
+    flex: 1 1 auto;
+  }
+
+  .page-actions .btn {
+    justify-content: center;
+    min-height: 42px;
+  }
+
+  .metric-grid,
+  .funnel-kpi-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .metric-card,
+  .funnel-kpi-card {
+    min-height: auto;
+    padding: 14px;
+  }
+
+  .funnel-kpi-value,
+  .metric-value {
+    font-size: 1.35rem;
+  }
+
+  .filters-row,
+  .filters-row-main {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .filter-field-sm {
+    max-width: none;
+    flex: 1 1 100%;
+  }
+
+  .toolbar-card {
+    padding: 14px;
+  }
+
+  .panel {
+    padding: 14px;
+  }
+
+  .data-table {
+    min-width: 620px;
+  }
+
+  .panel:has(> .data-table),
+  .panel-card:has(> .data-table),
+  .panel-card:has(.data-table),
+  .activities-table-card,
+  .contracts-table-card,
+  .settings-table-wrap,
+  .table-scroll-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .section-heading {
+    font-size: 0.95rem;
+  }
+
+  .btn {
+    min-height: 40px;
+  }
+
+  .funnel-horizontal {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
+  }
+
+  .funnel-horizontal-row {
+    min-width: 520px;
+  }
+
+  .funnel-page-chart {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+@media (max-width: 640px) {
+  .metric-grid,
+  .funnel-kpi-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .page-actions {
+    flex-direction: column;
+  }
+
+  .page-actions .btn {
+    width: 100%;
+  }
+
+  .filters-row-search .search-wrap input {
+    font-size: 16px;
+  }
+
+  .filter-field input,
+  .filter-field select,
+  .form-group input,
+  .form-group select,
+  .form-group textarea {
+    font-size: 16px;
+  }
 }

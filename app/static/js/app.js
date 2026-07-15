@@ -42,6 +42,7 @@ document.addEventListener("DOMContentLoaded", () => {
   renderPlotlyChart("weekly-chart");
   renderOverviewCharts();
   renderGoalsCharts();
+  initMobileNavigation();
 });
 
 document.body.addEventListener("htmx:afterSwap", (event) => {
@@ -52,3 +53,43 @@ document.body.addEventListener("htmx:afterSwap", (event) => {
     renderOverviewCharts();
   }
 });
+
+function initMobileNavigation() {
+  const body = document.body;
+  const menuBtn = document.getElementById("mobile-menu-btn");
+  const closeBtn = document.getElementById("sidebar-close-btn");
+  const overlay = document.getElementById("sidebar-overlay");
+  const sidebar = document.getElementById("app-sidebar");
+  if (!menuBtn || !sidebar) return;
+
+  const setOpen = (open) => {
+    body.classList.toggle("sidebar-open", open);
+    menuBtn.setAttribute("aria-expanded", open ? "true" : "false");
+    if (overlay) {
+      overlay.setAttribute("aria-hidden", open ? "false" : "true");
+    }
+  };
+
+  menuBtn.addEventListener("click", () => {
+    setOpen(!body.classList.contains("sidebar-open"));
+  });
+
+  closeBtn?.addEventListener("click", () => setOpen(false));
+  overlay?.addEventListener("click", () => setOpen(false));
+
+  sidebar.querySelectorAll(".sidebar-link").forEach((link) => {
+    link.addEventListener("click", () => setOpen(false));
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      setOpen(false);
+    }
+  });
+
+  window.addEventListener("resize", () => {
+    if (window.innerWidth > 900) {
+      setOpen(false);
+    }
+  });
+}

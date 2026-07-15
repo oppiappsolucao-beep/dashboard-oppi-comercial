@@ -323,4 +323,12 @@
     flex-direction: column;
     align-items: stretch;
   }
+
+  .proposals-chat-panel {
+    min-height: 360px;
+  }
+
+  .proposals-chat-body {
+    max-height: 280px;
+  }
 }

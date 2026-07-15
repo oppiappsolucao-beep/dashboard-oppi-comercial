@@ -114,4 +114,7 @@ body.login-page {
 
 @media (max-width: 900px) {
   .login-layout { grid-template-columns: 1fr; }
+  .login-brand-panel { min-height: auto; padding: 28px 22px; }
+  .login-brand-title { font-size: 2rem; }
+  .login-card { padding: 24px 20px; }
 }

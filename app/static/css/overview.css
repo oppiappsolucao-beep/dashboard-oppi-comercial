@@ -276,10 +276,48 @@
   .overview-kpi-grid {
     grid-template-columns: 1fr 1fr;
   }
+
+  .overview-funnel-card {
+    min-height: auto;
+  }
+
+  .overview-funnel-layout {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+
+  .overview-funnel-legend {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px 12px;
+  }
+
+  .overview-grid-bottom {
+    grid-template-columns: 1fr;
+  }
+
+  .overview-daily-action {
+    grid-template-columns: 34px 1fr;
+    grid-template-rows: auto auto;
+  }
+
+  .overview-daily-action-time {
+    grid-column: 2;
+    font-size: 0.76rem;
+  }
 }
 
 @media (max-width: 640px) {
   .overview-kpi-grid {
     grid-template-columns: 1fr;
+  }
+
+  .overview-funnel-legend {
+    grid-template-columns: 1fr;
+  }
+
+  .overview-funnel-layer {
+    font-size: 0.72rem;
+    padding: 0 10px;
   }
 }

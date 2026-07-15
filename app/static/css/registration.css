@@ -183,4 +183,22 @@
   .contracts-filter-actions {
     width: 100%;
   }
+
+  .contracts-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .contracts-table-card {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .form-actions {
+    flex-direction: column;
+  }
+
+  .form-actions .btn {
+    width: 100%;
+  }
 }

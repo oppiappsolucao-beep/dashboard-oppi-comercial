@@ -118,5 +118,16 @@
 }
 
 @media (max-width: 900px) {
-  .pricing-layout { grid-template-columns: 1fr; }
+  .pricing-layout {
+    grid-template-columns: 1fr;
+    min-height: auto;
+  }
+
+  .pricing-contacts-list {
+    max-height: 240px;
+  }
+
+  .oppi-chat-bubble {
+    max-width: 92%;
+  }
 }
