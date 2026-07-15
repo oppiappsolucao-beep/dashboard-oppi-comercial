@@ -16,6 +16,8 @@ from app.services.legacy_core import (
     apply_period_filter,
     as_python_date,
     count_dashboard_status,
+    normalize_digits,
+    normalize_text,
     row_matches_dashboard_card,
     safe_series,
     status_group,
@@ -303,37 +305,103 @@ def _contact_label(row, columns: dict) -> str:
     return row.get("_empresa", "") or "Lead"
 
 
+def _phone_for_row(row, columns: dict) -> str:
+    for key in ("telefone_b2b", "telefone_socio_1", "telefone_fixo", "telefone_alternativo"):
+        column = columns.get(key)
+        if column and column in row.index:
+            value = normalize_text(row.get(column, ""))
+            if value:
+                return value
+    return normalize_text(row.get("_telefone", ""))
+
+
+def _email_for_row(row, columns: dict) -> str:
+    for key in ("email", "email_socio_1"):
+        column = columns.get(key)
+        if column and column in row.index:
+            value = normalize_text(row.get(column, ""))
+            if value:
+                return value
+    return ""
+
+
+def _whatsapp_href(phone: str) -> str:
+    digits = normalize_digits(phone)
+    if not digits:
+        return ""
+    if digits.startswith("55") and len(digits) >= 12:
+        pass
+    elif len(digits) in (10, 11):
+        digits = f"55{digits}"
+    else:
+        return ""
+    return f"https://wa.me/{digits}"
+
+
+def build_row_daily_action(row, columns: dict) -> dict | None:
+    grouped = status_group(row.get("_status_grupo") or row.get("_status_original", ""))
+    if grouped in COMPLETED_STATUSES:
+        return None
+
+    for prefix, statuses, icon, tone in DAILY_ACTION_DEFS:
+        if grouped not in statuses:
+            continue
+
+        contact = _contact_label(row, columns)
+        empresa = normalize_text(row.get("_empresa", "")) or "—"
+        label = f"{prefix} {contact} ({empresa})" if prefix.endswith("para") else f"{prefix} {empresa}"
+        sheet_row = int(row.get("_sheet_row", 0) or 0)
+        telefone = _phone_for_row(row, columns)
+        email = _email_for_row(row, columns)
+
+        action = {
+            "label": label,
+            "action_type": prefix.replace(" -", "").strip(),
+            "icon": icon,
+            "tone": tone,
+            "sort_date": _as_date(row.get("_ultima_atualizacao") or row.get("_data_chamado")) or date.min,
+            "sheet_row": sheet_row,
+            "empresa": empresa,
+            "contact": contact,
+            "status": grouped,
+            "telefone": telefone,
+            "email": email,
+            "href": f"/cadastro/todos/{sheet_row}" if sheet_row else "/cadastro/todos",
+            "edit_href": f"/cadastro/todos/{sheet_row}/editar" if sheet_row else "/cadastro/todos",
+        }
+        if telefone:
+            action["tel_href"] = f"tel:{normalize_digits(telefone)}"
+            whatsapp_href = _whatsapp_href(telefone)
+            if whatsapp_href:
+                action["whatsapp_href"] = whatsapp_href
+        if email:
+            action["mailto_href"] = f"mailto:{email}"
+        return action
+
+    return None
+
+
+def build_client_action(row, columns: dict) -> dict | None:
+    """Próxima ação recomendada para um cadastro específico."""
+    return build_row_daily_action(row, columns)
+
+
 def build_daily_actions(filtered_df: pd.DataFrame, columns: dict) -> list[dict]:
     if filtered_df.empty:
         return []
 
     actionable = []
     for _, row in filtered_df.iterrows():
-        grouped = status_group(row.get("_status_grupo") or row.get("_status_original", ""))
-        if grouped in COMPLETED_STATUSES:
-            continue
-        for prefix, statuses, icon, tone in DAILY_ACTION_DEFS:
-            if grouped in statuses:
-                contact = _contact_label(row, columns)
-                empresa = row.get("_empresa") or "—"
-                actionable.append({
-                    "label": f"{prefix} {contact} ({empresa})" if prefix.endswith("para") else f"{prefix} {empresa}",
-                    "icon": icon,
-                    "tone": tone,
-                    "sort_date": _as_date(row.get("_ultima_atualizacao") or row.get("_data_chamado")) or date.min,
-                    "sheet_row": int(row.get("_sheet_row", 0) or 0),
-                })
-                break
+        action = build_row_daily_action(row, columns)
+        if action:
+            actionable.append(action)
 
     actionable.sort(key=lambda item: item["sort_date"], reverse=True)
     items = []
     for index, item in enumerate(actionable[:5]):
         items.append({
-            "label": item["label"],
-            "icon": item["icon"],
-            "tone": item["tone"],
+            **item,
             "time": DAILY_ACTION_SLOTS[index] if index < len(DAILY_ACTION_SLOTS) else "19:00",
-            "sheet_row": item["sheet_row"],
         })
     return items
 
@@ -373,6 +441,7 @@ def build_hot_opportunities(filtered_df: pd.DataFrame) -> list[dict]:
             "urgencia": urgency,
             "urgencia_class": urgency_class,
             "sheet_row": int(row.get("_sheet_row", 0) or 0),
+            "href": f"/cadastro/todos/{int(row.get('_sheet_row', 0) or 0)}",
         })
 
     rows.sort(key=lambda item: (item["urgencia_class"] != "high", -item["valor_num"]))
@@ -406,6 +475,7 @@ def build_overdue_activities(filtered_df: pd.DataFrame, columns: dict) -> list[d
                     "days_label": f"{days} dia{'s' if days != 1 else ''}",
                     "days": days,
                     "sheet_row": int(row.get("_sheet_row", 0) or 0),
+                    "href": f"/cadastro/todos/{int(row.get('_sheet_row', 0) or 0)}",
                 })
                 break
 

@@ -126,15 +126,16 @@
       </div>
       <div class="overview-daily-actions">
         {% for action in daily_actions %}
-        <div class="overview-daily-action">
+        <a href="{{ action.href }}" class="overview-daily-action overview-daily-action-link">
           <span class="overview-action-icon {{ action.tone }}">
             {% if action.icon == 'phone' %}☎{% elif action.icon == 'whatsapp' %}💬{% elif action.icon == 'email' %}✉{% elif action.icon == 'calendar' %}📅{% else %}✓{% endif %}
           </span>
           <div class="overview-daily-action-body">
             <div class="overview-daily-action-label">{{ action.label }}</div>
+            <div class="overview-daily-action-meta">Abrir cadastro do cliente →</div>
           </div>
           <div class="overview-daily-action-time">{{ action.time }}</div>
-        </div>
+        </a>
         {% else %}
         <div class="overview-empty-note">Nenhuma ação pendente no filtro atual.</div>
         {% endfor %}
@@ -164,12 +165,14 @@
         </thead>
         <tbody>
           {% for row in hot_opportunities %}
-          <tr>
+          <tr class="overview-clickable-row" onclick="window.location.href='{{ row.href }}'">
             <td>
+              <a href="{{ row.href }}" class="overview-row-link">
               <div class="table-company">
                 <span class="table-company-icon">{{ row.empresa_initials }}</span>
                 <span class="table-company-name">{{ row.empresa }}</span>
               </div>
+              </a>
             </td>
             <td><span class="stage-badge {{ row.etapa_class }}">{{ row.etapa }}</span></td>
             <td class="value-cell">{{ row.valor }}</td>
@@ -194,13 +197,13 @@
 
       <div class="overview-overdue-list">
         {% for item in overdue_activities %}
-        <div class="overview-overdue-item">
+        <a href="{{ item.href }}" class="overview-overdue-item overview-overdue-link">
           <span class="overview-overdue-icon">
             {% if item.icon == 'phone' %}☎{% elif item.icon == 'email' %}✉{% else %}✓{% endif %}
           </span>
           <div class="overview-overdue-label">{{ item.label }}</div>
           <div class="overview-overdue-days">{{ item.days_label }}</div>
-        </div>
+        </a>
         {% else %}
         <div class="overview-empty-note">Nenhuma atividade em atraso no filtro atual.</div>
         {% endfor %}

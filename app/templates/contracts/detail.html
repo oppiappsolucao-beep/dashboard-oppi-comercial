@@ -6,9 +6,44 @@
   <div class="registration-subtitle">Dados completos do cadastro na planilha comercial.</div>
 </div>
 
-<div style="display:flex;gap:10px;margin-bottom:18px;">
+<div class="client-detail-actions">
   <a href="/cadastro/todos" class="btn btn-secondary">Voltar</a>
   <a href="/cadastro/todos/{{ sheet_row }}/editar" class="btn">Editar cadastro</a>
+</div>
+
+<div class="client-action-panel panel">
+  <div class="section-heading">Próxima ação</div>
+  <div class="section-subtitle">Recomendação com base no status atual do cliente na planilha.</div>
+
+  {% if client_action %}
+  <div class="client-action-card">
+    <span class="overview-action-icon {{ client_action.tone }}">
+      {% if client_action.icon == 'phone' %}☎{% elif client_action.icon == 'whatsapp' %}💬{% elif client_action.icon == 'email' %}✉{% elif client_action.icon == 'calendar' %}📅{% else %}✓{% endif %}
+    </span>
+    <div class="client-action-body">
+      <div class="client-action-type">{{ client_action.action_type }}</div>
+      <div class="client-action-label">{{ client_action.label }}</div>
+      <div class="client-action-status">Status atual: <strong>{{ client_action.status }}</strong></div>
+    </div>
+  </div>
+
+  <div class="client-action-buttons">
+    {% if client_action.whatsapp_href %}
+    <a href="{{ client_action.whatsapp_href }}" class="btn" target="_blank" rel="noopener">WhatsApp</a>
+    {% endif %}
+    {% if client_action.tel_href %}
+    <a href="{{ client_action.tel_href }}" class="btn btn-secondary">Ligar</a>
+    {% endif %}
+    {% if client_action.mailto_href %}
+    <a href="{{ client_action.mailto_href }}" class="btn btn-secondary">E-mail</a>
+    {% endif %}
+    <a href="{{ client_action.edit_href }}" class="btn btn-secondary">Atualizar status</a>
+  </div>
+  {% else %}
+  <div class="client-action-empty">
+    Nenhuma ação pendente para este cadastro. Status finalizado ou sem pendência comercial.
+  </div>
+  {% endif %}
 </div>
 
 <div class="detail-grid">

@@ -15,6 +15,7 @@ from app.services.legacy_core import (
     safe_series,
     status_group,
 )
+from app.services.overview import build_client_action
 from app.services.registration import get_seller_options, save_company_edit
 
 router = APIRouter()
@@ -179,6 +180,7 @@ async def contract_detail(request: Request, sheet_row: int):
             "active_page": "contracts",
             "sheet_row": sheet_row,
             "fields": fields,
+            "client_action": build_client_action(row, columns),
         },
     )
 
