@@ -3,7 +3,7 @@ from datetime import date, datetime, timedelta
 
 import pandas as pd
 
-from app.services.legacy_core import safe_series, status_group
+from app.services.legacy_core import as_python_date, as_python_datetime, safe_series, status_group
 
 ACTIVITY_TYPES = ["Ligação", "WhatsApp", "Reunião", "E-mail", "Tarefa"]
 
@@ -65,27 +65,11 @@ def _initials(name: str) -> str:
 
 
 def _as_date(value) -> date | None:
-    if value is None or (isinstance(value, float) and pd.isna(value)):
-        return None
-    if isinstance(value, datetime):
-        return value.date()
-    if isinstance(value, date):
-        return value
-    try:
-        return pd.to_datetime(value).date()
-    except Exception:
-        return None
+    return as_python_date(value)
 
 
 def _as_datetime(value) -> datetime | None:
-    if value is None or (isinstance(value, float) and pd.isna(value)):
-        return None
-    if isinstance(value, datetime):
-        return value
-    try:
-        return pd.to_datetime(value).to_pydatetime()
-    except Exception:
-        return None
+    return as_python_datetime(value)
 
 
 def _activity_type(status: str) -> tuple[str, str, str]:

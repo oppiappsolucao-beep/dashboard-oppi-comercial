@@ -6,6 +6,7 @@ from datetime import date, datetime, timedelta
 import pandas as pd
 
 from app.config import settings
+from app.services.legacy_core import as_python_datetime
 
 SETTINGS_TABS = [
     ("geral", "Geral"),
@@ -66,14 +67,7 @@ def normalize_name(name: str) -> str:
 
 
 def _as_datetime(value) -> datetime | None:
-    if value is None or (isinstance(value, float) and pd.isna(value)):
-        return None
-    if isinstance(value, datetime):
-        return value
-    try:
-        return pd.to_datetime(value).to_pydatetime()
-    except Exception:
-        return None
+    return as_python_datetime(value)
 
 
 def _format_last_access(value) -> str:

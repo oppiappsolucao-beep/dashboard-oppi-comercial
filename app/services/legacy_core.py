@@ -7,7 +7,7 @@ import os
 import re
 import unicodedata
 import uuid
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
@@ -335,6 +335,55 @@ def as_datetime_series(series: pd.Series) -> pd.Series:
 
     normalized = pd.to_datetime(series, errors="coerce", dayfirst=True)
     return normalized
+
+
+def as_python_date(value) -> date | None:
+    """Converte valores da planilha para date, retornando None quando inválido/NaT."""
+    if value is None:
+        return None
+
+    try:
+        if pd.isna(value):
+            return None
+    except (TypeError, ValueError):
+        pass
+
+    if isinstance(value, datetime):
+        return value.date()
+
+    if isinstance(value, date):
+        return value
+
+    try:
+        parsed = pd.to_datetime(value, errors="coerce", dayfirst=True)
+        if pd.isna(parsed):
+            return None
+        return parsed.date()
+    except Exception:
+        return None
+
+
+def as_python_datetime(value) -> datetime | None:
+    """Converte valores da planilha para datetime, retornando None quando inválido/NaT."""
+    if value is None:
+        return None
+
+    try:
+        if pd.isna(value):
+            return None
+    except (TypeError, ValueError):
+        pass
+
+    if isinstance(value, datetime):
+        return value
+
+    try:
+        parsed = pd.to_datetime(value, errors="coerce", dayfirst=True)
+        if pd.isna(parsed):
+            return None
+        return parsed.to_pydatetime()
+    except Exception:
+        return None
 
 
 def normalize_period_filter(value):

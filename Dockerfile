@@ -5,7 +5,7 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV PORT=8501
-ENV APP_BUILD=20260715-sheet-date-fix
+ENV APP_BUILD=20260715-nat-date-fix
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \

@@ -90,3 +90,13 @@ async def http_exception_handler(request: Request, exc: HTTPException):
             status_code=503,
         )
     raise exc
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    return render(
+        request,
+        "error.html",
+        {"message": f"Erro interno ao carregar a página: {exc}"},
+        status_code=500,
+    )

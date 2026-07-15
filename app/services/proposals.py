@@ -8,7 +8,7 @@ from urllib.parse import quote
 import pandas as pd
 
 from app.services.filters import DashboardFilters, apply_dashboard_filters
-from app.services.legacy_core import apply_period_filter, normalize_search_text, normalize_text, status_group
+from app.services.legacy_core import apply_period_filter, as_python_date, normalize_search_text, normalize_text, status_group
 
 PROPOSAL_ROW_STATUSES = {"Proposta", "Fechado", "Conversando", "Reunião"}
 
@@ -40,16 +40,7 @@ def _initials(name: str) -> str:
 
 
 def _as_date(value) -> date | None:
-    if value is None or (isinstance(value, float) and pd.isna(value)):
-        return None
-    if isinstance(value, datetime):
-        return value.date()
-    if isinstance(value, date):
-        return value
-    try:
-        return pd.to_datetime(value).date()
-    except Exception:
-        return None
+    return as_python_date(value)
 
 
 def _format_money(value) -> str:

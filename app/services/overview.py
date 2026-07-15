@@ -14,6 +14,7 @@ from app.services.legacy_core import (
     DASHBOARD_STATUS_OPTIONS,
     STATUS_COLORS,
     apply_period_filter,
+    as_python_date,
     count_dashboard_status,
     row_matches_dashboard_card,
     safe_series,
@@ -106,16 +107,7 @@ def _initials(name: str) -> str:
 
 
 def _as_date(value) -> date | None:
-    if value is None or (isinstance(value, float) and pd.isna(value)):
-        return None
-    if isinstance(value, datetime):
-        return value.date()
-    if isinstance(value, date):
-        return value
-    try:
-        return pd.to_datetime(value).date()
-    except Exception:
-        return None
+    return as_python_date(value)
 
 
 def _period_trend(current: float, previous: float, is_points: bool = False) -> dict:
