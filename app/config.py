@@ -10,7 +10,7 @@ load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 class Settings:
     sheet_id: str = "1GAbrca0NSiJfPXaSte1qGxXCsGkQPacoRsm0PVB51gE"
     worksheet_name: str = "Folha1"
-    cache_ttl_seconds: int = 120
+    cache_ttl_seconds: int = 30
 
     app_username: str
     app_password: str

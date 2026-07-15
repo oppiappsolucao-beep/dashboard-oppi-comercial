@@ -5,7 +5,9 @@ from app.config import settings
 from app.services.legacy_core import (
     PricingSessionStore,
     identify_columns,
+    invalidate_sheet_cache,
     load_sheet_data,
+    normalize_text,
     prepare_data,
     set_pricing_store,
 )
@@ -19,7 +21,10 @@ def get_pricing_store(request: Request) -> PricingSessionStore:
     return store
 
 
-def get_prepared_data():
+def get_prepared_data(refresh: bool = False):
+    if refresh:
+        invalidate_sheet_cache()
+
     try:
         df = load_sheet_data()
     except Exception as error:
@@ -31,6 +36,9 @@ def get_prepared_data():
     try:
         columns = identify_columns(df)
         prepared = prepare_data(df, columns)
+        prepared = prepared[
+            prepared["_empresa"].apply(lambda value: normalize_text(value) != "")
+        ].copy()
         return prepared, columns
     except Exception as error:
         raise HTTPException(

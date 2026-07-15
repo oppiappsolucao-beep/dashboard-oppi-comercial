@@ -938,6 +938,13 @@ def load_sheet_data() -> pd.DataFrame:
         )
     ].copy()
 
+    empresa_column = first_existing_column(
+        df,
+        ["Nome Empresas", "Nome da empresa", "Empresa", "Nome Empresa", "Nome empresas", "Nome Empresa(s)"],
+    )
+    if empresa_column:
+        df = df[df[empresa_column].apply(lambda value: normalize_text(value) != "")].copy()
+
     result = df.reset_index(drop=True)
     _sheet_cache[cache_key] = result.copy()
     return result

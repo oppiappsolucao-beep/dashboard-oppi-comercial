@@ -9,6 +9,7 @@ from app.services.filters import get_filter_options as get_dashboard_filter_opti
 from app.services.legacy_core import (
     DuplicateRegistrationError,
     STATUS_OPTIONS,
+    invalidate_sheet_cache,
     normalize_search_text,
     normalize_text,
     safe_series,
@@ -48,7 +49,8 @@ async def contracts_list(request: Request, order: str = "recentes"):
     if redirect:
         return redirect
 
-    df, columns = get_prepared_data()
+    refresh = request.query_params.get("refresh") == "1"
+    df, columns = get_prepared_data(refresh=refresh)
     options = get_dashboard_filter_options(df)
 
     filters = apply_default_period_filters(
@@ -250,3 +252,12 @@ async def contract_edit_submit(request: Request, sheet_row: int):
         request.session["edit_error"] = f"Não consegui salvar: {error}"
 
     return RedirectResponse(url=f"/cadastro/todos/{sheet_row}/editar", status_code=303)
+
+
+@router.post("/cadastro/todos/atualizar")
+async def contracts_refresh(request: Request):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+    invalidate_sheet_cache()
+    return RedirectResponse(url="/cadastro/todos?refresh=1", status_code=303)
