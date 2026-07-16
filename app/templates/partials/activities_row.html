@@ -1,0 +1,157 @@
+<tr class="activity-row" id="activity-row-{{ row.id }}" data-activity-id="{{ row.id }}">
+  <td>
+    <div class="activity-cell">
+      <span class="activity-drag-handle" title="Arrastar">⋮⋮</span>
+      <span class="activity-cell-icon">{{ row.icon }}</span>
+      <div>
+        <div class="activity-cell-title">{{ row.title }}</div>
+        <div class="activity-cell-desc">{{ row.description }}</div>
+      </div>
+    </div>
+  </td>
+  <td>
+    <a href="/cadastro/todos/{{ row.sheet_row }}" class="activity-lead-link">
+      <div class="activity-lead-company">{{ row.empresa }}</div>
+      <div class="activity-lead-contact">{{ row.contato }}</div>
+    </a>
+  </td>
+  <td><span class="activity-stage-badge">{{ row.stage }}</span></td>
+  <td>
+    <select class="activity-inline-select" name="channel" data-activity-form="{{ row.id }}" data-activity-field>
+      {% for option in channels %}
+      <option value="{{ option }}" {% if row.channel == option %}selected{% endif %}>{{ option }}</option>
+      {% endfor %}
+    </select>
+  </td>
+  <td>
+    <select class="activity-inline-select" name="assigned_user_id" data-activity-form="{{ row.id }}" data-activity-field>
+      {% for option in responsible_options %}
+      {% if option != 'Todos os responsáveis' %}
+      <option value="{{ option }}" {% if row.vendedor == option %}selected{% endif %}>{{ option }}</option>
+      {% endif %}
+      {% endfor %}
+    </select>
+  </td>
+  <td>
+    <div class="activity-inline-datetime">
+      <input type="date" class="activity-inline-input" name="scheduled_date" value="{{ row.scheduled_date }}" data-activity-form="{{ row.id }}" data-activity-field>
+      <input type="time" class="activity-inline-input" name="scheduled_time" value="{{ row.scheduled_time }}" data-activity-form="{{ row.id }}" data-activity-field>
+    </div>
+  </td>
+  <td>
+    <select class="activity-inline-select activity-status-select status-{{ row.status_class }}" name="status" data-activity-form="{{ row.id }}" data-activity-field data-activity-status-select>
+      {% for value, label in status_options %}
+      <option value="{{ value }}" {% if row.status == value %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </td>
+  <td>
+    <select class="activity-inline-select" name="result" data-activity-form="{{ row.id }}" data-activity-field>
+      <option value="">Selecione</option>
+      {% for option in result_options %}
+      {% if option %}
+      <option value="{{ option }}" {% if row.result == option %}selected{% endif %}>{{ option }}</option>
+      {% endif %}
+      {% endfor %}
+    </select>
+  </td>
+  <td>
+    <select class="activity-inline-select" name="next_action" data-activity-form="{{ row.id }}" data-activity-field>
+      <option value="">Selecione</option>
+      {% for option in process_actions %}
+      <option value="{{ option }}" {% if row.proxima_acao == option %}selected{% endif %}>{{ option }}</option>
+      {% endfor %}
+    </select>
+  </td>
+  <td class="activity-action-cell">
+    <div class="activity-action-wrap">
+      <button type="button"
+        class="btn btn-small activity-save-btn"
+        data-activity-form="{{ row.id }}"
+        hx-post="/atividades/{{ row.id }}/salvar"
+        hx-include="[data-activity-form='{{ row.id }}']"
+        hx-target="#activities-root"
+        hx-swap="innerHTML"
+        disabled>💾 Salvar</button>
+      <details class="activity-menu">
+        <summary class="table-menu-btn" title="Mais ações">⋯</summary>
+        <div class="activity-menu-panel">
+          <a href="/cadastro/todos/{{ row.sheet_row }}">Abrir lead</a>
+          <a href="/cadastro/todos/{{ row.sheet_row }}#timeline">Ver linha do tempo</a>
+          <button type="button" onclick="activityToggleExtra('{{ row.id }}')">Adicionar observação</button>
+          <button type="button"
+            hx-post="/atividades/{{ row.id }}/cancelar"
+            hx-include="[data-activity-form='{{ row.id }}']"
+            hx-target="#activities-root"
+            hx-swap="innerHTML"
+            hx-confirm="Cancelar esta atividade?">Cancelar atividade</button>
+          {% if is_admin %}
+          <button type="button"
+            hx-post="/atividades/{{ row.id }}/excluir"
+            hx-include="#activities-filters"
+            hx-target="#activities-root"
+            hx-swap="innerHTML"
+            hx-confirm="Excluir esta atividade?">Excluir atividade</button>
+          {% endif %}
+        </div>
+      </details>
+    </div>
+  </td>
+</tr>
+<tr class="activity-extra-row {% if row.show_extra %}is-open{% endif %}" id="activity-extra-{{ row.id }}" data-activity-id="{{ row.id }}">
+  <td colspan="10">
+    <div class="activity-extra-panel">
+      <div class="activity-extra-grid">
+        <label>
+          <span>Próxima ação — data</span>
+          <input type="date" class="activity-inline-input" name="next_action_date" value="{{ row.next_action_date }}" data-activity-form="{{ row.id }}" data-activity-field>
+        </label>
+        <label>
+          <span>Horário</span>
+          <input type="time" class="activity-inline-input" name="next_action_time" value="{{ row.next_action_time }}" data-activity-form="{{ row.id }}" data-activity-field>
+        </label>
+        <label>
+          <span>Canal da próxima ação</span>
+          <select class="activity-inline-select" name="next_action_channel" data-activity-form="{{ row.id }}" data-activity-field>
+            {% for option in channels %}
+            <option value="{{ option }}" {% if row.next_action_channel == option %}selected{% endif %}>{{ option }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label>
+          <span>Mover etapa do funil?</span>
+          <select class="activity-inline-select" name="move_stage" data-activity-form="{{ row.id }}" data-activity-field>
+            <option value="">Manter etapa atual</option>
+            {% for option in stage_options %}
+            {% if option != 'Todas as etapas' %}
+            <option value="{{ option }}" {% if row.move_stage == option %}selected{% endif %}>{{ option }}</option>
+            {% endif %}
+            {% endfor %}
+          </select>
+        </label>
+        <label class="activity-extra-wide">
+          <span>Observação</span>
+          <textarea class="activity-inline-textarea" name="note" rows="2" data-activity-form="{{ row.id }}" data-activity-field>{{ row.note }}</textarea>
+        </label>
+        <label class="activity-extra-wide activity-result-other {% if row.result != 'Outro' %}is-hidden{% endif %}">
+          <span>Detalhe do resultado</span>
+          <textarea class="activity-inline-textarea" name="result_notes" rows="2" data-activity-form="{{ row.id }}" data-activity-field>{{ row.result_notes }}</textarea>
+        </label>
+      </div>
+      <input type="hidden" name="tab" value="{{ activities_params.tab }}" data-activity-form="{{ row.id }}">
+      <input type="hidden" name="activity_type" value="{{ activities_params.activity_type }}" data-activity-form="{{ row.id }}">
+      <input type="hidden" name="channel_filter" value="{{ activities_params.channel }}" data-activity-form="{{ row.id }}">
+      <input type="hidden" name="responsible" value="{{ activities_params.responsible }}" data-activity-form="{{ row.id }}">
+      <input type="hidden" name="stage_filter" value="{{ activities_params.stage }}" data-activity-form="{{ row.id }}">
+      <input type="hidden" name="page" value="{{ table.page }}" data-activity-form="{{ row.id }}">
+      <input type="hidden" name="per_page" value="{{ table.per_page }}" data-activity-form="{{ row.id }}">
+      <input type="hidden" name="seller" value="{{ filters.seller }}" data-activity-form="{{ row.id }}">
+      <input type="hidden" name="status_filter" value="{{ filters.status }}" data-activity-form="{{ row.id }}">
+      <input type="hidden" name="period_start" value="{{ filters.period_start }}" data-activity-form="{{ row.id }}">
+      <input type="hidden" name="period_end" value="{{ filters.period_end }}" data-activity-form="{{ row.id }}">
+      <input type="hidden" name="niche" value="{{ filters.niche }}" data-activity-form="{{ row.id }}">
+      <input type="hidden" name="state" value="{{ filters.state }}" data-activity-form="{{ row.id }}">
+      <input type="hidden" name="search" value="{{ filters.search }}" data-activity-form="{{ row.id }}">
+    </div>
+  </td>
+</tr>
