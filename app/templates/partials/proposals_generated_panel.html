@@ -24,6 +24,15 @@
     <a href="{{ generated_proposal.download_url }}" class="btn" download>Baixar PDF</a>
     <a href="{{ generated_proposal.email_href }}" class="btn btn-secondary">Enviar por e-mail</a>
     <a href="{{ generated_proposal.preview_url }}" class="btn btn-secondary" target="_blank" rel="noopener">Abrir em nova aba</a>
+    <form
+      class="proposals-delete-form"
+      hx-post="/propostas/gerada/excluir"
+      hx-target="#proposals-chat-panel"
+      hx-swap="innerHTML"
+      hx-confirm="Excluir esta proposta gerada? O PDF sairá da tela, mas você poderá gerar outro pelo chat."
+    >
+      <button type="submit" class="btn btn-danger">Excluir proposta</button>
+    </form>
   </div>
 </div>
 {% endif %}

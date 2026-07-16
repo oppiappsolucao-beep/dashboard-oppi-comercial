@@ -64,6 +64,21 @@
   min-width: 150px;
 }
 
+.proposals-delete-form {
+  margin: 0;
+}
+
+.proposals-generated-actions .btn-danger {
+  background: #fff;
+  color: #DC2626;
+  border: 1px solid #FECACA;
+}
+
+.proposals-generated-actions .btn-danger:hover {
+  background: #FEF2F2;
+  border-color: #FCA5A5;
+}
+
 .proposals-table-header {
   display: flex;
   align-items: center;

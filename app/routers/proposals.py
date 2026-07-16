@@ -14,6 +14,8 @@ from app.services.proposals import (
     default_proposal_chat_messages,
     get_generated_proposal,
     handle_proposal_chat_message,
+    clear_generated_proposal,
+    strip_proposal_pdf_cards,
     render_proposal_chat_messages,
     should_show_proposal_quick_form,
 )
@@ -178,6 +180,24 @@ async def proposals_refresh(request: Request):
         return redirect
     invalidate_sheet_cache()
     return RedirectResponse(url="/propostas", status_code=303)
+
+
+@router.post("/propostas/gerada/excluir", response_class=HTMLResponse)
+async def proposals_delete_generated(request: Request):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+
+    clear_generated_proposal(request)
+    chat_messages = strip_proposal_pdf_cards(_get_chat_messages(request))
+    request.session["proposals_chat"] = chat_messages
+
+    df, _columns = get_prepared_data()
+    return render(
+        request,
+        "partials/proposals_delete_response.html",
+        _proposals_chat_context(request, chat_messages, df),
+    )
 
 
 @router.post("/propostas/chat/reset")

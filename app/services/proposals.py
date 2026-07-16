@@ -377,6 +377,14 @@ def get_generated_proposal(request) -> dict | None:
     return data if isinstance(data, dict) else None
 
 
+def clear_generated_proposal(request) -> None:
+    request.session.pop("proposals_generated", None)
+
+
+def strip_proposal_pdf_cards(chat_messages: list[dict]) -> list[dict]:
+    return [message for message in chat_messages if message.get("type") != "pdf_card"]
+
+
 def _extract_value(message: str) -> str | None:
     patterns = [
         r"R\$\s*([\d.,]+)",
