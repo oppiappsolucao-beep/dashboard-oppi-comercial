@@ -12,6 +12,8 @@ class Settings:
     worksheet_name: str = "Folha1"
     cache_ttl_seconds: int = 30
     proposal_template_doc_id: str = "1iTBG1ZUMCVB-aS7QoYiC4Sym6Dgn9Z7gMN-LGLgyprI"
+    support_whatsapp_number: str = "5511942157917"
+    support_whatsapp_label: str = "+55 11 94215-7917"
 
     app_username: str
     app_password: str
@@ -41,6 +43,19 @@ class Settings:
             os.getenv("PROPOSAL_TEMPLATE_DOC_ID", self.proposal_template_doc_id).strip()
             or self.proposal_template_doc_id
         )
+        self.support_whatsapp_number = (
+            os.getenv("SUPPORT_WHATSAPP_NUMBER", self.support_whatsapp_number).strip()
+            or self.support_whatsapp_number
+        )
+        self.support_whatsapp_label = (
+            os.getenv("SUPPORT_WHATSAPP_LABEL", self.support_whatsapp_label).strip()
+            or self.support_whatsapp_label
+        )
+
+    @property
+    def support_whatsapp_url(self) -> str:
+        digits = "".join(ch for ch in self.support_whatsapp_number if ch.isdigit())
+        return f"https://wa.me/{digits}"
 
     @property
     def auth_configured(self) -> bool:

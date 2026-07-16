@@ -137,23 +137,54 @@
 .status-orange { background: #FFEDD5; color: #C2410C; }
 .status-red { background: #FEE2E2; color: #B91C1C; }
 
-.operational-actions-cell {
-  display: flex;
-  flex-wrap: wrap;
+.operational-action-table {
+  margin-top: 4px;
+}
+
+.operational-action-table tbody tr {
+  vertical-align: middle;
+}
+
+.operational-action-table th,
+.operational-action-table td {
+  vertical-align: middle;
+}
+
+.operational-actions-wrap {
+  display: inline-flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-start;
   gap: 6px;
-  min-width: 180px;
+  max-width: none;
+}
+
+.operational-actions-cell {
+  display: table-cell;
+  vertical-align: middle !important;
+  white-space: nowrap;
+  width: 1%;
+  padding-right: 18px !important;
+}
+
+.operational-action-table td.operational-actions-cell {
+  width: 1%;
+  white-space: nowrap;
 }
 
 .operational-action-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex: 0 0 auto;
   padding: 6px 10px;
   border-radius: 10px;
   font-size: 0.74rem;
   font-weight: 800;
   text-decoration: none;
   white-space: nowrap;
+  line-height: 1.2;
 }
 
 .operational-action-btn.tone-green { background: #DCFCE7; color: #15803D; }
@@ -210,7 +241,8 @@
 
 .operational-return-actions {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  align-items: center;
   gap: 6px;
 }
 

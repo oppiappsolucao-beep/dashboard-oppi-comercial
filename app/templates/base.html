@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/dashboard.css?v=12">
+  <link rel="stylesheet" href="/static/css/dashboard.css?v=13">
   <link rel="stylesheet" href="/static/css/registration.css?v=13">
   <link rel="stylesheet" href="/static/css/pricing.css?v=8">
   <script src="https://unpkg.com/htmx.org@2.0.4"></script>
@@ -63,6 +63,13 @@
       </nav>
 
       <div class="sidebar-footer">
+        <a href="{{ support_whatsapp_url }}" class="sidebar-whatsapp-link" target="_blank" rel="noopener">
+          <span class="sidebar-whatsapp-icon" aria-hidden="true">💬</span>
+          <span>
+            <span class="sidebar-whatsapp-title">WhatsApp Oppi</span>
+            <span class="sidebar-whatsapp-number">{{ support_whatsapp_label }}</span>
+          </span>
+        </a>
         <div class="sidebar-user">
           <div class="sidebar-user-avatar">{{ app_username[:2] | upper }}</div>
           <div>
@@ -90,5 +97,9 @@
       </main>
     </div>
   </div>
+
+  <a href="{{ support_whatsapp_url }}" class="whatsapp-fab" target="_blank" rel="noopener" aria-label="Falar no WhatsApp Oppi {{ support_whatsapp_label }}">
+    <span aria-hidden="true">💬</span>
+  </a>
 </body>
 </html>

@@ -157,11 +157,13 @@
             <td>{{ item.owner }}</td>
             <td><span class="operational-status {{ item.status_class }}">{{ item.status_label }}</span></td>
             <td class="operational-actions-cell">
-              {% for button in item.buttons %}
-              <a href="{{ button.href }}"
-                class="operational-action-btn tone-{{ button.tone }}"
-                {% if button.external %}target="_blank" rel="noopener"{% endif %}>{{ button.label }}</a>
-              {% endfor %}
+              <div class="operational-actions-wrap">
+                {% for button in item.buttons %}
+                <a href="{{ button.href }}"
+                  class="operational-action-btn tone-{{ button.tone }}"
+                  {% if button.external %}target="_blank" rel="noopener"{% endif %}>{{ button.label }}</a>
+                {% endfor %}
+              </div>
             </td>
           </tr>
           {% endfor %}
@@ -186,9 +188,11 @@
             <div class="operational-return-meta">{{ item.channel }} · {{ item.description }} · {{ item.owner }}</div>
           </div>
           <div class="operational-return-actions">
+            <div class="operational-actions-wrap">
             {% for button in item.buttons %}
             <a href="{{ button.href }}" class="operational-action-btn tone-{{ button.tone }}" {% if button.external %}target="_blank" rel="noopener"{% endif %}>{{ button.label }}</a>
             {% endfor %}
+            </div>
           </div>
         </div>
         {% endfor %}

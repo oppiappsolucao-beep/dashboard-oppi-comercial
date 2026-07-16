@@ -276,20 +276,29 @@ def _action_buttons(lead: dict, suggested: str, channel: str = "") -> list[dict]
     email = lead.get("email", "")
     wa = _whatsapp_href(phone)
 
-    if suggested in {"Fazer primeiro contato", "Retomar qualificação", "Realizar follow-up da proposta"} or channel == "whatsapp":
-        if wa:
-            buttons.append({"label": "Chamar", "href": wa, "tone": "green", "external": True})
+    whatsapp_actions = {
+        "Fazer primeiro contato",
+        "Retomar qualificação",
+        "Realizar follow-up da proposta",
+        "Retomar negociação",
+    }
+    if (suggested in whatsapp_actions or channel == "whatsapp") and wa:
+        buttons.append({"label": "Chamar", "href": wa, "tone": "green", "external": True})
+
     if suggested in {"Agendar retorno", "Agendar reunião", "Definir próximo passo", "Definir próxima ação"}:
         buttons.append({"label": "Agendar", "href": f"{lead['href']}/editar", "tone": "blue"})
+
     if suggested == "Criar proposta":
         buttons.append({"label": "Criar proposta", "href": "/propostas", "tone": "purple"})
-    if suggested in {"Confirmar reunião", "Realizar follow-up da proposta", "Retomar qualificação"}:
-        if wa:
-            buttons.append({"label": "Retornar", "href": wa, "tone": "green", "external": True})
-        elif phone:
-            buttons.append({"label": "Ligar", "href": f"tel:{normalize_digits(phone)}", "tone": "green"})
+
+    if suggested == "Confirmar reunião" and wa and not any(item["label"] == "Chamar" for item in buttons):
+        buttons.append({"label": "Retornar", "href": wa, "tone": "green", "external": True})
+    elif suggested == "Confirmar reunião" and phone and not wa:
+        buttons.append({"label": "Ligar", "href": f"tel:{normalize_digits(phone)}", "tone": "green"})
+
     if channel == "email" and email:
         buttons.append({"label": "Enviar e-mail", "href": f"mailto:{email}", "tone": "blue", "external": True})
+
     if channel == "reuniao":
         buttons.append({"label": "Abrir reunião", "href": lead["href"], "tone": "blue"})
 
@@ -302,7 +311,8 @@ def _action_buttons(lead: dict, suggested: str, channel: str = "") -> list[dict]
 
     if not buttons:
         buttons.append({"label": "Abrir", "href": lead["href"], "tone": "blue"})
-    return buttons[:3]
+
+    return buttons[:2]
 
 
 def _append_action(
