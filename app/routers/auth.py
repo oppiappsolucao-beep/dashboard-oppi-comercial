@@ -30,6 +30,7 @@ async def login_submit(
 ):
     if check_credentials(username, password):
         request.session["authenticated"] = True
+        request.session["username"] = username.strip()
         request.session["auth_error"] = ""
         return RedirectResponse(url="/visao-geral", status_code=303)
 

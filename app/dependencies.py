@@ -55,3 +55,10 @@ def require_auth(request: Request):
 
 def check_credentials(username: str, password: str) -> bool:
     return username == settings.app_username and password == settings.app_password
+
+
+def is_admin(request: Request) -> bool:
+    username = normalize_text(request.session.get("username", ""))
+    if username:
+        return username.lower() == settings.app_username.lower()
+    return bool(request.session.get("authenticated"))

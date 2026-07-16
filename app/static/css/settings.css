@@ -393,6 +393,67 @@
   font-weight: 600;
 }
 
+.settings-goals-layout {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 16px;
+}
+
+.settings-goals-form {
+  margin-top: 16px;
+}
+
+.settings-goals-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.settings-goals-field label {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.settings-goals-field select,
+.settings-goals-field input {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 12px;
+  font: inherit;
+  background: #fff;
+}
+
+.settings-goals-table td strong {
+  color: var(--violet);
+}
+
+.settings-alert {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.settings-alert.success {
+  background: #ECFDF5;
+  color: #047857;
+  border: 1px solid #A7F3D0;
+}
+
+.settings-alert.error {
+  background: #FEF2F2;
+  color: #B91C1C;
+  border: 1px solid #FECACA;
+}
+
 @media (max-width: 1200px) {
   .settings-layout,
   .settings-bottom-grid {
@@ -415,6 +476,7 @@
 }
 
 @media (max-width: 900px) {
+  .settings-goals-layout,
   .settings-company-grid,
   .settings-company-grid-wide,
   .settings-integrations-grid,

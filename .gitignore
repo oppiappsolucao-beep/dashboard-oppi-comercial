@@ -204,6 +204,7 @@ cython_debug/
 oppi_crm.db
 generated/proposals/*.pdf
 !generated/proposals/.gitkeep
+storage/monthly_goals.json
 
 # Ruff stuff:
 .ruff_cache/

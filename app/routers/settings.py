@@ -2,12 +2,14 @@ from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from app.config import settings
-from app.dependencies import get_prepared_data, require_auth
-from app.services.legacy_core import invalidate_sheet_cache
+from app.dependencies import get_prepared_data, is_admin, require_auth
+from app.services.legacy_core import invalidate_sheet_cache, parse_money
+from app.services.monthly_goals import TEAM_SELLER_LABEL, invalidate_monthly_goals_cache, set_monthly_goal
 from app.services.settings_page import (
     ROLE_OPTIONS,
     SETTINGS_TABS,
     build_company_profile,
+    build_goals_settings,
     build_integrations,
     build_permissions,
     build_services_list,
@@ -73,6 +75,10 @@ def _settings_context(request: Request, settings_params: dict):
         "permissions": build_permissions(_get_permissions(request)),
         "integrations": integrations,
         "company": build_company_profile(df),
+        "goals_settings": build_goals_settings(df),
+        "is_admin": is_admin(request),
+        "goal_success": request.session.pop("settings_goal_success", ""),
+        "goal_error": request.session.pop("settings_goal_error", ""),
     }
 
 
@@ -145,6 +151,38 @@ async def settings_permissions_toggle(
         "partials/settings_content.html",
         _settings_context(request, settings_params),
     )
+
+
+@router.post("/configuracoes/metas")
+async def settings_save_goal(
+    request: Request,
+    month: int = Form(...),
+    year: int = Form(...),
+    amount: str = Form(...),
+    seller: str = Form(TEAM_SELLER_LABEL),
+    tab: str = Form("metas"),
+):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+
+    if not is_admin(request):
+        request.session["settings_goal_error"] = "Apenas o administrador pode definir a meta do mês."
+        return RedirectResponse(url="/configuracoes?tab=metas", status_code=303)
+
+    try:
+        goal_value = parse_money(amount)
+        if goal_value <= 0:
+            raise ValueError("Informe um valor maior que zero para a meta.")
+        set_monthly_goal(year, month, goal_value, seller)
+        invalidate_monthly_goals_cache()
+        request.session["settings_goal_success"] = "Meta do mês salva com sucesso."
+    except ValueError as error:
+        request.session["settings_goal_error"] = str(error) if str(error) else "Informe um valor válido para a meta."
+    except Exception as error:
+        request.session["settings_goal_error"] = f"Não consegui salvar a meta: {error}"
+
+    return RedirectResponse(url="/configuracoes?tab=metas", status_code=303)
 
 
 @router.post("/configuracoes/atualizar")

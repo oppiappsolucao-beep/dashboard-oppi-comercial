@@ -6,10 +6,13 @@ from datetime import date, datetime, timedelta
 import pandas as pd
 
 from app.config import settings
-from app.services.legacy_core import as_python_datetime
+from app.services.goals_reports import MONTHS_PT
+from app.services.legacy_core import as_python_datetime, normalize_text
+from app.services.monthly_goals import TEAM_SELLER_LABEL, list_monthly_goals
 
 SETTINGS_TABS = [
     ("geral", "Geral"),
+    ("metas", "Metas"),
     ("usuarios", "Usuários e Permissões"),
     ("servicos", "Serviços"),
     ("integracoes", "Integrações"),
@@ -357,4 +360,26 @@ def build_users_table(
         "total_pages": total_pages,
         "from_record": start + 1 if total else 0,
         "to_record": min(start + per_page, total),
+    }
+
+
+def build_goals_settings(df: pd.DataFrame) -> dict:
+    today = date.today()
+    sellers = sorted(
+        normalize_name(seller)
+        for seller in df["_vendedor"].dropna().astype(str).unique().tolist()
+        if normalize_name(seller) and normalize_name(seller) != "Sem vendedor"
+    ) if not df.empty else []
+
+    configured = list_monthly_goals(12)
+    for item in configured:
+        item["month_label"] = MONTHS_PT[item["month"] - 1]
+
+    return {
+        "month_options": [{"value": index + 1, "label": name} for index, name in enumerate(MONTHS_PT)],
+        "year_options": [today.year - 1, today.year, today.year + 1],
+        "default_month": today.month,
+        "default_year": today.year,
+        "seller_options": [TEAM_SELLER_LABEL, *sellers],
+        "configured_goals": configured,
     }

@@ -216,6 +216,88 @@
     </div>
   </div>
 
+  {% elif settings_params.tab == 'metas' %}
+  <div class="settings-goals-layout">
+    <div class="panel settings-single-card">
+      <div class="section-heading">Meta do mês</div>
+      <div class="section-subtitle">Defina a meta comercial da equipe ou por vendedor. O valor aparece em Metas e Relatórios.</div>
+
+      {% if goal_success %}
+      <div class="settings-alert success">{{ goal_success }}</div>
+      {% endif %}
+      {% if goal_error %}
+      <div class="settings-alert error">{{ goal_error }}</div>
+      {% endif %}
+
+      {% if is_admin %}
+      <form method="post" action="/configuracoes/metas" class="settings-goals-form">
+        <input type="hidden" name="tab" value="metas">
+        <div class="settings-goals-grid">
+          <div class="settings-goals-field">
+            <label for="goal-month">Mês</label>
+            <select id="goal-month" name="month" required>
+              {% for option in goals_settings.month_options %}
+              <option value="{{ option.value }}" {% if option.value == goals_settings.default_month %}selected{% endif %}>{{ option.label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="settings-goals-field">
+            <label for="goal-year">Ano</label>
+            <select id="goal-year" name="year" required>
+              {% for option in goals_settings.year_options %}
+              <option value="{{ option }}" {% if option == goals_settings.default_year %}selected{% endif %}>{{ option }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="settings-goals-field">
+            <label for="goal-seller">Escopo</label>
+            <select id="goal-seller" name="seller" required>
+              {% for seller in goals_settings.seller_options %}
+              <option value="{{ seller }}">{{ seller }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="settings-goals-field">
+            <label for="goal-amount">Valor da meta</label>
+            <input id="goal-amount" name="amount" type="text" placeholder="Ex.: R$ 20.000" required>
+          </div>
+        </div>
+        <button type="submit" class="btn">Salvar meta</button>
+      </form>
+      {% else %}
+      <div class="settings-empty">Somente o administrador pode alterar a meta do mês.</div>
+      {% endif %}
+    </div>
+
+    <div class="panel settings-single-card">
+      <div class="section-heading">Metas cadastradas</div>
+      {% if goals_settings.configured_goals %}
+      <div class="settings-table-wrap">
+        <table class="data-table settings-goals-table">
+          <thead>
+            <tr>
+              <th>Período</th>
+              <th>Escopo</th>
+              <th>Meta</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in goals_settings.configured_goals %}
+            <tr>
+              <td>{{ row.month_label }}/{{ row.year }}</td>
+              <td>{{ row.seller }}</td>
+              <td><strong>{{ row.amount_label }}</strong></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="settings-empty">Nenhuma meta cadastrada ainda.</div>
+      {% endif %}
+    </div>
+  </div>
+
   {% elif settings_params.tab == 'servicos' %}
   <div class="panel settings-single-card">
     <div class="section-heading">Serviços cadastrados</div>

@@ -7,6 +7,7 @@ import plotly.graph_objects as go
 
 from app.services.filters import DashboardFilters, apply_dashboard_filters
 from app.services.legacy_core import apply_period_filter, count_dashboard_status, status_group
+from app.services.monthly_goals import TEAM_SELLER_LABEL, get_monthly_goal
 
 MONTHS_PT = [
     "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
@@ -112,6 +113,18 @@ def _seller_goal(realized_prev: float, realized_current: float) -> float:
     return DEFAULT_SELLER_GOAL
 
 
+def _resolved_seller_goal(base_df: pd.DataFrame, month: int, year: int, seller: str) -> float:
+    configured = get_monthly_goal(year, month, seller)
+    if configured is not None:
+        return configured
+
+    seller_df = base_df if seller == TEAM_SELLER_LABEL else base_df[base_df["_vendedor"] == seller].copy()
+    month_df = _filter_month(seller_df, month, year)
+    prev_month, prev_year = _previous_month(month, year)
+    prev_df = _filter_month(seller_df, prev_month, prev_year)
+    return _seller_goal(_realized_value(prev_df), _realized_value(month_df))
+
+
 def _achievement_status(pct: float) -> tuple[str, str]:
     if pct >= 100:
         return "Acima da meta", "above"
@@ -158,7 +171,7 @@ def _seller_rows(base_df: pd.DataFrame, month: int, year: int) -> list[dict]:
         prev_df = _filter_month(seller_df, prev_month, prev_year)
 
         realized = _realized_value(month_df)
-        goal = _seller_goal(_realized_value(prev_df), realized)
+        goal = _resolved_seller_goal(base_df, month, year, seller)
         proposals = _count_statuses(month_df, ["Proposta"])
         closed = count_dashboard_status(month_df, "Fechado")
         total_leads = len(month_df)
@@ -198,7 +211,11 @@ def build_goals_kpi_cards(base_df: pd.DataFrame, month: int, year: int, seller: 
 
     realized = _realized_value(month_df)
     realized_prev = _realized_value(prev_df)
-    goal = sum(row["meta"] for row in _seller_rows(filtered_base, month, year)) if seller == "Todos os vendedores" else _seller_goal(_realized_value(prev_df), realized)
+    if seller == TEAM_SELLER_LABEL:
+        team_goal = get_monthly_goal(year, month, TEAM_SELLER_LABEL)
+        goal = team_goal if team_goal is not None else sum(row["meta"] for row in _seller_rows(filtered_base, month, year))
+    else:
+        goal = _resolved_seller_goal(filtered_base, month, year, seller)
 
     forecast_base = realized
     forecast_base += _sum_capital_by_status(month_df, {"Proposta"}) * FORECAST_PROPOSAL_FACTOR
@@ -362,9 +379,11 @@ def build_revenue_chart_json(base_df: pd.DataFrame, month: int, year: int, selle
         prev_month, prev_year = _previous_month(target_month, target_year)
         prev_df = _filter_month(filtered_base, prev_month, prev_year)
         realized = _realized_value(month_df)
-        goal = sum(row["meta"] for row in _seller_rows(filtered_base, target_month, target_year))
-        if seller != "Todos os vendedores":
-            goal = _seller_goal(_realized_value(prev_df), realized)
+        goal = get_monthly_goal(target_year, target_month, seller)
+        if goal is None:
+            goal = sum(row["meta"] for row in _seller_rows(filtered_base, target_month, target_year))
+            if seller != TEAM_SELLER_LABEL:
+                goal = _resolved_seller_goal(filtered_base, target_month, target_year, seller)
 
         labels.append(f"{MONTHS_PT[target_month - 1][:3]}/{str(target_year)[-2:]}")
         meta_values.append(goal)
