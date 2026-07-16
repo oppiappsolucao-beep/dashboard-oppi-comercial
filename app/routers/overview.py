@@ -5,6 +5,7 @@ from config.crm_options import (
     CHANNEL_LABEL_TO_KEY,
     CHANNEL_OPTIONS,
     LOST_REASON_OPTIONS,
+    NEXT_ACTION_OPTIONS,
     PIPELINE_STAGE_OPTIONS,
     PROCESS_ACTION_OPTIONS,
 )
@@ -14,8 +15,8 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 
 from app.dependencies import get_prepared_data, is_admin, require_auth
 from app.services.crm_validation_service import (
-    get_actions_for_stage,
     normalize_legacy_action,
+    normalize_legacy_next_action,
     normalize_legacy_result,
     normalize_legacy_stage,
     normalize_opportunity_status,
@@ -147,7 +148,7 @@ async def overview_complete_action_form(request: Request, sheet_row: int):
     stored = get_lead_action(DEFAULT_TENANT_ID, sheet_row) or {}
     grouped = status_group(row.get("_status_grupo") or row.get("_status_original", ""))
     current_stage = resolve_pipeline_stage(grouped, stored)
-    stage_actions = get_actions_for_stage(current_stage)
+    stored_next_action = normalize_legacy_next_action(stored.get("next_action_description")) or stored.get("next_action_description", "")
     return render(
         request,
         "overview_complete_action.html",
@@ -156,10 +157,12 @@ async def overview_complete_action_form(request: Request, sheet_row: int):
             "sheet_row": sheet_row,
             "empresa": normalize_text(row.get("_empresa", "")) or "—",
             "stored": stored,
+            "stored_next_action": stored_next_action,
             "today": date.today().isoformat(),
             "overview_error": request.session.pop("overview_error", ""),
             "result_options": [opt for opt in ACTIVITY_RESULT_OPTIONS if opt != "Selecione"],
-            "process_actions": stage_actions,
+            "process_actions": NEXT_ACTION_OPTIONS,
+            "next_action_options": NEXT_ACTION_OPTIONS,
             "stage_options": PIPELINE_STAGE_OPTIONS,
             "channel_options": CHANNEL_OPTIONS,
             "channel_keys": CHANNEL_LABEL_TO_KEY,
@@ -189,7 +192,7 @@ async def overview_complete_action_submit(
 
     user = normalize_text(request.session.get("username", "")) or "Usuário"
     result = normalize_legacy_result(result)
-    next_action_description = normalize_legacy_action(next_action_description)
+    next_action_description = normalize_legacy_next_action(next_action_description)
     move_stage = normalize_legacy_stage(move_stage)
 
     validation_error = validate_activity_payload({

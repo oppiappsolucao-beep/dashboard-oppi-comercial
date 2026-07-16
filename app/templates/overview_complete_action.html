@@ -37,7 +37,7 @@
       <select name="next_action_description" required>
         <option value="">Selecione</option>
         {% for option in process_actions %}
-        <option value="{{ option }}" {% if stored.next_action_description == option %}selected{% endif %}>{{ option }}</option>
+        <option value="{{ option }}" {% if stored_next_action == option %}selected{% endif %}>{{ option }}</option>
         {% endfor %}
       </select>
     </div>

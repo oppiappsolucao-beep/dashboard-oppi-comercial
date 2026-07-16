@@ -58,7 +58,29 @@ PROCESS_ACTION_OPTIONS = [
     "Confirmar pagamento",
     "Iniciar implantação",
     "Encerrar processo comercial",
+    "Confirmar fechamento",
 ]
+
+NEXT_ACTION_OPTIONS = [
+    "Fazer primeiro contato",
+    "Qualificar lead",
+    "Agendar reunião",
+    "Criar proposta",
+    "Retornar contato",
+    "Negociar condições",
+    "Confirmar fechamento",
+]
+
+NEXT_ACTION_BY_STAGE = {
+    "Novo Lead": "Fazer primeiro contato",
+    "Contato": "Qualificar lead",
+    "Qualificação": "Agendar reunião",
+    "Reunião": "Criar proposta",
+    "Proposta": "Retornar contato",
+    "Retorno": "Negociar condições",
+    "Negociação": "Confirmar fechamento",
+    "Fechado": "Confirmar fechamento",
+}
 
 PROCESS_ACTIONS_BY_STAGE = {
     "Novo Lead": [
@@ -111,11 +133,13 @@ PROCESS_ACTIONS_BY_STAGE = {
         "Ajustar escopo",
         "Definir forma de pagamento",
         "Enviar contrato",
+        "Confirmar fechamento",
         "Confirmar assinatura",
     ],
     "Fechado": [
         "Confirmar assinatura",
         "Confirmar pagamento",
+        "Confirmar fechamento",
         "Iniciar implantação",
         "Encerrar processo comercial",
     ],
@@ -375,6 +399,7 @@ OVERVIEW_ACTION_TO_PROCESS = {
     "Agendar retorno": "Reagendar retorno",
     "Agendar reunião": "Agendar reunião",
     "Retornar contato": "Retornar contato",
+    "Confirmar fechamento": "Confirmar fechamento",
 }
 
 ACTION_DESCRIPTIONS = {
@@ -411,6 +436,17 @@ ACTION_DESCRIPTIONS = {
     "Confirmar pagamento": "Confirmar recebimento ou pagamento.",
     "Iniciar implantação": "Iniciar onboarding do cliente.",
     "Encerrar processo comercial": "Encerrar oportunidade comercial.",
+    "Confirmar fechamento": "Validar assinatura, pagamento e conclusão comercial.",
+}
+
+NEXT_ACTION_DESCRIPTIONS = {
+    "Fazer primeiro contato": "Entrar em contato inicial com o lead.",
+    "Qualificar lead": "Entender perfil, necessidade e fit comercial.",
+    "Agendar reunião": "Marcar reunião comercial com o decisor.",
+    "Criar proposta": "Montar e enviar proposta comercial.",
+    "Retornar contato": "Retomar conversa conforme combinado.",
+    "Negociar condições": "Tratar objeções e condições comerciais.",
+    "Confirmar fechamento": "Confirmar assinatura, pagamento ou conclusão da venda.",
 }
 
 RESULT_SUGGESTIONS = {
@@ -435,7 +471,7 @@ RESULT_SUGGESTIONS = {
     },
     "Avançou de etapa": {
         "advance_stage": True,
-        "next_action": "Definir próximo passo",
+        "next_action": "Qualificar lead",
         "days": 1,
         "channel": "WhatsApp",
     },

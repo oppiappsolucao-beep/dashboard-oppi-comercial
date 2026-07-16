@@ -137,8 +137,13 @@
       const stage = stageSelect ? stageSelect.value : "Novo Lead";
       const actions = await fetchStageActions(stage);
       fillSelect(actionSelect, actions, "Selecione a atividade");
-      fillSelect(nextActionSelect, actions, "Selecione a próxima ação");
     }
+
+    fillSelect(
+      nextActionSelect,
+      window.ACTIVITY_MODAL_NEXT_ACTIONS || [],
+      "Selecione a próxima ação"
+    );
 
     if (stageSelect) {
       stageSelect.addEventListener("change", refreshActions);

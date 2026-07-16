@@ -17,6 +17,7 @@ from config.crm_options import (
     CHANNEL_OPTIONS,
     LOST_REASON_OPTIONS,
     NEW_ACTIVITY_STATUS_KEYS,
+    NEXT_ACTION_OPTIONS,
     NO_NEXT_ACTION_RESULTS,
     OVERVIEW_ACTION_TO_PROCESS,
     PIPELINE_STAGE_OPTIONS,
@@ -36,8 +37,10 @@ from app.services.crm_validation_service import (
     calcular_status_atraso,
     channel_label_to_key,
     get_actions_for_stage,
+    get_next_action_options,
     normalize_legacy_action,
     normalize_legacy_channel,
+    normalize_legacy_next_action,
     normalize_legacy_result,
     normalize_legacy_stage,
     normalize_legacy_status_key,
@@ -215,7 +218,13 @@ def _serialize_activity(record: dict) -> dict:
         result_display = result
     vendedor = normalize_text(record.get("assigned_user_id")) or "Sem vendedor"
     status_label = ACTIVITY_STATUS_LABELS.get(status, status.title())
-    allowed_next_actions = get_actions_for_stage(stage, record.get("next_action", ""))
+    allowed_next_actions = get_next_action_options(record.get("next_action", ""))
+    next_action_value = normalize_legacy_next_action(record.get("next_action")) or ""
+    next_action_raw = normalize_text(record.get("next_action"))
+    if next_action_raw and not next_action_value:
+        proxima_acao = f"{next_action_raw} (Valor legado)"
+    else:
+        proxima_acao = next_action_value or normalize_legacy_next_action(process_action) or process_action
 
     return {
         "id": record["id"],
@@ -242,7 +251,8 @@ def _serialize_activity(record: dict) -> dict:
         "result": result_display,
         "result_value": result,
         "result_notes": record.get("result_notes") or "",
-        "proxima_acao": normalize_legacy_action(record.get("next_action")) or process_action,
+        "proxima_acao": proxima_acao,
+        "proxima_acao_value": next_action_value or next_action_raw,
         "allowed_next_actions": allowed_next_actions,
         "next_action_date": (record.get("next_action_date") or "")[:10],
         "next_action_time": record.get("next_action_time") or "09:00",
@@ -455,7 +465,7 @@ def atualizar_lead_pela_atividade(
         "next_action_date": next_action_date[:10],
         "next_action_time": next_action_time,
         "next_action_type": channel_key,
-        "next_action_description": normalize_legacy_action(next_action),
+        "next_action_description": normalize_legacy_next_action(next_action),
         "next_action_completed": False,
         "last_contact_at": _now().isoformat(timespec="seconds"),
     }
@@ -489,7 +499,7 @@ def atualizar_atividade_inline(
         status = normalize_legacy_status_key(current.get("status", "pendente"))
 
     result = normalize_legacy_result(payload.get("result"))
-    next_action = normalize_legacy_action(payload.get("next_action"))
+    next_action = normalize_legacy_next_action(payload.get("next_action"))
     next_action_date = normalize_text(payload.get("next_action_date"))
     next_action_time = normalize_text(payload.get("next_action_time")) or "09:00"
     next_action_channel = normalize_legacy_channel(payload.get("next_action_channel") or current.get("channel"))
@@ -661,6 +671,7 @@ def build_activity_page_context(
         "channels": CHANNEL_OPTIONS,
         "status_options": SELECTABLE_ACTIVITY_STATUS_KEYS,
         "result_options": [opt for opt in ACTIVITY_RESULT_OPTIONS if opt != "Selecione"],
+        "next_action_options": NEXT_ACTION_OPTIONS,
         "stage_options": stage_options,
         "pipeline_stage_options": PIPELINE_STAGE_OPTIONS,
         "type_options": ["Todos os tipos"] + PROCESS_ACTION_OPTIONS,
@@ -788,7 +799,7 @@ def validar_nova_atividade(payload: dict, *, is_admin_user: bool = False, allow_
     scheduled_time = normalize_text(payload.get("scheduled_time")) or "09:00"
     status = normalize_legacy_status_key(payload.get("status") or "pendente")
     result = normalize_legacy_result(payload.get("result"))
-    next_action = normalize_legacy_action(payload.get("next_action"))
+    next_action = normalize_legacy_next_action(payload.get("next_action"))
 
     if activity_type and activity_type not in ACTIVITY_TYPE_OPTIONS:
         return "A opção selecionada não pertence ao processo comercial atual. Atualize o campo antes de salvar."
@@ -939,7 +950,7 @@ def criar_atividade(
     result = normalize_legacy_result(payload.get("result"))
     note = normalize_text(payload.get("note"))
     result_notes = normalize_text(payload.get("result_notes"))
-    next_action = normalize_legacy_action(payload.get("next_action"))
+    next_action = normalize_legacy_next_action(payload.get("next_action"))
     next_action_date = normalize_text(payload.get("next_action_date"))
     next_action_time = normalize_text(payload.get("next_action_time")) or "10:00"
     next_action_channel = normalize_legacy_channel(payload.get("next_action_channel") or channel)
@@ -1101,6 +1112,7 @@ def build_new_activity_modal_context(
         "status_options": NEW_ACTIVITY_STATUS_KEYS,
         "priority_options": PRIORITY_OPTIONS,
         "result_options": [opt for opt in ACTIVITY_RESULT_OPTIONS if opt != "Selecione"],
+        "next_action_options": NEXT_ACTION_OPTIONS,
         "lost_reason_options": LOST_REASON_OPTIONS,
         "responsible_options": responsibles,
         "default_responsible": default_responsible,
@@ -1111,6 +1123,7 @@ def build_new_activity_modal_context(
         "activity_type_stage_hints": ACTIVITY_TYPE_STAGE_HINT,
         "activity_type_defaults_json": json.dumps(ACTIVITY_TYPE_DEFAULT_ACTION, ensure_ascii=False),
         "activity_type_stage_hints_json": json.dumps(ACTIVITY_TYPE_STAGE_HINT, ensure_ascii=False),
+        "next_action_options_json": json.dumps(NEXT_ACTION_OPTIONS, ensure_ascii=False),
         "modal_error": error,
     }
 

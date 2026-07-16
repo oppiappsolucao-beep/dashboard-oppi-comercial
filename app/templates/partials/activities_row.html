@@ -59,7 +59,7 @@
     <select class="activity-inline-select" name="next_action" data-activity-form="{{ row.id }}" data-activity-field>
       <option value="">Selecione</option>
       {% for option in row.allowed_next_actions %}
-      <option value="{{ option }}" {% if row.proxima_acao == option %}selected{% endif %}>{{ option }}</option>
+      <option value="{{ option }}" {% if row.proxima_acao_value == option %}selected{% endif %}>{{ option }}</option>
       {% endfor %}
     </select>
   </td>

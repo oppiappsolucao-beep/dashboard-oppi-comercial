@@ -8,6 +8,8 @@ from config.crm_options import (
     ACTIVITY_STATUS_KEYS,
     CHANNEL_LABEL_TO_KEY,
     CHANNEL_OPTIONS,
+    NEXT_ACTION_BY_STAGE,
+    NEXT_ACTION_OPTIONS,
     NO_NEXT_ACTION_RESULTS,
     OPEN_OPPORTUNITY_STATUSES,
     PIPELINE_STAGE_OPTIONS,
@@ -20,6 +22,7 @@ from config.crm_options import (
 from config.legacy_option_maps import (
     LEGACY_ACTION_MAP,
     LEGACY_CHANNEL_MAP,
+    LEGACY_NEXT_ACTION_MAP,
     LEGACY_OPPORTUNITY_STATUS_MAP,
     LEGACY_RESULT_MAP,
     LEGACY_STAGE_MAP,
@@ -57,6 +60,21 @@ def normalize_legacy_action(value: str | None) -> str:
     if text in PROCESS_ACTION_OPTIONS:
         return text
     return LEGACY_ACTION_MAP.get(text, "")
+
+
+def normalize_legacy_next_action(value: str | None) -> str:
+    text = _clean(value)
+    if not text:
+        return ""
+    if text in NEXT_ACTION_OPTIONS:
+        return text
+    mapped = LEGACY_NEXT_ACTION_MAP.get(text, "")
+    if mapped in NEXT_ACTION_OPTIONS:
+        return mapped
+    process_mapped = normalize_legacy_action(text)
+    if process_mapped in NEXT_ACTION_OPTIONS:
+        return process_mapped
+    return LEGACY_NEXT_ACTION_MAP.get(process_mapped, "")
 
 
 def normalize_legacy_channel(value: str | None) -> str:
@@ -137,6 +155,17 @@ def get_actions_for_stage(stage: str, include_current: str = "") -> list[str]:
     return actions
 
 
+def get_next_action_options(include_current: str = "") -> list[str]:
+    options = list(NEXT_ACTION_OPTIONS)
+    current = normalize_legacy_next_action(include_current)
+    if current and current not in options:
+        options.insert(0, current)
+    raw = _clean(include_current)
+    if raw and raw not in options and raw != current:
+        options.insert(0, raw)
+    return options
+
+
 def is_open_opportunity(stored: dict | None, grouped_status: str = "") -> bool:
     stored = stored or {}
     opportunity_status = normalize_opportunity_status(stored.get("opportunity_status"))
@@ -167,9 +196,7 @@ def suggest_from_result(result: str, current_stage: str = "") -> dict:
             stage_index = PIPELINE_STAGE_OPTIONS.index(from_stage)
             if stage_index < len(PIPELINE_STAGE_OPTIONS) - 1:
                 move_stage = PIPELINE_STAGE_OPTIONS[stage_index + 1]
-                stage_actions = PROCESS_ACTIONS_BY_STAGE.get(move_stage, [])
-                if stage_actions:
-                    next_action = stage_actions[0]
+                next_action = NEXT_ACTION_BY_STAGE.get(move_stage, next_action)
 
     return {
         "next_action": next_action,
@@ -198,6 +225,10 @@ def validate_activity_result(result: str) -> bool:
 
 def validate_channel(channel: str) -> bool:
     return normalize_legacy_channel(channel) in CHANNEL_OPTIONS
+
+
+def validate_next_action(action: str) -> bool:
+    return normalize_legacy_next_action(action) in NEXT_ACTION_OPTIONS
 
 
 def validate_process_action(action: str, stage: str = "") -> bool:
@@ -246,10 +277,8 @@ def validate_activity_payload(payload: dict) -> str | None:
     next_action = _clean(payload.get("next_action"))
     current_stage = normalize_legacy_stage(_clean(payload.get("stage"))) or normalize_legacy_stage(move_stage)
     if next_action:
-        normalized_action = normalize_legacy_action(next_action)
-        if normalized_action not in PROCESS_ACTION_OPTIONS:
-            return VALIDATION_ERROR_MESSAGE
-        if current_stage and normalized_action not in get_actions_for_stage(current_stage):
+        normalized_next = normalize_legacy_next_action(next_action)
+        if normalized_next not in NEXT_ACTION_OPTIONS:
             return VALIDATION_ERROR_MESSAGE
 
     process_action = _clean(payload.get("process_action"))
@@ -273,7 +302,7 @@ def validate_completion(status: str, result: str, next_action: str) -> str | Non
     if normalized_result in NO_NEXT_ACTION_RESULTS:
         return None
 
-    if not normalize_legacy_action(next_action):
+    if not normalize_legacy_next_action(next_action):
         return "Defina a próxima ação para concluir esta atividade."
 
     return None
