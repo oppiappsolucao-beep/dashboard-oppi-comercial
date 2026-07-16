@@ -1,0 +1,14 @@
+<form class="contracts-status-form"
+  hx-post="/cadastro/todos/{{ sheet_row }}/status"
+  hx-target="#status-cell-{{ sheet_row }}"
+  hx-swap="innerHTML">
+  <select
+    name="status"
+    class="contracts-status-select stage-badge {{ status_class }}"
+    aria-label="Alterar status do cliente"
+    onchange="this.form.requestSubmit()">
+    {% for option in status_options %}
+    <option value="{{ option }}" {% if status == option %}selected{% endif %}>{{ option }}</option>
+    {% endfor %}
+  </select>
+</form>

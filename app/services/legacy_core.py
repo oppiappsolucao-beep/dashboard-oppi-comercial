@@ -566,6 +566,54 @@ def status_group(value: str) -> str:
     return normalize_text(value)
 
 
+STATUS_BADGE_CLASSES = {
+    "Novo Lead": "novo-lead",
+    "Chamado Whats": "qualificacao",
+    "Conversando": "qualificacao",
+    "Reunião": "reuniao",
+    "Proposta": "proposta",
+    "Fechado": "fechado",
+    "Sem Resposta": "qualificacao",
+    "Sem Whatsapp": "qualificacao",
+    "Retornar": "qualificacao",
+    "Sem interesse": "qualificacao",
+    "Ligação - Conversando Whats": "qualificacao",
+    "Ligação não atende/cx": "qualificacao",
+    "Ligação Numero errado": "qualificacao",
+    "Ligação retornar": "qualificacao",
+}
+
+
+def status_badge_class(status: str) -> str:
+    return STATUS_BADGE_CLASSES.get(normalize_text(status), "qualificacao")
+
+
+def resolve_company_status(row, fallback: str = "Novo Lead") -> str:
+    current_status = status_group(row.get("_status_original", row.get("_status_grupo", fallback)))
+    if current_status == "Não responde" and "Sem Resposta" in STATUS_OPTIONS:
+        current_status = "Sem Resposta"
+    if current_status == "Ligação":
+        ligacao_status = normalize_text(row.get("_status_ligacao_original", ""))
+        if ligacao_status in STATUS_OPTIONS:
+            return ligacao_status
+        current_status = "Ligação - Conversando Whats"
+    if current_status not in STATUS_OPTIONS:
+        return fallback
+    return current_status
+
+
+def update_company_status_in_sheet(sheet_row: int, new_status: str, columns: dict) -> None:
+    status_column = columns.get("status_whatsapp") or columns.get("status")
+    if not status_column:
+        raise RuntimeError("Coluna de status não encontrada na planilha.")
+
+    update_statuses_in_sheet(
+        [{"sheet_row": sheet_row, "status": new_status}],
+        status_column,
+        columns.get("ultima_atualizacao"),
+    )
+
+
 def dashboard_status_from_rows(status_whatsapp: str, status_ligacao: str) -> str:
     """
     Define o status principal do dashboard usando as duas colunas novas:

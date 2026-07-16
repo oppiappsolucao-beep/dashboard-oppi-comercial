@@ -119,7 +119,11 @@
               <span>{{ company.vendedor }}</span>
             </div>
           </td>
-          <td><span class="stage-badge contracts-status-badge">{{ company.status }}</span></td>
+          <td id="status-cell-{{ company.sheet_row }}">
+            {% with sheet_row=company.sheet_row, status=company.status, status_class=company.status_class, status_options=status_options %}
+            {% include "partials/contracts_status_cell.html" %}
+            {% endwith %}
+          </td>
           <td>{{ company.nicho }}</td>
           <td>{{ company.estado }}</td>
           <td class="table-actions">

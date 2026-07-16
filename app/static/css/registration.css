@@ -160,14 +160,78 @@
   font-size: 0.78rem;
 }
 
-.contracts-status-badge {
+.contracts-status-badge,
+.contracts-status-select {
   display: inline-flex;
   align-items: center;
-  padding: 6px 12px;
+  padding: 6px 28px 6px 12px;
   border-radius: 999px;
   background: #F3E8FF;
   color: #7C3AED;
   font-size: 0.82rem;
+  font-weight: 700;
+  border: 1px solid transparent;
+  max-width: 100%;
+}
+
+.contracts-status-form {
+  display: inline-block;
+  margin: 0;
+  max-width: 100%;
+}
+
+.contracts-status-select {
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%237C3AED' d='M2.5 4.5 6 8l3.5-3.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.contracts-status-select:hover {
+  border-color: #DDD6FE;
+}
+
+.contracts-status-select:focus {
+  outline: none;
+  border-color: var(--violet);
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.15);
+}
+
+.contracts-status-select.novo-lead {
+  background-color: #F3E8FF;
+  color: #7C3AED;
+}
+
+.contracts-status-select.qualificacao {
+  background-color: #DBEAFE;
+  color: #2563EB;
+}
+
+.contracts-status-select.reuniao {
+  background-color: #EDE9FE;
+  color: #6D28D9;
+}
+
+.contracts-status-select.proposta {
+  background-color: #FCE7F3;
+  color: #DB2777;
+}
+
+.contracts-status-select.fechado {
+  background-color: #DCFCE7;
+  color: #16A34A;
+}
+
+.contracts-status-error {
+  display: inline-block;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #FEE2E2;
+  color: #DC2626;
+  font-size: 0.78rem;
   font-weight: 700;
 }
 

@@ -16,8 +16,11 @@ from app.services.legacy_core import (
     invalidate_sheet_cache,
     normalize_search_text,
     normalize_text,
+    resolve_company_status,
     safe_series,
+    status_badge_class,
     status_group,
+    update_company_status_in_sheet,
 )
 from app.services.overview import build_client_action
 from app.services.registration import get_seller_options, save_company_edit
@@ -101,7 +104,7 @@ async def contracts_list(request: Request, order: str = "recentes"):
         nicho = "—"
         estado = "—"
         if full_row is not None:
-            status = status_group(full_row.get("_status_original", full_row.get("_status_grupo", "Novo Lead")))
+            status = resolve_company_status(full_row)
             vendedor = normalize_text(full_row.get("_vendedor", "")) or "Sem vendedor"
             nicho = normalize_text(full_row.get("_nicho", "")) or "—"
             estado = normalize_text(full_row.get("_estado", "")) or "—"
@@ -114,6 +117,7 @@ async def contracts_list(request: Request, order: str = "recentes"):
             "initials": initials[:2],
             "vendedor": vendedor,
             "status": status,
+            "status_class": status_badge_class(status),
             "nicho": nicho,
             "estado": estado,
         })
@@ -129,6 +133,7 @@ async def contracts_list(request: Request, order: str = "recentes"):
             "filters": filters,
             "sort_mode": sort_mode,
             "next_order": "alfabetica" if sort_mode == "recentes" else "recentes",
+            "status_options": STATUS_OPTIONS,
         },
     )
 
@@ -267,6 +272,45 @@ async def contract_edit_submit(request: Request, sheet_row: int):
         request.session["edit_error"] = f"Não consegui salvar: {error}"
 
     return RedirectResponse(url=f"/cadastro/todos/{sheet_row}/editar", status_code=303)
+
+
+@router.post("/cadastro/todos/{sheet_row}/status", response_class=HTMLResponse)
+async def contract_update_status(request: Request, sheet_row: int, status: str = Form(...)):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+
+    df, columns = get_prepared_data()
+    row = _get_row_by_sheet(df, sheet_row)
+    if row is None:
+        return RedirectResponse(url="/cadastro/todos", status_code=303)
+
+    new_status = normalize_text(status)
+    if new_status not in STATUS_OPTIONS:
+        new_status = "Novo Lead"
+
+    try:
+        update_company_status_in_sheet(sheet_row, new_status, columns)
+    except Exception as error:
+        if request.headers.get("HX-Request"):
+            return HTMLResponse(
+                f'<span class="contracts-status-error">Erro: {error}</span>',
+                status_code=500,
+            )
+        request.session["contracts_status_error"] = str(error)
+        return RedirectResponse(url=request.headers.get("referer", "/cadastro/todos"), status_code=303)
+
+    status_context = {
+        "sheet_row": sheet_row,
+        "status": new_status,
+        "status_class": status_badge_class(new_status),
+        "status_options": STATUS_OPTIONS,
+    }
+
+    if request.headers.get("HX-Request"):
+        return render(request, "partials/contracts_status_cell.html", status_context)
+
+    return RedirectResponse(url=request.headers.get("referer", "/cadastro/todos"), status_code=303)
 
 
 @router.post("/cadastro/todos/atualizar")
