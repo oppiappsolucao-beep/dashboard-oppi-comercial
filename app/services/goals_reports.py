@@ -14,7 +14,12 @@ MONTHS_PT = [
     "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
 ]
 
-from config.crm_options import OVERVIEW_FUNNEL_STAGES as CRM_FUNNEL_STAGES, PIPELINE_STAGE_OPTIONS, PIPELINE_STAGE_SHEET_STATUSES
+from config.crm_options import (
+    OVERVIEW_FUNNEL_STAGES as CRM_FUNNEL_STAGES,
+    PIPELINE_STAGE_COLORS,
+    PIPELINE_STAGE_OPTIONS,
+    PIPELINE_STAGE_SHEET_STATUSES,
+)
 
 CONVERSION_STAGES = [(stage, PIPELINE_STAGE_SHEET_STATUSES.get(stage, [])) for stage in PIPELINE_STAGE_OPTIONS]
 
@@ -280,10 +285,9 @@ def build_conversion_stages(base_df: pd.DataFrame, month: int, year: int, seller
     month_df = _filter_month(filtered_base, month, year)
     counts = [_count_statuses(month_df, statuses) for _, statuses in CONVERSION_STAGES]
     base = counts[0] or max(counts) or 1
-    tones = ["stage-0", "stage-1", "stage-2", "stage-3", "stage-4", "stage-5"]
 
     rows = []
-    for index, ((name, _), count) in enumerate(zip(CONVERSION_STAGES, counts)):
+    for (name, _), count in zip(CONVERSION_STAGES, counts):
         pct = round((count / base) * 100) if base else 0
         width = max(12, pct)
         rows.append({
@@ -291,7 +295,7 @@ def build_conversion_stages(base_df: pd.DataFrame, month: int, year: int, seller
             "count": count,
             "percent": pct,
             "width": width,
-            "tone": tones[index],
+            "color": PIPELINE_STAGE_COLORS.get(name, "#7C3AED"),
         })
     return rows
 
