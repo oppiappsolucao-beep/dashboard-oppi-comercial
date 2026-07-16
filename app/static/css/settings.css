@@ -454,6 +454,54 @@
   border: 1px solid #FECACA;
 }
 
+.settings-template-status {
+  display: inline-flex;
+  margin-top: 14px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.settings-template-status.connected {
+  background: #ECFDF5;
+  color: #047857;
+}
+
+.settings-template-status.disconnected {
+  background: #FEF3C7;
+  color: #B45309;
+}
+
+.settings-template-help {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.settings-template-help p {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+
+.settings-template-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.settings-template-tags code {
+  background: #F3E8FF;
+  color: #7C3AED;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
 @media (max-width: 1200px) {
   .settings-layout,
   .settings-bottom-grid {

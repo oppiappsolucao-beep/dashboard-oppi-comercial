@@ -202,17 +202,62 @@
   </div>
 
   {% elif settings_params.tab == 'geral' %}
-  <div class="panel settings-single-card">
-    <div class="section-heading">Dados gerais da operação</div>
-    <div class="settings-company-grid settings-company-grid-wide">
-      <div><span class="settings-company-label">Nome da empresa</span><strong>{{ company.company_name }}</strong></div>
-      <div><span class="settings-company-label">Nome fantasia</span><strong>{{ company.trade_name }}</strong></div>
-      <div><span class="settings-company-label">CNPJ</span><strong>{{ company.cnpj }}</strong></div>
-      <div><span class="settings-company-label">Planilha conectada</span><strong>{{ company.worksheet_name }}</strong></div>
-      <div><span class="settings-company-label">Empresas na planilha</span><strong>{{ company.companies_count }}</strong></div>
-      <div><span class="settings-company-label">Capital monitorado</span><strong>{{ company.total_capital_label }}</strong></div>
-      <div><span class="settings-company-label">Google Sheets</span><strong>{% if company.sheet_configured %}Conectado{% else %}Pendente{% endif %}</strong></div>
-      <div><span class="settings-company-label">Usuário admin</span><strong>{{ app_username }}</strong></div>
+  <div class="settings-goals-layout">
+    <div class="panel settings-single-card">
+      <div class="section-heading">Dados gerais da operação</div>
+      <div class="settings-company-grid settings-company-grid-wide">
+        <div><span class="settings-company-label">Nome da empresa</span><strong>{{ company.company_name }}</strong></div>
+        <div><span class="settings-company-label">Nome fantasia</span><strong>{{ company.trade_name }}</strong></div>
+        <div><span class="settings-company-label">CNPJ</span><strong>{{ company.cnpj }}</strong></div>
+        <div><span class="settings-company-label">Planilha conectada</span><strong>{{ company.worksheet_name }}</strong></div>
+        <div><span class="settings-company-label">Empresas na planilha</span><strong>{{ company.companies_count }}</strong></div>
+        <div><span class="settings-company-label">Capital monitorado</span><strong>{{ company.total_capital_label }}</strong></div>
+        <div><span class="settings-company-label">Google Sheets</span><strong>{% if company.sheet_configured %}Conectado{% else %}Pendente{% endif %}</strong></div>
+        <div><span class="settings-company-label">Usuário admin</span><strong>{{ app_username }}</strong></div>
+      </div>
+    </div>
+
+    <div class="panel settings-single-card">
+      <div class="section-heading">Modelo de proposta (PDF)</div>
+      <div class="section-subtitle">Use um Google Docs como base. O sistema preenche os campos e gera o PDF automaticamente.</div>
+
+      {% if template_success %}
+      <div class="settings-alert success">{{ template_success }}</div>
+      {% endif %}
+      {% if template_error %}
+      <div class="settings-alert error">{{ template_error }}</div>
+      {% endif %}
+
+      {% if proposal_template_settings.template_configured %}
+      <div class="settings-template-status connected">Modelo ativo</div>
+      {% else %}
+      <div class="settings-template-status disconnected">Nenhum modelo configurado</div>
+      {% endif %}
+
+      {% if is_admin %}
+      <form method="post" action="/configuracoes/modelo-proposta" class="settings-goals-form">
+        <input type="hidden" name="tab" value="geral">
+        <div class="settings-goals-field">
+          <label for="proposal-template-url">Link do Google Docs</label>
+          <input id="proposal-template-url" name="template_url" type="url"
+            value="{{ proposal_template_settings.template_url }}"
+            placeholder="https://docs.google.com/document/d/.../edit" required>
+        </div>
+        <button type="submit" class="btn">Salvar modelo</button>
+      </form>
+      {% else %}
+      <div class="settings-empty">Somente o administrador pode alterar o modelo de proposta.</div>
+      {% endif %}
+
+      <div class="settings-template-help">
+        <div class="settings-company-label">Campos disponíveis no documento</div>
+        <div class="settings-template-tags">
+          {% for item in proposal_template_settings.placeholders %}
+          <code>{{ item }}</code>
+          {% endfor %}
+        </div>
+        <p>Compartilhe o documento com a conta de serviço do Google Sheets (permissão de editor).</p>
+      </div>
     </div>
   </div>
 

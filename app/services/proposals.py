@@ -361,6 +361,8 @@ def render_proposal_chat_messages(messages: list[dict]) -> str:
             company = html.escape(message.get("company", ""))
             filename = html.escape(message.get("filename", "proposta.pdf"))
             encoded_company = quote(message.get("company", ""))
+            value = message.get("value")
+            value_query = f"?valor={quote(str(value))}" if value else ""
             rows.append(
                 f'<div class="proposal-pdf-card">'
                 f'<div class="proposal-pdf-card-top">'
@@ -370,9 +372,9 @@ def render_proposal_chat_messages(messages: list[dict]) -> str:
                 f'<span class="proposal-pdf-ready">Pronto</span>'
                 f'</div>'
                 f'<div class="proposal-pdf-actions">'
-                f'<a href="/pesos-medidas/{encoded_company}/pdf" target="_blank" class="proposal-pdf-btn">👁 Visualizar PDF</a>'
+                f'<a href="/propostas/{encoded_company}/pdf{value_query}" target="_blank" class="proposal-pdf-btn">👁 Visualizar PDF</a>'
                 f'<a href="/pesos-medidas?empresa={encoded_company}" class="proposal-pdf-btn">📱 Enviar no WhatsApp</a>'
-                f'<a href="/pesos-medidas/{encoded_company}/pdf" class="proposal-pdf-btn">⬇ Baixar</a>'
+                f'<a href="/propostas/{encoded_company}/pdf{value_query}" class="proposal-pdf-btn">⬇ Baixar</a>'
                 f'</div></div>'
             )
             continue
@@ -398,7 +400,8 @@ def default_proposal_chat_messages() -> list[dict]:
         "role": "assistant",
         "content": (
             "Olá! Sou o agente de IA para propostas.\n\n"
-            "Descreva a proposta que deseja gerar e eu monto o PDF pronto para enviar ao cliente."
+            "Descreva a proposta que deseja gerar e eu monto o PDF pronto para enviar ao cliente.\n\n"
+            "Exemplo: Crie uma proposta para Clínica PetCare. Valor R$ 24.900."
         ),
         "time": _now_time(),
     }]

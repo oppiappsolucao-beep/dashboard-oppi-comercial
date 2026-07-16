@@ -3,6 +3,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 
 from app.config import settings
 from app.dependencies import get_prepared_data, is_admin, require_auth
+from app.services.app_settings import set_proposal_template
 from app.services.legacy_core import invalidate_sheet_cache, parse_money
 from app.services.monthly_goals import TEAM_SELLER_LABEL, invalidate_monthly_goals_cache, set_monthly_goal
 from app.services.settings_page import (
@@ -12,6 +13,7 @@ from app.services.settings_page import (
     build_goals_settings,
     build_integrations,
     build_permissions,
+    build_proposal_template_settings,
     build_services_list,
     build_settings_kpi_cards,
     build_users_table,
@@ -76,9 +78,12 @@ def _settings_context(request: Request, settings_params: dict):
         "integrations": integrations,
         "company": build_company_profile(df),
         "goals_settings": build_goals_settings(df),
+        "proposal_template_settings": build_proposal_template_settings(),
         "is_admin": is_admin(request),
         "goal_success": request.session.pop("settings_goal_success", ""),
         "goal_error": request.session.pop("settings_goal_error", ""),
+        "template_success": request.session.pop("settings_template_success", ""),
+        "template_error": request.session.pop("settings_template_error", ""),
     }
 
 
@@ -183,6 +188,31 @@ async def settings_save_goal(
         request.session["settings_goal_error"] = f"Não consegui salvar a meta: {error}"
 
     return RedirectResponse(url="/configuracoes?tab=metas", status_code=303)
+
+
+@router.post("/configuracoes/modelo-proposta")
+async def settings_save_proposal_template(
+    request: Request,
+    template_url: str = Form(...),
+    tab: str = Form("geral"),
+):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+
+    if not is_admin(request):
+        request.session["settings_template_error"] = "Apenas o administrador pode alterar o modelo de proposta."
+        return RedirectResponse(url="/configuracoes?tab=geral", status_code=303)
+
+    try:
+        set_proposal_template(template_url)
+        request.session["settings_template_success"] = "Modelo de proposta salvo com sucesso."
+    except ValueError as error:
+        request.session["settings_template_error"] = str(error)
+    except Exception as error:
+        request.session["settings_template_error"] = f"Não consegui salvar o modelo: {error}"
+
+    return RedirectResponse(url="/configuracoes?tab=geral", status_code=303)
 
 
 @router.post("/configuracoes/atualizar")

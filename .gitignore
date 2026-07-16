@@ -205,6 +205,7 @@ oppi_crm.db
 generated/proposals/*.pdf
 !generated/proposals/.gitkeep
 storage/monthly_goals.json
+storage/app_settings.json
 
 # Ruff stuff:
 .ruff_cache/

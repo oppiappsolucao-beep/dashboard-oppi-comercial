@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from app.dependencies import get_prepared_data, require_auth
 from app.services.filters import apply_dashboard_filters, apply_default_period_filters, get_filter_options, parse_dashboard_filters
 from app.services.legacy_core import invalidate_sheet_cache
+from app.services.proposal_pdf import generate_proposal_pdf, proposal_pdf_filename
 from app.services.proposals import (
     PROPOSAL_STATUS_OPTIONS,
     build_proposals_kpi_cards,
@@ -155,3 +156,23 @@ async def proposals_chat_reset(request: Request):
         return redirect
     request.session["proposals_chat"] = default_proposal_chat_messages()
     return RedirectResponse(url="/propostas", status_code=303)
+
+
+@router.get("/propostas/{empresa:path}/pdf")
+async def proposals_pdf(request: Request, empresa: str, valor: str = ""):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+
+    df, columns = get_prepared_data()
+    try:
+        pdf_bytes = generate_proposal_pdf(empresa, df, columns, value=valor or None)
+    except Exception as error:
+        return HTMLResponse(f"<p>Erro ao gerar PDF: {error}</p>", status_code=500)
+
+    filename = proposal_pdf_filename(empresa)
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

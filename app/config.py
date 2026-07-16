@@ -11,6 +11,7 @@ class Settings:
     sheet_id: str = "1GAbrca0NSiJfPXaSte1qGxXCsGkQPacoRsm0PVB51gE"
     worksheet_name: str = "Folha1"
     cache_ttl_seconds: int = 30
+    proposal_template_doc_id: str = "1iTBG1ZUMCVB-aS7QoYiC4Sym6Dgn9Z7gMN-LGLgyprI"
 
     app_username: str
     app_password: str
@@ -35,6 +36,10 @@ class Settings:
         self.gcp_service_account_b64 = (
             os.getenv("GCP_SERVICE_ACCOUNT_B64", "").strip()
             or os.getenv("GOOGLE_SERVICE_ACCOUNT_B64", "").strip()
+        )
+        self.proposal_template_doc_id = (
+            os.getenv("PROPOSAL_TEMPLATE_DOC_ID", self.proposal_template_doc_id).strip()
+            or self.proposal_template_doc_id
         )
 
     @property
