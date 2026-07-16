@@ -4,7 +4,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from app.dependencies import get_prepared_data, require_auth
 from app.services.filters import apply_dashboard_filters, apply_default_period_filters, get_filter_options, parse_dashboard_filters
 from app.services.commercial_services import get_commercial_service_options
-from app.services.legacy_core import get_colaborador_options, invalidate_sheet_cache
+from app.services.legacy_core import get_colaborador_options, invalidate_sheet_cache, normalize_text
 from app.services.proposal_pdf import generate_proposal_pdf, proposal_pdf_filename
 from app.services.proposals import (
     PROPOSAL_STATUS_OPTIONS,
@@ -159,7 +159,14 @@ async def proposals_chat(
     if empresa.strip():
         message = build_proposal_form_message(empresa, servico, valor_proposta, colaboradores)
 
-    chat_messages, generated = handle_proposal_chat_message(message, df, chat_messages, columns)
+    chat_messages, generated = handle_proposal_chat_message(
+        message,
+        df,
+        chat_messages,
+        columns,
+        servico=servico or None,
+        colaboradores=colaboradores or None,
+    )
     request.session["proposals_chat"] = chat_messages
     if generated:
         request.session["proposals_generated"] = generated
@@ -212,14 +219,33 @@ async def proposals_chat_reset(request: Request):
 
 
 @router.get("/propostas/{empresa:path}/pdf")
-async def proposals_pdf(request: Request, empresa: str, valor: str = ""):
+async def proposals_pdf(
+    request: Request,
+    empresa: str,
+    valor: str = "",
+    servico: str = "",
+    colaboradores: str = "",
+):
     redirect = require_auth(request)
     if redirect:
         return redirect
 
+    generated = request.session.get("proposals_generated") or {}
+    if isinstance(generated, dict) and normalize_text(generated.get("company")) == normalize_text(empresa):
+        valor = valor or generated.get("value") or ""
+        servico = servico or generated.get("servico") or ""
+        colaboradores = colaboradores or generated.get("colaboradores") or ""
+
     df, columns = get_prepared_data()
     try:
-        pdf_bytes = generate_proposal_pdf(empresa, df, columns, value=valor or None)
+        pdf_bytes = generate_proposal_pdf(
+            empresa,
+            df,
+            columns,
+            value=valor or None,
+            servico=servico or None,
+            colaboradores=colaboradores or None,
+        )
     except Exception as error:
         return HTMLResponse(f"<p>Erro ao gerar PDF: {error}</p>", status_code=500)
 

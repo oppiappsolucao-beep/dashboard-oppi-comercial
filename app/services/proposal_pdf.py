@@ -10,7 +10,6 @@ from google.oauth2.service_account import Credentials
 from app.services.app_settings import get_proposal_template_doc_id
 from app.services.legacy_core import (
     _load_google_credentials_info,
-    _pricing_generate_pdf,
     build_client_commercial_summary,
     format_proposal_value_display,
     identify_columns,
@@ -72,6 +71,8 @@ def build_proposal_placeholder_values(
     df: pd.DataFrame,
     columns: dict,
     value: str | None = None,
+    servico: str | None = None,
+    colaboradores: str | None = None,
 ) -> dict[str, str]:
     row = _company_row(company_name, df)
     commercial = build_client_commercial_summary(row, columns) if row is not None else {
@@ -80,9 +81,12 @@ def build_proposal_placeholder_values(
         "colaboradores": "Não informado",
     }
 
-    proposal_value = value or commercial.get("valor_proposta", "Não informado")
+    proposal_value = normalize_text(value) or commercial.get("valor_proposta", "Não informado")
     if proposal_value and proposal_value != "Não informado":
         proposal_value = format_proposal_value_display(proposal_value)
+
+    servico_value = normalize_text(servico) or commercial.get("servico", "Não informado")
+    colaboradores_value = normalize_text(colaboradores) or commercial.get("colaboradores", "Não informado")
 
     now = pd.Timestamp.now(tz="America/Sao_Paulo")
     proposal_number = f"OPPI-{now.strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:4].upper()}"
@@ -90,14 +94,14 @@ def build_proposal_placeholder_values(
     canonical = {
         "{{EMPRESA}}": normalize_text(company_name) or "Não informado",
         "{{VALOR_PROPOSTA}}": proposal_value,
-        "{{SERVICO}}": commercial.get("servico", "Não informado"),
+        "{{SERVICO}}": servico_value,
         "{{VENDEDOR}}": normalize_text(row.get("_vendedor", "")) if row is not None else "Sem vendedor",
         "{{DATA}}": now.strftime("%d/%m/%Y"),
         "{{NUMERO_PROPOSTA}}": proposal_number,
         "{{CNPJ}}": _sheet_field(row, columns, "cnpj") or "Não informado",
         "{{TELEFONE}}": _sheet_field(row, columns, "telefone_b2b") or "Não informado",
         "{{EMAIL}}": _sheet_field(row, columns, "email") or "Não informado",
-        "{{COLABORADORES}}": commercial.get("colaboradores", "Não informado"),
+        "{{COLABORADORES}}": colaboradores_value,
         "{{ENDERECO}}": _sheet_field(row, columns, "endereco") or "Não informado",
     }
 
@@ -133,6 +137,8 @@ def generate_proposal_pdf_from_template(
     df: pd.DataFrame,
     columns: dict,
     value: str | None = None,
+    servico: str | None = None,
+    colaboradores: str | None = None,
 ) -> bytes:
     template_id = get_proposal_template_doc_id()
     if not template_id:
@@ -154,7 +160,14 @@ def generate_proposal_pdf_from_template(
         raise RuntimeError("Google Drive não retornou o arquivo copiado.")
 
     try:
-        values = build_proposal_placeholder_values(company_name, df, columns, value=value)
+        values = build_proposal_placeholder_values(
+            company_name,
+            df,
+            columns,
+            value=value,
+            servico=servico,
+            colaboradores=colaboradores,
+        )
         _replace_placeholders(session, copy_id, values)
 
         export_response = session.get(
@@ -178,6 +191,8 @@ def generate_proposal_pdf(
     df: pd.DataFrame | None = None,
     columns: dict | None = None,
     value: str | None = None,
+    servico: str | None = None,
+    colaboradores: str | None = None,
 ) -> bytes:
     if df is None or columns is None:
         raw_df = load_sheet_data()
@@ -185,13 +200,26 @@ def generate_proposal_pdf(
         df = prepare_data(raw_df, columns)
 
     template_id = get_proposal_template_doc_id()
-    if template_id:
-        try:
-            return generate_proposal_pdf_from_template(company_name, df, columns, value=value)
-        except Exception:
-            pass
+    if not template_id:
+        raise RuntimeError(
+            "Modelo de proposta não configurado. Informe o link do Google Docs em Configurações → Geral."
+        )
 
-    return _pricing_generate_pdf(company_name, df, columns)
+    try:
+        return generate_proposal_pdf_from_template(
+            company_name,
+            df,
+            columns,
+            value=value,
+            servico=servico,
+            colaboradores=colaboradores,
+        )
+    except Exception as error:
+        raise RuntimeError(
+            "Não foi possível gerar o PDF a partir do modelo Google Docs. "
+            "Compartilhe o documento com a conta de serviço do Google Sheets e confira os placeholders. "
+            f"Detalhe: {error}"
+        ) from error
 
 
 def proposal_pdf_filename(company_name: str) -> str:

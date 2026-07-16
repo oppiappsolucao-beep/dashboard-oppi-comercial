@@ -330,16 +330,32 @@ def _company_email(company_name: str, df: pd.DataFrame, columns: dict) -> str:
     return normalize_text(row.get(email_column, ""))
 
 
-def _proposal_pdf_query(value: str | None) -> str:
+def _proposal_pdf_query(
+    value: str | None = None,
+    servico: str | None = None,
+    colaboradores: str | None = None,
+) -> str:
     params = {}
     if value:
         params["valor"] = value
+    if servico:
+        params["servico"] = servico
+    if colaboradores:
+        params["colaboradores"] = colaboradores
     return f"?{urlencode(params)}" if params else ""
 
 
-def build_generated_proposal(company: str, value: str | None, df: pd.DataFrame, columns: dict) -> dict:
+def build_generated_proposal(
+    company: str,
+    value: str | None,
+    df: pd.DataFrame,
+    columns: dict,
+    *,
+    servico: str | None = None,
+    colaboradores: str | None = None,
+) -> dict:
     encoded_company = quote(company)
-    query = _proposal_pdf_query(value)
+    query = _proposal_pdf_query(value, servico, colaboradores)
     preview_query = f"{query}&inline=1" if query else "?inline=1"
     value_label = ""
     if value:
@@ -364,7 +380,11 @@ def build_generated_proposal(company: str, value: str | None, df: pd.DataFrame, 
         "company": company,
         "filename": proposal_pdf_filename(company),
         "value": value,
+        "servico": servico or "",
+        "colaboradores": colaboradores or "",
         "value_label": value_label,
+        "servico_label": normalize_text(servico) or "",
+        "colaboradores_label": normalize_text(colaboradores) or "",
         "client_email": client_email or "Não informado na planilha",
         "preview_url": f"/propostas/{encoded_company}/pdf{preview_query}",
         "download_url": f"/propostas/{encoded_company}/pdf{query}",
@@ -383,6 +403,24 @@ def clear_generated_proposal(request) -> None:
 
 def strip_proposal_pdf_cards(chat_messages: list[dict]) -> list[dict]:
     return [message for message in chat_messages if message.get("type") != "pdf_card"]
+
+
+def _extract_colaboradores(message: str) -> str | None:
+    match = re.search(r"colaboradores:\s*(.+)$", message, flags=re.IGNORECASE)
+    if match:
+        return normalize_text(match.group(1)).rstrip(".")
+    return None
+
+
+def _extract_servico(message: str) -> str | None:
+    match = re.search(
+        r"servi[çc]o:\s*(.+?)(?:\.\s+(?:valor|colaboradores)|$)",
+        message,
+        flags=re.IGNORECASE,
+    )
+    if match:
+        return normalize_text(match.group(1)).rstrip(".")
+    return None
 
 
 def _extract_value(message: str) -> str | None:
@@ -407,6 +445,9 @@ def handle_proposal_chat_message(
     df: pd.DataFrame,
     chat_messages: list[dict],
     columns: dict | None = None,
+    *,
+    servico: str | None = None,
+    colaboradores: str | None = None,
 ) -> tuple[list[dict], dict | None]:
     clean_message = normalize_text(message)
     if not clean_message:
@@ -415,17 +456,33 @@ def handle_proposal_chat_message(
     chat_messages.append({"role": "user", "content": clean_message, "time": _now_time()})
     company = _extract_company(clean_message, df)
     value = _extract_value(clean_message)
+    servico = normalize_text(servico) or _extract_servico(clean_message) or None
+    colaboradores = normalize_text(colaboradores) or _extract_colaboradores(clean_message) or None
     generated = None
 
     if company:
         if columns is None:
             columns = identify_columns(df)
-        generated = build_generated_proposal(company, value, df, columns)
+        generated = build_generated_proposal(
+            company,
+            value,
+            df,
+            columns,
+            servico=servico,
+            colaboradores=colaboradores,
+        )
+        details = []
+        if generated.get("servico_label"):
+            details.append(f"Serviço: {generated['servico_label']}")
+        if generated.get("colaboradores_label"):
+            details.append(f"Colaboradores: {generated['colaboradores_label']}")
+        details_text = ("\n" + "\n".join(details)) if details else ""
         chat_messages.append({
             "role": "assistant",
             "content": (
                 f"Proposta gerada para **{company}**"
                 + (f" no valor de {generated['value_label']}." if generated.get("value_label") else ".")
+                + details_text
                 + "\n\nO PDF já está disponível ao lado, com opções para baixar ou enviar por e-mail."
             ),
             "time": _now_time(),
