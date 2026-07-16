@@ -1,0 +1,30 @@
+<div class="activity-modal-backdrop" id="activity-modal-backdrop" onclick="activityCloseModal(event)">
+  <div class="activity-modal" role="dialog" aria-labelledby="activity-modal-title" onclick="event.stopPropagation()">
+    <div class="activity-modal-header">
+      <div>
+        <h2 id="activity-modal-title">Nova atividade</h2>
+        <p>Registre uma nova interação ou tarefa no processo comercial.</p>
+      </div>
+      <button type="button" class="activity-modal-close" onclick="activityCloseModal()" aria-label="Fechar">×</button>
+    </div>
+
+    <form id="activity-new-form"
+      class="activity-modal-body"
+      hx-post="/atividades/nova"
+      hx-target="#activities-root"
+      hx-swap="innerHTML"
+      hx-include="#activities-filters [name='seller'], #activities-filters [name='status'], #activities-filters [name='period_start'], #activities-filters [name='period_end'], #activities-filters [name='niche'], #activities-filters [name='state'], #activities-filters [name='search'], #activities-filters [name='tab'], #activities-filters [name='page'], #activities-filters [name='per_page']"
+      hx-on::after-request="activityHandleCreateResponse(event)">
+      <input type="hidden" name="sheet_row" id="new-activity-sheet-row" value="">
+      <input type="hidden" name="empresa" id="new-activity-empresa" value="">
+      <input type="hidden" name="contato" id="new-activity-contato" value="">
+      <input type="hidden" name="move_stage_confirm" id="new-activity-move-confirm" value="">
+      {% include "partials/activities_new_form_fields.html" %}
+    </form>
+
+    <div class="activity-modal-footer">
+      <button type="button" class="btn btn-secondary" onclick="activityCloseModal()">Cancelar</button>
+      <button type="submit" form="activity-new-form" class="btn" id="activity-new-submit">Salvar atividade</button>
+    </div>
+  </div>
+</div>

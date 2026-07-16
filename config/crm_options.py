@@ -184,6 +184,79 @@ SELECTABLE_ACTIVITY_STATUS_KEYS = [
     ("cancelada", "Cancelada"),
 ]
 
+NEW_ACTIVITY_STATUS_KEYS = [
+    ("pendente", "Pendente"),
+    ("em_andamento", "Em andamento"),
+    ("concluida", "Concluída"),
+    ("reagendada", "Reagendada"),
+    ("cancelada", "Cancelada"),
+]
+
+ACTIVITY_TYPE_OPTIONS = [
+    "Contato",
+    "Qualificação",
+    "Retorno",
+    "Reunião",
+    "Proposta",
+    "Negociação",
+    "Contrato",
+    "Pagamento",
+    "Implantação",
+    "Tarefa interna",
+    "Outro",
+]
+
+ACTIVITY_TYPE_DEFAULT_ACTION = {
+    "Contato": "Fazer primeiro contato",
+    "Qualificação": "Qualificar lead",
+    "Retorno": "Retornar contato",
+    "Reunião": "Agendar reunião",
+    "Proposta": "Criar proposta",
+    "Negociação": "Negociar condições",
+    "Contrato": "Enviar contrato",
+    "Pagamento": "Confirmar pagamento",
+    "Implantação": "Iniciar implantação",
+    "Tarefa interna": "Definir próximo passo",
+    "Outro": "Definir próximo passo",
+}
+
+ACTIVITY_TYPE_STAGE_HINT = {
+    "Contato": "Contato",
+    "Qualificação": "Qualificação",
+    "Retorno": "Retorno",
+    "Reunião": "Reunião",
+    "Proposta": "Proposta",
+    "Negociação": "Negociação",
+    "Contrato": "Negociação",
+    "Pagamento": "Fechado",
+    "Implantação": "Fechado",
+    "Tarefa interna": "Contato",
+    "Outro": "Contato",
+}
+
+PRIORITY_OPTIONS = [
+    "Baixa",
+    "Média",
+    "Alta",
+    "Crítica",
+]
+
+PRIORITY_SCORE_VALUES = {
+    "Baixa": 10,
+    "Média": 20,
+    "Alta": 50,
+    "Crítica": 100,
+}
+
+DATE_QUICK_SUGGESTIONS = [
+    ("Hoje", 0),
+    ("Amanhã", 1),
+    ("Próximo dia útil", 1),
+    ("Em 2 dias", 2),
+    ("Em 3 dias", 3),
+    ("Em 7 dias", 7),
+]
+
 OPPORTUNITY_STATUS_OPTIONS = [
     "Aberta",
     "Fechada ganha",

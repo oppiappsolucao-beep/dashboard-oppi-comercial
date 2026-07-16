@@ -10,11 +10,18 @@ from config.crm_options import (
     ACTION_DESCRIPTIONS,
     ACTIVITY_RESULT_OPTIONS,
     ACTIVITY_STATUS_LABELS,
+    ACTIVITY_TYPE_DEFAULT_ACTION,
+    ACTIVITY_TYPE_OPTIONS,
+    ACTIVITY_TYPE_STAGE_HINT,
     CHANNEL_CLASS,
     CHANNEL_OPTIONS,
+    LOST_REASON_OPTIONS,
+    NEW_ACTIVITY_STATUS_KEYS,
     NO_NEXT_ACTION_RESULTS,
     OVERVIEW_ACTION_TO_PROCESS,
     PIPELINE_STAGE_OPTIONS,
+    PRIORITY_OPTIONS,
+    PRIORITY_SCORE_VALUES,
     PROCESS_ACTION_OPTIONS,
     SELECTABLE_ACTIVITY_STATUS_KEYS,
 )
@@ -36,14 +43,15 @@ from app.services.crm_validation_service import (
     normalize_legacy_status_key,
     normalize_opportunity_status,
     resolve_display_stage,
+    resolve_pipeline_stage,
     suggest_from_result,
     validate_activity_payload,
     validate_completion,
 )
 from app.services.filters import DashboardFilters, apply_dashboard_filters
-from app.services.followup_service import _lead_record, buscar_leads_para_acao
-from app.services.lead_actions_storage import append_interaction, save_lead_action
-from app.services.legacy_core import normalize_text, safe_series
+from app.services.followup_service import _lead_record, buscar_leads_para_acao, _minutes_since
+from app.services.lead_actions_storage import append_interaction, get_lead_action, save_lead_action
+from app.services.legacy_core import normalize_digits, normalize_text, safe_series
 
 STATUS_CLASS = {
     "pendente": "pendente",
@@ -658,3 +666,464 @@ def build_activity_page_context(
         "type_options": ["Todos os tipos"] + PROCESS_ACTION_OPTIONS,
         "channel_options": ["Todos os canais"] + CHANNEL_OPTIONS,
     }
+
+
+def buscar_acoes_por_etapa(stage: str) -> list[str]:
+    return get_actions_for_stage(normalize_legacy_stage(stage) or "Novo Lead")
+
+
+def buscar_responsaveis_permitidos(seller_options: list[str], current_user: str, is_admin_user: bool) -> list[str]:
+    sellers = [normalize_text(item) for item in seller_options if normalize_text(item)]
+    if is_admin_user:
+        return sellers
+    username = normalize_text(current_user)
+    if not username:
+        return sellers
+    allowed = [seller for seller in sellers if seller.lower() == username.lower()]
+    return allowed or ([username] if username else sellers)
+
+
+def _lead_search_blob(row, columns: dict, lead: dict) -> str:
+    contato = _contact_name(row, columns)
+    parts = [
+        lead.get("empresa", ""),
+        contato,
+        lead.get("phone", ""),
+        lead.get("email", ""),
+        normalize_text(row.get("_cnpj", "")),
+        normalize_digits(lead.get("phone", "")),
+    ]
+    return " | ".join(normalize_text(part).lower() for part in parts if normalize_text(part))
+
+
+def _lead_is_accessible(row, current_user: str, is_admin_user: bool) -> bool:
+    if is_admin_user:
+        return True
+    username = normalize_text(current_user).lower()
+    vendedor = normalize_text(row.get("_vendedor", "")).lower()
+    return not username or not vendedor or vendedor == username
+
+
+def buscar_leads_para_atividade(
+    filtered_df: pd.DataFrame,
+    columns: dict,
+    tenant_id: str | None,
+    query: str,
+    current_user: str = "",
+    is_admin_user: bool = False,
+    limit: int = 12,
+) -> list[dict]:
+    term = normalize_text(query).lower()
+    if not term or filtered_df.empty:
+        return []
+
+    results: list[dict] = []
+    for _, row in filtered_df.iterrows():
+        if not _lead_is_accessible(row, current_user, is_admin_user):
+            continue
+        lead = _lead_record(row, columns, tenant_id)
+        if lead.get("opportunity_status") in {"Fechada ganha", "Fechada perdida", "Encerrada"}:
+            grouped = status_group(row.get("_status_grupo") or row.get("_status_original", ""))
+            if grouped in {"Fechado", "Sem interesse"}:
+                continue
+        blob = _lead_search_blob(row, columns, lead)
+        digits = normalize_digits(term)
+        if term not in blob and (not digits or digits not in blob.replace(" ", "")):
+            continue
+        stage = lead.get("stage", "Novo Lead")
+        actions = get_actions_for_stage(stage)
+        results.append({
+            "sheet_row": lead["sheet_row"],
+            "empresa": lead["empresa"],
+            "contato": _contact_name(row, columns),
+            "stage": stage,
+            "vendedor": lead["vendedor"],
+            "phone": lead.get("phone", "") or "—",
+            "email": lead.get("email", "") or "—",
+            "suggested_action": actions[0] if actions else ACTIVITY_TYPE_DEFAULT_ACTION.get("Contato", "Fazer primeiro contato"),
+        })
+        if len(results) >= limit:
+            break
+    return results
+
+
+def sugerir_prioridade(stage: str, scheduled_at: datetime | None, created_at=None) -> str:
+    if stage == "Novo Lead":
+        minutes = _minutes_since(created_at)
+        if minutes is not None and minutes >= 60:
+            return "Crítica"
+    if not scheduled_at:
+        return "Média"
+    today = date.today()
+    scheduled_date = scheduled_at.date()
+    if scheduled_date <= today:
+        return "Alta"
+    if scheduled_date == today + timedelta(days=1):
+        return "Média"
+    return "Baixa"
+
+
+def _priority_score(label: str) -> int:
+    return PRIORITY_SCORE_VALUES.get(normalize_text(label) or "Média", 20)
+
+
+def _next_business_day(base: date, days: int = 1) -> date:
+    target = base + timedelta(days=days)
+    while target.weekday() >= 5:
+        target += timedelta(days=1)
+    return target
+
+
+def validar_nova_atividade(payload: dict, *, is_admin_user: bool = False, allow_past_date: bool = False) -> str | None:
+    sheet_row = int(payload.get("sheet_row") or 0)
+    if not sheet_row:
+        return "Selecione um lead ou empresa."
+
+    stage = normalize_legacy_stage(payload.get("stage"))
+    activity_type = normalize_text(payload.get("activity_type"))
+    process_action = normalize_legacy_action(payload.get("process_action"))
+    channel = normalize_legacy_channel(payload.get("channel"))
+    assigned_user = normalize_text(payload.get("assigned_user_id"))
+    scheduled_date = normalize_text(payload.get("scheduled_date"))
+    scheduled_time = normalize_text(payload.get("scheduled_time")) or "09:00"
+    status = normalize_legacy_status_key(payload.get("status") or "pendente")
+    result = normalize_legacy_result(payload.get("result"))
+    next_action = normalize_legacy_action(payload.get("next_action"))
+
+    if activity_type and activity_type not in ACTIVITY_TYPE_OPTIONS:
+        return "A opção selecionada não pertence ao processo comercial atual. Atualize o campo antes de salvar."
+    if not stage:
+        return "Selecione a etapa do funil."
+    if not process_action:
+        return "Selecione uma atividade compatível com a etapa."
+    if not assigned_user:
+        return "Selecione o responsável."
+    if not scheduled_date:
+        return "Informe data e horário."
+
+    validation_payload = {
+        "stage": stage,
+        "move_stage": normalize_legacy_stage(payload.get("move_stage")),
+        "status": status,
+        "result": result,
+        "channel": channel,
+        "next_action_channel": normalize_legacy_channel(payload.get("next_action_channel") or channel),
+        "next_action": next_action,
+        "process_action": process_action,
+    }
+    validation_error = validate_activity_payload(validation_payload)
+    if validation_error:
+        return validation_error
+
+    if status in {"pendente", "em_andamento", "reagendada"} and not allow_past_date and not is_admin_user:
+        try:
+            scheduled_dt = _parse_datetime(None, date.fromisoformat(scheduled_date[:10]), scheduled_time)
+            if scheduled_dt < _now().replace(second=0, microsecond=0):
+                return "Informe data e horário."
+        except ValueError:
+            return "Informe data e horário."
+
+    if status == "concluida":
+        completion_error = validate_completion(status, result, next_action)
+        if completion_error:
+            return completion_error
+        if result == "Outro" and not normalize_text(payload.get("note")):
+            return "Informe a observação quando selecionar Outro como resultado."
+        if result in {"Sem interesse", "Lead não qualificado"} and not normalize_text(payload.get("lost_reason")):
+            return "Informe o motivo da perda."
+        if result == "Venda fechada" and not normalize_text(payload.get("close_value")):
+            return "Informe o valor final da venda."
+
+    if channel == "Outro" and not normalize_text(payload.get("channel_other")):
+        return "Descreva o canal selecionado como Outro."
+
+    if activity_type == "Outro" and not normalize_text(payload.get("description")):
+        return "Descreva a atividade quando selecionar o tipo Outro."
+
+    return None
+
+
+def movimentar_etapa_lead(
+    tenant_id: str | None,
+    sheet_row: int,
+    *,
+    from_stage: str,
+    to_stage: str,
+    user: str,
+) -> None:
+    to_stage = normalize_legacy_stage(to_stage)
+    if not to_stage:
+        return
+    save_lead_action(tenant_id, sheet_row, {
+        "stage_override": to_stage,
+        "stage_entered_at": _now().isoformat(timespec="seconds"),
+        "previous_stage": normalize_legacy_stage(from_stage),
+    })
+    append_interaction(
+        tenant_id,
+        sheet_row,
+        interaction_type="etapa_alterada",
+        description=f"Lead movido de {from_stage} para {to_stage}",
+        user=user,
+        previous_stage=from_stage,
+        new_stage=to_stage,
+    )
+
+
+def registrar_historico_atividade(
+    tenant_id: str | None,
+    sheet_row: int,
+    *,
+    user: str,
+    process_action: str,
+    stage: str,
+    activity_type: str,
+    channel: str,
+    assigned_user: str,
+    status: str,
+    result: str = "",
+    note: str = "",
+    move_stage: str = "",
+) -> None:
+    append_interaction(
+        tenant_id,
+        sheet_row,
+        interaction_type="atividade_criada",
+        description=f"Atividade criada: {process_action}",
+        user=user,
+        previous_stage=stage,
+        new_stage=move_stage or stage,
+        note=f"Tipo: {activity_type}. Canal: {channel}. Responsável: {assigned_user}. Status: {status}. {result}. {note}".strip(),
+    )
+
+
+def verificar_duplicidade_atividade(
+    tenant_id: str | None,
+    sheet_row: int,
+    process_action: str,
+    scheduled_date: str,
+) -> bool:
+    normalized_action = normalize_legacy_action(process_action)
+    for record in list_activities(tenant_id):
+        if int(record.get("sheet_row") or 0) != sheet_row:
+            continue
+        if normalize_legacy_action(record.get("process_action")) != normalized_action:
+            continue
+        if (record.get("scheduled_date") or "")[:10] != scheduled_date[:10]:
+            continue
+        if record.get("status") in {"pendente", "em_andamento", "atrasada", "reagendada"}:
+            return True
+    return False
+
+
+def criar_atividade(
+    tenant_id: str | None,
+    payload: dict,
+    user: str,
+    *,
+    is_admin_user: bool = False,
+) -> tuple[dict | None, str | None]:
+    allow_past = is_admin_user or normalize_legacy_status_key(payload.get("status")) == "concluida"
+    validation_error = validar_nova_atividade(payload, is_admin_user=is_admin_user, allow_past_date=allow_past)
+    if validation_error:
+        return None, validation_error
+
+    sheet_row = int(payload["sheet_row"])
+    stage = normalize_legacy_stage(payload.get("stage")) or "Novo Lead"
+    activity_type = normalize_text(payload.get("activity_type")) or "Contato"
+    process_action = normalize_legacy_action(payload.get("process_action"))
+    channel = normalize_legacy_channel(payload.get("channel"))
+    channel_other = normalize_text(payload.get("channel_other"))
+    assigned_user = normalize_text(payload.get("assigned_user_id"))
+    scheduled_date = normalize_text(payload.get("scheduled_date"))[:10]
+    scheduled_time = normalize_text(payload.get("scheduled_time")) or "09:00"
+    status = normalize_legacy_status_key(payload.get("status") or "pendente")
+    priority_label = normalize_text(payload.get("priority")) or "Média"
+    description = normalize_text(payload.get("description"))
+    result = normalize_legacy_result(payload.get("result"))
+    note = normalize_text(payload.get("note"))
+    result_notes = normalize_text(payload.get("result_notes"))
+    next_action = normalize_legacy_action(payload.get("next_action"))
+    next_action_date = normalize_text(payload.get("next_action_date"))
+    next_action_time = normalize_text(payload.get("next_action_time")) or "10:00"
+    next_action_channel = normalize_legacy_channel(payload.get("next_action_channel") or channel)
+    next_action_assigned = normalize_text(payload.get("next_action_assigned")) or assigned_user
+    move_stage = normalize_legacy_stage(payload.get("move_stage"))
+    move_stage_confirm = str(payload.get("move_stage_confirm", "")).lower() in {"1", "true", "on", "yes"}
+    lost_reason = normalize_text(payload.get("lost_reason"))
+    close_value = normalize_text(payload.get("close_value"))
+    close_payment = normalize_text(payload.get("close_payment"))
+
+    if verificar_duplicidade_atividade(tenant_id, sheet_row, process_action, scheduled_date):
+        return None, "Já existe uma atividade semelhante para este lead na mesma data."
+
+    scheduled_at = _parse_datetime(None, date.fromisoformat(scheduled_date), scheduled_time).isoformat(timespec="seconds")
+    empresa = normalize_text(payload.get("empresa")) or "—"
+    contato = normalize_text(payload.get("contato")) or "—"
+
+    activity_record = {
+        "tenant_id": tenant_id or DEFAULT_TENANT_ID,
+        "sheet_row": sheet_row,
+        "lead_id": str(sheet_row),
+        "company_id": str(sheet_row),
+        "empresa": empresa,
+        "contato": contato,
+        "assigned_user_id": assigned_user,
+        "created_by_user_id": user,
+        "activity_type": activity_type,
+        "title": process_action,
+        "process_action": process_action,
+        "description": description or ACTION_DESCRIPTIONS.get(process_action, ""),
+        "channel": channel,
+        "channel_other": channel_other,
+        "stage": stage,
+        "result": result,
+        "result_notes": result_notes or lost_reason,
+        "note": note,
+        "scheduled_at": scheduled_at,
+        "scheduled_date": scheduled_date,
+        "scheduled_time": scheduled_time,
+        "status": status,
+        "priority": _priority_score(priority_label),
+        "priority_label": priority_label,
+        "deleted": False,
+    }
+    if status == "concluida":
+        activity_record["completed_at"] = _now().isoformat(timespec="seconds")
+    activity_record["status"] = calcular_status_atraso(activity_record)
+    saved = save_activity(tenant_id, None, activity_record)
+    activity_id = saved["id"]
+
+    registrar_historico_atividade(
+        tenant_id,
+        sheet_row,
+        user=user,
+        process_action=process_action,
+        stage=stage,
+        activity_type=activity_type,
+        channel=channel,
+        assigned_user=assigned_user,
+        status=activity_record["status"],
+        result=result,
+        note=note,
+        move_stage=move_stage if move_stage_confirm else "",
+    )
+
+    suggestion = suggest_from_result(result) if result else {}
+    opportunity_status = suggestion.get("opportunity_status", "")
+    next_activity_stage = suggestion.get("activity_stage") or move_stage or stage
+
+    if status == "concluida":
+        if move_stage_confirm and move_stage:
+            movimentar_etapa_lead(tenant_id, sheet_row, from_stage=stage, to_stage=move_stage, user=user)
+
+        if next_action and next_action_date and result not in NO_NEXT_ACTION_RESULTS:
+            criar_proxima_atividade(
+                tenant_id,
+                {"id": activity_id, "priority": _priority_score(priority_label), "updated_by": user},
+                process_action=next_action,
+                channel=next_action_channel,
+                assigned_user=next_action_assigned,
+                scheduled_date=next_action_date,
+                scheduled_time=next_action_time,
+                sheet_row=sheet_row,
+                empresa=empresa,
+                contato=contato,
+                stage=next_activity_stage,
+            )
+            atualizar_lead_pela_atividade(
+                tenant_id,
+                sheet_row,
+                next_action=next_action,
+                next_action_date=next_action_date,
+                next_action_time=next_action_time,
+                channel=next_action_channel,
+                move_stage=move_stage if move_stage_confirm else "",
+                user=user,
+                opportunity_status=opportunity_status,
+                lost_reason=lost_reason or result_notes,
+                close_value=close_value,
+                close_payment=close_payment,
+            )
+        elif result in NO_NEXT_ACTION_RESULTS:
+            atualizar_lead_pela_atividade(
+                tenant_id,
+                sheet_row,
+                next_action="Encerrar processo comercial",
+                next_action_date="",
+                next_action_time="",
+                channel=next_action_channel,
+                move_stage=move_stage if move_stage_confirm else "",
+                user=user,
+                opportunity_status=opportunity_status or ("Fechada perdida" if result == "Sem interesse" else "Encerrada"),
+                lost_reason=lost_reason or result_notes or result,
+                close_value=close_value,
+                close_payment=close_payment,
+            )
+        else:
+            atualizar_lead_pela_atividade(
+                tenant_id,
+                sheet_row,
+                next_action=process_action,
+                next_action_date=scheduled_date,
+                next_action_time=scheduled_time,
+                channel=channel,
+                move_stage="",
+                user=user,
+            )
+    else:
+        atualizar_lead_pela_atividade(
+            tenant_id,
+            sheet_row,
+            next_action=process_action,
+            next_action_date=scheduled_date,
+            next_action_time=scheduled_time,
+            channel=channel,
+            move_stage="",
+            user=user,
+        )
+
+    return _serialize_activity({"id": activity_id, **saved}), None
+
+
+def build_new_activity_modal_context(
+    *,
+    seller_options: list[str],
+    current_user: str,
+    is_admin_user: bool,
+    today_iso: str,
+    error: str = "",
+) -> dict:
+    import json
+
+    responsibles = buscar_responsaveis_permitidos(seller_options, current_user, is_admin_user)
+    default_responsible = responsibles[0] if responsibles else current_user
+    return {
+        "pipeline_stage_options": PIPELINE_STAGE_OPTIONS,
+        "activity_type_options": ACTIVITY_TYPE_OPTIONS,
+        "channel_options": CHANNEL_OPTIONS,
+        "status_options": NEW_ACTIVITY_STATUS_KEYS,
+        "priority_options": PRIORITY_OPTIONS,
+        "result_options": [opt for opt in ACTIVITY_RESULT_OPTIONS if opt != "Selecione"],
+        "lost_reason_options": LOST_REASON_OPTIONS,
+        "responsible_options": responsibles,
+        "default_responsible": default_responsible,
+        "today_iso": today_iso,
+        "current_user": current_user,
+        "is_admin": is_admin_user,
+        "activity_type_defaults": ACTIVITY_TYPE_DEFAULT_ACTION,
+        "activity_type_stage_hints": ACTIVITY_TYPE_STAGE_HINT,
+        "activity_type_defaults_json": json.dumps(ACTIVITY_TYPE_DEFAULT_ACTION, ensure_ascii=False),
+        "activity_type_stage_hints_json": json.dumps(ACTIVITY_TYPE_STAGE_HINT, ensure_ascii=False),
+        "modal_error": error,
+    }
+
+
+def sugerir_fluxo_por_resultado(result: str, current_stage: str = "") -> dict:
+    suggestion = suggest_from_result(result)
+    from_stage = normalize_legacy_stage(current_stage) or suggestion.get("keep_stage") or current_stage
+    to_stage = suggestion.get("move_stage") or suggestion.get("activity_stage") or ""
+    move_text = ""
+    if from_stage and to_stage and from_stage != to_stage:
+        move_text = f"Deseja mover o lead de {from_stage} para {to_stage}?"
+    return {**suggestion, "move_text": move_text, "from_stage": from_stage, "to_stage": to_stage}
