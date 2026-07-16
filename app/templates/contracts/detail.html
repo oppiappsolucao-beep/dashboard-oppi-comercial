@@ -9,7 +9,6 @@
 <div class="client-detail-actions">
   <a href="/cadastro/todos" class="btn btn-secondary">Voltar</a>
   <a href="/cadastro/todos/{{ sheet_row }}/editar" class="btn">Editar cadastro</a>
-  <a href="/pesos-medidas?empresa={{ fields.empresa | urlencode }}" class="btn btn-secondary">Precificação</a>
 </div>
 
 <div class="client-commercial-panel panel">
@@ -33,7 +32,7 @@
 
   {% if not commercial.has_data %}
   <div class="client-commercial-empty">
-    Nenhum dado comercial registrado. Preencha na edição do cadastro ou conclua a precificação em Pesos e Medidas.
+    Nenhum dado comercial registrado. Preencha na edição do cadastro ou gere uma proposta em Propostas.
   </div>
   {% endif %}
 </div>

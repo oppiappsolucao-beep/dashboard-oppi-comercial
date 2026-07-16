@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import settings
-from app.routers import auth, activities, contracts, funnel, goals_reports, leads, overview, pricing, proposals, registration
+from app.routers import auth, activities, contracts, funnel, goals_reports, leads, overview, proposals, registration
 from app.routers import settings as settings_router
 from app.templating import render
 
@@ -32,7 +32,6 @@ app.include_router(goals_reports.router)
 app.include_router(leads.router)
 app.include_router(registration.router)
 app.include_router(contracts.router)
-app.include_router(pricing.router)
 app.include_router(settings_router.router)
 
 # Leads e Empresas (registro explícito para garantir rota no deploy)
