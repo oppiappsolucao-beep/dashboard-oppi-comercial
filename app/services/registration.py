@@ -21,6 +21,7 @@ REGISTRATION_FIELDS = [
     "socio_2", "telefone_socio_2", "cpf_socio_2",
     "socio_3", "telefone_socio_3", "cpf_socio_3",
     "instagram", "linkedin", "vendedor", "status", "data_chamado", "observacoes",
+    "servico", "valor_proposta", "colaboradores",
 ]
 
 

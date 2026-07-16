@@ -48,6 +48,27 @@
     <div class="form-group"><label>Data do chamado</label><input type="date" name="data_chamado" value="{{ data_chamado }}"></div>
     <div class="form-group full"><label>Observações</label><textarea name="observacoes" rows="4">{{ values.observacoes }}</textarea></div>
   </div>
+
+  <div class="section-title">PROPOSTA COMERCIAL</div>
+  <div class="form-grid">
+    <div class="form-group"><label>Serviço escolhido</label>
+      <select name="servico">
+        <option value="">Selecione</option>
+        {% for service in service_options %}
+        <option value="{{ service }}" {% if values.servico == service %}selected{% endif %}>{{ service }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="form-group"><label>Valor da proposta</label><input name="valor_proposta" value="{{ values.valor_proposta }}" placeholder="Ex.: R$ 8.500"></div>
+    <div class="form-group"><label>Quantidade de colaboradores</label>
+      <select name="colaboradores">
+        <option value="">Selecione</option>
+        {% for option in colaborador_options %}
+        <option value="{{ option }}" {% if values.colaboradores == option %}selected{% endif %}>{{ option }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
   <div style="display:flex;gap:10px;margin-top:18px;">
     <button type="submit" name="action" value="save" class="btn">Salvar alterações</button>
     <button type="submit" name="action" value="cancel" class="btn btn-secondary">Cancelar</button>

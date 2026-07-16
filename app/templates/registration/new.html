@@ -61,6 +61,27 @@
     <div class="form-group full"><label>Observações</label><textarea name="observacoes" rows="4"></textarea></div>
   </div>
 
+  <div class="section-title">PROPOSTA COMERCIAL</div>
+  <div class="form-grid">
+    <div class="form-group"><label>Serviço escolhido</label>
+      <select name="servico">
+        <option value="">Selecione</option>
+        {% for service in service_options %}
+        <option value="{{ service }}">{{ service }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="form-group"><label>Valor da proposta</label><input name="valor_proposta" placeholder="Ex.: R$ 8.500"></div>
+    <div class="form-group"><label>Quantidade de colaboradores</label>
+      <select name="colaboradores">
+        <option value="">Selecione</option>
+        {% for option in colaborador_options %}
+        <option value="{{ option }}">{{ option }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+
   <button type="submit" class="btn" style="margin-top:18px;width:100%">Cadastrar empresa</button>
 </form>
 {% endblock %}

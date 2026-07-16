@@ -9,6 +9,33 @@
 <div class="client-detail-actions">
   <a href="/cadastro/todos" class="btn btn-secondary">Voltar</a>
   <a href="/cadastro/todos/{{ sheet_row }}/editar" class="btn">Editar cadastro</a>
+  <a href="/pesos-medidas?empresa={{ fields.empresa | urlencode }}" class="btn btn-secondary">Precificação</a>
+</div>
+
+<div class="client-commercial-panel panel">
+  <div class="section-heading">Proposta comercial</div>
+  <div class="section-subtitle">Serviço escolhido, valor da proposta e quantidade de colaboradores para contabilização.</div>
+
+  <div class="client-commercial-grid">
+    <div class="client-commercial-stat">
+      <div class="client-commercial-label">Serviço escolhido</div>
+      <div class="client-commercial-value">{{ commercial.servico }}</div>
+    </div>
+    <div class="client-commercial-stat highlight">
+      <div class="client-commercial-label">Valor da proposta</div>
+      <div class="client-commercial-value">{{ commercial.valor_proposta }}</div>
+    </div>
+    <div class="client-commercial-stat">
+      <div class="client-commercial-label">Colaboradores</div>
+      <div class="client-commercial-value">{{ commercial.colaboradores }}</div>
+    </div>
+  </div>
+
+  {% if not commercial.has_data %}
+  <div class="client-commercial-empty">
+    Nenhum dado comercial registrado. Preencha na edição do cadastro ou conclua a precificação em Pesos e Medidas.
+  </div>
+  {% endif %}
 </div>
 
 <div class="client-action-panel panel">

@@ -2,13 +2,17 @@ from datetime import date
 
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from app.dependencies import get_prepared_data, require_auth
+from app.dependencies import get_prepared_data, get_pricing_store, require_auth
 from app.templating import render
 from app.services.filters import DashboardFilters, apply_dashboard_filters, apply_default_period_filters
 from app.services.filters import get_filter_options as get_dashboard_filter_options
 from app.services.legacy_core import (
+    COMMERCIAL_SERVICE_OPTIONS,
     DuplicateRegistrationError,
     STATUS_OPTIONS,
+    _diagnostic_get_answers,
+    build_client_commercial_summary,
+    get_colaborador_options,
     invalidate_sheet_cache,
     normalize_search_text,
     normalize_text,
@@ -135,10 +139,15 @@ async def contract_detail(request: Request, sheet_row: int):
     if redirect:
         return redirect
 
+    get_pricing_store(request)
     df, columns = get_prepared_data()
     row = _get_row_by_sheet(df, sheet_row)
     if row is None:
         return RedirectResponse(url="/cadastro/todos", status_code=303)
+
+    company_name = normalize_text(row.get("_empresa", ""))
+    pricing_answers = _diagnostic_get_answers().get(company_name)
+    commercial = build_client_commercial_summary(row, columns, pricing_answers)
 
     fields = {
         "empresa": _contract_value(row, columns, "empresa"),
@@ -180,6 +189,7 @@ async def contract_detail(request: Request, sheet_row: int):
             "active_page": "contracts",
             "sheet_row": sheet_row,
             "fields": fields,
+            "commercial": commercial,
             "client_action": build_client_action(row, columns),
         },
     )
@@ -223,7 +233,10 @@ async def contract_edit_page(request: Request, sheet_row: int):
                 "socio_2", "telefone_socio_2", "cpf_socio_2",
                 "socio_3", "telefone_socio_3", "cpf_socio_3",
                 "instagram", "linkedin", "observacoes",
+                "servico", "valor_proposta", "colaboradores",
             ]},
+            "service_options": COMMERCIAL_SERVICE_OPTIONS,
+            "colaborador_options": get_colaborador_options(),
             "vendedor": normalize_text(row.get("_vendedor", "")) or "Sem vendedor",
             "error": request.session.pop("edit_error", ""),
         },

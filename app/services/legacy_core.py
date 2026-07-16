@@ -1238,6 +1238,24 @@ def append_company_to_sheet(payload: dict) -> None:
     _set_sheet_value_by_header(row_values, headers, ["Data do chamado", "Data chamado"], payload.get("data_chamado"))
     _set_sheet_value_by_header(row_values, headers, ["Última atualização", "Ultima atualização", "Ultima atualizacao"], payload.get("ultima_atualizacao"))
     _set_sheet_value_by_header(row_values, headers, ["Observações", "Observacoes", "Observação", "Observacao"], payload.get("observacoes"))
+    _set_sheet_value_by_header(
+        row_values,
+        headers,
+        ["Serviço", "Servico", "Serviço escolhido", "Solução", "Solucao", "Produto Oppi"],
+        payload.get("servico"),
+    )
+    _set_sheet_value_by_header(
+        row_values,
+        headers,
+        ["Valor da proposta", "Valor proposta", "Valor Proposta"],
+        payload.get("valor_proposta"),
+    )
+    _set_sheet_value_by_header(
+        row_values,
+        headers,
+        ["Colaboradores", "Qtd colaboradores", "Quantidade de colaboradores", "Qtd. colaboradores"],
+        payload.get("colaboradores"),
+    )
 
     worksheet.append_row(
         row_values,
@@ -1300,6 +1318,24 @@ def update_company_in_sheet(sheet_row: int, payload: dict) -> None:
     _set_sheet_value_by_header(row_values, headers, ["Data do chamado", "Data chamado"], payload.get("data_chamado"))
     _set_sheet_value_by_header(row_values, headers, ["Última atualização", "Ultima atualização", "Ultima atualizacao"], payload.get("ultima_atualizacao"))
     _set_sheet_value_by_header(row_values, headers, ["Observações", "Observacoes", "Observação", "Observacao"], payload.get("observacoes"))
+    _set_sheet_value_by_header(
+        row_values,
+        headers,
+        ["Serviço", "Servico", "Serviço escolhido", "Solução", "Solucao", "Produto Oppi"],
+        payload.get("servico"),
+    )
+    _set_sheet_value_by_header(
+        row_values,
+        headers,
+        ["Valor da proposta", "Valor proposta", "Valor Proposta"],
+        payload.get("valor_proposta"),
+    )
+    _set_sheet_value_by_header(
+        row_values,
+        headers,
+        ["Colaboradores", "Qtd colaboradores", "Quantidade de colaboradores", "Qtd. colaboradores"],
+        payload.get("colaboradores"),
+    )
 
     changed_cells = []
 
@@ -1358,6 +1394,12 @@ def identify_columns(df: pd.DataFrame) -> dict:
         "data_chamado": first_existing_column(df, ["Data do chamado", "Data chamado"]),
         "ultima_atualizacao": first_existing_column(df, ["Última atualização", "Ultima atualização", "Ultima atualizacao"]),
         "observacoes": first_existing_column(df, ["Observações", "Observacoes", "Observação", "Observacao"]),
+        "servico": first_existing_column(df, ["Serviço", "Servico", "Serviço escolhido", "Solução", "Solucao", "Produto Oppi"]),
+        "valor_proposta": first_existing_column(df, ["Valor da proposta", "Valor proposta", "Valor Proposta"]),
+        "colaboradores": first_existing_column(
+            df,
+            ["Colaboradores", "Qtd colaboradores", "Quantidade de colaboradores", "Qtd. colaboradores"],
+        ),
     }
 
 
@@ -1927,6 +1969,157 @@ def _pricing_answer_label_for_pdf(step: dict, answer_data: dict) -> str:
 
     return answer or "Não informado"
 
+
+COMMERCIAL_SERVICE_OPTIONS = ["Oppi Vision", "Oppi Flow", "Oppi Track"]
+
+
+def get_colaborador_options() -> list[str]:
+    step = next(item for item in OPPI_PRICING_STEPS if item["id"] == "colaboradores")
+    return list(step.get("options", []))
+
+
+def format_colaboradores_label(answer_data: dict | str) -> str:
+    if isinstance(answer_data, str):
+        answer_data = {"answer": answer_data, "weight": None}
+
+    step = next(item for item in OPPI_PRICING_STEPS if item["id"] == "colaboradores")
+    return _pricing_answer_label_for_pdf(step, answer_data or {})
+
+
+def format_proposal_value_display(value: str) -> str:
+    text = normalize_text(value)
+    if not text:
+        return "Não informado"
+    if "consulta" in normalize_search_text(text):
+        return text
+    if text.upper().startswith("R$"):
+        return text
+    amount = parse_money(text)
+    if amount > 0:
+        return format_money(amount)
+    return text
+
+
+def build_client_commercial_summary(row, columns: dict, pricing_answers: dict | None = None) -> dict:
+    def sheet_value(key: str) -> str:
+        column_name = columns.get(key)
+        if column_name and column_name in row.index:
+            return normalize_text(row.get(column_name, ""))
+        return ""
+
+    servico = sheet_value("servico")
+    valor = sheet_value("valor_proposta")
+    colaboradores = sheet_value("colaboradores")
+
+    if pricing_answers:
+        weighted_steps = [step for step in OPPI_PRICING_STEPS if step["weighted"]]
+        if not servico and all(pricing_answers.get(step["id"], {}).get("weight") for step in weighted_steps):
+            servico = _pricing_product(pricing_answers)
+        if not colaboradores and pricing_answers.get("colaboradores"):
+            colaboradores = format_colaboradores_label(pricing_answers["colaboradores"])
+        if not valor and pricing_answers.get("valor_proposta"):
+            valor = normalize_text(pricing_answers["valor_proposta"].get("answer"))
+
+    return {
+        "servico": servico or "Não informado",
+        "valor_proposta": format_proposal_value_display(valor),
+        "valor_proposta_num": parse_money(valor),
+        "colaboradores": colaboradores or "Não informado",
+        "has_data": bool(servico or valor or colaboradores),
+    }
+
+
+def find_company_sheet_row(company_name: str) -> int | None:
+    df = load_sheet_data()
+    if df.empty:
+        return None
+
+    columns = identify_columns(df)
+    prepared = prepare_data(df, columns)
+    matches = prepared[prepared["_empresa"].astype(str) == normalize_text(company_name)].copy()
+
+    if matches.empty:
+        return None
+
+    if "_sheet_row" in matches.columns:
+        matches = matches.sort_values("_sheet_row", ascending=False)
+
+    return int(matches.iloc[0]["_sheet_row"])
+
+
+def update_company_commercial_fields(sheet_row: int, payload: dict) -> None:
+    client = get_gsheet_client()
+    spreadsheet = client.open_by_key(settings.sheet_id)
+    worksheet = _open_worksheet(spreadsheet, settings.worksheet_name)
+    headers = worksheet.row_values(1)
+
+    if not headers:
+        raise RuntimeError("A primeira linha da planilha precisa conter os cabeçalhos.")
+
+    current_row = worksheet.row_values(int(sheet_row))
+    row_values = list(current_row) + [""] * max(0, len(headers) - len(current_row))
+    row_values = row_values[:len(headers)]
+
+    _set_sheet_value_by_header(
+        row_values,
+        headers,
+        ["Serviço", "Servico", "Serviço escolhido", "Solução", "Solucao", "Produto Oppi"],
+        payload.get("servico"),
+    )
+    _set_sheet_value_by_header(
+        row_values,
+        headers,
+        ["Valor da proposta", "Valor proposta", "Valor Proposta"],
+        payload.get("valor_proposta"),
+    )
+    _set_sheet_value_by_header(
+        row_values,
+        headers,
+        ["Colaboradores", "Qtd colaboradores", "Quantidade de colaboradores", "Qtd. colaboradores"],
+        payload.get("colaboradores"),
+    )
+
+    changed_cells = []
+    for column_index, new_value in enumerate(row_values, start=1):
+        old_value = current_row[column_index - 1] if column_index - 1 < len(current_row) else ""
+        if normalize_text(old_value) != normalize_text(new_value):
+            changed_cells.append(gspread.Cell(int(sheet_row), column_index, normalize_text(new_value)))
+
+    if changed_cells:
+        worksheet.update_cells(changed_cells, value_input_option="USER_ENTERED")
+        invalidate_sheet_cache()
+
+
+def sync_pricing_answers_to_sheet(company_name: str, answer_map: dict) -> None:
+    if not answer_map:
+        return
+
+    sheet_row = find_company_sheet_row(company_name)
+    if sheet_row is None:
+        return
+
+    payload: dict[str, str] = {}
+
+    if answer_map.get("colaboradores"):
+        payload["colaboradores"] = format_colaboradores_label(answer_map["colaboradores"])
+
+    weighted_steps = [step for step in OPPI_PRICING_STEPS if step["weighted"]]
+    if all(answer_map.get(step["id"], {}).get("weight") for step in weighted_steps):
+        payload["servico"] = _pricing_product(answer_map)
+
+    valor_answer = normalize_text(answer_map.get("valor_proposta", {}).get("answer"))
+    if valor_answer:
+        payload["valor_proposta"] = valor_answer
+
+    if not payload:
+        return
+
+    try:
+        update_company_commercial_fields(sheet_row, payload)
+    except Exception:
+        return
+
+
 def _pricing_generate_pdf(company_name: str, df: pd.DataFrame, columns: dict) -> bytes:
     """Gera um PDF de diagnóstico com os dados cadastrais e todas as respostas do vendedor."""
     try:
@@ -2300,6 +2493,7 @@ def _diagnostic_add_answer(company_name: str, answer: str) -> None:
             "answer": clean_answer,
             "weight": None,
         }
+        sync_pricing_answers_to_sheet(company_name, answers.get(company_name, {}))
         messages.append(
             {
                 "role": "assistant",
@@ -2365,6 +2559,7 @@ def _diagnostic_add_answer(company_name: str, answer: str) -> None:
             "time": _diagnostic_now(),
         }
     )
+    sync_pricing_answers_to_sheet(company_name, answers.get(company_name, {}))
 
 
 def _diagnostic_reset(company_name: str) -> None:
