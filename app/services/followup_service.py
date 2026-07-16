@@ -7,6 +7,20 @@ from typing import Any
 
 import pandas as pd
 
+from config.crm_options import (
+    COMPLETED_SHEET_STATUSES,
+    FIRST_CONTACT_SHEET_STATUSES,
+    OVERVIEW_FUNNEL_STAGES,
+    PIPELINE_STAGE_OPTIONS,
+    PIPELINE_STAGE_SHEET_STATUSES,
+    PROCESS_GUIDE,
+)
+from app.services.crm_validation_service import (
+    is_open_opportunity,
+    normalize_legacy_action,
+    normalize_opportunity_status,
+    resolve_pipeline_stage,
+)
 from app.services.filters import DashboardFilters, apply_dashboard_filters
 from app.services.lead_actions_storage import DEFAULT_TENANT_ID, get_lead_action
 from app.services.legacy_core import (
@@ -18,39 +32,9 @@ from app.services.legacy_core import (
     status_group,
 )
 
-COMPLETED_STATUSES = {"Fechado", "Sem interesse"}
-FIRST_CONTACT_STATUSES = {
-    "Chamado Whats",
-    "Ligação - Conversando Whats",
-    "Ligação",
-    "Conversando",
-    "Reunião",
-    "Proposta",
-    "Retornar",
-    "Ligação retornar",
-    "Sem Resposta",
-}
-
-STAGE_MAP = {
-    "Novo Lead": ["Novo Lead"],
-    "Primeiro Contato": ["Chamado Whats", "Ligação - Conversando Whats", "Ligação"],
-    "Qualificação": ["Conversando"],
-    "Reunião": ["Reunião"],
-    "Proposta": ["Proposta"],
-    "Negociação": ["Retornar", "Ligação retornar"],
-    "Fechado": ["Fechado", "Sem interesse"],
-}
-
-PROCESS_GUIDE = [
-    ("Novo Lead", "Até 1 hora"),
-    ("Contato", "No mesmo dia"),
-    ("Qualificação", "1 a 3 dias"),
-    ("Reunião", "Até 7 dias"),
-    ("Proposta", "Até 24 horas"),
-    ("Retorno", "2 dias"),
-    ("Negociação", "3 a 7 dias"),
-    ("Fechado", "Processo concluído"),
-]
+COMPLETED_STATUSES = COMPLETED_SHEET_STATUSES
+FIRST_CONTACT_STATUSES = FIRST_CONTACT_SHEET_STATUSES
+STAGE_MAP = PIPELINE_STAGE_SHEET_STATUSES
 
 PRIORITY_SCORE = {
     "critico": 100,
@@ -160,11 +144,8 @@ def _format_deadline(value: date | None, label: str = "") -> str:
     return value.strftime("%d/%m/%Y")
 
 
-def _stage_for_status(grouped: str) -> str:
-    for stage, statuses in STAGE_MAP.items():
-        if grouped in statuses:
-            return stage
-    return "Qualificação"
+def _stage_for_status(grouped: str, stored: dict | None = None) -> str:
+    return resolve_pipeline_stage(grouped, stored)
 
 
 def _phone_for_row(row, columns: dict) -> str:
@@ -212,6 +193,7 @@ def _lead_record(row, columns: dict, tenant_id: str | None = None) -> dict:
     created = row.get("_data_chamado")
     last_contact = row.get("_ultima_atualizacao") or row.get("_data_chamado")
     stored = get_lead_action(tenant_id, sheet_row) or {}
+    opportunity_status = normalize_opportunity_status(stored.get("opportunity_status"))
 
     next_action_date = None
     next_action_time = normalize_text(stored.get("next_action_time")) or "09:00"
@@ -229,7 +211,8 @@ def _lead_record(row, columns: dict, tenant_id: str | None = None) -> dict:
         "empresa": normalize_text(row.get("_empresa", "")) or "—",
         "vendedor": normalize_text(row.get("_vendedor", "")) or "Sem vendedor",
         "grouped_status": grouped,
-        "stage": _stage_for_status(grouped),
+        "stage": _stage_for_status(grouped, stored),
+        "opportunity_status": opportunity_status,
         "created_at": created,
         "last_contact_at": last_contact,
         "stage_entered_at": last_contact,
@@ -278,14 +261,15 @@ def _action_buttons(lead: dict, suggested: str, channel: str = "") -> list[dict]
 
     whatsapp_actions = {
         "Fazer primeiro contato",
-        "Retomar qualificação",
-        "Realizar follow-up da proposta",
-        "Retomar negociação",
+        "Qualificar lead",
+        "Fazer acompanhamento da proposta",
+        "Negociar condições",
+        "Retornar contato",
     }
     if (suggested in whatsapp_actions or channel == "whatsapp") and wa:
         buttons.append({"label": "Chamar", "href": wa, "tone": "green", "external": True})
 
-    if suggested in {"Agendar retorno", "Agendar reunião", "Definir próximo passo", "Definir próxima ação"}:
+    if suggested in {"Agendar retorno", "Reagendar retorno", "Agendar reunião", "Definir próximo passo", "Definir próxima ação"}:
         buttons.append({"label": "Agendar", "href": f"{lead['href']}/editar", "tone": "blue"})
 
     if suggested == "Criar proposta":
@@ -347,8 +331,11 @@ def _append_action(
 
 
 def _evaluate_lead_rules(lead: dict) -> list[dict]:
-    if lead["grouped_status"] in COMPLETED_STATUSES:
+    if lead["grouped_status"] in COMPLETED_STATUSES and lead.get("opportunity_status") != "Aberta":
         return []
+    if not is_open_opportunity(lead.get("stored"), lead["grouped_status"]) and lead.get("opportunity_status") != "Aberta":
+        if lead.get("opportunity_status") in {"Fechada ganha", "Fechada perdida", "Encerrada"}:
+            return []
 
     grouped = lead["grouped_status"]
     stage = lead["stage"]
@@ -437,7 +424,7 @@ def _evaluate_lead_rules(lead: dict) -> list[dict]:
             lead=lead,
             rule_code="proposta_sem_followup",
             priority_key=priority,
-            suggested_action="Realizar follow-up da proposta",
+            suggested_action="Fazer acompanhamento da proposta",
             deadline_label=f"SLA 2 dias ({days_idle}d)",
             channel="whatsapp",
         )
@@ -457,7 +444,7 @@ def _evaluate_lead_rules(lead: dict) -> list[dict]:
             lead=lead,
             rule_code="negociacao_parada",
             priority_key=priority_key,
-            suggested_action="Retomar negociação",
+            suggested_action="Negociar condições",
             deadline_label=f"{days_idle} dias parado",
             channel="whatsapp",
         )
@@ -471,7 +458,7 @@ def _evaluate_lead_rules(lead: dict) -> list[dict]:
             lead=lead,
             rule_code="qualificacao_parada",
             priority_key=priority_key,
-            suggested_action="Retomar qualificação",
+            suggested_action="Qualificar lead",
             deadline_label=f"{days_idle} dias na etapa",
             channel="whatsapp",
         )
@@ -543,7 +530,10 @@ def buscar_retornos_de_hoje(
         lead = _lead_record(row, columns, tenant_id)
         if lead["grouped_status"] in COMPLETED_STATUSES:
             continue
-        if not lead["has_next_action"] or lead["next_action_date"] != today:
+        is_return_today = lead["has_next_action"] and lead["next_action_date"] == today
+        is_return_stage = lead.get("stage") == "Retorno"
+        is_return_action = normalize_legacy_action(lead.get("next_action_description", "")) == "Retornar contato"
+        if not is_return_today and not (is_return_stage and is_return_action and lead["has_next_action"]):
             continue
 
         channel = lead["next_action_type"] or "whatsapp"
@@ -711,8 +701,24 @@ def build_operational_kpi_cards(
     )
 
     month_df = apply_period_filter(scoped.copy(), "_data_chamado", (month_start, today))
-    fechados_mes = count_dashboard_status(month_df, "Fechado")
-    valor_fechado = float(month_df[month_df["_status_grupo"].apply(lambda s: status_group(s) == "Fechado")]["_capital_num"].fillna(0).sum()) if not month_df.empty else 0.0
+    fechados_mes = 0
+    valor_fechado = 0.0
+    for _, row in month_df.iterrows():
+        lead = _lead_record(row, columns, tenant_id)
+        closed_at = lead.get("stored", {}).get("closed_at")
+        if lead.get("opportunity_status") == "Fechada ganha" or (
+            lead["grouped_status"] == "Fechado" and lead.get("opportunity_status") == "Aberta"
+        ):
+            if closed_at:
+                try:
+                    closed_date = date.fromisoformat(str(closed_at)[:10])
+                except ValueError:
+                    closed_date = _as_date(row.get("_data_chamado"))
+            else:
+                closed_date = _as_date(row.get("_data_chamado"))
+            if closed_date and month_start <= closed_date <= today:
+                fechados_mes += 1
+                valor_fechado += float(row.get("_capital_num") or 0)
 
     def money(value: float) -> str:
         if value <= 0:
@@ -771,29 +777,25 @@ def build_operational_kpi_cards(
     ]
 
 
-def build_funnel_summary(filtered_df: pd.DataFrame) -> list[dict]:
-    from app.services.overview import OVERVIEW_FUNNEL_STAGES
-
-    def count_statuses(names: list[str]) -> int:
-        if filtered_df.empty:
-            return 0
-        total = 0
+def build_funnel_summary(filtered_df: pd.DataFrame, columns: dict | None = None, tenant_id: str | None = None) -> list[dict]:
+    columns = columns or {}
+    counts = {stage: 0 for stage in PIPELINE_STAGE_OPTIONS}
+    if not filtered_df.empty:
         for _, row in filtered_df.iterrows():
-            grouped = status_group(row.get("_status_grupo") or row.get("_status_original", ""))
-            if grouped in names:
-                total += 1
-        return total
+            lead = _lead_record(row, columns, tenant_id)
+            stage = lead.get("stage")
+            if stage in counts:
+                counts[stage] += 1
 
-    counts = [count_statuses(statuses) for _, statuses, _ in OVERVIEW_FUNNEL_STAGES]
-    total = sum(counts) or 1
+    total = sum(counts.values()) or 1
     return [
         {
             "name": name,
-            "count": count,
-            "percent": round((count / total) * 100),
+            "count": counts.get(name, 0),
+            "percent": round((counts.get(name, 0) / total) * 100),
             "color": color,
         }
-        for (name, _, color), count in zip(OVERVIEW_FUNNEL_STAGES, counts)
+        for name, _, color in OVERVIEW_FUNNEL_STAGES
     ]
 
 
@@ -810,7 +812,7 @@ def build_operational_overview_context(
     action_queue = buscar_leads_para_acao(scoped, columns, operational, tenant_id)
     returns_today = buscar_retornos_de_hoje(scoped, columns, tenant_id)
     alerts = montar_alertas_processo(scoped, columns, tenant_id)
-    funnel_summary = build_funnel_summary(scoped)
+    funnel_summary = build_funnel_summary(scoped, columns, tenant_id)
 
     return {
         "kpi_cards": build_operational_kpi_cards(df, columns, filters, tenant_id),
@@ -820,7 +822,7 @@ def build_operational_overview_context(
         "alerts": alerts,
         "funnel_summary": funnel_summary,
         "operational": operational,
-        "stage_options": ["Todas as etapas", *STAGE_MAP.keys()],
+        "stage_options": ["Todas as etapas", *PIPELINE_STAGE_OPTIONS],
         "priority_options": ["Todas", "Crítico", "Atrasado", "Vence hoje", "Alta", "Normal"],
     }
 

@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
-<link rel="stylesheet" href="/static/css/overview.css?v=4">
+<link rel="stylesheet" href="/static/css/overview.css?v=5">
 <div class="page-header">
   <div>
     <div class="page-title">Concluir atividade</div>
@@ -21,19 +21,25 @@
       <label>Resultado do contato *</label>
       <select name="result" required>
         <option value="">Selecione</option>
-        <option value="Contato realizado">Contato realizado</option>
-        <option value="Cliente respondeu">Cliente respondeu</option>
-        <option value="Sem resposta">Sem resposta</option>
-        <option value="Reunião confirmada">Reunião confirmada</option>
-        <option value="Proposta enviada">Proposta enviada</option>
-        <option value="Follow-up realizado">Follow-up realizado</option>
-        <option value="Lead encerrado">Lead encerrado</option>
+        {% for option in result_options %}
+        <option value="{{ option }}">{{ option }}</option>
+        {% endfor %}
       </select>
     </div>
 
     <div class="form-group full">
       <label>Observação</label>
       <textarea name="note" rows="3" placeholder="Resumo do que foi tratado..."></textarea>
+    </div>
+
+    <div class="form-group">
+      <label>Próxima ação *</label>
+      <select name="next_action_description" required>
+        <option value="">Selecione</option>
+        {% for option in process_actions %}
+        <option value="{{ option }}" {% if stored.next_action_description == option %}selected{% endif %}>{{ option }}</option>
+        {% endfor %}
+      </select>
     </div>
 
     <div class="form-group">
@@ -49,37 +55,37 @@
     <div class="form-group">
       <label>Canal</label>
       <select name="next_action_type">
-        <option value="whatsapp">WhatsApp</option>
-        <option value="ligacao">Ligação</option>
-        <option value="email">E-mail</option>
-        <option value="reuniao">Reunião</option>
-        <option value="tarefa">Tarefa</option>
+        {% for option in channel_options %}
+        <option value="{{ channel_keys[option] }}" {% if stored.next_action_type == channel_keys[option] %}selected{% endif %}>{{ option }}</option>
+        {% endfor %}
       </select>
-    </div>
-
-    <div class="form-group">
-      <label>Descrição da próxima ação</label>
-      <input type="text" name="next_action_description" value="{{ stored.next_action_description or '' }}" placeholder="Ex.: Retornar no WhatsApp">
     </div>
 
     <div class="form-group">
       <label>Movimentar etapa?</label>
       <select name="move_stage">
         <option value="">Manter etapa atual</option>
-        <option value="Primeiro Contato">Primeiro Contato</option>
-        <option value="Qualificação">Qualificação</option>
-        <option value="Reunião">Reunião</option>
-        <option value="Proposta">Proposta</option>
-        <option value="Negociação">Negociação</option>
-        <option value="Fechado">Fechado</option>
+        {% for option in stage_options %}
+        <option value="{{ option }}">{{ option }}</option>
+        {% endfor %}
       </select>
     </div>
 
     <div class="form-group">
-      <label>Lead encerrado?</label>
+      <label>Oportunidade encerrada sem venda?</label>
       <select name="lead_closed">
-        <option value="">Não — lead continua aberto</option>
-        <option value="1">Sim — sem próxima ação</option>
+        <option value="">Não — oportunidade continua aberta</option>
+        <option value="1">Sim — fechar como perdida</option>
+      </select>
+    </div>
+
+    <div class="form-group full" id="lost-reason-group" style="display:none;">
+      <label>Motivo da perda</label>
+      <select name="lost_reason">
+        <option value="">Selecione</option>
+        {% for option in lost_reason_options %}
+        <option value="{{ option }}">{{ option }}</option>
+        {% endfor %}
       </select>
     </div>
 
@@ -89,4 +95,18 @@
     </div>
   </form>
 </div>
+<script>
+document.querySelector('select[name="lead_closed"]')?.addEventListener('change', function () {
+  const group = document.getElementById('lost-reason-group');
+  if (group) group.style.display = this.value === '1' ? 'block' : 'none';
+});
+document.querySelector('select[name="result"]')?.addEventListener('change', function () {
+  const closed = document.querySelector('select[name="lead_closed"]');
+  if (!closed) return;
+  if (['Sem interesse', 'Lead não qualificado', 'Contato inválido'].includes(this.value)) {
+    closed.value = '1';
+    closed.dispatchEvent(new Event('change'));
+  }
+});
+</script>
 {% endblock %}

@@ -15,7 +15,7 @@
       <div class="activity-lead-contact">{{ row.contato }}</div>
     </a>
   </td>
-  <td><span class="activity-stage-badge">{{ row.stage }}</span></td>
+  <td><span class="activity-stage-badge stage-{{ row.stage|lower|replace(' ', '-') }}">{{ row.stage }}{% if row.stage_legacy %} <span class="legacy-tag">legado</span>{% endif %}</span></td>
   <td>
     <select class="activity-inline-select" name="channel" data-activity-form="{{ row.id }}" data-activity-field>
       {% for option in channels %}
@@ -58,7 +58,7 @@
   <td>
     <select class="activity-inline-select" name="next_action" data-activity-form="{{ row.id }}" data-activity-field>
       <option value="">Selecione</option>
-      {% for option in process_actions %}
+      {% for option in row.allowed_next_actions %}
       <option value="{{ option }}" {% if row.proxima_acao == option %}selected{% endif %}>{{ option }}</option>
       {% endfor %}
     </select>
@@ -122,10 +122,8 @@
           <span>Mover etapa do funil?</span>
           <select class="activity-inline-select" name="move_stage" data-activity-form="{{ row.id }}" data-activity-field>
             <option value="">Manter etapa atual</option>
-            {% for option in stage_options %}
-            {% if option != 'Todas as etapas' %}
+            {% for option in pipeline_stage_options %}
             <option value="{{ option }}" {% if row.move_stage == option %}selected{% endif %}>{{ option }}</option>
-            {% endif %}
             {% endfor %}
           </select>
         </label>

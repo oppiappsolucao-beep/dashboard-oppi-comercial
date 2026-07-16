@@ -26,14 +26,14 @@ STAGE_COLORS = [
 ]
 
 DEFAULT_PIPELINE_STAGES = [
-    ("Novo Lead", 1, "#6D28D9", 10),
-    ("Primeiro Contato", 2, "#EC4899", 20),
-    ("Qualificação", 3, "#2563EB", 35),
-    ("Reunião", 4, "#16A34A", 50),
-    ("Proposta Enviada", 5, "#F59E0B", 65),
-    ("Negociação", 6, "#8B5CF6", 80),
-    ("Fechado", 7, "#22C55E", 100),
-    ("Perdido", 8, "#EF4444", 0),
+    ("Novo Lead", 1, "#8B5CF6", 10),
+    ("Contato", 2, "#EC4899", 20),
+    ("Qualificação", 3, "#3B82F6", 35),
+    ("Reunião", 4, "#10B981", 50),
+    ("Proposta", 5, "#F59E0B", 65),
+    ("Retorno", 6, "#A855F7", 75),
+    ("Negociação", 7, "#EA580C", 85),
+    ("Fechado", 8, "#22C55E", 100),
 ]
 
 ROLES = ["Administrador", "Gestor", "Vendedor", "Financeiro", "Analista"]

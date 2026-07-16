@@ -3,51 +3,25 @@ from datetime import datetime
 
 import pandas as pd
 
+from config.crm_options import PIPELINE_STAGE_BADGE, PIPELINE_STAGE_OPTIONS
+from app.services.crm_validation_service import resolve_pipeline_stage
 from app.services.legacy_core import safe_series, status_group
 
-ETAPA_STAGES = [
-    "Novo Lead",
-    "Primeiro Contato",
-    "Qualificação",
-    "Reunião",
-    "Proposta Enviada",
-    "Negociação",
-    "Fechado",
-]
-
-ETAPA_BADGE = {
-    "Novo Lead": "novo-lead",
-    "Primeiro Contato": "primeiro-contato",
-    "Qualificação": "qualificacao",
-    "Reunião": "reuniao",
-    "Proposta Enviada": "proposta",
-    "Negociação": "negociacao",
-    "Fechado": "fechado",
-}
+ETAPA_STAGES = PIPELINE_STAGE_OPTIONS
+ETAPA_BADGE = PIPELINE_STAGE_BADGE
 
 ACTIVE_STATUSES = {
     "Novo Lead", "Chamado Whats", "Conversando", "Reunião", "Proposta",
     "Retornar", "Ligação", "Ligação - Conversando Whats", "Ligação retornar",
+    "Sem Resposta", "Não responde",
 }
 
-OPPORTUNITY_STATUSES = {"Conversando", "Reunião", "Proposta", "Retornar", "Ligação - Conversando Whats"}
+OPPORTUNITY_STATUSES = {"Conversando", "Reunião", "Proposta", "Retornar", "Ligação - Conversando Whats", "Negociação"}
 
 
-def map_etapa(status: str) -> str:
+def map_etapa(status: str, stored: dict | None = None) -> str:
     grouped = status_group(status)
-    mapping = {
-        "Novo Lead": "Novo Lead",
-        "Chamado Whats": "Primeiro Contato",
-        "Retornar": "Primeiro Contato",
-        "Ligação": "Primeiro Contato",
-        "Ligação - Conversando Whats": "Primeiro Contato",
-        "Ligação retornar": "Primeiro Contato",
-        "Conversando": "Qualificação",
-        "Reunião": "Reunião",
-        "Proposta": "Proposta Enviada",
-        "Fechado": "Fechado",
-    }
-    return mapping.get(grouped, "Primeiro Contato" if grouped else "Novo Lead")
+    return resolve_pipeline_stage(grouped, stored)
 
 
 def _format_money(value) -> str:
@@ -98,9 +72,10 @@ def build_leads_kpi_cards(filtered_df: pd.DataFrame) -> list[dict]:
         for _, row in filtered_df.iterrows():
             status = row.get("_status_grupo") or row.get("_status_original") or ""
             grouped = status_group(status)
-            if grouped not in ("Fechado", "Sem interesse"):
+            etapa = map_etapa(status)
+            if grouped not in ("Fechado", "Sem interesse") or etapa != "Fechado":
                 active += 1
-            if grouped in OPPORTUNITY_STATUSES or map_etapa(status) in ("Qualificação", "Reunião", "Proposta Enviada", "Negociação"):
+            if etapa in {"Qualificação", "Reunião", "Proposta", "Retorno", "Negociação"} or grouped in OPPORTUNITY_STATUSES:
                 opportunities += 1
                 negotiation_value += float(row.get("_capital_num") or 0)
 
@@ -154,33 +129,26 @@ def build_leads_table(
     total_pages = max(1, (total + per_page - 1) // per_page)
     page = max(1, min(page, total_pages))
     start = (page - 1) * per_page
-    page_df = view_df.iloc[start : start + per_page]
+    slice_df = view_df.iloc[start : start + per_page]
 
     rows = []
-    for _, row in page_df.iterrows():
-        status = row.get("_status_grupo") or row.get("_status_original", "")
-        etapa = map_etapa(status)
-        empresa = row.get("_empresa", "") or "—"
-        email = ""
-        if columns.get("email"):
-            email = safe_series(pd.DataFrame([row]), columns["email"]).iloc[0]
-        if not email and columns.get("email_socio_1"):
-            email = safe_series(pd.DataFrame([row]), columns["email_socio_1"]).iloc[0]
-
+    for _, row in slice_df.iterrows():
+        status_raw = row.get("_status_grupo") or row.get("_status_original") or ""
+        etapa = map_etapa(status_raw)
+        vendedor = str(row.get("_vendedor", "") or "Sem vendedor").strip() or "Sem vendedor"
+        sheet_row = int(row.get("_sheet_row", 0) or 0)
         rows.append({
-            "empresa": empresa,
-            "empresa_initials": _initials(empresa),
-            "nicho": row.get("_nicho") or "—",
-            "telefone": row.get("_telefone") or "—",
-            "email": email or "—",
+            "empresa": str(row.get("_empresa", "") or "—"),
+            "contato": _initials(str(row.get("_empresa", ""))),
+            "vendedor": vendedor,
+            "vendedor_initials": _initials(vendedor),
             "etapa": etapa,
             "etapa_class": ETAPA_BADGE.get(etapa, "novo-lead"),
-            "vendedor": row.get("_vendedor") or "—",
-            "vendedor_initials": _initials(row.get("_vendedor", "")),
+            "status": status_group(status_raw),
             "ultimo_contato": _format_contact_date(row.get("_ultima_atualizacao") or row.get("_data_chamado")),
-            "proxima_acao": "Acompanhar contato",
             "valor": _format_money(row.get("_capital_num")),
-            "sheet_row": int(row.get("_sheet_row", 0)),
+            "sheet_row": sheet_row,
+            "href": f"/cadastro/todos/{sheet_row}" if sheet_row else "/cadastro/todos",
         })
 
     return {

@@ -8,6 +8,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 
+from config.crm_options import OVERVIEW_FUNNEL_STAGES as CRM_FUNNEL_STAGES, PIPELINE_STAGE_OPTIONS, PIPELINE_STAGE_SHEET_STATUSES
 from app.services.filters import DashboardFilters, apply_dashboard_filters
 from app.services.leads import ETAPA_BADGE, map_etapa
 from app.services.legacy_core import (
@@ -23,41 +24,20 @@ from app.services.legacy_core import (
     status_group,
 )
 
-FUNNEL_STAGES = [
-    ("Novo Lead", ["Novo Lead"]),
-    ("Primeiro Contato", ["Chamado Whats", "Conversando", "Ligação - Conversando Whats"]),
-    ("Reunião", ["Reunião"]),
-    ("Proposta", ["Proposta"]),
-    ("Fechado", ["Fechado"]),
-]
+FUNNEL_STAGES = [(stage, PIPELINE_STAGE_SHEET_STATUSES.get(stage, [])) for stage in PIPELINE_STAGE_OPTIONS]
 
-FUNNEL_PAGE_STAGES = [
-    ("Novo Lead", ["Novo Lead"]),
-    ("Primeiro Contato", ["Chamado Whats", "Ligação - Conversando Whats"]),
-    ("Qualificação", ["Conversando"]),
-    ("Reunião", ["Reunião"]),
-    ("Proposta Enviada", ["Proposta"]),
-    ("Fechado", ["Fechado"]),
-]
+FUNNEL_PAGE_STAGES = FUNNEL_STAGES
 
 FUNNEL_PAGE_ACTIONS = [
-    ("Leads para retornar hoje", ["Retornar", "Ligação retornar"], "action-purple"),
-    ("Propostas aguardando resposta", ["Proposta"], "action-pink"),
+    ("Retornos de hoje", ["Retornar", "Ligação retornar", "Sem Resposta"], "action-purple"),
+    ("Propostas aguardando retorno", ["Proposta"], "action-pink"),
     ("Reuniões agendadas", ["Reunião"], "action-indigo"),
-    ("Contatos sem follow-up", ["Sem Resposta"], "action-green"),
+    ("Contatos sem retorno", ["Sem Resposta", "Não responde"], "action-green"),
 ]
 
-OVERVIEW_FUNNEL_STAGES = [
-    ("Novo Lead", ["Novo Lead"], "#8B5CF6"),
-    ("Primeiro Contato", ["Chamado Whats", "Ligação - Conversando Whats", "Ligação"], "#EC4899"),
-    ("Qualificação", ["Conversando"], "#3B82F6"),
-    ("Reunião", ["Reunião"], "#10B981"),
-    ("Proposta", ["Proposta"], "#F59E0B"),
-    ("Negociação", ["Retornar", "Ligação retornar"], "#EA580C"),
-    ("Fechado", ["Fechado"], "#EF4444"),
-]
+OVERVIEW_FUNNEL_STAGES = CRM_FUNNEL_STAGES
 
-OPPORTUNITY_STATUSES = {"Conversando", "Reunião", "Proposta", "Retornar", "Ligação - Conversando Whats", "Ligação retornar"}
+OPPORTUNITY_STATUSES = {"Conversando", "Reunião", "Proposta", "Retornar", "Ligação - Conversando Whats", "Ligação retornar", "Negociação"}
 COMPLETED_STATUSES = {"Fechado", "Sem interesse"}
 
 DAILY_ACTION_SLOTS = ["09:00", "10:30", "14:00", "16:00", "18:30"]
@@ -413,12 +393,10 @@ def build_hot_opportunities(filtered_df: pd.DataFrame) -> list[dict]:
     rows = []
     for _, row in filtered_df.iterrows():
         grouped = status_group(row.get("_status_grupo") or row.get("_status_original", ""))
-        if grouped not in OPPORTUNITY_STATUSES and map_etapa(grouped) not in ("Proposta Enviada", "Negociação", "Reunião", "Qualificação"):
+        if grouped not in OPPORTUNITY_STATUSES and map_etapa(grouped) not in ("Proposta", "Negociação", "Reunião", "Qualificação", "Retorno"):
             continue
         capital = float(row.get("_capital_num") or 0)
         etapa = map_etapa(grouped)
-        if etapa == "Proposta Enviada":
-            etapa = "Proposta"
         activity_date = _as_date(row.get("_ultima_atualizacao") or row.get("_data_chamado"))
         days_idle = (date.today() - activity_date).days if activity_date else 0
         if capital >= 20000 or days_idle >= 5 or grouped == "Proposta":
@@ -553,7 +531,7 @@ def build_funnel_page_kpi_cards(
 
     card_defs = [
         ("Novos Leads", ["Novo Lead"], "purple", "👥"),
-        ("Primeiro Contato", ["Chamado Whats", "Ligação - Conversando Whats"], "pink", "☎"),
+        ("Contato", ["Chamado Whats", "Ligação - Conversando Whats", "Ligação"], "pink", "☎"),
         ("Reuniões", ["Reunião"], "blue", "📅"),
         ("Propostas", ["Proposta"], "rose", "📄"),
         ("Fechados", ["Fechado"], "green", "✓"),

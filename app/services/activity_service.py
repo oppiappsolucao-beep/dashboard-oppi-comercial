@@ -6,129 +6,44 @@ from datetime import date, datetime, timedelta
 
 import pandas as pd
 
+from config.crm_options import (
+    ACTION_DESCRIPTIONS,
+    ACTIVITY_RESULT_OPTIONS,
+    ACTIVITY_STATUS_LABELS,
+    CHANNEL_CLASS,
+    CHANNEL_OPTIONS,
+    NO_NEXT_ACTION_RESULTS,
+    OVERVIEW_ACTION_TO_PROCESS,
+    PIPELINE_STAGE_OPTIONS,
+    PROCESS_ACTION_OPTIONS,
+    SELECTABLE_ACTIVITY_STATUS_KEYS,
+)
 from app.services.activities_storage import (
     DEFAULT_TENANT_ID,
     activity_exists,
     get_activity,
     list_activities,
     save_activity,
-    soft_delete_activity,
+)
+from app.services.crm_validation_service import (
+    calcular_status_atraso,
+    channel_label_to_key,
+    get_actions_for_stage,
+    normalize_legacy_action,
+    normalize_legacy_channel,
+    normalize_legacy_result,
+    normalize_legacy_stage,
+    normalize_legacy_status_key,
+    normalize_opportunity_status,
+    resolve_display_stage,
+    suggest_from_result,
+    validate_activity_payload,
+    validate_completion,
 )
 from app.services.filters import DashboardFilters, apply_dashboard_filters
-from app.services.followup_service import (
-    STAGE_MAP,
-    _lead_record,
-    buscar_leads_para_acao,
-)
+from app.services.followup_service import _lead_record, buscar_leads_para_acao
 from app.services.lead_actions_storage import append_interaction, save_lead_action
-from app.services.legacy_core import as_python_date, as_python_datetime, normalize_text, safe_series, status_group
-
-PROCESS_ACTIONS = [
-    "Fazer primeiro contato",
-    "Qualificar lead",
-    "Retornar contato",
-    "Agendar reunião",
-    "Confirmar reunião",
-    "Realizar reunião",
-    "Criar proposta",
-    "Enviar proposta",
-    "Fazer follow-up",
-    "Negociar condições",
-    "Enviar contrato",
-    "Confirmar assinatura",
-    "Confirmar pagamento",
-    "Iniciar implantação",
-    "Encerrar oportunidade",
-]
-
-CHANNELS = [
-    "WhatsApp",
-    "Ligação",
-    "E-mail",
-    "Reunião online",
-    "Reunião presencial",
-    "Mensagem interna",
-    "Outro",
-]
-
-ACTIVITY_STATUSES = [
-    ("pendente", "Pendente"),
-    ("em_andamento", "Em andamento"),
-    ("concluida", "Concluída"),
-    ("atrasada", "Atrasada"),
-    ("reagendada", "Reagendada"),
-    ("cancelada", "Cancelada"),
-]
-
-RESULT_OPTIONS = [
-    "",
-    "Cliente respondeu",
-    "Cliente não respondeu",
-    "Pediu retorno",
-    "Interesse confirmado",
-    "Lead qualificado",
-    "Reunião agendada",
-    "Reunião realizada",
-    "Proposta solicitada",
-    "Proposta enviada",
-    "Em negociação",
-    "Venda fechada",
-    "Sem interesse",
-    "Número incorreto",
-    "Sem WhatsApp",
-    "Contato inválido",
-    "Outro",
-]
-
-CLOSED_RESULTS = {"Venda fechada", "Sem interesse", "Contato inválido"}
-NO_NEXT_ACTION_RESULTS = CLOSED_RESULTS | {"Encerrar oportunidade"}
-
-ACTION_DESCRIPTIONS = {
-    "Fazer primeiro contato": "Entrar em contato inicial com o lead.",
-    "Qualificar lead": "Entender perfil, necessidade e fit comercial.",
-    "Retornar contato": "Retomar conversa conforme combinado.",
-    "Agendar reunião": "Marcar reunião comercial com o decisor.",
-    "Confirmar reunião": "Confirmar presença antes da reunião.",
-    "Realizar reunião": "Conduzir apresentação ou alinhamento.",
-    "Criar proposta": "Montar proposta comercial.",
-    "Enviar proposta": "Enviar proposta formal ao cliente.",
-    "Fazer follow-up": "Acompanhar retorno da proposta enviada.",
-    "Negociar condições": "Tratar objeções e condições comerciais.",
-    "Enviar contrato": "Enviar documentação para assinatura.",
-    "Confirmar assinatura": "Validar assinatura do contrato.",
-    "Confirmar pagamento": "Confirmar recebimento ou pagamento.",
-    "Iniciar implantação": "Iniciar onboarding do cliente.",
-    "Encerrar oportunidade": "Encerrar oportunidade comercial.",
-}
-
-OVERVIEW_TO_PROCESS = {
-    "Fazer primeiro contato": "Fazer primeiro contato",
-    "Definir próximo passo": "Retornar contato",
-    "Definir próxima ação": "Retornar contato",
-    "Retomar qualificação": "Qualificar lead",
-    "Retomar negociação": "Negociar condições",
-    "Realizar follow-up da proposta": "Fazer follow-up",
-    "Criar proposta": "Criar proposta",
-    "Confirmar reunião": "Confirmar reunião",
-}
-
-CHANNEL_KEY_TO_LABEL = {
-    "whatsapp": "WhatsApp",
-    "ligacao": "Ligação",
-    "email": "E-mail",
-    "reuniao": "Reunião online",
-    "tarefa": "Mensagem interna",
-}
-
-CHANNEL_CLASS = {
-    "WhatsApp": "whatsapp",
-    "Ligação": "ligacao",
-    "E-mail": "email",
-    "Reunião online": "reuniao",
-    "Reunião presencial": "reuniao",
-    "Mensagem interna": "tarefa",
-    "Outro": "tarefa",
-}
+from app.services.legacy_core import normalize_text, safe_series
 
 STATUS_CLASS = {
     "pendente": "pendente",
@@ -204,68 +119,18 @@ def _format_when(scheduled_at: str | None) -> tuple[str, str, str]:
 
 
 def sugerir_proxima_acao(result: str) -> dict:
-    today = date.today()
-    suggestions = {
-        "Cliente não respondeu": {"next_action": "Retornar contato", "days": 1, "channel": "WhatsApp"},
-        "Pediu retorno": {"next_action": "Retornar contato", "days": 0, "channel": "WhatsApp", "require_schedule": True},
-        "Interesse confirmado": {"next_action": "Qualificar lead", "days": 1, "channel": "WhatsApp"},
-        "Lead qualificado": {"next_action": "Agendar reunião", "days": 2, "channel": "Reunião online"},
-        "Reunião agendada": {"next_action": "Confirmar reunião", "days": 1, "channel": "Ligação"},
-        "Reunião realizada": {"next_action": "Criar proposta", "days": 1, "channel": "E-mail"},
-        "Proposta solicitada": {"next_action": "Criar proposta", "days": 1, "channel": "E-mail"},
-        "Proposta enviada": {"next_action": "Fazer follow-up", "days": 2, "channel": "WhatsApp"},
-        "Em negociação": {"next_action": "Negociar condições", "days": 2, "channel": "WhatsApp"},
-        "Venda fechada": {"next_action": "Enviar contrato", "days": 1, "channel": "E-mail"},
-        "Sem interesse": {"next_action": "Encerrar oportunidade", "days": 0, "channel": "Mensagem interna"},
-        "Número incorreto": {"next_action": "Retornar contato", "days": 2, "channel": "Ligação"},
-        "Sem WhatsApp": {"next_action": "Retornar contato", "days": 2, "channel": "Ligação"},
-        "Contato inválido": {"next_action": "Encerrar oportunidade", "days": 0, "channel": "Mensagem interna"},
-        "Cliente respondeu": {"next_action": "Qualificar lead", "days": 1, "channel": "WhatsApp"},
-    }
-    item = suggestions.get(result, {"next_action": "Retornar contato", "days": 1, "channel": "WhatsApp"})
-    suggested_date = today + timedelta(days=item.get("days", 1))
-    return {
-        "next_action": item["next_action"],
-        "next_action_date": suggested_date.isoformat(),
-        "next_action_time": "10:00",
-        "channel": item.get("channel", "WhatsApp"),
-        "move_stage": _suggest_stage(result),
-    }
-
-
-def _suggest_stage(result: str) -> str:
-    mapping = {
-        "Lead qualificado": "Qualificação",
-        "Reunião agendada": "Reunião",
-        "Reunião realizada": "Reunião",
-        "Proposta solicitada": "Proposta",
-        "Proposta enviada": "Proposta",
-        "Em negociação": "Negociação",
-        "Venda fechada": "Fechado",
-        "Sem interesse": "Fechado",
-    }
-    return mapping.get(result, "")
-
-
-def calcular_status_atraso(record: dict) -> str:
-    status = normalize_text(record.get("status")) or "pendente"
-    if status in {"concluida", "cancelada"}:
-        return status
-    scheduled_at = record.get("scheduled_at")
-    if not scheduled_at:
-        return status
-    dt = _parse_datetime(scheduled_at)
-    if dt < _now() and status in {"pendente", "em_andamento", "reagendada", "atrasada"}:
-        return "atrasada"
-    return status
+    return suggest_from_result(result)
 
 
 def _channel_from_overview(channel_key: str) -> str:
+    from config.crm_options import CHANNEL_KEY_TO_LABEL
+
     return CHANNEL_KEY_TO_LABEL.get(normalize_text(channel_key).lower(), "WhatsApp")
 
 
 def _process_from_overview(next_action: str) -> str:
-    return OVERVIEW_TO_PROCESS.get(next_action, next_action if next_action in PROCESS_ACTIONS else "Retornar contato")
+    mapped = OVERVIEW_ACTION_TO_PROCESS.get(next_action, next_action)
+    return normalize_legacy_action(mapped) or "Retornar contato"
 
 
 def sync_auto_activities(
@@ -286,6 +151,7 @@ def sync_auto_activities(
         lead = _lead_record(row, columns, tenant_id)
         process_action = _process_from_overview(item["next_action"])
         channel = _channel_from_overview(lead.get("next_action_type", "whatsapp"))
+        stage = normalize_legacy_stage(item.get("stage")) or lead.get("stage", "Novo Lead")
 
         scheduled_date = lead.get("next_action_date") or date.today()
         scheduled_time = lead.get("next_action_time") or "09:00"
@@ -307,7 +173,7 @@ def sync_auto_activities(
             "process_action": process_action,
             "description": ACTION_DESCRIPTIONS.get(process_action, item["next_action"]),
             "channel": channel,
-            "stage": item["stage"],
+            "stage": stage,
             "result": "",
             "result_notes": "",
             "scheduled_at": scheduled_at,
@@ -330,19 +196,28 @@ def sync_auto_activities(
 def _serialize_activity(record: dict) -> dict:
     status = calcular_status_atraso(record)
     when_label, when_date, when_time = _format_when(record.get("scheduled_at"))
-    channel = normalize_text(record.get("channel")) or "WhatsApp"
-    process_action = normalize_text(record.get("process_action")) or normalize_text(record.get("title"))
+    channel = normalize_legacy_channel(record.get("channel"))
+    process_action = normalize_legacy_action(record.get("process_action") or record.get("title"))
+    stage_raw = record.get("stage", "")
+    stage, stage_legacy = resolve_display_stage(stage_raw)
+    result = normalize_legacy_result(record.get("result")) or record.get("result") or ""
+    if result and result not in ACTIVITY_RESULT_OPTIONS and result != "Selecione":
+        result_display = f"{result} (Valor legado)"
+    else:
+        result_display = result
     vendedor = normalize_text(record.get("assigned_user_id")) or "Sem vendedor"
-    status_label = dict(ACTIVITY_STATUSES).get(status, status.title())
+    status_label = ACTIVITY_STATUS_LABELS.get(status, status.title())
+    allowed_next_actions = get_actions_for_stage(stage, record.get("next_action", ""))
 
     return {
         "id": record["id"],
-        "title": process_action,
+        "title": process_action or record.get("title", "—"),
         "description": normalize_text(record.get("description")) or ACTION_DESCRIPTIONS.get(process_action, ""),
         "icon": "💬" if channel == "WhatsApp" else "☎" if channel == "Ligação" else "📅" if "Reunião" in channel else "✉" if channel == "E-mail" else "📋",
         "empresa": record.get("empresa", "—"),
         "contato": record.get("contato", "—"),
-        "stage": record.get("stage", "—"),
+        "stage": stage,
+        "stage_legacy": stage_legacy,
         "channel": channel,
         "channel_class": CHANNEL_CLASS.get(channel, "tarefa"),
         "vendedor": vendedor,
@@ -356,14 +231,16 @@ def _serialize_activity(record: dict) -> dict:
         "status": status,
         "status_label": status_label,
         "status_class": STATUS_CLASS.get(status, "pendente"),
-        "result": record.get("result") or "",
+        "result": result_display,
+        "result_value": result,
         "result_notes": record.get("result_notes") or "",
-        "proxima_acao": record.get("next_action") or process_action,
+        "proxima_acao": normalize_legacy_action(record.get("next_action")) or process_action,
+        "allowed_next_actions": allowed_next_actions,
         "next_action_date": (record.get("next_action_date") or "")[:10],
         "next_action_time": record.get("next_action_time") or "09:00",
-        "next_action_channel": record.get("next_action_channel") or channel,
+        "next_action_channel": normalize_legacy_channel(record.get("next_action_channel")) or channel,
         "note": record.get("note") or "",
-        "move_stage": record.get("move_stage") or "",
+        "move_stage": normalize_legacy_stage(record.get("move_stage")) or "",
         "sheet_row": int(record.get("sheet_row") or 0),
         "priority": int(record.get("priority") or 20),
         "show_extra": status == "concluida" or normalize_text(record.get("result")),
@@ -465,22 +342,15 @@ def atualizar_cards_atividades(activities: list[dict], filters: DashboardFilters
 
 
 def validar_conclusao(status: str, result: str, next_action: str) -> str | None:
-    if status != "concluida":
-        return None
-    if not result or result == "Selecione":
-        return "Selecione o resultado para concluir a atividade."
-    if result in NO_NEXT_ACTION_RESULTS or result == "Outro":
-        return None
-    if not next_action:
-        return "Defina a próxima ação para concluir esta atividade."
-    return None
+    return validate_completion(status, result, next_action)
 
 
 def verificar_duplicidade(tenant_id: str | None, origin_id: str, next_action: str, scheduled_date: str) -> bool:
+    normalized_action = normalize_legacy_action(next_action)
     for record in list_activities(tenant_id):
         if record.get("origin_activity_id") != origin_id:
             continue
-        if record.get("process_action") == next_action and (record.get("scheduled_date") or "")[:10] == scheduled_date[:10]:
+        if normalize_legacy_action(record.get("process_action")) == normalized_action and (record.get("scheduled_date") or "")[:10] == scheduled_date[:10]:
             if record.get("status") in {"pendente", "em_andamento", "atrasada", "reagendada"}:
                 return True
     return False
@@ -500,6 +370,10 @@ def criar_proxima_atividade(
     contato: str,
     stage: str,
 ) -> dict | None:
+    process_action = normalize_legacy_action(process_action)
+    channel = normalize_legacy_channel(channel)
+    stage = normalize_legacy_stage(stage) or "Novo Lead"
+
     if verificar_duplicidade(tenant_id, origin.get("id"), process_action, scheduled_date):
         return None
 
@@ -563,25 +437,32 @@ def atualizar_lead_pela_atividade(
     channel: str,
     move_stage: str,
     user: str,
+    opportunity_status: str = "",
+    lost_reason: str = "",
+    close_value: str = "",
+    close_payment: str = "",
 ) -> None:
-    channel_key = {
-        "WhatsApp": "whatsapp",
-        "Ligação": "ligacao",
-        "E-mail": "email",
-        "Reunião online": "reuniao",
-        "Reunião presencial": "reuniao",
-    }.get(channel, "tarefa")
-
+    channel_key = channel_label_to_key(channel)
     payload = {
         "next_action_date": next_action_date[:10],
         "next_action_time": next_action_time,
         "next_action_type": channel_key,
-        "next_action_description": next_action,
+        "next_action_description": normalize_legacy_action(next_action),
         "next_action_completed": False,
         "last_contact_at": _now().isoformat(timespec="seconds"),
     }
     if move_stage:
-        payload["stage_override"] = move_stage
+        payload["stage_override"] = normalize_legacy_stage(move_stage)
+    if opportunity_status:
+        payload["opportunity_status"] = normalize_opportunity_status(opportunity_status)
+        if opportunity_status in {"Fechada ganha", "Fechada perdida", "Encerrada"}:
+            payload["closed_at"] = _now().isoformat(timespec="seconds")
+    if lost_reason:
+        payload["lost_reason"] = lost_reason
+    if close_value:
+        payload["close_value"] = close_value
+    if close_payment:
+        payload["close_payment_method"] = close_payment
     save_lead_action(tenant_id, sheet_row, payload)
 
 
@@ -595,19 +476,38 @@ def atualizar_atividade_inline(
     if not current:
         return None, "Atividade não encontrada."
 
-    status = normalize_text(payload.get("status")) or current.get("status", "pendente")
-    result = normalize_text(payload.get("result"))
-    if result == "Selecione":
-        result = ""
-    next_action = normalize_text(payload.get("next_action"))
+    status = normalize_legacy_status_key(payload.get("status") or current.get("status", "pendente"))
+    if status == "atrasada":
+        status = normalize_legacy_status_key(current.get("status", "pendente"))
+
+    result = normalize_legacy_result(payload.get("result"))
+    next_action = normalize_legacy_action(payload.get("next_action"))
     next_action_date = normalize_text(payload.get("next_action_date"))
     next_action_time = normalize_text(payload.get("next_action_time")) or "09:00"
-    next_action_channel = normalize_text(payload.get("next_action_channel")) or normalize_text(current.get("channel"))
+    next_action_channel = normalize_legacy_channel(payload.get("next_action_channel") or current.get("channel"))
     note = normalize_text(payload.get("note"))
     result_notes = normalize_text(payload.get("result_notes"))
     assigned_user = normalize_text(payload.get("assigned_user_id")) or current.get("assigned_user_id")
-    move_stage = normalize_text(payload.get("move_stage"))
-    channel = normalize_text(payload.get("channel")) or current.get("channel")
+    move_stage = normalize_legacy_stage(payload.get("move_stage"))
+    channel = normalize_legacy_channel(payload.get("channel") or current.get("channel"))
+    current_stage = normalize_legacy_stage(current.get("stage")) or "Novo Lead"
+
+    validation_payload = {
+        "stage": current_stage,
+        "move_stage": move_stage,
+        "status": status,
+        "result": result,
+        "channel": channel,
+        "next_action_channel": next_action_channel,
+        "next_action": next_action,
+        "process_action": current.get("process_action"),
+    }
+    validation_error = validate_activity_payload(validation_payload)
+    if validation_error:
+        return None, validation_error
+
+    if status == "cancelada" and not note and not result_notes:
+        return None, "Informe o motivo do cancelamento."
 
     if status == "reagendada":
         scheduled_date = normalize_text(payload.get("scheduled_date")) or next_action_date
@@ -639,6 +539,7 @@ def atualizar_atividade_inline(
         "next_action_time": next_action_time,
         "next_action_channel": next_action_channel,
         "move_stage": move_stage,
+        "stage": move_stage or current_stage,
         "updated_by": user,
     }
 
@@ -667,6 +568,10 @@ def atualizar_atividade_inline(
         move_stage=move_stage,
     )
 
+    suggestion = suggest_from_result(result) if result else {}
+    opportunity_status = suggestion.get("opportunity_status", "")
+    next_activity_stage = suggestion.get("activity_stage") or move_stage or current_stage
+
     if status == "concluida" and next_action and next_action_date and result not in NO_NEXT_ACTION_RESULTS:
         criar_proxima_atividade(
             tenant_id,
@@ -679,7 +584,7 @@ def atualizar_atividade_inline(
             sheet_row=sheet_row,
             empresa=current.get("empresa", "—"),
             contato=current.get("contato", "—"),
-            stage=move_stage or current.get("stage", "—"),
+            stage=next_activity_stage,
         )
         atualizar_lead_pela_atividade(
             tenant_id,
@@ -690,6 +595,21 @@ def atualizar_atividade_inline(
             channel=next_action_channel,
             move_stage=move_stage,
             user=user,
+            opportunity_status=opportunity_status,
+            lost_reason=result_notes if result in {"Sem interesse", "Lead não qualificado", "Outro"} else "",
+        )
+    elif status == "concluida" and result in NO_NEXT_ACTION_RESULTS:
+        atualizar_lead_pela_atividade(
+            tenant_id,
+            sheet_row,
+            next_action="Encerrar processo comercial",
+            next_action_date="",
+            next_action_time="",
+            channel=next_action_channel,
+            move_stage=move_stage,
+            user=user,
+            opportunity_status=opportunity_status or ("Fechada perdida" if result == "Sem interesse" else "Encerrada"),
+            lost_reason=result_notes or result,
         )
 
     return _serialize_activity({"id": activity_id, **saved}), None
@@ -699,6 +619,8 @@ def cancelar_atividade(tenant_id: str | None, activity_id: str, user: str, reaso
     current = get_activity(tenant_id, activity_id)
     if not current:
         return False, "Atividade não encontrada."
+    if not reason:
+        return False, "Informe o motivo do cancelamento."
     save_activity(tenant_id, activity_id, {"status": "cancelada", "note": reason, "updated_by": user})
     registrar_historico(
         tenant_id,
@@ -722,16 +644,17 @@ def build_activity_page_context(
     filtered_df = apply_dashboard_filters(df, columns, filters)
     activities = buscar_atividades(filtered_df, columns, tenant_id, search=filters.search)
     table = build_activities_table(activities, params)
-    stage_options = ["Todas as etapas"] + [stage for stage in STAGE_MAP.keys()]
+    stage_options = ["Todas as etapas"] + PIPELINE_STAGE_OPTIONS
     return {
         "activities": activities,
         "table": table,
         "kpi_cards": atualizar_cards_atividades(activities, filters),
-        "process_actions": PROCESS_ACTIONS,
-        "channels": CHANNELS,
-        "status_options": ACTIVITY_STATUSES,
-        "result_options": RESULT_OPTIONS,
+        "process_actions": PROCESS_ACTION_OPTIONS,
+        "channels": CHANNEL_OPTIONS,
+        "status_options": SELECTABLE_ACTIVITY_STATUS_KEYS,
+        "result_options": [opt for opt in ACTIVITY_RESULT_OPTIONS if opt != "Selecione"],
         "stage_options": stage_options,
-        "type_options": ["Todos os tipos"] + PROCESS_ACTIONS,
-        "channel_options": ["Todos os canais"] + CHANNELS,
+        "pipeline_stage_options": PIPELINE_STAGE_OPTIONS,
+        "type_options": ["Todos os tipos"] + PROCESS_ACTION_OPTIONS,
+        "channel_options": ["Todos os canais"] + CHANNEL_OPTIONS,
     }

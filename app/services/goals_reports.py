@@ -14,14 +14,9 @@ MONTHS_PT = [
     "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
 ]
 
-CONVERSION_STAGES = [
-    ("Novo Lead", ["Novo Lead"]),
-    ("Primeiro Contato", ["Chamado Whats", "Ligação - Conversando Whats", "Ligação", "Ligação retornar", "Retornar"]),
-    ("Qualificação", ["Conversando"]),
-    ("Reunião", ["Reunião"]),
-    ("Proposta", ["Proposta"]),
-    ("Fechado", ["Fechado"]),
-]
+from config.crm_options import OVERVIEW_FUNNEL_STAGES as CRM_FUNNEL_STAGES, PIPELINE_STAGE_OPTIONS, PIPELINE_STAGE_SHEET_STATUSES
+
+CONVERSION_STAGES = [(stage, PIPELINE_STAGE_SHEET_STATUSES.get(stage, [])) for stage in PIPELINE_STAGE_OPTIONS]
 
 COMMISSION_RATE = 0.08
 FORECAST_PROPOSAL_FACTOR = 0.35

@@ -106,7 +106,9 @@
   font-size: 0.78rem;
 }
 
-.stage-badge.primeiro-contato { background: #F3E8FF; color: #7C3AED; }
+.stage-badge.contato,
+.stage-badge.primeiro-contato { background: #FCE7F3; color: #DB2777; }
+.stage-badge.retorno { background: #EDE9FE; color: #7C3AED; }
 .stage-badge.negociacao { background: #FEF3C7; color: #B45309; }
 
 .owner-cell {

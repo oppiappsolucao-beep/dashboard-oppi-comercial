@@ -1,9 +1,29 @@
 from datetime import date
 
+from config.crm_options import (
+    ACTIVITY_RESULT_OPTIONS,
+    CHANNEL_LABEL_TO_KEY,
+    CHANNEL_OPTIONS,
+    LOST_REASON_OPTIONS,
+    PIPELINE_STAGE_OPTIONS,
+    PROCESS_ACTION_OPTIONS,
+)
+from fastapi import APIRouter, Form, Request
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from app.dependencies import get_prepared_data, is_admin, require_auth
+from app.services.crm_validation_service import (
+    get_actions_for_stage,
+    normalize_legacy_action,
+    normalize_legacy_result,
+    normalize_legacy_stage,
+    normalize_opportunity_status,
+    resolve_pipeline_stage,
+    suggest_from_result,
+    validate_activity_payload,
+)
+from app.services.legacy_core import invalidate_sheet_cache, normalize_text, status_group
 from app.services.filters import (
     DashboardFilters,
     apply_default_period_filters,
@@ -16,7 +36,6 @@ from app.services.followup_service import (
     build_operational_overview_context,
     parse_operational_filters,
 )
-from app.services.legacy_core import invalidate_sheet_cache, normalize_text
 from app.services.lead_actions_storage import DEFAULT_TENANT_ID, complete_activity, get_lead_action
 from app.templating import render
 
@@ -126,6 +145,9 @@ async def overview_complete_action_form(request: Request, sheet_row: int):
 
     row = row_match.iloc[0]
     stored = get_lead_action(DEFAULT_TENANT_ID, sheet_row) or {}
+    grouped = status_group(row.get("_status_grupo") or row.get("_status_original", ""))
+    current_stage = resolve_pipeline_stage(grouped, stored)
+    stage_actions = get_actions_for_stage(current_stage)
     return render(
         request,
         "overview_complete_action.html",
@@ -136,6 +158,13 @@ async def overview_complete_action_form(request: Request, sheet_row: int):
             "stored": stored,
             "today": date.today().isoformat(),
             "overview_error": request.session.pop("overview_error", ""),
+            "result_options": [opt for opt in ACTIVITY_RESULT_OPTIONS if opt != "Selecione"],
+            "process_actions": stage_actions,
+            "stage_options": PIPELINE_STAGE_OPTIONS,
+            "channel_options": CHANNEL_OPTIONS,
+            "channel_keys": CHANNEL_LABEL_TO_KEY,
+            "lost_reason_options": LOST_REASON_OPTIONS,
+            "current_stage": current_stage,
         },
     )
 
@@ -152,12 +181,30 @@ async def overview_complete_action_submit(
     next_action_description: str = Form(""),
     move_stage: str = Form(""),
     lead_closed: str = Form(""),
+    lost_reason: str = Form(""),
 ):
     redirect = require_auth(request)
     if redirect:
         return redirect
 
     user = normalize_text(request.session.get("username", "")) or "Usuário"
+    result = normalize_legacy_result(result)
+    next_action_description = normalize_legacy_action(next_action_description)
+    move_stage = normalize_legacy_stage(move_stage)
+
+    validation_error = validate_activity_payload({
+        "result": result,
+        "next_action": next_action_description,
+        "move_stage": move_stage,
+    })
+    if validation_error:
+        request.session["overview_error"] = validation_error
+        return RedirectResponse(url=f"/visao-geral/acoes/{sheet_row}/concluir", status_code=303)
+
+    if not result:
+        request.session["overview_error"] = "Selecione o resultado para concluir a atividade."
+        return RedirectResponse(url=f"/visao-geral/acoes/{sheet_row}/concluir", status_code=303)
+
     parsed_date = None
     if next_action_date:
         try:
@@ -165,9 +212,23 @@ async def overview_complete_action_submit(
         except ValueError:
             parsed_date = None
 
-    if not lead_closed and not parsed_date:
+    if not lead_closed and not parsed_date and result not in {"Sem interesse", "Lead não qualificado", "Contato inválido", "Venda fechada"}:
         request.session["overview_error"] = "Defina a próxima ação antes de concluir."
         return RedirectResponse(url=f"/visao-geral/acoes/{sheet_row}/concluir", status_code=303)
+
+    if lead_closed and not lost_reason and result in {"Sem interesse", "Outro"}:
+        request.session["overview_error"] = "Informe o motivo da perda."
+        return RedirectResponse(url=f"/visao-geral/acoes/{sheet_row}/concluir", status_code=303)
+
+    suggestion = suggest_from_result(result)
+    if not move_stage:
+        move_stage = suggestion.get("move_stage", "")
+    if not next_action_description and not lead_closed:
+        next_action_description = suggestion.get("next_action", "")
+
+    opportunity_status = suggestion.get("opportunity_status", "")
+    if lead_closed:
+        opportunity_status = "Fechada perdida"
 
     complete_activity(
         DEFAULT_TENANT_ID,
@@ -180,6 +241,8 @@ async def overview_complete_action_submit(
         next_action_type=next_action_type,
         next_action_description=next_action_description,
         move_stage=move_stage,
+        opportunity_status=opportunity_status,
+        lost_reason=lost_reason,
     )
     request.session["overview_success"] = "Atividade concluída e histórico atualizado."
     return RedirectResponse(url="/visao-geral", status_code=303)

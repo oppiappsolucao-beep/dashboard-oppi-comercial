@@ -101,7 +101,21 @@ def complete_activity(
     next_action_type: str = "",
     next_action_description: str = "",
     move_stage: str = "",
+    opportunity_status: str = "",
+    lost_reason: str = "",
 ) -> dict:
+    from app.services.crm_validation_service import (
+        normalize_legacy_action,
+        normalize_legacy_result,
+        normalize_legacy_stage,
+        normalize_opportunity_status,
+    )
+
+    result = normalize_legacy_result(result)
+    next_action_description = normalize_legacy_action(next_action_description)
+    move_stage = normalize_legacy_stage(move_stage)
+    opportunity_status = normalize_opportunity_status(opportunity_status) if opportunity_status else ""
+
     record = get_lead_action(tenant_id, sheet_row) or {}
     completed = record.get("completed_activities")
     if not isinstance(completed, list):
@@ -131,6 +145,14 @@ def complete_activity(
 
     if move_stage:
         record["stage_override"] = move_stage
+
+    if opportunity_status:
+        record["opportunity_status"] = opportunity_status
+        if opportunity_status in {"Fechada ganha", "Fechada perdida", "Encerrada"}:
+            record["closed_at"] = datetime.now().isoformat(timespec="seconds")
+    if lost_reason:
+        record["lost_reason"] = lost_reason
+        record["result_notes"] = lost_reason
 
     record["interactions"] = record.get("interactions") if isinstance(record.get("interactions"), list) else []
     record["interactions"].append({
