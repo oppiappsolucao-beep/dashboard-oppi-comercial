@@ -217,7 +217,7 @@ def build_settings_kpi_cards(df: pd.DataFrame, integrations: list[dict]) -> list
     users = _build_users_from_sheet(df, settings.app_username)
     active_users = len([user for user in users if user["status_class"] == "active"])
     active_integrations = len([item for item in integrations if item["connected"]])
-    services_count = len(MODULE_SERVICES)
+    services_count = len(build_services_list())
     companies_count = int(df["_empresa"].apply(lambda v: normalize_name(v) != "").sum()) if not df.empty else 0
     total_capital = float(df["_capital_num"].sum()) if not df.empty and "_capital_num" in df.columns else 0.0
 
@@ -277,16 +277,9 @@ def build_settings_kpi_cards(df: pd.DataFrame, integrations: list[dict]) -> list
 
 
 def build_services_list() -> list[dict]:
-    status_map = {
-        "ativo": ("Ativo", "active"),
-        "teste": ("Em teste", "test"),
-        "opcional": ("Opcional", "optional"),
-    }
-    rows = []
-    for name, status_key in MODULE_SERVICES:
-        label, css = status_map.get(status_key, ("Ativo", "active"))
-        rows.append({"name": name, "status_label": label, "status_class": css})
-    return rows
+    from app.services.commercial_services import build_commercial_services_rows
+
+    return build_commercial_services_rows()
 
 
 def build_permissions(session_permissions: dict | None) -> list[dict]:

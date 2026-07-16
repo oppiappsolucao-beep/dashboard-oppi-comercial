@@ -22,6 +22,7 @@ def _default_settings() -> dict:
             f"https://docs.google.com/document/d/{doc_id}/edit"
             if doc_id else ""
         ),
+        "commercial_services": ["Oppi Vision", "Oppi Flow", "Oppi Track"],
     }
 
 

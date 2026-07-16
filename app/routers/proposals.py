@@ -3,7 +3,8 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from app.dependencies import get_prepared_data, require_auth
 from app.services.filters import apply_dashboard_filters, apply_default_period_filters, get_filter_options, parse_dashboard_filters
-from app.services.legacy_core import COMMERCIAL_SERVICE_OPTIONS, get_colaborador_options, invalidate_sheet_cache
+from app.services.commercial_services import get_commercial_service_options
+from app.services.legacy_core import get_colaborador_options, invalidate_sheet_cache
 from app.services.proposal_pdf import generate_proposal_pdf, proposal_pdf_filename
 from app.services.proposals import (
     PROPOSAL_STATUS_OPTIONS,
@@ -59,7 +60,7 @@ def _proposals_chat_context(request: Request, chat_messages: list[dict], df) -> 
         "chat_messages_html": render_proposal_chat_messages(chat_messages),
         "show_quick_form": should_show_proposal_quick_form(chat_messages),
         "company_options": build_proposal_company_options(df),
-        "service_options": COMMERCIAL_SERVICE_OPTIONS,
+        "service_options": get_commercial_service_options(),
         "colaborador_options": get_colaborador_options(),
     }
 

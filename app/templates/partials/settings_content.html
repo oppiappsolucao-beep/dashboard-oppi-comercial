@@ -127,7 +127,7 @@
 
     <div class="settings-side">
       <div class="panel settings-widget">
-        <div class="section-heading">Serviços cadastrados</div>
+        <div class="section-heading">Serviços comerciais</div>
         <div class="settings-service-list">
           {% for service in services[:6] %}
           <div class="settings-service-row">
@@ -344,15 +344,54 @@
   </div>
 
   {% elif settings_params.tab == 'servicos' %}
-  <div class="panel settings-single-card">
-    <div class="section-heading">Serviços cadastrados</div>
-    <div class="settings-service-list settings-service-list-full">
-      {% for service in services %}
-      <div class="settings-service-row">
-        <span>{{ service.name }}</span>
-        <span class="settings-service-badge {{ service.status_class }}">{{ service.status_label }}</span>
+  <div class="settings-goals-layout">
+    <div class="panel settings-single-card">
+      <div class="section-heading">Serviços comerciais</div>
+      <div class="section-subtitle">Cadastre aqui os serviços disponíveis para propostas, cadastros e edição de clientes.</div>
+
+      {% if service_success %}
+      <div class="settings-alert success">{{ service_success }}</div>
+      {% endif %}
+      {% if service_error %}
+      <div class="settings-alert error">{{ service_error }}</div>
+      {% endif %}
+
+      {% if is_admin %}
+      <form method="post" action="/configuracoes/servicos/adicionar" class="settings-goals-form settings-service-form">
+        <input type="hidden" name="tab" value="servicos">
+        <label>
+          <span class="settings-company-label">Novo serviço</span>
+          <input type="text" name="service_name" placeholder="Ex.: Oppi Vision" required maxlength="120">
+        </label>
+        <button type="submit" class="btn">Cadastrar serviço</button>
+      </form>
+      {% else %}
+      <div class="settings-empty">Somente administradores podem cadastrar ou remover serviços.</div>
+      {% endif %}
+    </div>
+
+    <div class="panel settings-single-card">
+      <div class="section-heading">Serviços cadastrados</div>
+      <div class="settings-service-list settings-service-list-full">
+        {% for service in services %}
+        <div class="settings-service-row">
+          <span>{{ service.name }}</span>
+          <div class="settings-service-actions">
+            <span class="settings-service-badge {{ service.status_class }}">{{ service.status_label }}</span>
+            {% if is_admin %}
+            <form method="post" action="/configuracoes/servicos/remover" class="settings-inline-form"
+              onsubmit="return confirm('Remover o serviço {{ service.name }}?');">
+              <input type="hidden" name="tab" value="servicos">
+              <input type="hidden" name="service_name" value="{{ service.name }}">
+              <button type="submit" class="settings-link-btn danger">Remover</button>
+            </form>
+            {% endif %}
+          </div>
+        </div>
+        {% else %}
+        <div class="settings-empty">Nenhum serviço cadastrado.</div>
+        {% endfor %}
       </div>
-      {% endfor %}
     </div>
   </div>
 

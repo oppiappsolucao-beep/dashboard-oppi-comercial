@@ -237,6 +237,17 @@
   color: var(--muted);
 }
 
+.proposals-quick-hint {
+  font-size: 0.72rem;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.proposals-quick-hint a {
+  color: var(--violet);
+  font-weight: 600;
+}
+
 .proposals-quick-field input,
 .proposals-quick-field select {
   height: 36px;

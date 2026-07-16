@@ -20,12 +20,15 @@
 
   <label class="proposals-quick-field">
     <span>Serviço</span>
-    <select name="servico">
+    <select name="servico" {% if not service_options %}disabled{% endif %}>
       <option value="">Selecione</option>
       {% for service in service_options %}
       <option value="{{ service }}">{{ service }}</option>
       {% endfor %}
     </select>
+    {% if not service_options %}
+    <small class="proposals-quick-hint">Cadastre serviços em <a href="/configuracoes?tab=servicos">Configurações → Serviços</a>.</small>
+    {% endif %}
   </label>
 
   <div class="proposals-quick-form-row">

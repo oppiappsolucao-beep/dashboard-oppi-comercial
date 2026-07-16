@@ -230,6 +230,24 @@
 .settings-service-badge.test { background: #DBEAFE; color: #2563EB; }
 .settings-service-badge.optional { background: #F3F4F6; color: #64748B; }
 
+.settings-service-form {
+  margin-top: 16px;
+}
+
+.settings-service-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.settings-inline-form {
+  margin: 0;
+}
+
+.settings-link-btn.danger {
+  color: #B91C1C;
+}
+
 .settings-link-btn,
 .settings-outline-btn {
   margin-top: 14px;

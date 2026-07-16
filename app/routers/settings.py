@@ -84,6 +84,8 @@ def _settings_context(request: Request, settings_params: dict):
         "goal_error": request.session.pop("settings_goal_error", ""),
         "template_success": request.session.pop("settings_template_success", ""),
         "template_error": request.session.pop("settings_template_error", ""),
+        "service_success": request.session.pop("settings_service_success", ""),
+        "service_error": request.session.pop("settings_service_error", ""),
     }
 
 
@@ -188,6 +190,60 @@ async def settings_save_goal(
         request.session["settings_goal_error"] = f"Não consegui salvar a meta: {error}"
 
     return RedirectResponse(url="/configuracoes?tab=metas", status_code=303)
+
+
+@router.post("/configuracoes/servicos/adicionar")
+async def settings_add_service(
+    request: Request,
+    service_name: str = Form(...),
+    tab: str = Form("servicos"),
+):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+
+    if not is_admin(request):
+        request.session["settings_service_error"] = "Apenas o administrador pode cadastrar serviços."
+        return RedirectResponse(url="/configuracoes?tab=servicos", status_code=303)
+
+    from app.services.commercial_services import add_commercial_service
+
+    try:
+        add_commercial_service(service_name)
+        request.session["settings_service_success"] = "Serviço cadastrado com sucesso."
+    except ValueError as error:
+        request.session["settings_service_error"] = str(error)
+    except Exception as error:
+        request.session["settings_service_error"] = f"Não consegui cadastrar o serviço: {error}"
+
+    return RedirectResponse(url="/configuracoes?tab=servicos", status_code=303)
+
+
+@router.post("/configuracoes/servicos/remover")
+async def settings_remove_service(
+    request: Request,
+    service_name: str = Form(...),
+    tab: str = Form("servicos"),
+):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+
+    if not is_admin(request):
+        request.session["settings_service_error"] = "Apenas o administrador pode remover serviços."
+        return RedirectResponse(url="/configuracoes?tab=servicos", status_code=303)
+
+    from app.services.commercial_services import remove_commercial_service
+
+    try:
+        remove_commercial_service(service_name)
+        request.session["settings_service_success"] = "Serviço removido com sucesso."
+    except ValueError as error:
+        request.session["settings_service_error"] = str(error)
+    except Exception as error:
+        request.session["settings_service_error"] = f"Não consegui remover o serviço: {error}"
+
+    return RedirectResponse(url="/configuracoes?tab=servicos", status_code=303)
 
 
 @router.post("/configuracoes/modelo-proposta")

@@ -4,7 +4,8 @@ from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from app.dependencies import get_prepared_data, require_auth
 from app.templating import render
-from app.services.legacy_core import COMMERCIAL_SERVICE_OPTIONS, DuplicateRegistrationError, STATUS_OPTIONS, get_colaborador_options, normalize_text
+from app.services.commercial_services import get_commercial_service_options
+from app.services.legacy_core import DuplicateRegistrationError, STATUS_OPTIONS, get_colaborador_options, normalize_text
 from app.services.registration import get_seller_options, save_new_company
 
 router = APIRouter()
@@ -24,7 +25,7 @@ async def new_registration_page(request: Request):
             "active_page": "registration_new",
             "seller_options": get_seller_options(df),
             "status_options": STATUS_OPTIONS,
-            "service_options": COMMERCIAL_SERVICE_OPTIONS,
+            "service_options": get_commercial_service_options(),
             "colaborador_options": get_colaborador_options(),
             "today": date.today().isoformat(),
             "error": request.session.pop("registration_error", ""),

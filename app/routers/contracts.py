@@ -6,8 +6,8 @@ from app.dependencies import get_prepared_data, get_pricing_store, require_auth
 from app.templating import render
 from app.services.filters import DashboardFilters, apply_dashboard_filters, apply_default_period_filters
 from app.services.filters import get_filter_options as get_dashboard_filter_options
+from app.services.commercial_services import get_commercial_service_options
 from app.services.legacy_core import (
-    COMMERCIAL_SERVICE_OPTIONS,
     DuplicateRegistrationError,
     STATUS_OPTIONS,
     _diagnostic_get_answers,
@@ -247,7 +247,7 @@ async def contract_edit_page(request: Request, sheet_row: int):
                 "instagram", "linkedin", "observacoes",
                 "servico", "valor_proposta", "colaboradores",
             ]},
-            "service_options": COMMERCIAL_SERVICE_OPTIONS,
+            "service_options": get_commercial_service_options(),
             "colaborador_options": get_colaborador_options(),
             "vendedor": normalize_text(row.get("_vendedor", "")) or "Sem vendedor",
             "error": request.session.pop("edit_error", ""),
