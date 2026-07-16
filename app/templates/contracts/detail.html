@@ -73,6 +73,39 @@
   {% endif %}
 </div>
 
+{% if lead_action.next_action_date and not lead_action.next_action_completed %}
+<div class="client-action-panel panel">
+  <div class="section-heading">Próximo retorno agendado</div>
+  <div class="client-action-status">
+    {{ lead_action.next_action_date }} às {{ lead_action.next_action_time or '09:00' }}
+    · {{ lead_action.next_action_description or 'Acompanhar lead' }}
+  </div>
+  <div class="client-action-buttons" style="margin-top:12px">
+    <a href="/visao-geral/acoes/{{ sheet_row }}/concluir" class="btn">Concluir atividade</a>
+  </div>
+</div>
+{% endif %}
+
+<div class="client-action-panel panel">
+  <div class="section-heading">Linha do tempo</div>
+  <div class="section-subtitle">Histórico automático de interações e conclusões de atividades.</div>
+  {% if interactions %}
+  <div class="operational-timeline">
+    {% for item in interactions %}
+    <div class="operational-timeline-item">
+      <div class="operational-timeline-time">{{ item.at }}</div>
+      <div class="operational-timeline-body">
+        <div class="operational-timeline-title">{{ item.description }}</div>
+        <div class="operational-timeline-meta">{{ item.user }}{% if item.note %} · {{ item.note }}{% endif %}</div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="client-action-empty">Nenhuma interação registrada ainda.</div>
+  {% endif %}
+</div>
+
 <div class="detail-grid">
   {% for label, value in fields.items() %}
   <div class="detail-field">

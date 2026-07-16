@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block content %}
+<link rel="stylesheet" href="/static/css/overview.css?v=4">
+<div class="page-header">
+  <div>
+    <div class="page-title">Concluir atividade</div>
+    <div class="page-subtitle">{{ empresa }}</div>
+  </div>
+  <div class="page-actions">
+    <a href="/visao-geral" class="btn btn-secondary">← Voltar</a>
+  </div>
+</div>
+
+{% if overview_error %}
+<div class="alert-error">{{ overview_error }}</div>
+{% endif %}
+
+<div class="panel operational-complete-form">
+  <form method="post" action="/visao-geral/acoes/{{ sheet_row }}/concluir" class="form-grid operational-form-grid">
+    <div class="form-group full">
+      <label>Resultado do contato *</label>
+      <select name="result" required>
+        <option value="">Selecione</option>
+        <option value="Contato realizado">Contato realizado</option>
+        <option value="Cliente respondeu">Cliente respondeu</option>
+        <option value="Sem resposta">Sem resposta</option>
+        <option value="Reunião confirmada">Reunião confirmada</option>
+        <option value="Proposta enviada">Proposta enviada</option>
+        <option value="Follow-up realizado">Follow-up realizado</option>
+        <option value="Lead encerrado">Lead encerrado</option>
+      </select>
+    </div>
+
+    <div class="form-group full">
+      <label>Observação</label>
+      <textarea name="note" rows="3" placeholder="Resumo do que foi tratado..."></textarea>
+    </div>
+
+    <div class="form-group">
+      <label>Próxima ação — data *</label>
+      <input type="date" name="next_action_date" value="{{ today }}" min="{{ today }}">
+    </div>
+
+    <div class="form-group">
+      <label>Horário</label>
+      <input type="time" name="next_action_time" value="{{ stored.next_action_time or '09:00' }}">
+    </div>
+
+    <div class="form-group">
+      <label>Canal</label>
+      <select name="next_action_type">
+        <option value="whatsapp">WhatsApp</option>
+        <option value="ligacao">Ligação</option>
+        <option value="email">E-mail</option>
+        <option value="reuniao">Reunião</option>
+        <option value="tarefa">Tarefa</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>Descrição da próxima ação</label>
+      <input type="text" name="next_action_description" value="{{ stored.next_action_description or '' }}" placeholder="Ex.: Retornar no WhatsApp">
+    </div>
+
+    <div class="form-group">
+      <label>Movimentar etapa?</label>
+      <select name="move_stage">
+        <option value="">Manter etapa atual</option>
+        <option value="Primeiro Contato">Primeiro Contato</option>
+        <option value="Qualificação">Qualificação</option>
+        <option value="Reunião">Reunião</option>
+        <option value="Proposta">Proposta</option>
+        <option value="Negociação">Negociação</option>
+        <option value="Fechado">Fechado</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>Lead encerrado?</label>
+      <select name="lead_closed">
+        <option value="">Não — lead continua aberto</option>
+        <option value="1">Sim — sem próxima ação</option>
+      </select>
+    </div>
+
+    <div class="form-group full operational-form-actions">
+      <button type="submit" class="btn">Salvar e registrar histórico</button>
+      <a href="/cadastro/todos/{{ sheet_row }}" class="btn btn-secondary">Abrir linha do tempo</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

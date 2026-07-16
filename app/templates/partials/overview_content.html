@@ -3,16 +3,60 @@
   hx-target="#overview-root"
   hx-swap="innerHTML"
 >
-  <details class="overview-filters-toggle panel">
-    <summary>Filtros avançados</summary>
-    <div class="toolbar-card overview-filters-inner">
-      <div class="filters-row filters-row-main">
+  <input type="hidden" name="overdue_only" id="overview-overdue-only" value="{{ '1' if operational.overdue_only else '' }}">
+  <input type="hidden" name="no_next_action_only" id="overview-no-next-action" value="{{ '1' if operational.no_next_action_only else '' }}">
+
+  <div class="overview-toolbar panel">
+    <div class="overview-toolbar-row">
+      <div class="filter-field filter-field-sm">
+        <label>Vendedor</label>
+        <select name="seller" {% if not is_admin %}disabled{% endif %} onchange="document.getElementById('overview-filters').requestSubmit()">
+          <option value="Todos os vendedores" {% if filters.seller == 'Todos os vendedores' %}selected{% endif %}>Todos os vendedores</option>
+          {% for seller in options.seller_options %}
+          <option value="{{ seller }}" {% if filters.seller == seller %}selected{% endif %}>{{ seller }}</option>
+          {% endfor %}
+        </select>
+        {% if not is_admin %}
+        <input type="hidden" name="seller" value="{{ filters.seller }}">
+        {% endif %}
+      </div>
+
+      <div class="filter-field filter-field-sm">
+        <label>Período início</label>
+        <input type="date" name="period_start" value="{{ filters.period_start }}" onchange="document.getElementById('overview-filters').requestSubmit()">
+      </div>
+
+      <div class="filter-field filter-field-sm">
+        <label>Período fim</label>
+        <input type="date" name="period_end" value="{{ filters.period_end }}" onchange="document.getElementById('overview-filters').requestSubmit()">
+      </div>
+
+      <div class="filter-field filter-field-search">
+        <label>Buscar</label>
+        <div class="search-wrap">
+          <span class="search-icon">⌕</span>
+          <input type="text" name="search" value="{{ filters.search }}" placeholder="Buscar empresas, leads ou negócios..."
+            hx-trigger="keyup changed delay:400ms" hx-post="/visao-geral/filtros" hx-target="#overview-root" hx-swap="innerHTML">
+        </div>
+      </div>
+    </div>
+
+    <details class="overview-advanced-filters">
+      <summary>Filtros operacionais</summary>
+      <div class="overview-toolbar-row">
         <div class="filter-field filter-field-sm">
-          <label>Vendedor</label>
-          <select name="seller" onchange="document.getElementById('overview-filters').requestSubmit()">
-            <option value="Todos os vendedores">Todos os vendedores</option>
-            {% for seller in options.seller_options %}
-            <option value="{{ seller }}" {% if filters.seller == seller %}selected{% endif %}>{{ seller }}</option>
+          <label>Prioridade</label>
+          <select name="op_priority" onchange="document.getElementById('overview-filters').requestSubmit()">
+            {% for option in priority_options %}
+            <option value="{{ option }}" {% if operational.priority == option %}selected{% endif %}>{{ option }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="filter-field filter-field-sm">
+          <label>Etapa</label>
+          <select name="op_stage" onchange="document.getElementById('overview-filters').requestSubmit()">
+            {% for option in stage_options %}
+            <option value="{{ option }}" {% if operational.stage == option %}selected{% endif %}>{{ option }}</option>
             {% endfor %}
           </select>
         </div>
@@ -26,15 +70,7 @@
           </select>
         </div>
         <div class="filter-field filter-field-sm">
-          <label>Período início</label>
-          <input type="date" name="period_start" value="{{ filters.period_start }}" onchange="document.getElementById('overview-filters').requestSubmit()">
-        </div>
-        <div class="filter-field filter-field-sm">
-          <label>Período fim</label>
-          <input type="date" name="period_end" value="{{ filters.period_end }}" onchange="document.getElementById('overview-filters').requestSubmit()">
-        </div>
-        <div class="filter-field filter-field-sm">
-          <label>Nichos</label>
+          <label>Nicho</label>
           <select name="niche" onchange="document.getElementById('overview-filters').requestSubmit()">
             <option value="Todos os nichos">Todos os nichos</option>
             {% for niche in options.niche_options %}
@@ -43,7 +79,7 @@
           </select>
         </div>
         <div class="filter-field filter-field-sm">
-          <label>Estados</label>
+          <label>Estado</label>
           <select name="state" onchange="document.getElementById('overview-filters').requestSubmit()">
             <option value="Todos os estados">Todos os estados</option>
             {% for state in options.state_options %}
@@ -52,160 +88,144 @@
           </select>
         </div>
       </div>
-      <div class="filters-row filters-row-search">
-        <div class="filter-field filter-field-search">
-          <label>Buscar</label>
-          <div class="search-wrap">
-            <span class="search-icon">⌕</span>
-            <input type="text" name="search" value="{{ filters.search }}" placeholder="Buscar empresas, leads ou negócios..."
-              hx-trigger="keyup changed delay:400ms" hx-post="/visao-geral/filtros" hx-target="#overview-root" hx-swap="innerHTML">
-          </div>
-        </div>
-      </div>
-    </div>
-  </details>
+    </details>
+  </div>
 
-  <div class="funnel-kpi-grid overview-kpi-grid">
+  <div class="funnel-kpi-grid overview-kpi-grid operational-kpi-grid">
     {% for card in kpi_cards %}
-    <div class="funnel-kpi-card panel">
+    <div class="funnel-kpi-card panel operational-kpi-card">
       <div class="funnel-kpi-icon tone-{{ card.tone }}">{{ card.icon }}</div>
       <div class="funnel-kpi-body">
         <div class="funnel-kpi-label">{{ card.label }}</div>
         <div class="funnel-kpi-value">{{ card.value }}</div>
-        <div class="funnel-kpi-trend {% if card.trend_flat %}flat{% elif card.trend_up %}up{% else %}down{% endif %}">
-          {{ card.trend_label }}
-        </div>
+        <div class="operational-kpi-note {{ card.note_class }}">{{ card.note }}</div>
       </div>
     </div>
     {% endfor %}
   </div>
 
-  <div class="overview-grid">
-    <div class="overview-funnel-card panel">
-      <div class="section-heading">Funil de Vendas</div>
-      <div class="section-subtitle">Distribuição dos leads por etapa comercial.</div>
-
-      <div class="overview-funnel-layout">
-        <div class="overview-funnel-legend">
-          {% for stage in overview_funnel.stages %}
-          <div class="overview-funnel-legend-row">
-            <span class="overview-funnel-dot" style="background: {{ stage.color }};"></span>
-            <span class="overview-funnel-legend-name">{{ stage.name }}</span>
-            <span class="overview-funnel-legend-count">{{ stage.count }}</span>
-          </div>
-          {% endfor %}
-        </div>
-
-        <div class="overview-funnel-visual">
-          {% for stage in overview_funnel.stages %}
-          <div class="overview-funnel-layer" style="width: {{ stage.width }}%; background: {{ stage.color }};">
-            <span>{{ stage.name }}</span>
-            <strong>{{ stage.count }}</strong>
-          </div>
-          {% endfor %}
-        </div>
-
-        <div class="overview-funnel-conversion">
-          <div class="overview-funnel-conversion-title">Taxa de Conversão Geral</div>
-          <div id="overview-conversion-donut" class="overview-conversion-donut" data-chart='{{ conversion_donut_json | safe }}'></div>
-          <div class="overview-funnel-conversion-value">{{ overview_funnel.conversion_label }}</div>
-          <div class="funnel-kpi-trend up">{{ kpi_cards[3].trend_label }}</div>
-        </div>
+  <div class="operational-process-guide panel">
+    <div class="section-heading">Guia do processo comercial</div>
+    <div class="operational-process-steps">
+      {% for step, sla in process_guide %}
+      <div class="operational-process-step">
+        <div class="operational-process-step-name">{{ step }}</div>
+        <div class="operational-process-step-sla">{{ sla }}</div>
       </div>
-
-      <a href="/funil-de-vendas" class="overview-funnel-link">Ver funil completo →</a>
-    </div>
-
-    <div class="overview-actions-card panel">
-      <div class="overview-card-header">
-        <div>
-          <div class="section-heading">Ações do dia</div>
-          <div class="section-subtitle">Prioridades com base nos status atuais.</div>
-        </div>
-        <a href="/atividades" class="overview-card-link">Ver todas</a>
-      </div>
-      <div class="overview-daily-actions">
-        {% for action in daily_actions %}
-        <a href="{{ action.href }}" class="overview-daily-action overview-daily-action-link">
-          <span class="overview-action-icon {{ action.tone }}">
-            {% if action.icon == 'phone' %}☎{% elif action.icon == 'whatsapp' %}💬{% elif action.icon == 'email' %}✉{% elif action.icon == 'calendar' %}📅{% else %}✓{% endif %}
-          </span>
-          <div class="overview-daily-action-body">
-            <div class="overview-daily-action-label">{{ action.label }}</div>
-            <div class="overview-daily-action-meta">Abrir cadastro do cliente →</div>
-          </div>
-          <div class="overview-daily-action-time">{{ action.time }}</div>
-        </a>
-        {% else %}
-        <div class="overview-empty-note">Nenhuma ação pendente no filtro atual.</div>
-        {% endfor %}
-      </div>
+      {% if not loop.last %}
+      <div class="operational-process-arrow">→</div>
+      {% endif %}
+      {% endfor %}
     </div>
   </div>
 
-  <div class="overview-grid overview-grid-bottom">
-    <div class="overview-hot-card panel">
-      <div class="overview-card-header">
-        <div>
-          <div class="section-heading">Oportunidades quentes</div>
-          <div class="section-subtitle">Negócios com maior potencial no funil.</div>
-        </div>
-        <a href="/leads-e-empresas" class="overview-card-link">Ver todas</a>
+  <div class="operational-main panel">
+    <div class="overview-card-header">
+      <div>
+        <div class="section-heading">O que precisa ser feito agora</div>
+        <div class="section-subtitle">Priorizado automaticamente com base nos prazos comerciais.</div>
       </div>
+    </div>
 
-      {% if hot_opportunities %}
-      <table class="data-table overview-hot-table">
+    {% if action_queue %}
+    <div class="operational-table-wrap">
+      <table class="data-table operational-action-table">
         <thead>
           <tr>
-            <th>Empresa</th>
+            <th>Prioridade</th>
+            <th>Cliente / Empresa</th>
             <th>Etapa</th>
-            <th>Valor</th>
-            <th>Urgência</th>
+            <th>Última interação</th>
+            <th>Prazo ideal</th>
+            <th>Próxima ação</th>
+            <th>Responsável</th>
+            <th>Status</th>
+            <th>Ação</th>
           </tr>
         </thead>
         <tbody>
-          {% for row in hot_opportunities %}
-          <tr class="overview-clickable-row" onclick="window.location.href='{{ row.href }}'">
+          {% for item in action_queue %}
+          <tr class="operational-row priority-{{ item.priority_class }}">
+            <td><span class="operational-priority operational-priority-{{ item.priority_class }}">{{ item.priority_label }}</span></td>
             <td>
-              <a href="{{ row.href }}" class="overview-row-link">
-              <div class="table-company">
-                <span class="table-company-icon">{{ row.empresa_initials }}</span>
-                <span class="table-company-name">{{ row.empresa }}</span>
-              </div>
-              </a>
+              <a href="{{ item.href }}" class="operational-company-link">{{ item.empresa }}</a>
             </td>
-            <td><span class="stage-badge {{ row.etapa_class }}">{{ row.etapa }}</span></td>
-            <td class="value-cell">{{ row.valor }}</td>
-            <td><span class="overview-urgency {{ row.urgencia_class }}">{{ row.urgencia }}</span></td>
+            <td>{{ item.stage }}</td>
+            <td>{{ item.last_interaction }}</td>
+            <td>{{ item.deadline_label }}</td>
+            <td>{{ item.next_action }}</td>
+            <td>{{ item.owner }}</td>
+            <td><span class="operational-status {{ item.status_class }}">{{ item.status_label }}</span></td>
+            <td class="operational-actions-cell">
+              {% for button in item.buttons %}
+              <a href="{{ button.href }}"
+                class="operational-action-btn tone-{{ button.tone }}"
+                {% if button.external %}target="_blank" rel="noopener"{% endif %}>{{ button.label }}</a>
+              {% endfor %}
+            </td>
           </tr>
           {% endfor %}
         </tbody>
       </table>
+    </div>
+    {% else %}
+    <div class="overview-empty-note">Nenhuma ação pendente para os filtros atuais. Ótimo trabalho!</div>
+    {% endif %}
+  </div>
+
+  <div class="operational-bottom-grid">
+    <div class="operational-returns panel">
+      <div class="section-heading">Retornos agendados de hoje</div>
+      {% if returns_today %}
+      <div class="operational-returns-list">
+        {% for item in returns_today %}
+        <div class="operational-return-item">
+          <div class="operational-return-time">{{ item.time }}</div>
+          <div class="operational-return-body">
+            <div class="operational-return-title">{{ item.empresa }}</div>
+            <div class="operational-return-meta">{{ item.channel }} · {{ item.description }} · {{ item.owner }}</div>
+          </div>
+          <div class="operational-return-actions">
+            {% for button in item.buttons %}
+            <a href="{{ button.href }}" class="operational-action-btn tone-{{ button.tone }}" {% if button.external %}target="_blank" rel="noopener"{% endif %}>{{ button.label }}</a>
+            {% endfor %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
       {% else %}
-      <div class="overview-empty-note">Nenhuma oportunidade quente encontrada.</div>
+      <div class="overview-empty-note">Nenhum retorno agendado para hoje.</div>
       {% endif %}
     </div>
 
-    <div class="overview-overdue-card panel">
-      <div class="overview-card-header">
-        <div>
-          <div class="section-heading">Atividades em atraso</div>
-          <div class="section-subtitle">Itens que precisam de follow-up imediato.</div>
-        </div>
-        <a href="/atividades" class="overview-card-link">Ver todas</a>
+    <div class="operational-alerts panel">
+      <div class="section-heading">Alertas do processo</div>
+      {% if alerts %}
+      <div class="operational-alerts-list">
+        {% for alert in alerts %}
+        <button type="button" class="operational-alert-item tone-{{ alert.tone }}"
+          onclick="overviewApplyAlertFilter('{{ alert.filter }}')">
+          <span class="operational-alert-dot"></span>
+          {{ alert.label }}
+        </button>
+        {% endfor %}
       </div>
+      {% else %}
+      <div class="overview-empty-note">Nenhum alerta crítico no momento.</div>
+      {% endif %}
+    </div>
 
-      <div class="overview-overdue-list">
-        {% for item in overdue_activities %}
-        <a href="{{ item.href }}" class="overview-overdue-item overview-overdue-link">
-          <span class="overview-overdue-icon">
-            {% if item.icon == 'phone' %}☎{% elif item.icon == 'email' %}✉{% else %}✓{% endif %}
-          </span>
-          <div class="overview-overdue-label">{{ item.label }}</div>
-          <div class="overview-overdue-days">{{ item.days_label }}</div>
-        </a>
-        {% else %}
-        <div class="overview-empty-note">Nenhuma atividade em atraso no filtro atual.</div>
+    <div class="operational-funnel panel">
+      <div class="section-heading">Resumo do funil</div>
+      <div class="operational-funnel-bars">
+        {% for stage in funnel_summary %}
+        <div class="operational-funnel-row">
+          <div class="operational-funnel-label">{{ stage.name }}</div>
+          <div class="operational-funnel-bar-track">
+            <div class="operational-funnel-bar-fill" style="width: {{ stage.percent }}%; background: {{ stage.color }};"></div>
+          </div>
+          <div class="operational-funnel-count">{{ stage.count }}</div>
+        </div>
         {% endfor %}
       </div>
     </div>
@@ -213,7 +233,27 @@
 </form>
 
 <script>
-  if (typeof renderOverviewCharts === "function") {
-    renderOverviewCharts();
+  function overviewApplyAlertFilter(filterQuery) {
+    const overdueInput = document.getElementById("overview-overdue-only");
+    const noNextInput = document.getElementById("overview-no-next-action");
+    overdueInput.value = "";
+    noNextInput.value = "";
+
+    if (!filterQuery) {
+      document.getElementById("overview-filters").requestSubmit();
+      return;
+    }
+
+    const params = new URLSearchParams(filterQuery);
+    if (params.get("overdue_only") === "1") overdueInput.value = "1";
+    if (params.get("no_next_action_only") === "1") noNextInput.value = "1";
+
+    const stage = params.get("stage");
+    if (stage) {
+      const stageSelect = document.querySelector('select[name="op_stage"]');
+      if (stageSelect) stageSelect.value = stage;
+    }
+
+    document.getElementById("overview-filters").requestSubmit();
   }
 </script>

@@ -417,6 +417,41 @@
   word-break: break-word;
 }
 
+.operational-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.operational-timeline-item {
+  display: grid;
+  grid-template-columns: 170px 1fr;
+  gap: 12px;
+  padding: 10px 12px;
+  border-left: 3px solid #C4B5FD;
+  background: #FAFBFC;
+  border-radius: 0 10px 10px 0;
+}
+
+.operational-timeline-time {
+  font-size: 0.74rem;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.operational-timeline-title {
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.operational-timeline-meta {
+  font-size: 0.74rem;
+  color: var(--muted);
+  margin-top: 3px;
+}
+
 @media (max-width: 900px) {
   .client-commercial-grid,
   .detail-grid {

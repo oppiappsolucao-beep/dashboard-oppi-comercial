@@ -22,6 +22,7 @@ from app.services.legacy_core import (
     status_group,
     update_company_status_in_sheet,
 )
+from app.services.lead_actions_storage import DEFAULT_TENANT_ID, get_lead_action
 from app.services.overview import build_client_action
 from app.services.registration import get_seller_options, save_company_edit
 
@@ -187,6 +188,10 @@ async def contract_detail(request: Request, sheet_row: int):
         "classificacao": normalize_text(row.get("_classificacao", "")),
     }
 
+    lead_action = get_lead_action(DEFAULT_TENANT_ID, sheet_row) or {}
+    interactions = lead_action.get("interactions") if isinstance(lead_action.get("interactions"), list) else []
+    interactions = list(reversed(interactions))
+
     return render(
         request,
         "contracts/detail.html",
@@ -196,6 +201,8 @@ async def contract_detail(request: Request, sheet_row: int):
             "fields": fields,
             "commercial": commercial,
             "client_action": build_client_action(row, columns),
+            "lead_action": lead_action,
+            "interactions": interactions,
         },
     )
 
