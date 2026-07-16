@@ -148,7 +148,7 @@ def is_open_opportunity(stored: dict | None, grouped_status: str = "") -> bool:
     return True
 
 
-def suggest_from_result(result: str) -> dict:
+def suggest_from_result(result: str, current_stage: str = "") -> dict:
     normalized = normalize_legacy_result(result)
     item = RESULT_SUGGESTIONS.get(normalized, {
         "stage": "",
@@ -159,8 +159,20 @@ def suggest_from_result(result: str) -> dict:
     today = date.today()
     suggested_date = today + timedelta(days=int(item.get("days", 1)))
     move_stage = item.get("stage") or item.get("keep_stage", "")
+    next_action = item.get("next_action", "Retornar contato")
+
+    if item.get("advance_stage"):
+        from_stage = normalize_legacy_stage(current_stage)
+        if from_stage in PIPELINE_STAGE_OPTIONS:
+            stage_index = PIPELINE_STAGE_OPTIONS.index(from_stage)
+            if stage_index < len(PIPELINE_STAGE_OPTIONS) - 1:
+                move_stage = PIPELINE_STAGE_OPTIONS[stage_index + 1]
+                stage_actions = PROCESS_ACTIONS_BY_STAGE.get(move_stage, [])
+                if stage_actions:
+                    next_action = stage_actions[0]
+
     return {
-        "next_action": item.get("next_action", "Retornar contato"),
+        "next_action": next_action,
         "next_action_date": suggested_date.isoformat(),
         "next_action_time": "10:00",
         "channel": item.get("channel", "WhatsApp"),
@@ -170,6 +182,7 @@ def suggest_from_result(result: str) -> dict:
         "require_close_fields": bool(item.get("require_close_fields")),
         "opportunity_status": item.get("opportunity_status", ""),
         "activity_stage": item.get("stage") or move_stage,
+        "advance_stage": bool(item.get("advance_stage")),
     }
 
 
@@ -256,9 +269,6 @@ def validate_completion(status: str, result: str, next_action: str) -> str | Non
     normalized_result = normalize_legacy_result(result)
     if not normalized_result or normalized_result == "Selecione":
         return "Selecione o resultado para concluir a atividade."
-
-    if normalized_result == "Outro":
-        return None
 
     if normalized_result in NO_NEXT_ACTION_RESULTS:
         return None

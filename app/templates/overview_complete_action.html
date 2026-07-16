@@ -103,7 +103,7 @@ document.querySelector('select[name="lead_closed"]')?.addEventListener('change',
 document.querySelector('select[name="result"]')?.addEventListener('change', function () {
   const closed = document.querySelector('select[name="lead_closed"]');
   if (!closed) return;
-  if (['Sem interesse', 'Lead não qualificado', 'Contato inválido'].includes(this.value)) {
+  if (['Sem interesse', 'Contato inválido'].includes(this.value)) {
     closed.value = '1';
     closed.dispatchEvent(new Event('change'));
   }

@@ -212,15 +212,23 @@ async def overview_complete_action_submit(
         except ValueError:
             parsed_date = None
 
-    if not lead_closed and not parsed_date and result not in {"Sem interesse", "Lead não qualificado", "Contato inválido", "Venda fechada"}:
+    if not lead_closed and not parsed_date and result not in {"Sem interesse", "Contato inválido"}:
         request.session["overview_error"] = "Defina a próxima ação antes de concluir."
         return RedirectResponse(url=f"/visao-geral/acoes/{sheet_row}/concluir", status_code=303)
 
-    if lead_closed and not lost_reason and result in {"Sem interesse", "Outro"}:
+    if lead_closed and not lost_reason and result == "Sem interesse":
         request.session["overview_error"] = "Informe o motivo da perda."
         return RedirectResponse(url=f"/visao-geral/acoes/{sheet_row}/concluir", status_code=303)
 
-    suggestion = suggest_from_result(result)
+    df, _columns = get_prepared_data()
+    row_match = df[df["_sheet_row"] == sheet_row]
+    stored = get_lead_action(DEFAULT_TENANT_ID, sheet_row) or {}
+    current_stage = ""
+    if not row_match.empty:
+        grouped = status_group(row_match.iloc[0].get("_status_grupo") or row_match.iloc[0].get("_status_original", ""))
+        current_stage = resolve_pipeline_stage(grouped, stored)
+
+    suggestion = suggest_from_result(result, current_stage)
     if not move_stage:
         move_stage = suggestion.get("move_stage", "")
     if not next_action_description and not lead_closed:

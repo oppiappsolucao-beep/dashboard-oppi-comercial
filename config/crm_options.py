@@ -126,24 +126,9 @@ ACTIVITY_RESULT_OPTIONS = [
     "Cliente respondeu",
     "Cliente não respondeu",
     "Pediu retorno",
-    "Interesse confirmado",
-    "Interesse não confirmado",
-    "Lead qualificado",
-    "Lead não qualificado",
-    "Reunião agendada",
-    "Reunião realizada",
-    "Reunião não realizada",
-    "Proposta solicitada",
-    "Proposta enviada",
-    "Ajuste solicitado",
-    "Em análise pelo cliente",
-    "Em negociação",
-    "Venda fechada",
+    "Avançou de etapa",
     "Sem interesse",
-    "Número incorreto",
-    "Sem WhatsApp",
     "Contato inválido",
-    "Outro",
 ]
 
 CHANNEL_OPTIONS = [
@@ -277,7 +262,7 @@ LOST_REASON_OPTIONS = [
     "Outro",
 ]
 
-CLOSED_RESULTS = {"Venda fechada", "Sem interesse", "Contato inválido", "Lead não qualificado"}
+CLOSED_RESULTS = {"Sem interesse", "Contato inválido"}
 NO_NEXT_ACTION_RESULTS = CLOSED_RESULTS | {"Encerrar processo comercial"}
 
 PIPELINE_STAGE_COLORS = {
@@ -448,88 +433,11 @@ RESULT_SUGGESTIONS = {
         "channel": "WhatsApp",
         "require_schedule": True,
     },
-    "Interesse confirmado": {
-        "stage": "Qualificação",
-        "next_action": "Qualificar lead",
+    "Avançou de etapa": {
+        "advance_stage": True,
+        "next_action": "Definir próximo passo",
         "days": 1,
         "channel": "WhatsApp",
-    },
-    "Interesse não confirmado": {
-        "stage": "Contato",
-        "next_action": "Retornar contato",
-        "days": 2,
-        "channel": "WhatsApp",
-    },
-    "Lead qualificado": {
-        "stage": "Reunião",
-        "next_action": "Agendar reunião",
-        "days": 2,
-        "channel": "Reunião online",
-    },
-    "Lead não qualificado": {
-        "stage": "",
-        "next_action": "Encerrar processo comercial",
-        "days": 0,
-        "channel": "Mensagem interna",
-        "require_reason": True,
-    },
-    "Reunião agendada": {
-        "stage": "Reunião",
-        "next_action": "Confirmar reunião",
-        "days": 1,
-        "channel": "Ligação",
-    },
-    "Reunião realizada": {
-        "stage": "Proposta",
-        "next_action": "Criar proposta",
-        "days": 1,
-        "channel": "E-mail",
-        "max_hours": 24,
-    },
-    "Reunião não realizada": {
-        "stage": "Reunião",
-        "next_action": "Reagendar reunião",
-        "days": 1,
-        "channel": "WhatsApp",
-    },
-    "Proposta solicitada": {
-        "stage": "Proposta",
-        "next_action": "Criar proposta",
-        "days": 1,
-        "channel": "E-mail",
-    },
-    "Proposta enviada": {
-        "stage": "Retorno",
-        "next_action": "Fazer acompanhamento da proposta",
-        "days": 2,
-        "channel": "WhatsApp",
-        "keep_stage": "Proposta",
-    },
-    "Ajuste solicitado": {
-        "stage": "Proposta",
-        "next_action": "Ajustar proposta",
-        "days": 1,
-        "channel": "E-mail",
-    },
-    "Em análise pelo cliente": {
-        "stage": "Retorno",
-        "next_action": "Verificar decisão",
-        "days": 2,
-        "channel": "WhatsApp",
-    },
-    "Em negociação": {
-        "stage": "Negociação",
-        "next_action": "Negociar condições",
-        "days": 2,
-        "channel": "WhatsApp",
-    },
-    "Venda fechada": {
-        "stage": "Fechado",
-        "next_action": "Confirmar pagamento",
-        "days": 1,
-        "channel": "E-mail",
-        "opportunity_status": "Fechada ganha",
-        "require_close_fields": True,
     },
     "Sem interesse": {
         "stage": "",
@@ -539,23 +447,12 @@ RESULT_SUGGESTIONS = {
         "opportunity_status": "Fechada perdida",
         "require_reason": True,
     },
-    "Número incorreto": {
-        "stage": "",
-        "next_action": "Verificar dados do lead",
-        "days": 2,
-        "channel": "Ligação",
-    },
-    "Sem WhatsApp": {
-        "stage": "",
-        "next_action": "Retornar contato",
-        "days": 2,
-        "channel": "Ligação",
-    },
     "Contato inválido": {
         "stage": "",
-        "next_action": "Verificar dados do lead",
+        "next_action": "Encerrar processo comercial",
         "days": 0,
         "channel": "Mensagem interna",
+        "opportunity_status": "Encerrada",
     },
 }
 

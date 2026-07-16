@@ -37,13 +37,8 @@
         const formId = select.getAttribute("data-activity-form");
         const extra = scope.querySelector("#activity-extra-" + formId);
         if (!extra) return;
-        const other = extra.querySelector(".activity-result-other");
-        if (!other) return;
-        if (select.value === "Outro") {
-          other.classList.remove("is-hidden");
+        if (select.value === "Sem interesse" || select.value === "Contato inválido") {
           extra.classList.add("is-open");
-        } else {
-          other.classList.add("is-hidden");
         }
       });
     });
@@ -260,9 +255,7 @@
           moveHint.textContent = suggestion.move_text || "";
         }
         toggleHidden(moveConfirmWrap, Boolean(suggestion.move_text));
-        toggleHidden(lostReasonWrap, ["Sem interesse", "Lead não qualificado", "Outro"].indexOf(resultSelect.value) >= 0);
-        toggleHidden(closeValueWrap, resultSelect.value === "Venda fechada");
-        toggleHidden(closePaymentWrap, resultSelect.value === "Venda fechada");
+        toggleHidden(lostReasonWrap, resultSelect.value === "Sem interesse");
         if (complement) complement.open = true;
       });
     }

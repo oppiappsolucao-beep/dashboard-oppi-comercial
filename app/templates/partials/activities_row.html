@@ -50,7 +50,7 @@
       <option value="">Selecione</option>
       {% for option in result_options %}
       {% if option %}
-      <option value="{{ option }}" {% if row.result == option %}selected{% endif %}>{{ option }}</option>
+      <option value="{{ option }}" {% if row.result_value == option %}selected{% endif %}>{{ option }}</option>
       {% endif %}
       {% endfor %}
     </select>
@@ -130,10 +130,6 @@
         <label class="activity-extra-wide">
           <span>Observação</span>
           <textarea class="activity-inline-textarea" name="note" rows="2" data-activity-form="{{ row.id }}" data-activity-field>{{ row.note }}</textarea>
-        </label>
-        <label class="activity-extra-wide activity-result-other {% if row.result != 'Outro' %}is-hidden{% endif %}">
-          <span>Detalhe do resultado</span>
-          <textarea class="activity-inline-textarea" name="result_notes" rows="2" data-activity-form="{{ row.id }}" data-activity-field>{{ row.result_notes }}</textarea>
         </label>
       </div>
       <input type="hidden" name="tab" value="{{ activities_params.tab }}" data-activity-form="{{ row.id }}">

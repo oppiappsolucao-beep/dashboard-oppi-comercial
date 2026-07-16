@@ -576,7 +576,7 @@ def atualizar_atividade_inline(
         move_stage=move_stage,
     )
 
-    suggestion = suggest_from_result(result) if result else {}
+    suggestion = suggest_from_result(result, current_stage) if result else {}
     opportunity_status = suggestion.get("opportunity_status", "")
     next_activity_stage = suggestion.get("activity_stage") or move_stage or current_stage
 
@@ -604,7 +604,7 @@ def atualizar_atividade_inline(
             move_stage=move_stage,
             user=user,
             opportunity_status=opportunity_status,
-            lost_reason=result_notes if result in {"Sem interesse", "Lead não qualificado", "Outro"} else "",
+            lost_reason=result_notes if result == "Sem interesse" else "",
         )
     elif status == "concluida" and result in NO_NEXT_ACTION_RESULTS:
         atualizar_lead_pela_atividade(
@@ -827,12 +827,8 @@ def validar_nova_atividade(payload: dict, *, is_admin_user: bool = False, allow_
         completion_error = validate_completion(status, result, next_action)
         if completion_error:
             return completion_error
-        if result == "Outro" and not normalize_text(payload.get("note")):
-            return "Informe a observação quando selecionar Outro como resultado."
-        if result in {"Sem interesse", "Lead não qualificado"} and not normalize_text(payload.get("lost_reason")):
+        if result == "Sem interesse" and not normalize_text(payload.get("lost_reason")):
             return "Informe o motivo da perda."
-        if result == "Venda fechada" and not normalize_text(payload.get("close_value")):
-            return "Informe o valor final da venda."
 
     if channel == "Outro" and not normalize_text(payload.get("channel_other")):
         return "Descreva o canal selecionado como Outro."
@@ -1009,7 +1005,7 @@ def criar_atividade(
         move_stage=move_stage if move_stage_confirm else "",
     )
 
-    suggestion = suggest_from_result(result) if result else {}
+    suggestion = suggest_from_result(result, stage) if result else {}
     opportunity_status = suggestion.get("opportunity_status", "")
     next_activity_stage = suggestion.get("activity_stage") or move_stage or stage
 
@@ -1120,7 +1116,7 @@ def build_new_activity_modal_context(
 
 
 def sugerir_fluxo_por_resultado(result: str, current_stage: str = "") -> dict:
-    suggestion = suggest_from_result(result)
+    suggestion = suggest_from_result(result, current_stage)
     from_stage = normalize_legacy_stage(current_stage) or suggestion.get("keep_stage") or current_stage
     to_stage = suggestion.get("move_stage") or suggestion.get("activity_stage") or ""
     move_text = ""
