@@ -608,6 +608,7 @@ body.activity-modal-open {
 .activity-modal-close {
   border: none;
   background: #F3F4F6;
+  color: var(--text);
   width: 36px;
   height: 36px;
   border-radius: 999px;
@@ -695,14 +696,18 @@ body.activity-modal-open {
   gap: 2px;
   width: 100%;
   border: 0;
-  background: none;
+  background: transparent;
+  color: var(--text);
   text-align: left;
   padding: 12px 14px;
   cursor: pointer;
+  font-weight: 600;
+  font-size: 0.88rem;
 }
 
 .activity-lead-result-item:hover {
   background: #F5F3FF;
+  color: var(--text);
 }
 
 .activity-lead-result-item .muted {
@@ -726,10 +731,18 @@ body.activity-modal-open {
 .activity-quick-dates button {
   border: 1px solid var(--border);
   background: #F9FAFB;
+  color: var(--text);
   border-radius: 999px;
   padding: 4px 10px;
   font-size: 0.74rem;
+  font-weight: 600;
   cursor: pointer;
+}
+
+.activity-quick-dates button:hover {
+  background: #F5F3FF;
+  border-color: #C4B5FD;
+  color: var(--text);
 }
 
 .activity-modal-complement {
