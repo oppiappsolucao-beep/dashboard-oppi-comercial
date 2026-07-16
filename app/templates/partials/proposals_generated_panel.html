@@ -1,0 +1,29 @@
+{% if generated_proposal %}
+<div class="proposals-generated-panel">
+  <div class="proposals-generated-header">
+    <div>
+      <div class="section-heading">Proposta gerada</div>
+      <div class="proposals-generated-meta">
+        <strong>{{ generated_proposal.company }}</strong>
+        {% if generated_proposal.value_label %}
+        <span>· {{ generated_proposal.value_label }}</span>
+        {% endif %}
+      </div>
+      <div class="proposals-generated-email">E-mail do cliente: {{ generated_proposal.client_email }}</div>
+    </div>
+    <span class="proposal-pdf-ready">PDF pronto</span>
+  </div>
+
+  <iframe
+    class="proposals-pdf-preview"
+    src="{{ generated_proposal.preview_url }}"
+    title="Visualização da proposta {{ generated_proposal.company }}"
+  ></iframe>
+
+  <div class="proposals-generated-actions">
+    <a href="{{ generated_proposal.download_url }}" class="btn" download>Baixar PDF</a>
+    <a href="{{ generated_proposal.email_href }}" class="btn btn-secondary">Enviar por e-mail</a>
+    <a href="{{ generated_proposal.preview_url }}" class="btn btn-secondary" target="_blank" rel="noopener">Abrir em nova aba</a>
+  </div>
+</div>
+{% endif %}

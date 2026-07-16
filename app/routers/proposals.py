@@ -3,15 +3,19 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from app.dependencies import get_prepared_data, require_auth
 from app.services.filters import apply_dashboard_filters, apply_default_period_filters, get_filter_options, parse_dashboard_filters
-from app.services.legacy_core import invalidate_sheet_cache
+from app.services.legacy_core import COMMERCIAL_SERVICE_OPTIONS, get_colaborador_options, invalidate_sheet_cache
 from app.services.proposal_pdf import generate_proposal_pdf, proposal_pdf_filename
 from app.services.proposals import (
     PROPOSAL_STATUS_OPTIONS,
+    build_proposal_company_options,
+    build_proposal_form_message,
     build_proposals_kpi_cards,
     build_proposals_table,
     default_proposal_chat_messages,
+    get_generated_proposal,
     handle_proposal_chat_message,
     render_proposal_chat_messages,
+    should_show_proposal_quick_form,
 )
 from app.templating import render
 
@@ -48,6 +52,16 @@ def _parse_proposals_params(request: Request, form: dict | None = None) -> dict:
     }
 
 
+def _proposals_chat_context(request: Request, chat_messages: list[dict], df) -> dict:
+    return {
+        "chat_messages_html": render_proposal_chat_messages(chat_messages),
+        "show_quick_form": should_show_proposal_quick_form(chat_messages),
+        "company_options": build_proposal_company_options(df),
+        "service_options": COMMERCIAL_SERVICE_OPTIONS,
+        "colaborador_options": get_colaborador_options(),
+    }
+
+
 def _proposals_context(request: Request, filters, proposals_params: dict):
     df, columns = get_prepared_data()
     options = get_filter_options(df)
@@ -69,7 +83,8 @@ def _proposals_context(request: Request, filters, proposals_params: dict):
             page=proposals_params["page"],
             per_page=proposals_params["per_page"],
         ),
-        "chat_messages_html": render_proposal_chat_messages(chat_messages),
+        "generated_proposal": get_generated_proposal(request),
+        **_proposals_chat_context(request, chat_messages, df),
     }
 
 
@@ -123,20 +138,36 @@ async def proposals_filters(
 
 
 @router.post("/propostas/chat", response_class=HTMLResponse)
-async def proposals_chat(request: Request, message: str = Form(...)):
+async def proposals_chat(
+    request: Request,
+    message: str = Form(""),
+    empresa: str = Form(""),
+    servico: str = Form(""),
+    valor_proposta: str = Form(""),
+    colaboradores: str = Form(""),
+):
     redirect = require_auth(request)
     if redirect:
         return redirect
 
     df, columns = get_prepared_data()
     chat_messages = _get_chat_messages(request)
-    chat_messages = handle_proposal_chat_message(message, df, chat_messages)
+
+    if empresa.strip():
+        message = build_proposal_form_message(empresa, servico, valor_proposta, colaboradores)
+
+    chat_messages, generated = handle_proposal_chat_message(message, df, chat_messages, columns)
     request.session["proposals_chat"] = chat_messages
+    if generated:
+        request.session["proposals_generated"] = generated
 
     return render(
         request,
-        "partials/proposals_chat.html",
-        {"chat_messages_html": render_proposal_chat_messages(chat_messages)},
+        "partials/proposals_chat_response.html",
+        {
+            "generated_proposal": generated,
+            **_proposals_chat_context(request, chat_messages, df),
+        },
     )
 
 
@@ -155,6 +186,7 @@ async def proposals_chat_reset(request: Request):
     if redirect:
         return redirect
     request.session["proposals_chat"] = default_proposal_chat_messages()
+    request.session.pop("proposals_generated", None)
     return RedirectResponse(url="/propostas", status_code=303)
 
 
@@ -171,8 +203,10 @@ async def proposals_pdf(request: Request, empresa: str, valor: str = ""):
         return HTMLResponse(f"<p>Erro ao gerar PDF: {error}</p>", status_code=500)
 
     filename = proposal_pdf_filename(empresa)
+    inline = request.query_params.get("inline") == "1"
+    disposition = "inline" if inline else "attachment"
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={"Content-Disposition": f'{disposition}; filename="{filename}"'},
     )

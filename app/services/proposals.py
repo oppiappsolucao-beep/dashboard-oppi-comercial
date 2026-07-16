@@ -3,12 +3,13 @@ import html
 import re
 from dataclasses import replace
 from datetime import date, datetime, timedelta
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 
 import pandas as pd
 
 from app.services.filters import DashboardFilters, apply_dashboard_filters
-from app.services.legacy_core import apply_period_filter, as_python_date, normalize_search_text, normalize_text, status_group
+from app.services.legacy_core import apply_period_filter, as_python_date, identify_columns, normalize_search_text, normalize_text, parse_money, status_group
+from app.services.proposal_pdf import proposal_pdf_filename
 
 PROPOSAL_ROW_STATUSES = {"Proposta", "Fechado", "Conversando", "Reunião"}
 
@@ -290,9 +291,90 @@ def _extract_company(message: str, df: pd.DataFrame) -> str | None:
         if normalize_search_text(company_text) in normalized_message:
             matches.append(company_text)
 
-    if not matches:
+    if matches:
+        return max(matches, key=len)
+
+    patterns = [
+        r"proposta(?:\s+comercial)?\s+(?:para|p/)\s+(.+?)(?:\.\s|,|\s+valor|\s+com\s|\s+r\$|\s+no\s+valor|$)",
+        r"(?:para|p/)\s+(.+?)(?:\.\s|,|\s+valor|\s+com\s|\s+r\$|\s+no\s+valor|$)",
+        r"empresa\s+(.+?)(?:\.\s|,|\s+valor|\s+com\s|\s+r\$|$)",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, message, flags=re.IGNORECASE)
+        if match:
+            candidate = normalize_text(match.group(1))
+            if len(candidate) >= 3:
+                return candidate
+
+    return None
+
+
+def _company_row(company_name: str, df: pd.DataFrame):
+    if df.empty:
         return None
-    return max(matches, key=len)
+    matches = df[df["_empresa"].astype(str) == normalize_text(company_name)].copy()
+    if matches.empty:
+        return None
+    if "_sheet_row" in matches.columns:
+        matches = matches.sort_values("_sheet_row", ascending=False)
+    return matches.iloc[0]
+
+
+def _company_email(company_name: str, df: pd.DataFrame, columns: dict) -> str:
+    row = _company_row(company_name, df)
+    if row is None:
+        return ""
+    email_column = columns.get("email")
+    if not email_column or email_column not in row.index:
+        return ""
+    return normalize_text(row.get(email_column, ""))
+
+
+def _proposal_pdf_query(value: str | None) -> str:
+    params = {}
+    if value:
+        params["valor"] = value
+    return f"?{urlencode(params)}" if params else ""
+
+
+def build_generated_proposal(company: str, value: str | None, df: pd.DataFrame, columns: dict) -> dict:
+    encoded_company = quote(company)
+    query = _proposal_pdf_query(value)
+    preview_query = f"{query}&inline=1" if query else "?inline=1"
+    value_label = ""
+    if value:
+        amount = parse_money(value)
+        if amount > 0:
+            value_label = f"R$ {amount:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+    client_email = _company_email(company, df, columns)
+    subject = quote(f"Proposta comercial - {company}")
+    body = quote(
+        "Prezado(a),\n\n"
+        "Segue em anexo a nossa proposta comercial"
+        + (f", no valor de {value_label}" if value_label else "")
+        + f", referente à empresa {company}.\n\n"
+        "Baixe o PDF pelo dashboard e anexe a este e-mail antes de enviar.\n\n"
+        "Atenciosamente,\n"
+        "Equipe Oppi Comercial"
+    )
+    email_href = f"mailto:{quote(client_email)}?subject={subject}&body={body}" if client_email else f"mailto:?subject={subject}&body={body}"
+
+    return {
+        "company": company,
+        "filename": proposal_pdf_filename(company),
+        "value": value,
+        "value_label": value_label,
+        "client_email": client_email or "Não informado na planilha",
+        "preview_url": f"/propostas/{encoded_company}/pdf{preview_query}",
+        "download_url": f"/propostas/{encoded_company}/pdf{query}",
+        "email_href": email_href,
+    }
+
+
+def get_generated_proposal(request) -> dict | None:
+    data = request.session.get("proposals_generated")
+    return data if isinstance(data, dict) else None
 
 
 def _extract_value(message: str) -> str | None:
@@ -312,22 +394,31 @@ def _now_time() -> str:
     return datetime.now().strftime("%H:%M")
 
 
-def handle_proposal_chat_message(message: str, df: pd.DataFrame, chat_messages: list[dict]) -> list[dict]:
+def handle_proposal_chat_message(
+    message: str,
+    df: pd.DataFrame,
+    chat_messages: list[dict],
+    columns: dict | None = None,
+) -> tuple[list[dict], dict | None]:
     clean_message = normalize_text(message)
     if not clean_message:
-        return chat_messages
+        return chat_messages, None
 
     chat_messages.append({"role": "user", "content": clean_message, "time": _now_time()})
     company = _extract_company(clean_message, df)
     value = _extract_value(clean_message)
+    generated = None
 
     if company:
+        if columns is None:
+            columns = identify_columns(df)
+        generated = build_generated_proposal(company, value, df, columns)
         chat_messages.append({
             "role": "assistant",
             "content": (
-                f"Entendi. Estou montando a proposta para **{company}**"
-                + (f" com valor de R$ {value}." if value else ".")
-                + "\n\nOrganizando os dados e gerando o PDF profissional..."
+                f"Proposta gerada para **{company}**"
+                + (f" no valor de {generated['value_label']}." if generated.get("value_label") else ".")
+                + "\n\nO PDF já está disponível ao lado, com opções para baixar ou enviar por e-mail."
             ),
             "time": _now_time(),
         })
@@ -335,9 +426,9 @@ def handle_proposal_chat_message(message: str, df: pd.DataFrame, chat_messages: 
             "role": "assistant",
             "type": "pdf_card",
             "company": company,
-            "filename": f"Proposta_{company.replace(' ', '')}.pdf",
+            "filename": generated["filename"],
             "value": value,
-            "size_label": "245 KB",
+            "generated": generated,
             "time": _now_time(),
         })
     else:
@@ -350,7 +441,7 @@ def handle_proposal_chat_message(message: str, df: pd.DataFrame, chat_messages: 
             "time": _now_time(),
         })
 
-    return chat_messages
+    return chat_messages, generated
 
 
 def render_proposal_chat_messages(messages: list[dict]) -> str:
@@ -358,23 +449,24 @@ def render_proposal_chat_messages(messages: list[dict]) -> str:
 
     for message in messages:
         if message.get("type") == "pdf_card":
+            generated = message.get("generated") or {}
             company = html.escape(message.get("company", ""))
             filename = html.escape(message.get("filename", "proposta.pdf"))
-            encoded_company = quote(message.get("company", ""))
-            value = message.get("value")
-            value_query = f"?valor={quote(str(value))}" if value else ""
+            download_url = html.escape(generated.get("download_url", "#"))
+            email_href = html.escape(generated.get("email_href", "mailto:"))
+            preview_url = html.escape(generated.get("preview_url", "#"))
             rows.append(
-                f'<div class="proposal-pdf-card">'
+                f'<div class="proposal-pdf-card proposal-pdf-card-chat">'
                 f'<div class="proposal-pdf-card-top">'
                 f'<span class="proposal-pdf-icon">📄</span>'
                 f'<div><div class="proposal-pdf-name">{filename}</div>'
-                f'<div class="proposal-pdf-meta">{html.escape(message.get("size_label", "PDF"))}</div></div>'
+                f'<div class="proposal-pdf-meta">{company}</div></div>'
                 f'<span class="proposal-pdf-ready">Pronto</span>'
                 f'</div>'
                 f'<div class="proposal-pdf-actions">'
-                f'<a href="/propostas/{encoded_company}/pdf{value_query}" target="_blank" class="proposal-pdf-btn">👁 Visualizar PDF</a>'
-                f'<a href="/pesos-medidas?empresa={encoded_company}" class="proposal-pdf-btn">📱 Enviar no WhatsApp</a>'
-                f'<a href="/propostas/{encoded_company}/pdf{value_query}" class="proposal-pdf-btn">⬇ Baixar</a>'
+                f'<a href="{download_url}" class="proposal-pdf-btn primary">⬇ Baixar PDF</a>'
+                f'<a href="{email_href}" class="proposal-pdf-btn">✉ Enviar por e-mail</a>'
+                f'<a href="{preview_url}" target="_blank" class="proposal-pdf-btn">👁 Abrir</a>'
                 f'</div></div>'
             )
             continue
@@ -395,13 +487,49 @@ def render_proposal_chat_messages(messages: list[dict]) -> str:
     return "".join(rows)
 
 
+def should_show_proposal_quick_form(messages: list[dict]) -> bool:
+    return not any(message.get("role") == "user" for message in messages)
+
+
+def build_proposal_company_options(df: pd.DataFrame) -> list[str]:
+    if df.empty or "_empresa" not in df.columns:
+        return []
+    companies = []
+    seen = set()
+    for raw in df["_empresa"].dropna().astype(str).tolist():
+        company = normalize_text(raw)
+        if not company or company in seen:
+            continue
+        seen.add(company)
+        companies.append(company)
+    return sorted(companies, key=str.casefold)
+
+
+def build_proposal_form_message(
+    empresa: str,
+    servico: str = "",
+    valor_proposta: str = "",
+    colaboradores: str = "",
+) -> str:
+    parts = [f"Crie uma proposta para {normalize_text(empresa)}"]
+    if normalize_text(servico):
+        parts.append(f"Serviço: {normalize_text(servico)}")
+    if normalize_text(valor_proposta):
+        value = normalize_text(valor_proposta)
+        if not value.lower().startswith("r$"):
+            value = f"R$ {value}"
+        parts.append(f"Valor {value}")
+    if normalize_text(colaboradores):
+        parts.append(f"Colaboradores: {normalize_text(colaboradores)}")
+    return ". ".join(parts) + "."
+
+
 def default_proposal_chat_messages() -> list[dict]:
     return [{
         "role": "assistant",
         "content": (
             "Olá! Sou o agente de IA para propostas.\n\n"
-            "Descreva a proposta que deseja gerar e eu monto o PDF pronto para enviar ao cliente.\n\n"
-            "Exemplo: Crie uma proposta para Clínica PetCare. Valor R$ 24.900."
+            "Descreva a proposta que deseja gerar ou use o formulário abaixo para montar o PDF pronto para enviar ao cliente."
         ),
         "time": _now_time(),
     }]

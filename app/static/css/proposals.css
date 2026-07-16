@@ -15,6 +15,55 @@
   overflow: hidden;
 }
 
+.proposals-generated-panel {
+  padding: 18px;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(180deg, #FAF5FF 0%, #FFFFFF 100%);
+}
+
+.proposals-generated-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.proposals-generated-meta {
+  font-size: 0.88rem;
+  color: var(--text);
+  margin-top: 4px;
+}
+
+.proposals-generated-meta strong {
+  color: var(--violet);
+}
+
+.proposals-generated-email {
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin-top: 6px;
+}
+
+.proposals-pdf-preview {
+  width: 100%;
+  height: 420px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: #fff;
+}
+
+.proposals-generated-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+
+.proposals-generated-actions .btn {
+  min-width: 150px;
+}
+
 .proposals-table-header {
   display: flex;
   align-items: center;
@@ -142,6 +191,65 @@
   min-height: 420px;
 }
 
+.proposals-quick-form {
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px solid #E9D5FF;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: var(--shadow);
+}
+
+.proposals-quick-form-title {
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: var(--violet);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 10px;
+}
+
+.proposals-quick-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.proposals-quick-field span {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.proposals-quick-field input,
+.proposals-quick-field select {
+  height: 36px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0 10px;
+  font-size: 0.82rem;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.proposals-quick-form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.proposals-quick-form-row .proposals-quick-field {
+  margin-bottom: 0;
+}
+
+.proposals-quick-form-btn {
+  width: 100%;
+  margin-top: 12px;
+  min-height: 38px;
+  font-size: 0.84rem;
+}
+
 .proposals-chat-input {
   display: flex;
   align-items: center;
@@ -243,6 +351,15 @@
   background: #E5E7EB;
 }
 
+.proposal-pdf-btn.primary {
+  background: linear-gradient(135deg, var(--pink), var(--purple));
+  color: #fff;
+}
+
+.proposal-pdf-btn.primary:hover {
+  filter: brightness(1.03);
+}
+
 .proposals-workflow {
   padding: 20px 22px;
 }
@@ -322,6 +439,19 @@
   .proposals-table-controls {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .proposals-pdf-preview {
+    height: 280px;
+  }
+
+  .proposals-generated-actions .btn {
+    flex: 1 1 auto;
+    min-width: 140px;
+  }
+
+  .proposals-quick-form-row {
+    grid-template-columns: 1fr;
   }
 
   .proposals-chat-panel {
