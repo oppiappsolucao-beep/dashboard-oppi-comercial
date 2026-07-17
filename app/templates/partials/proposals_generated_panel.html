@@ -11,10 +11,10 @@
         {% if generated_proposal.servico_label %}
         <span>· {{ generated_proposal.servico_label }}</span>
         {% endif %}
-        {% if generated_proposal.colaboradores_label %}
-        <span>· {{ generated_proposal.colaboradores_label }}</span>
-        {% endif %}
       </div>
+      {% if generated_proposal.colaboradores_label %}
+      <div class="proposals-generated-colaboradores">{{ generated_proposal.colaboradores_label }}</div>
+      {% endif %}
       <div class="proposals-generated-email">E-mail do cliente: {{ generated_proposal.client_email }}</div>
     </div>
     {% if generated_proposal.pdf_ready %}

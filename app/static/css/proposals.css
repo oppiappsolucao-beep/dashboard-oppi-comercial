@@ -39,6 +39,14 @@
   color: var(--violet);
 }
 
+.proposals-generated-colaboradores {
+  margin-top: 6px;
+  font-size: 0.82rem;
+  color: var(--text);
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
 .proposals-generated-email {
   font-size: 0.78rem;
   color: var(--muted);
@@ -249,14 +257,27 @@
 }
 
 .proposals-quick-field input,
-.proposals-quick-field select {
-  height: 36px;
+.proposals-quick-field select,
+.proposals-quick-field textarea {
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 0 10px;
   font-size: 0.82rem;
   background: var(--surface);
   color: var(--text);
+  font-family: inherit;
+}
+
+.proposals-quick-field input,
+.proposals-quick-field select {
+  height: 36px;
+}
+
+.proposals-quick-field textarea {
+  min-height: 56px;
+  padding: 8px 10px;
+  resize: vertical;
+  line-height: 1.4;
 }
 
 .proposals-quick-form-row {

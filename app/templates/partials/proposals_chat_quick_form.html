@@ -31,22 +31,20 @@
     {% endif %}
   </label>
 
-  <div class="proposals-quick-form-row">
-    <label class="proposals-quick-field">
-      <span>Valor</span>
-      <input type="text" name="valor_proposta" placeholder="Ex.: R$ 8.500" autocomplete="off">
-    </label>
+  <label class="proposals-quick-field">
+    <span>Valor</span>
+    <input type="text" name="valor_proposta" placeholder="Ex.: R$ 8.500" autocomplete="off">
+  </label>
 
-    <label class="proposals-quick-field">
-      <span>Colaboradores</span>
-      <select name="colaboradores">
-        <option value="">Selecione</option>
-        {% for option in colaborador_options %}
-        <option value="{{ option }}">{{ option }}</option>
-        {% endfor %}
-      </select>
-    </label>
-  </div>
+  <label class="proposals-quick-field">
+    <span>Colaboradores</span>
+    <textarea
+      name="colaboradores"
+      rows="2"
+      placeholder="Descreva livremente a quantidade ou contexto dos colaboradores"
+      autocomplete="off"
+    ></textarea>
+  </label>
 
   <button type="submit" class="btn proposals-quick-form-btn">Gerar proposta</button>
 </form>
