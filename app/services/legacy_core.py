@@ -2057,12 +2057,34 @@ def format_proposal_value_display(value: str) -> str:
     return text
 
 
+def row_field_value(row, columns: dict, key: str) -> str:
+    if row is None:
+        return ""
+    column_name = columns.get(key)
+    if not column_name or column_name not in row.index:
+        return ""
+    return normalize_text(row.get(column_name, ""))
+
+
+def row_contact_email(row, columns: dict) -> str:
+    for key in ("email", "email_socio_1"):
+        value = row_field_value(row, columns, key)
+        if value:
+            return value
+    return ""
+
+
+def row_contact_phone(row, columns: dict) -> str:
+    for key in ("telefone_b2b", "telefone_socio_1", "telefone_fixo", "telefone_alternativo"):
+        value = row_field_value(row, columns, key)
+        if value:
+            return value
+    return ""
+
+
 def build_client_commercial_summary(row, columns: dict, pricing_answers: dict | None = None) -> dict:
     def sheet_value(key: str) -> str:
-        column_name = columns.get(key)
-        if column_name and column_name in row.index:
-            return normalize_text(row.get(column_name, ""))
-        return ""
+        return row_field_value(row, columns, key)
 
     servico = sheet_value("servico")
     valor = sheet_value("valor_proposta")

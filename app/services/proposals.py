@@ -8,7 +8,7 @@ from urllib.parse import quote, urlencode
 import pandas as pd
 
 from app.services.filters import DashboardFilters, apply_dashboard_filters
-from app.services.legacy_core import apply_period_filter, as_python_date, find_prepared_company_row, identify_columns, normalize_search_text, normalize_text, parse_money, resolve_company_name, status_group, deal_value_from_row
+from app.services.legacy_core import apply_period_filter, as_python_date, find_prepared_company_row, identify_columns, normalize_search_text, normalize_text, parse_money, resolve_company_name, row_contact_email, status_group, deal_value_from_row
 from app.services.proposal_pdf import prepare_generated_proposal_pdf, proposal_pdf_filename
 
 PROPOSAL_ROW_STATUSES = {"Proposta", "Fechado", "Conversando", "Reunião"}
@@ -316,15 +316,8 @@ def _company_row(company_name: str, df: pd.DataFrame):
 def _company_email(company_name: str, df: pd.DataFrame, columns: dict) -> str:
     row = _company_row(company_name, df)
     if row is None:
-        return ""
-    for key in ("email", "email_socio_1"):
-        email_column = columns.get(key)
-        if not email_column or email_column not in row.index:
-            continue
-        value = normalize_text(row.get(email_column, ""))
-        if value:
-            return value
-    return ""
+        row = _company_row(resolve_company_name(company_name, df), df)
+    return row_contact_email(row, columns)
 
 
 def _proposal_pdf_query(

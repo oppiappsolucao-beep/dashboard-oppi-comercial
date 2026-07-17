@@ -25,6 +25,9 @@ from app.services.legacy_core import (
     normalize_text,
     prepare_data,
     resolve_company_name,
+    row_contact_email,
+    row_contact_phone,
+    row_field_value,
 )
 
 GOOGLE_SCOPES = [
@@ -111,21 +114,6 @@ def _company_row(company_name: str, df: pd.DataFrame):
     return find_prepared_company_row(company_name, df)
 
 
-def _sheet_field(row, columns: dict, key: str) -> str:
-    column_name = columns.get(key)
-    if not row or not column_name or column_name not in row.index:
-        return ""
-    return normalize_text(row.get(column_name, ""))
-
-
-def _sheet_email(row, columns: dict) -> str:
-    for key in ("email", "email_socio_1"):
-        value = _sheet_field(row, columns, key)
-        if value:
-            return value
-    return ""
-
-
 def build_proposal_placeholder_values(
     company_name: str,
     df: pd.DataFrame,
@@ -135,7 +123,9 @@ def build_proposal_placeholder_values(
     colaboradores: str | None = None,
 ) -> dict[str, str]:
     resolved_company = resolve_company_name(company_name, df)
-    row = _company_row(resolved_company, df)
+    row = _company_row(company_name, df)
+    if row is None:
+        row = _company_row(resolved_company, df)
     commercial = build_client_commercial_summary(row, columns) if row is not None else {
         "servico": "Não informado",
         "valor_proposta": "Não informado",
@@ -156,14 +146,14 @@ def build_proposal_placeholder_values(
         "{{EMPRESA}}": resolved_company or "Não informado",
         "{{VALOR_PROPOSTA}}": proposal_value,
         "{{SERVICO}}": servico_value,
-        "{{VENDEDOR}}": normalize_text(row.get("_vendedor", "")) if row is not None else "Sem vendedor",
+        "{{VENDEDOR}}": row_field_value(row, columns, "vendedor") or (normalize_text(row.get("_vendedor", "")) if row is not None else "") or "Sem vendedor",
         "{{DATA}}": now.strftime("%d/%m/%Y"),
         "{{NUMERO_PROPOSTA}}": proposal_number,
-        "{{CNPJ}}": _sheet_field(row, columns, "cnpj") or "Não informado",
-        "{{TELEFONE}}": _sheet_field(row, columns, "telefone_b2b") or _sheet_field(row, columns, "telefone_socio_1") or "Não informado",
-        "{{EMAIL}}": _sheet_email(row, columns) or "Não informado",
+        "{{CNPJ}}": row_field_value(row, columns, "cnpj") or "Não informado",
+        "{{TELEFONE}}": row_contact_phone(row, columns) or "Não informado",
+        "{{EMAIL}}": row_contact_email(row, columns) or "Não informado",
         "{{COLABORADORES}}": colaboradores_value,
-        "{{ENDERECO}}": _sheet_field(row, columns, "endereco") or "Não informado",
+        "{{ENDERECO}}": row_field_value(row, columns, "endereco") or "Não informado",
     }
 
     values: dict[str, str] = {}
