@@ -2077,19 +2077,44 @@ def format_proposal_value_display(value: str) -> str:
     return text
 
 
+def row_get(row, key, default=""):
+    if row is None:
+        return default
+    try:
+        if key not in row.index:
+            return default
+    except Exception:
+        return default
+    return coerce_scalar(row.get(key, default))
+
+
+def normalize_company_row(row):
+    if row is None:
+        return None
+    if not isinstance(row, pd.Series):
+        return row
+    if row.index.is_unique:
+        return row
+    data = {}
+    for key in row.index:
+        if key not in data:
+            data[key] = coerce_scalar(row[key])
+    return pd.Series(data, dtype=object)
+
+
 def row_field_value(row, columns: dict, key: str) -> str:
     if row is None:
         return ""
     column_name = columns.get(key)
-    if not column_name or column_name not in row.index:
+    if not column_name:
         return ""
-    return normalize_text(coerce_scalar(row.get(column_name, "")))
+    return normalize_text(row_get(row, column_name, ""))
 
 
 def row_contact_email(row, columns: dict) -> str:
     for key in ("email", "email_socio_1"):
         value = row_field_value(row, columns, key)
-        if value:
+        if normalize_text(value):
             return value
     return ""
 
@@ -2097,7 +2122,7 @@ def row_contact_email(row, columns: dict) -> str:
 def row_contact_phone(row, columns: dict) -> str:
     for key in ("telefone_b2b", "telefone_socio_1", "telefone_fixo", "telefone_alternativo"):
         value = row_field_value(row, columns, key)
-        if value:
+        if normalize_text(value):
             return value
     return ""
 
@@ -2106,9 +2131,9 @@ def build_client_commercial_summary(row, columns: dict, pricing_answers: dict | 
     def sheet_value(key: str) -> str:
         return row_field_value(row, columns, key)
 
-    servico = sheet_value("servico")
-    valor = sheet_value("valor_proposta")
-    colaboradores = sheet_value("colaboradores")
+    servico = normalize_text(sheet_value("servico"))
+    valor = normalize_text(sheet_value("valor_proposta"))
+    colaboradores = normalize_text(sheet_value("colaboradores"))
 
     if pricing_answers:
         weighted_steps = [step for step in OPPI_PRICING_STEPS if step["weighted"]]
@@ -2138,11 +2163,11 @@ def find_prepared_company_row(company_name: str, df: pd.DataFrame):
     if not exact.empty:
         if "_sheet_row" in exact.columns:
             exact = exact.sort_values("_sheet_row", ascending=False)
-        return exact.iloc[0]
+        return normalize_company_row(exact.iloc[0])
 
     matches = []
     for _, row in df.iterrows():
-        company_text = normalize_text(row.get("_empresa", ""))
+        company_text = normalize_text(row_get(row, "_empresa", ""))
         if not company_text:
             continue
         if flexible_search_match(clean, company_text):
@@ -2154,13 +2179,13 @@ def find_prepared_company_row(company_name: str, df: pd.DataFrame):
     matches_df = pd.DataFrame(matches)
     if "_sheet_row" in matches_df.columns:
         matches_df = matches_df.sort_values("_sheet_row", ascending=False)
-    return matches_df.iloc[0]
+    return normalize_company_row(matches_df.iloc[0])
 
 
 def resolve_company_name(company_name: str, df: pd.DataFrame) -> str:
     row = find_prepared_company_row(company_name, df)
     if row is not None:
-        return normalize_text(row.get("_empresa", company_name)) or normalize_text(company_name)
+        return normalize_text(row_get(row, "_empresa", company_name)) or normalize_text(company_name)
     return normalize_text(company_name)
 
 

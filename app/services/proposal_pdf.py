@@ -18,7 +18,6 @@ from app.services.app_settings import get_proposal_template_doc_id
 from app.services.legacy_core import (
     _load_google_credentials_info,
     build_client_commercial_summary,
-    coerce_scalar,
     find_prepared_company_row,
     format_proposal_value_display,
     identify_columns,
@@ -29,6 +28,7 @@ from app.services.legacy_core import (
     row_contact_email,
     row_contact_phone,
     row_field_value,
+    row_get,
 )
 
 GOOGLE_SCOPES = [
@@ -133,12 +133,12 @@ def build_proposal_placeholder_values(
         "colaboradores": "Não informado",
     }
 
-    proposal_value = normalize_text(value) or commercial.get("valor_proposta", "Não informado")
-    if proposal_value and proposal_value != "Não informado":
+    proposal_value = normalize_text(value) or normalize_text(commercial.get("valor_proposta", "Não informado"))
+    if normalize_text(proposal_value) and normalize_text(proposal_value) != "Não informado":
         proposal_value = format_proposal_value_display(proposal_value)
 
-    servico_value = normalize_text(servico) or commercial.get("servico", "Não informado")
-    colaboradores_value = normalize_text(colaboradores) or commercial.get("colaboradores", "Não informado")
+    servico_value = normalize_text(servico) or normalize_text(commercial.get("servico", "Não informado"))
+    colaboradores_value = normalize_text(colaboradores) or normalize_text(commercial.get("colaboradores", "Não informado"))
 
     now = pd.Timestamp.now(tz="America/Sao_Paulo")
     proposal_number = f"OPPI-{now.strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:4].upper()}"
@@ -147,7 +147,7 @@ def build_proposal_placeholder_values(
         "{{EMPRESA}}": resolved_company or "Não informado",
         "{{VALOR_PROPOSTA}}": proposal_value,
         "{{SERVICO}}": servico_value,
-        "{{VENDEDOR}}": row_field_value(row, columns, "vendedor") or normalize_text(coerce_scalar(row.get("_vendedor", "")) if row is not None else "") or "Sem vendedor",
+        "{{VENDEDOR}}": row_field_value(row, columns, "vendedor") or normalize_text(row_get(row, "_vendedor", "")) or "Sem vendedor",
         "{{DATA}}": now.strftime("%d/%m/%Y"),
         "{{NUMERO_PROPOSTA}}": proposal_number,
         "{{CNPJ}}": row_field_value(row, columns, "cnpj") or "Não informado",
