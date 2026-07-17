@@ -76,6 +76,14 @@ def get_proposal_template_doc_id() -> str:
     return normalize_text(data.get("proposal_template_doc_id")) or settings.proposal_template_doc_id
 
 
+def get_proposal_pdf_folder_id() -> str:
+    data = load_app_settings()
+    return (
+        normalize_text(data.get("proposal_pdf_folder_id"))
+        or settings.proposal_pdf_folder_id
+    )
+
+
 def get_proposal_template_url() -> str:
     data = load_app_settings()
     url = normalize_text(data.get("proposal_template_url"))

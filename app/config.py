@@ -12,6 +12,7 @@ class Settings:
     worksheet_name: str = "Folha1"
     cache_ttl_seconds: int = 30
     proposal_template_doc_id: str = "1iTBG1ZUMCVB-aS7QoYiC4Sym6Dgn9Z7gMN-LGLgyprI"
+    proposal_pdf_folder_id: str = ""
     support_whatsapp_number: str = "5511942157917"
     support_whatsapp_label: str = "+55 11 94215-7917"
 
@@ -43,6 +44,7 @@ class Settings:
             os.getenv("PROPOSAL_TEMPLATE_DOC_ID", self.proposal_template_doc_id).strip()
             or self.proposal_template_doc_id
         )
+        self.proposal_pdf_folder_id = os.getenv("PROPOSAL_PDF_FOLDER_ID", self.proposal_pdf_folder_id).strip()
         self.support_whatsapp_number = (
             os.getenv("SUPPORT_WHATSAPP_NUMBER", self.support_whatsapp_number).strip()
             or self.support_whatsapp_number

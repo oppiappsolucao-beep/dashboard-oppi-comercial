@@ -9,7 +9,7 @@ import pandas as pd
 from google.auth.transport.requests import AuthorizedSession
 from google.oauth2.service_account import Credentials
 
-from app.services.app_settings import get_proposal_template_doc_id
+from app.services.app_settings import get_proposal_pdf_folder_id, get_proposal_template_doc_id
 from app.services.legacy_core import (
     _load_google_credentials_info,
     build_client_commercial_summary,
@@ -188,15 +188,133 @@ def _replace_placeholders(session: AuthorizedSession, document_id: str, values: 
         raise RuntimeError(f"Erro ao preencher o modelo Google Docs: {response.text[:240]}")
 
 
+def _delete_drive_file(session: AuthorizedSession, file_id: str) -> bool:
+    if not file_id:
+        return False
+    response = session.delete(
+        f"https://www.googleapis.com/drive/v3/files/{file_id}",
+        params=DRIVE_PARAMS,
+        timeout=30,
+    )
+    return response.status_code < 400
+
+
+def _parse_drive_error(response) -> str:
+    raw = normalize_text(getattr(response, "text", ""))
+    lowered = raw.lower()
+    if "storage quota has been exceeded" in lowered or "quota" in lowered:
+        return (
+            "O Google Drive está sem espaço para criar a cópia temporária da proposta. "
+            "Mova o modelo para um Shared Drive, libere espaço na conta ou configure "
+            "PROPOSAL_PDF_FOLDER_ID com uma pasta de Shared Drive compartilhada com a service account."
+        )
+    if response.status_code == 403:
+        return "Sem permissão no Google Drive. Verifique o compartilhamento do modelo."
+    if response.status_code == 404:
+        return "Modelo Google Docs não encontrado. Confira o link em Configurações → Geral."
+    if raw:
+        return raw[:240]
+    return "Erro desconhecido ao acessar o Google Drive."
+
+
+def _get_template_location(session: AuthorizedSession, template_id: str) -> dict:
+    response = session.get(
+        f"https://www.googleapis.com/drive/v3/files/{template_id}",
+        params={"fields": "id,parents,driveId", **DRIVE_PARAMS},
+        timeout=30,
+    )
+    if response.status_code >= 400:
+        return {"parents": [], "drive_id": ""}
+    payload = response.json()
+    return {
+        "parents": [parent for parent in (payload.get("parents") or []) if normalize_text(parent)],
+        "drive_id": normalize_text(payload.get("driveId")),
+    }
+
+
+def _resolve_copy_parents(session: AuthorizedSession, template_id: str) -> list[str]:
+    configured_folder = get_proposal_pdf_folder_id()
+    if configured_folder:
+        return [configured_folder]
+
+    location = _get_template_location(session, template_id)
+    if location["drive_id"] and location["parents"]:
+        return location["parents"][:1]
+    return []
+
+
+def _cleanup_proposal_temp_docs(
+    session: AuthorizedSession,
+    *,
+    keep_file_id: str | None = None,
+) -> int:
+    query = (
+        "mimeType='application/vnd.google-apps.document' "
+        "and name contains 'Proposta ' "
+        "and trashed=false"
+    )
+    deleted = 0
+    page_token = None
+
+    while True:
+        params = {
+            "q": query,
+            "fields": "nextPageToken,files(id,name)",
+            "pageSize": 100,
+            "spaces": "drive",
+            "includeItemsFromAllDrives": "true",
+            "supportsAllDrives": "true",
+            **DRIVE_PARAMS,
+        }
+        if page_token:
+            params["pageToken"] = page_token
+
+        response = session.get(
+            "https://www.googleapis.com/drive/v3/files",
+            params=params,
+            timeout=60,
+        )
+        if response.status_code >= 400:
+            break
+
+        payload = response.json()
+        for item in payload.get("files") or []:
+            file_id = normalize_text(item.get("id"))
+            if not file_id or file_id == keep_file_id:
+                continue
+            if _delete_drive_file(session, file_id):
+                deleted += 1
+
+        page_token = payload.get("nextPageToken")
+        if not page_token:
+            break
+
+    return deleted
+
+
+def _copy_template(
+    session: AuthorizedSession,
+    template_id: str,
+    name: str,
+    parents: list[str],
+):
+    body: dict = {"name": name}
+    if parents:
+        body["parents"] = parents
+    return session.post(
+        f"https://www.googleapis.com/drive/v3/files/{template_id}/copy",
+        params=DRIVE_PARAMS,
+        json=body,
+        timeout=60,
+    )
+
+
 def _copy_template_error_detail(response) -> str:
     service_email = _service_account_email()
-    base = "Não consegui copiar o modelo Google Docs."
-    if service_email:
-        base += f" Compartilhe o documento como Editor com {service_email}."
-    detail = normalize_text(getattr(response, "text", ""))[:180]
-    if detail:
-        base += f" Retorno da API: {detail}"
-    return base
+    detail = _parse_drive_error(response)
+    if service_email and "compartilh" not in detail.lower():
+        detail += f" Compartilhe o documento como Editor com {service_email}."
+    return detail
 
 
 def generate_proposal_pdf_from_template(
@@ -213,14 +331,18 @@ def generate_proposal_pdf_from_template(
 
     resolved_company = resolve_company_name(company_name, df)
     session = _google_session()
-    copy_response = session.post(
-        f"https://www.googleapis.com/drive/v3/files/{template_id}/copy",
-        params=DRIVE_PARAMS,
-        json={"name": f"Proposta {resolved_company or 'Cliente'}"},
-        timeout=60,
-    )
+    copy_name = f"Proposta {resolved_company or 'Cliente'}"
+    copy_parents = _resolve_copy_parents(session, template_id)
+    _cleanup_proposal_temp_docs(session)
+
+    copy_response = _copy_template(session, template_id, copy_name, copy_parents)
     if copy_response.status_code >= 400:
-        raise RuntimeError(_copy_template_error_detail(copy_response))
+        lowered = normalize_text(copy_response.text).lower()
+        if "quota" in lowered:
+            _cleanup_proposal_temp_docs(session)
+            copy_response = _copy_template(session, template_id, copy_name, copy_parents)
+        if copy_response.status_code >= 400:
+            raise RuntimeError(_copy_template_error_detail(copy_response))
 
     copy_id = copy_response.json().get("id")
     if not copy_id:
@@ -243,15 +365,12 @@ def generate_proposal_pdf_from_template(
             timeout=90,
         )
         if export_response.status_code >= 400:
-            raise RuntimeError("Erro ao exportar o PDF a partir do Google Docs.")
+            raise RuntimeError(_parse_drive_error(export_response))
 
         return export_response.content
     finally:
-        session.delete(
-            f"https://www.googleapis.com/drive/v3/files/{copy_id}",
-            params=DRIVE_PARAMS,
-            timeout=30,
-        )
+        _delete_drive_file(session, copy_id)
+        _cleanup_proposal_temp_docs(session)
 
 
 def generate_proposal_pdf(
@@ -292,12 +411,15 @@ def generate_proposal_pdf(
             colaboradores=colaboradores,
         )
     except Exception as error:
-        service_email = _service_account_email()
-        hint = f" Compartilhe o documento com {service_email}." if service_email else ""
-        raise RuntimeError(
-            "Não foi possível gerar o PDF a partir do modelo Google Docs."
-            f"{hint} Detalhe: {error}"
-        ) from error
+        message = str(error)
+        if "Não foi possível gerar o PDF" not in message:
+            service_email = _service_account_email()
+            hint = f" Compartilhe o documento com {service_email}." if service_email else ""
+            raise RuntimeError(
+                "Não foi possível gerar o PDF a partir do modelo Google Docs."
+                f"{hint} Detalhe: {message}"
+            ) from error
+        raise
 
     store_proposal_pdf_cache(cache_key, pdf_bytes)
     return pdf_bytes
@@ -325,8 +447,18 @@ def prepare_generated_proposal_pdf(
             use_cache=True,
         )
     except Exception as error:
-        return cache_key, str(error)
+        return cache_key, _format_pdf_generation_error(error)
     return cache_key, None
+
+
+def _format_pdf_generation_error(error: Exception) -> str:
+    message = normalize_text(str(error))
+    for prefix in (
+        "Não foi possível gerar o PDF a partir do modelo Google Docs.",
+        "Detalhe: ",
+    ):
+        message = message.replace(prefix, " ")
+    return normalize_text(message)[:500]
 
 
 def proposal_pdf_filename(company_name: str) -> str:

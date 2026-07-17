@@ -492,29 +492,30 @@ def handle_proposal_chat_message(
         if generated.get("colaboradores_label"):
             details.append(f"Colaboradores: {generated['colaboradores_label']}")
         details_text = ("\n" + "\n".join(details)) if details else ""
+        if generated.get("pdf_error"):
+            footer = f"\n\nNão foi possível gerar o PDF.\n{generated['pdf_error']}"
+        else:
+            footer = "\n\nO PDF já está disponível ao lado, com opções para baixar ou enviar por e-mail."
         chat_messages.append({
             "role": "assistant",
             "content": (
                 f"Proposta gerada para **{company}**"
                 + (f" no valor de {generated['value_label']}." if generated.get("value_label") else ".")
                 + details_text
-                + (
-                    "\n\nNão foi possível gerar o PDF. Verifique o compartilhamento do modelo Google Docs."
-                    if generated.get("pdf_error")
-                    else "\n\nO PDF já está disponível ao lado, com opções para baixar ou enviar por e-mail."
-                )
+                + footer
             ),
             "time": _now_time(),
         })
-        chat_messages.append({
-            "role": "assistant",
-            "type": "pdf_card",
-            "company": company,
-            "filename": generated["filename"],
-            "value": value,
-            "generated": generated,
-            "time": _now_time(),
-        })
+        if generated.get("pdf_ready"):
+            chat_messages.append({
+                "role": "assistant",
+                "type": "pdf_card",
+                "company": company,
+                "filename": generated["filename"],
+                "value": value,
+                "generated": generated,
+                "time": _now_time(),
+            })
     else:
         chat_messages.append({
             "role": "assistant",
@@ -534,6 +535,8 @@ def render_proposal_chat_messages(messages: list[dict]) -> str:
     for message in messages:
         if message.get("type") == "pdf_card":
             generated = message.get("generated") or {}
+            if not generated.get("pdf_ready"):
+                continue
             company = html.escape(message.get("company", ""))
             filename = html.escape(message.get("filename", "proposta.pdf"))
             download_url = html.escape(generated.get("download_url", "#"))
