@@ -2,6 +2,7 @@
 import hashlib
 import io
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -40,7 +41,7 @@ DRIVE_PARAMS = {"supportsAllDrives": "true"}
 DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
 PLACEHOLDER_ALIASES = {
-    "{{EMPRESA}}": ["{{EMPRESA}}", "{{empresa}}", "{{NOME_EMPRESA}}", "{{nome_empresa}}"],
+    "{{EMPRESA}}": ["{{EMPRESA}}", "{{empresa}}", "{{NOME_EMPRESA}}", "{{nome_empresa}}", "{{CONTRATANTE}}", "{{contratante}}"],
     "{{VALOR_PROPOSTA}}": ["{{VALOR_PROPOSTA}}", "{{valor_proposta}}", "{{VALOR}}", "{{valor}}"],
     "{{SERVICO}}": ["{{SERVICO}}", "{{servico}}", "{{SOLUCAO}}", "{{solucao}}"],
     "{{VENDEDOR}}": ["{{VENDEDOR}}", "{{vendedor}}"],
@@ -51,7 +52,17 @@ PLACEHOLDER_ALIASES = {
     "{{EMAIL}}": ["{{EMAIL}}", "{{email}}"],
     "{{COLABORADORES}}": ["{{COLABORADORES}}", "{{colaboradores}}"],
     "{{ENDERECO}}": ["{{ENDERECO}}", "{{endereco}}"],
+    "{{RUA}}": ["{{RUA}}", "{{rua}}"],
+    "{{BAIRRO_CEP}}": ["{{BAIRRO_CEP}}", "{{bairro_cep}}"],
 }
+
+CONTRATANTE_LABEL_FILLS = (
+    ("CONTRATANTE", "{{EMPRESA}}"),
+    ("CNPJ", "{{CNPJ}}"),
+    ("Rua", "{{RUA}}"),
+    ("Bairro: CEP", "{{BAIRRO_CEP}}"),
+    ("E-mail", "{{EMAIL}}"),
+)
 
 
 def _proposal_cache_dir() -> Path:
@@ -72,6 +83,7 @@ def _proposal_cache_key(
         normalize_text(servico),
         normalize_text(colaboradores),
         normalize_text(get_proposal_template_doc_id()),
+        normalize_text(os.environ.get("APP_BUILD", "")),
     ])
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
@@ -153,10 +165,37 @@ def build_form_fallback_placeholder_values(
         "{{COLABORADORES}}": normalize_text(colaboradores) or safe_field("colaboradores"),
         "{{ENDERECO}}": safe_field("endereco"),
     }
+    return _values_from_canonical(canonical)
 
+
+def _address_parts(endereco: str) -> dict[str, str]:
+    text = normalize_text(endereco)
+    if not text or text == "Não informado":
+        return {"rua": "Não informado", "bairro_cep": "Não informado"}
+
+    cep_match = re.search(r"\b(\d{5}-?\d{3})\b", text)
+    cep = cep_match.group(1) if cep_match else ""
+    rua = text
+    if cep:
+        rua = normalize_text(text.replace(cep, "")).strip(" ,-")
+    bairro_cep = f"CEP: {cep}" if cep else "Não informado"
+    return {"rua": rua or text, "bairro_cep": bairro_cep}
+
+
+def _extend_canonical(canonical: dict[str, str]) -> dict[str, str]:
+    extended = dict(canonical)
+    parts = _address_parts(extended.get("{{ENDERECO}}", ""))
+    extended["{{RUA}}"] = parts["rua"]
+    extended["{{BAIRRO_CEP}}"] = parts["bairro_cep"]
+    extended["{{CONTRATANTE}}"] = extended.get("{{EMPRESA}}", "")
+    return extended
+
+
+def _values_from_canonical(canonical: dict[str, str]) -> dict[str, str]:
+    extended = _extend_canonical(canonical)
     values: dict[str, str] = {}
     for key, aliases in PLACEHOLDER_ALIASES.items():
-        replacement = canonical[key]
+        replacement = extended.get(key, "")
         for alias in aliases:
             values[alias] = replacement
     return values
@@ -203,17 +242,12 @@ def build_proposal_placeholder_values(
         "{{COLABORADORES}}": colaboradores_value,
         "{{ENDERECO}}": row_field_value(row, columns, "endereco") or "Não informado",
     }
-
-    values: dict[str, str] = {}
-    for key, aliases in PLACEHOLDER_ALIASES.items():
-        replacement = canonical[key]
-        for alias in aliases:
-            values[alias] = replacement
-    return values
+    return _values_from_canonical(canonical)
 
 
 def _canonical_values(values: dict[str, str]) -> dict[str, str]:
-    return {field_key: values[field_key] for field_key in PLACEHOLDER_ALIASES}
+    extended = _extend_canonical({field_key: values.get(field_key, "") for field_key in PLACEHOLDER_ALIASES})
+    return extended
 
 
 def _escape_xml(text: str) -> str:
@@ -231,9 +265,32 @@ def _placeholder_xml_pattern(placeholder: str) -> re.Pattern[str]:
     return re.compile(r"(?:<[^>]+>)*".join(parts))
 
 
-def _replace_placeholders_in_docx(docx_bytes: bytes, values: dict[str, str]) -> bytes:
+def _find_marker_index(xml: str, marker: str) -> int:
+    pattern = _placeholder_xml_pattern(marker)
+    match = pattern.search(xml)
+    return match.start() if match else len(xml)
+
+
+def _fill_label_in_xml(xml: str, label: str, value: str, *, stop_before: str = "CONTRATADO") -> str:
+    safe = _escape_xml(normalize_text(value) or "—")
+    stop_idx = _find_marker_index(xml, stop_before)
+    head, tail = xml[:stop_idx], xml[stop_idx:]
+    pattern = _placeholder_xml_pattern(f"{label}:")
+    head, _ = pattern.subn(lambda m: f"{m.group(0)} {safe}", head, count=1)
+    return head + tail
+
+
+def _apply_contratante_label_fills(xml: str, canonical: dict[str, str]) -> str:
+    extended = _extend_canonical(canonical)
+    for label, field_key in CONTRATANTE_LABEL_FILLS:
+        xml = _fill_label_in_xml(xml, label, extended.get(field_key, ""))
+    return xml
+
+
+def _replace_placeholders_in_docx(docx_bytes: bytes, values: dict[str, str], canonical: dict[str, str] | None = None) -> bytes:
     input_buffer = io.BytesIO(docx_bytes)
     output_buffer = io.BytesIO()
+    label_canonical = canonical or _canonical_values(values)
 
     with zipfile.ZipFile(input_buffer, "r") as source, zipfile.ZipFile(output_buffer, "w") as target:
         for item in source.infolist():
@@ -245,6 +302,7 @@ def _replace_placeholders_in_docx(docx_bytes: bytes, values: dict[str, str]) -> 
                     text = _placeholder_xml_pattern(placeholder).sub(safe_replacement, text)
                     if placeholder in text:
                         text = text.replace(placeholder, safe_replacement)
+                text = _apply_contratante_label_fills(text, label_canonical)
                 content = text.encode("utf-8")
             target.writestr(item, content)
 
@@ -486,7 +544,7 @@ def generate_proposal_pdf_from_template(
 
     try:
         docx_bytes = _export_document_docx(session, template_id)
-        filled_docx = _replace_placeholders_in_docx(docx_bytes, values)
+        filled_docx = _replace_placeholders_in_docx(docx_bytes, values, canonical)
         return _convert_docx_to_pdf(session, filled_docx, f"Proposta {resolved_company or 'Cliente'}")
     except Exception:
         return _generate_reportlab_fallback(canonical)
