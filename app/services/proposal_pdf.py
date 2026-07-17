@@ -357,8 +357,31 @@ def _export_document_pdf(session: AuthorizedSession, document_id: str) -> bytes:
     return response.content
 
 
-def _upload_docx_and_export_pdf(session: AuthorizedSession, docx_bytes: bytes, title: str) -> bytes:
-    folder_id = get_proposal_pdf_folder_id()
+def _resolve_proposal_upload_folder(session: AuthorizedSession, template_id: str | None) -> str:
+    configured = get_proposal_pdf_folder_id()
+    if configured:
+        return configured
+    if not template_id:
+        return ""
+    response = session.get(
+        f"https://www.googleapis.com/drive/v3/files/{template_id}",
+        params={"fields": "parents", **DRIVE_PARAMS},
+        timeout=30,
+    )
+    if response.status_code >= 400:
+        return ""
+    parents = response.json().get("parents") or []
+    return normalize_text(parents[0]) if parents else ""
+
+
+def _upload_docx_and_export_pdf(
+    session: AuthorizedSession,
+    docx_bytes: bytes,
+    title: str,
+    *,
+    template_id: str | None = None,
+) -> bytes:
+    folder_id = _resolve_proposal_upload_folder(session, template_id)
     metadata: dict[str, object] = {
         "name": title[:120],
         "mimeType": "application/vnd.google-apps.document",
@@ -377,9 +400,11 @@ def _upload_docx_and_export_pdf(session: AuthorizedSession, docx_bytes: bytes, t
     )
     if upload_response.status_code >= 400:
         message = _parse_drive_error(upload_response)
-        if "storage quota" in message.lower() and not folder_id:
+        if "storage quota" in message.lower():
             raise RuntimeError(
-                f"{message} Configure PROPOSAL_PDF_FOLDER_ID apontando para uma pasta em Shared Drive."
+                "A cota de armazenamento do Google Drive foi excedida. "
+                "Mova o modelo para um Shared Drive ou configure PROPOSAL_PDF_FOLDER_ID "
+                "com o ID de uma pasta nesse Shared Drive."
             )
         raise RuntimeError(message)
 
@@ -398,47 +423,80 @@ def _upload_docx_and_export_pdf(session: AuthorizedSession, docx_bytes: bytes, t
 
 
 def _libreoffice_binary() -> str | None:
-    for candidate in ("soffice", "libreoffice"):
+    for candidate in ("soffice", "libreoffice", "/usr/bin/soffice", "/usr/bin/libreoffice"):
+        if candidate.startswith("/"):
+            path = Path(candidate)
+            if path.is_file():
+                return str(path)
+            continue
         path = shutil.which(candidate)
         if path:
             return path
     return None
 
 
-def _convert_docx_to_pdf(session: AuthorizedSession, docx_bytes: bytes, title: str) -> bytes:
+def _convert_docx_with_libreoffice(docx_bytes: bytes) -> tuple[bytes | None, str]:
     binary = _libreoffice_binary()
-    lo_error = ""
-    if binary:
-        with tempfile.TemporaryDirectory(prefix="oppi-proposal-") as tmp_dir:
-            tmp_path = Path(tmp_dir)
-            docx_path = tmp_path / "proposta.docx"
-            docx_path.write_bytes(docx_bytes)
+    if not binary:
+        return None, "LibreOffice não está instalado no servidor."
 
-            result = subprocess.run(
-                [binary, "--headless", "--convert-to", "pdf", "--outdir", str(tmp_path), str(docx_path)],
-                capture_output=True,
-                text=True,
-                timeout=120,
-                check=False,
-            )
-            if result.returncode == 0:
-                pdf_path = tmp_path / "proposta.pdf"
-                if pdf_path.exists():
-                    return pdf_path.read_bytes()
-            lo_error = normalize_text(result.stderr or result.stdout)[:240]
+    with tempfile.TemporaryDirectory(prefix="oppi-proposal-") as tmp_dir:
+        tmp_path = Path(tmp_dir)
+        docx_path = tmp_path / "proposta.docx"
+        docx_path.write_bytes(docx_bytes)
+        env = {
+            **os.environ,
+            "HOME": tmp_dir,
+            "TMPDIR": tmp_dir,
+            "SAL_USE_VCLPLUGIN": "gen",
+            "LANG": "C.UTF-8",
+        }
+        result = subprocess.run(
+            [
+                binary,
+                "--headless",
+                "--invisible",
+                "--norestore",
+                "--nologo",
+                "--nodefault",
+                "--nofirststartwizard",
+                "--convert-to",
+                "pdf",
+                "--outdir",
+                str(tmp_path),
+                str(docx_path),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=180,
+            check=False,
+            env=env,
+        )
+        pdf_path = tmp_path / "proposta.pdf"
+        if result.returncode == 0 and pdf_path.exists():
+            return pdf_path.read_bytes(), ""
+        lo_error = normalize_text(result.stderr or result.stdout)[:240]
+        return None, lo_error or f"LibreOffice retornou código {result.returncode}."
+
+
+def _convert_docx_to_pdf(
+    session: AuthorizedSession,
+    docx_bytes: bytes,
+    title: str,
+    *,
+    template_id: str | None = None,
+) -> bytes:
+    pdf_bytes, lo_error = _convert_docx_with_libreoffice(docx_bytes)
+    if pdf_bytes:
+        return pdf_bytes
 
     try:
-        return _upload_docx_and_export_pdf(session, docx_bytes, title)
+        return _upload_docx_and_export_pdf(session, docx_bytes, title, template_id=template_id)
     except Exception as drive_error:
         details = normalize_text(str(drive_error))[:240]
-        if binary and lo_error:
-            raise RuntimeError(
-                "Não foi possível converter o modelo Google Docs para PDF. "
-                f"LibreOffice: {lo_error}. Drive: {details}"
-            ) from drive_error
         raise RuntimeError(
             "Não foi possível converter o modelo Google Docs para PDF. "
-            f"{details}"
+            f"LibreOffice: {lo_error or 'indisponível'}. Drive: {details}"
         ) from drive_error
 
 
@@ -567,7 +625,12 @@ def generate_proposal_pdf_from_template(
 
     docx_bytes = _export_document_docx(session, template_id)
     filled_docx = _replace_placeholders_in_docx(docx_bytes, values, canonical)
-    return _convert_docx_to_pdf(session, filled_docx, f"Proposta {resolved_company or 'Cliente'}")
+    return _convert_docx_to_pdf(
+        session,
+        filled_docx,
+        f"Proposta {resolved_company or 'Cliente'}",
+        template_id=template_id,
+    )
 
 
 def generate_proposal_pdf(
