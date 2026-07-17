@@ -241,6 +241,48 @@ def _export_document_docx(session: AuthorizedSession, document_id: str) -> bytes
     return response.content
 
 
+def _export_document_pdf(session: AuthorizedSession, document_id: str) -> bytes:
+    response = session.get(
+        f"https://www.googleapis.com/drive/v3/files/{document_id}/export",
+        params={"mimeType": "application/pdf", **DRIVE_PARAMS},
+        timeout=90,
+    )
+    if response.status_code >= 400:
+        raise RuntimeError(_parse_drive_error(response))
+    return response.content
+
+
+def _upload_docx_and_export_pdf(session: AuthorizedSession, docx_bytes: bytes, title: str) -> bytes:
+    metadata = {
+        "name": title[:120],
+        "mimeType": "application/vnd.google-apps.document",
+    }
+    upload_response = session.post(
+        "https://www.googleapis.com/upload/drive/v3/files",
+        params={"uploadType": "multipart", **DRIVE_PARAMS},
+        files={
+            "metadata": ("metadata", json.dumps(metadata), "application/json; charset=UTF-8"),
+            "file": ("proposta.docx", docx_bytes, DOCX_MIME),
+        },
+        timeout=120,
+    )
+    if upload_response.status_code >= 400:
+        raise RuntimeError(_parse_drive_error(upload_response))
+
+    file_id = upload_response.json().get("id")
+    if not file_id:
+        raise RuntimeError("Google Drive não retornou o arquivo temporário da proposta.")
+
+    try:
+        return _export_document_pdf(session, file_id)
+    finally:
+        session.delete(
+            f"https://www.googleapis.com/drive/v3/files/{file_id}",
+            params=DRIVE_PARAMS,
+            timeout=30,
+        )
+
+
 def _libreoffice_binary() -> str | None:
     for candidate in ("soffice", "libreoffice"):
         path = shutil.which(candidate)
@@ -249,31 +291,27 @@ def _libreoffice_binary() -> str | None:
     return None
 
 
-def _convert_docx_to_pdf(docx_bytes: bytes) -> bytes:
+def _convert_docx_to_pdf(session: AuthorizedSession, docx_bytes: bytes, title: str) -> bytes:
     binary = _libreoffice_binary()
-    if not binary:
-        raise RuntimeError("LibreOffice não está disponível para converter o modelo em PDF.")
+    if binary:
+        with tempfile.TemporaryDirectory(prefix="oppi-proposal-") as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            docx_path = tmp_path / "proposta.docx"
+            docx_path.write_bytes(docx_bytes)
 
-    with tempfile.TemporaryDirectory(prefix="oppi-proposal-") as tmp_dir:
-        tmp_path = Path(tmp_dir)
-        docx_path = tmp_path / "proposta.docx"
-        docx_path.write_bytes(docx_bytes)
+            result = subprocess.run(
+                [binary, "--headless", "--convert-to", "pdf", "--outdir", str(tmp_path), str(docx_path)],
+                capture_output=True,
+                text=True,
+                timeout=120,
+                check=False,
+            )
+            if result.returncode == 0:
+                pdf_path = tmp_path / "proposta.pdf"
+                if pdf_path.exists():
+                    return pdf_path.read_bytes()
 
-        result = subprocess.run(
-            [binary, "--headless", "--convert-to", "pdf", "--outdir", str(tmp_path), str(docx_path)],
-            capture_output=True,
-            text=True,
-            timeout=120,
-            check=False,
-        )
-        if result.returncode != 0:
-            detail = normalize_text(result.stderr or result.stdout)[:240]
-            raise RuntimeError(f"Falha ao converter DOCX para PDF. {detail}")
-
-        pdf_path = tmp_path / "proposta.pdf"
-        if not pdf_path.exists():
-            raise RuntimeError("LibreOffice não gerou o arquivo PDF da proposta.")
-        return pdf_path.read_bytes()
+    return _upload_docx_and_export_pdf(session, docx_bytes, title)
 
 
 def _generate_reportlab_fallback(canonical: dict[str, str]) -> bytes:
@@ -391,7 +429,7 @@ def generate_proposal_pdf_from_template(
     try:
         docx_bytes = _export_document_docx(session, template_id)
         filled_docx = _replace_placeholders_in_docx(docx_bytes, values)
-        return _convert_docx_to_pdf(filled_docx)
+        return _convert_docx_to_pdf(session, filled_docx, f"Proposta {resolved_company or 'Cliente'}")
     except Exception as template_error:
         try:
             return _generate_reportlab_fallback(canonical)
