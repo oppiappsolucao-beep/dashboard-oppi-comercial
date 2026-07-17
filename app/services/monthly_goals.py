@@ -150,15 +150,18 @@ def load_monthly_goals(force_refresh: bool = False) -> dict[str, float]:
         if not force_refresh and _file_cache is not None:
             return dict(_file_cache)
 
-        sheet_store = _load_from_sheet()
-        if sheet_store is not None:
-            _file_cache = sheet_store
-            _save_to_file(sheet_store)
-            return dict(sheet_store)
-
         file_store = _load_from_file()
-        _file_cache = file_store
-        return dict(file_store)
+        sheet_store = _load_from_sheet()
+
+        if sheet_store is not None:
+            merged = {**file_store, **sheet_store}
+            if merged != file_store:
+                _save_to_file(merged)
+        else:
+            merged = file_store
+
+        _file_cache = merged
+        return dict(merged)
 
 
 def invalidate_monthly_goals_cache() -> None:
@@ -185,8 +188,8 @@ def set_monthly_goal(year: int, month: int, amount: float, seller: str = TEAM_SE
     store = load_monthly_goals()
     store[_goal_key(year, month, seller_name)] = float(amount)
 
-    if not _save_to_sheet(store):
-        _save_to_file(store)
+    _save_to_file(store)
+    _save_to_sheet(store)
 
     with _lock:
         global _file_cache

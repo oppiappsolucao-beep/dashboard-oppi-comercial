@@ -5,7 +5,7 @@ from app.config import settings
 from app.dependencies import get_prepared_data, is_admin, require_auth
 from app.services.app_settings import set_proposal_template
 from app.services.legacy_core import invalidate_sheet_cache, parse_money
-from app.services.monthly_goals import TEAM_SELLER_LABEL, invalidate_monthly_goals_cache, set_monthly_goal
+from app.services.monthly_goals import TEAM_SELLER_LABEL, set_monthly_goal
 from app.services.settings_page import (
     ROLE_OPTIONS,
     SETTINGS_TABS,
@@ -182,7 +182,6 @@ async def settings_save_goal(
         if goal_value <= 0:
             raise ValueError("Informe um valor maior que zero para a meta.")
         set_monthly_goal(year, month, goal_value, seller)
-        invalidate_monthly_goals_cache()
         request.session["settings_goal_success"] = "Meta do mês salva com sucesso."
     except ValueError as error:
         request.session["settings_goal_error"] = str(error) if str(error) else "Informe um valor válido para a meta."
