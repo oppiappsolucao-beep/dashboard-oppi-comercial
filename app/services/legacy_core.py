@@ -109,7 +109,24 @@ STATUS_COLORS = {
 # =========================================================
 # UTILITÁRIOS
 # =========================================================
+def coerce_scalar(value):
+    """Converte Series/DataFrame do pandas em valor escalar."""
+    if isinstance(value, pd.Series):
+        if value.empty:
+            return None
+        cleaned = value.dropna()
+        if cleaned.empty:
+            return None
+        return cleaned.iloc[0]
+    if isinstance(value, pd.DataFrame):
+        if value.empty:
+            return None
+        return value.iloc[0, 0]
+    return value
+
+
 def normalize_text(value) -> str:
+    value = coerce_scalar(value)
     if value is None:
         return ""
 
@@ -124,8 +141,11 @@ def normalize_text(value) -> str:
 
 def deal_value_from_row(row) -> float:
     """Valor comercial em negociação — usa valor da proposta, nunca capital social."""
+    if row is None:
+        return 0.0
     try:
-        return float(row.get("_valor_proposta_num") or 0)
+        value = coerce_scalar(row.get("_valor_proposta_num", 0))
+        return float(value or 0)
     except (TypeError, ValueError):
         return 0.0
 
@@ -2063,7 +2083,7 @@ def row_field_value(row, columns: dict, key: str) -> str:
     column_name = columns.get(key)
     if not column_name or column_name not in row.index:
         return ""
-    return normalize_text(row.get(column_name, ""))
+    return normalize_text(coerce_scalar(row.get(column_name, "")))
 
 
 def row_contact_email(row, columns: dict) -> str:

@@ -18,6 +18,7 @@ from app.services.app_settings import get_proposal_template_doc_id
 from app.services.legacy_core import (
     _load_google_credentials_info,
     build_client_commercial_summary,
+    coerce_scalar,
     find_prepared_company_row,
     format_proposal_value_display,
     identify_columns,
@@ -146,7 +147,7 @@ def build_proposal_placeholder_values(
         "{{EMPRESA}}": resolved_company or "Não informado",
         "{{VALOR_PROPOSTA}}": proposal_value,
         "{{SERVICO}}": servico_value,
-        "{{VENDEDOR}}": row_field_value(row, columns, "vendedor") or (normalize_text(row.get("_vendedor", "")) if row is not None else "") or "Sem vendedor",
+        "{{VENDEDOR}}": row_field_value(row, columns, "vendedor") or normalize_text(coerce_scalar(row.get("_vendedor", "")) if row is not None else "") or "Sem vendedor",
         "{{DATA}}": now.strftime("%d/%m/%Y"),
         "{{NUMERO_PROPOSTA}}": proposal_number,
         "{{CNPJ}}": row_field_value(row, columns, "cnpj") or "Não informado",
@@ -178,6 +179,11 @@ def _escape_xml(text: str) -> str:
     )
 
 
+def _placeholder_xml_pattern(placeholder: str) -> re.Pattern[str]:
+    parts = [re.escape(char) for char in placeholder]
+    return re.compile(r"(?:<[^>]+>)*".join(parts))
+
+
 def _replace_placeholders_in_docx(docx_bytes: bytes, values: dict[str, str]) -> bytes:
     input_buffer = io.BytesIO(docx_bytes)
     output_buffer = io.BytesIO()
@@ -189,7 +195,9 @@ def _replace_placeholders_in_docx(docx_bytes: bytes, values: dict[str, str]) -> 
                 text = content.decode("utf-8")
                 for placeholder, replacement in values.items():
                     safe_replacement = _escape_xml(replacement or "—")
-                    text = text.replace(placeholder, safe_replacement)
+                    text = _placeholder_xml_pattern(placeholder).sub(safe_replacement, text)
+                    if placeholder in text:
+                        text = text.replace(placeholder, safe_replacement)
                 content = text.encode("utf-8")
             target.writestr(item, content)
 
@@ -474,6 +482,11 @@ def prepare_generated_proposal_pdf(
 
 def _format_pdf_generation_error(error: Exception) -> str:
     message = normalize_text(str(error))
+    if "truth value of a series is ambiguous" in message.lower():
+        return (
+            "Erro ao ler os dados da planilha para montar a proposta. "
+            "Atualize o sistema e tente novamente."
+        )
     for prefix in (
         "Não foi possível gerar o PDF a partir do modelo Google Docs.",
         "Detalhe: ",
