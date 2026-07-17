@@ -52,6 +52,7 @@ def _parse_settings_params(request: Request, form: dict | None = None) -> dict:
         "role": data.get("role", "Todos os perfis"),
         "page": max(1, page),
         "per_page": per_page if per_page in (10, 25, 50) else 10,
+        "edit_user_id": data.get("edit_user_id", ""),
     }
 
 
@@ -72,6 +73,7 @@ def _settings_context(request: Request, settings_params: dict):
             role=settings_params["role"],
             page=settings_params["page"],
             per_page=settings_params["per_page"],
+            edit_user_id=settings_params.get("edit_user_id", ""),
         ),
         "services": build_services_list(),
         "permissions": build_permissions(_get_permissions(request)),
@@ -86,6 +88,8 @@ def _settings_context(request: Request, settings_params: dict):
         "template_error": request.session.pop("settings_template_error", ""),
         "service_success": request.session.pop("settings_service_success", ""),
         "service_error": request.session.pop("settings_service_error", ""),
+        "user_success": request.session.pop("settings_user_success", ""),
+        "user_error": request.session.pop("settings_user_error", ""),
     }
 
 
@@ -243,6 +247,135 @@ async def settings_remove_service(
         request.session["settings_service_error"] = f"Não consegui remover o serviço: {error}"
 
     return RedirectResponse(url="/configuracoes?tab=servicos", status_code=303)
+
+
+@router.post("/configuracoes/usuarios/adicionar")
+async def settings_add_user(
+    request: Request,
+    name: str = Form(...),
+    email: str = Form(...),
+    username: str = Form(...),
+    password: str = Form(...),
+    role: str = Form("Vendedor"),
+    active: str = Form("1"),
+    tab: str = Form("usuarios"),
+):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+
+    if not is_admin(request):
+        request.session["settings_user_error"] = "Apenas o administrador pode cadastrar usuários."
+        return RedirectResponse(url="/configuracoes?tab=usuarios", status_code=303)
+
+    from app.services.account_users import create_account_user
+
+    try:
+        create_account_user(
+            name=name,
+            email=email,
+            username=username,
+            password=password,
+            role=role,
+            active=active == "1",
+        )
+        request.session["settings_user_success"] = "Usuário cadastrado com sucesso."
+    except ValueError as error:
+        request.session["settings_user_error"] = str(error)
+    except Exception as error:
+        request.session["settings_user_error"] = f"Não consegui cadastrar o usuário: {error}"
+
+    return RedirectResponse(url="/configuracoes?tab=usuarios", status_code=303)
+
+
+@router.post("/configuracoes/usuarios/editar")
+async def settings_edit_user(
+    request: Request,
+    user_id: str = Form(...),
+    name: str = Form(...),
+    email: str = Form(...),
+    username: str = Form(...),
+    password: str = Form(""),
+    role: str = Form("Vendedor"),
+    active: str = Form("1"),
+    tab: str = Form("usuarios"),
+):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+
+    if not is_admin(request):
+        request.session["settings_user_error"] = "Apenas o administrador pode editar usuários."
+        return RedirectResponse(url="/configuracoes?tab=usuarios", status_code=303)
+
+    from app.services.account_users import create_account_user, update_account_user
+
+    try:
+        if user_id.startswith("sheet:"):
+            if not password.strip():
+                raise ValueError("Informe uma senha para liberar o acesso deste usuário.")
+            create_account_user(
+                name=name,
+                email=email,
+                username=username,
+                password=password,
+                role=role,
+                active=active == "1",
+            )
+            request.session["settings_user_success"] = "Acesso cadastrado com sucesso."
+        else:
+            update_account_user(
+                user_id,
+                name=name,
+                email=email,
+                username=username,
+                role=role,
+                active=active == "1",
+                password=password or None,
+            )
+            request.session["settings_user_success"] = "Usuário atualizado com sucesso."
+    except ValueError as error:
+        request.session["settings_user_error"] = str(error)
+    except Exception as error:
+        request.session["settings_user_error"] = f"Não consegui salvar o usuário: {error}"
+
+    return RedirectResponse(url="/configuracoes?tab=usuarios", status_code=303)
+
+
+@router.post("/configuracoes/usuarios/remover")
+async def settings_remove_user(
+    request: Request,
+    user_id: str = Form(...),
+    tab: str = Form("usuarios"),
+):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+
+    if not is_admin(request):
+        request.session["settings_user_error"] = "Apenas o administrador pode remover usuários."
+        return RedirectResponse(url="/configuracoes?tab=usuarios", status_code=303)
+
+    if user_id.startswith("__admin__") or user_id.startswith("sheet:"):
+        request.session["settings_user_error"] = "Este usuário não pode ser removido por aqui."
+        return RedirectResponse(url="/configuracoes?tab=usuarios", status_code=303)
+
+    current_user_id = request.session.get("user_id", "")
+    if current_user_id and user_id == current_user_id:
+        request.session["settings_user_error"] = "Você não pode remover o usuário da sessão atual."
+        return RedirectResponse(url="/configuracoes?tab=usuarios", status_code=303)
+
+    from app.services.account_users import delete_account_user
+
+    try:
+        delete_account_user(user_id)
+        request.session["settings_user_success"] = "Usuário removido com sucesso."
+    except ValueError as error:
+        request.session["settings_user_error"] = str(error)
+    except Exception as error:
+        request.session["settings_user_error"] = f"Não consegui remover o usuário: {error}"
+
+    return RedirectResponse(url="/configuracoes?tab=usuarios", status_code=303)
 
 
 @router.post("/configuracoes/modelo-proposta")

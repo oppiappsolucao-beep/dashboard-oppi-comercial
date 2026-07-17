@@ -6,6 +6,7 @@ from datetime import date, datetime, timedelta
 import pandas as pd
 
 from app.config import settings
+from app.services.account_users import ROLE_CLASS, load_account_users
 from app.services.app_settings import get_proposal_template_doc_id, get_proposal_template_url
 from app.services.goals_reports import MONTHS_PT
 from app.services.legacy_core import as_python_datetime, normalize_text
@@ -108,29 +109,63 @@ def build_integrations() -> list[dict]:
     return rows
 
 
+def _role_class(role: str) -> str:
+    return ROLE_CLASS.get(role, "seller")
+
+
 def _build_users_from_sheet(df: pd.DataFrame, app_username: str) -> list[dict]:
     users = []
-    seen = set()
+    seen_emails: set[str] = set()
+    seen_names: set[str] = set()
 
     admin_name = normalize_name(app_username) or "Administrador"
+    admin_email = _slug_email(admin_name)
     users.append({
+        "id": "__admin__",
         "name": admin_name,
-        "email": _slug_email(admin_name),
+        "email": admin_email,
+        "username": normalize_name(app_username).lower() or "admin",
         "role": "Administrador",
         "role_class": "admin",
         "status_label": "Ativo",
         "status_class": "active",
         "last_access": datetime.now().strftime("%d/%m/%Y %H:%M"),
         "initials": _initials(admin_name),
+        "managed": False,
+        "can_edit": False,
+        "can_delete": False,
+        "source_label": "Administrador principal",
     })
-    seen.add(admin_name.lower())
+    seen_emails.add(admin_email.lower())
+    seen_names.add(admin_name.lower())
+
+    for stored in load_account_users():
+        users.append({
+            "id": stored["id"],
+            "name": stored["name"],
+            "email": stored["email"],
+            "username": stored["username"],
+            "role": stored["role"],
+            "role_class": stored["role_class"],
+            "status_label": stored["status_label"],
+            "status_class": stored["status_class"],
+            "last_access": stored["last_access"] or "—",
+            "initials": _initials(stored["name"]),
+            "managed": True,
+            "can_edit": True,
+            "can_delete": True,
+            "active": stored["active"],
+            "source_label": "Conta",
+        })
+        seen_emails.add(stored["email"].lower())
+        seen_names.add(stored["name"].lower())
 
     if df.empty:
         return users
 
     for seller in sorted(df["_vendedor"].dropna().astype(str).unique().tolist()):
         seller_name = normalize_name(seller)
-        if not seller_name or seller_name.lower() in seen or seller_name == "Sem vendedor":
+        if not seller_name or seller_name.lower() in seen_names or seller_name == "Sem vendedor":
             continue
 
         seller_rows = df[df["_vendedor"] == seller]
@@ -142,17 +177,27 @@ def _build_users_from_sheet(df: pd.DataFrame, app_username: str) -> list[dict]:
                 last_dt = dt
 
         recent = last_dt and (datetime.now() - last_dt).days <= 30
+        seller_email = _slug_email(seller_name)
+        if seller_email.lower() in seen_emails:
+            continue
+
         users.append({
+            "id": f"sheet:{seller_name.lower()}",
             "name": seller_name,
-            "email": _slug_email(seller_name),
+            "email": seller_email,
+            "username": re.sub(r"[^a-z0-9._-]+", ".", seller_name.lower()).strip(".") or "vendedor",
             "role": "Vendedor",
             "role_class": "seller",
             "status_label": "Ativo" if recent else "Pendente",
             "status_class": "active" if recent else "pending",
             "last_access": _format_last_access(last_dt),
             "initials": _initials(seller_name),
+            "managed": False,
+            "can_edit": True,
+            "can_delete": False,
+            "source_label": "Planilha",
         })
-        seen.add(seller_name.lower())
+        seen_names.add(seller_name.lower())
 
     return users
 
@@ -338,6 +383,7 @@ def build_users_table(
     role: str = "Todos os perfis",
     page: int = 1,
     per_page: int = 10,
+    edit_user_id: str = "",
 ) -> dict:
     users = apply_users_view(_build_users_from_sheet(df, app_username), search, role)
     total = len(users)
@@ -345,6 +391,16 @@ def build_users_table(
     page = max(1, min(page, total_pages))
     start = (page - 1) * per_page
     rows = users[start : start + per_page]
+    edit_user = None
+    if edit_user_id:
+        edit_user = next((user for user in users if user["id"] == edit_user_id), None)
+        if edit_user is None and edit_user_id.startswith("sheet:"):
+            edit_user = next((user for user in users if user["id"] == edit_user_id), None)
+        if edit_user and not edit_user.get("managed"):
+            edit_user = {
+                **edit_user,
+                "is_new_access": not edit_user["id"].startswith("__"),
+            }
 
     return {
         "rows": rows,
@@ -354,6 +410,7 @@ def build_users_table(
         "total_pages": total_pages,
         "from_record": start + 1 if total else 0,
         "to_record": min(start + per_page, total),
+        "edit_user": edit_user,
     }
 
 

@@ -32,6 +32,21 @@ async def login_submit(
         request.session["authenticated"] = True
         request.session["username"] = username.strip()
         request.session["auth_error"] = ""
+
+        from app.services.account_users import (
+            get_account_user_by_username,
+            touch_account_user_last_access,
+        )
+
+        managed_user = get_account_user_by_username(username.strip())
+        if managed_user:
+            request.session["user_id"] = managed_user["id"]
+            request.session["user_role"] = managed_user["role"]
+            touch_account_user_last_access(managed_user["id"])
+        else:
+            request.session["user_id"] = ""
+            request.session["user_role"] = "Administrador"
+
         return RedirectResponse(url="/visao-geral", status_code=303)
 
     request.session["auth_error"] = "Usuário ou senha inválidos."

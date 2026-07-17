@@ -263,6 +263,59 @@
   padding: 0;
 }
 
+.settings-user-form-card {
+  margin-bottom: 16px;
+}
+
+.settings-user-form-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.settings-user-form-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.settings-user-form-actions .settings-link-btn,
+.settings-user-form-actions .settings-outline-btn {
+  margin-top: 0;
+}
+
+.settings-outline-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.88rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.settings-field-hint {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.settings-users-table .table-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  white-space: nowrap;
+}
+
+.settings-users-table .table-actions .settings-link-btn {
+  margin-top: 0;
+}
+
 .settings-permissions-list {
   display: flex;
   flex-direction: column;
@@ -542,6 +595,10 @@
 }
 
 @media (max-width: 900px) {
+  .settings-user-form-grid {
+    grid-template-columns: 1fr;
+  }
+
   .settings-goals-layout,
   .settings-company-grid,
   .settings-company-grid-wide,

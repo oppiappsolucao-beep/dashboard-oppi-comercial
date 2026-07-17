@@ -54,11 +54,44 @@ def require_auth(request: Request):
 
 
 def check_credentials(username: str, password: str) -> bool:
-    return username == settings.app_username and password == settings.app_password
+    clean_username = normalize_text(username)
+    if clean_username == settings.app_username and password == settings.app_password:
+        return True
+
+    from app.services.account_users import verify_account_user_credentials
+
+    return verify_account_user_credentials(clean_username, password) is not None
+
+
+def get_session_user(request: Request) -> dict | None:
+    username = normalize_text(request.session.get("username", ""))
+    if not username:
+        return None
+
+    if username.lower() == settings.app_username.lower():
+        return {
+            "username": settings.app_username,
+            "name": settings.app_username,
+            "role": "Administrador",
+            "managed": False,
+        }
+
+    from app.services.account_users import get_account_user_by_username
+
+    user = get_account_user_by_username(username)
+    if not user:
+        return None
+    return {
+        "id": user["id"],
+        "username": user["username"],
+        "name": user["name"],
+        "role": user["role"],
+        "managed": True,
+    }
 
 
 def is_admin(request: Request) -> bool:
-    username = normalize_text(request.session.get("username", ""))
-    if username:
-        return username.lower() == settings.app_username.lower()
+    user = get_session_user(request)
+    if user:
+        return user.get("role") == "Administrador"
     return bool(request.session.get("authenticated"))

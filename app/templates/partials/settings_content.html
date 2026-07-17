@@ -34,6 +34,102 @@
   {% if settings_params.tab == 'usuarios' %}
   <div class="settings-layout">
     <div class="settings-main">
+      {% if is_admin %}
+      <div class="panel settings-user-form-card">
+        <div class="section-heading">
+          {% if users_table.edit_user %}
+            {% if users_table.edit_user.is_new_access %}Cadastrar acesso{% else %}Editar usuário{% endif %}
+          {% else %}
+            Novo usuário
+          {% endif %}
+        </div>
+        <div class="section-subtitle">
+          {% if users_table.edit_user and users_table.edit_user.is_new_access %}
+            Este vendedor veio da planilha. Defina login e senha para liberar o acesso ao CRM.
+          {% else %}
+            Cadastre logins da equipe com perfil, e-mail e senha de acesso.
+          {% endif %}
+        </div>
+
+        {% if user_success %}
+        <div class="settings-alert success">{{ user_success }}</div>
+        {% endif %}
+        {% if user_error %}
+        <div class="settings-alert error">{{ user_error }}</div>
+        {% endif %}
+
+        <form method="post"
+          action="{% if users_table.edit_user %}/configuracoes/usuarios/editar{% else %}/configuracoes/usuarios/adicionar{% endif %}"
+          class="settings-goals-form settings-user-form">
+          <input type="hidden" name="tab" value="usuarios">
+          {% if users_table.edit_user %}
+          <input type="hidden" name="user_id" value="{{ users_table.edit_user.id }}">
+          {% endif %}
+          <div class="settings-goals-grid settings-user-form-grid">
+            <div class="settings-goals-field">
+              <label for="user-name">Nome</label>
+              <input id="user-name" name="name" type="text" required maxlength="120"
+                value="{{ users_table.edit_user.name if users_table.edit_user else '' }}">
+            </div>
+            <div class="settings-goals-field">
+              <label for="user-email">E-mail</label>
+              <input id="user-email" name="email" type="email" required maxlength="120"
+                value="{{ users_table.edit_user.email if users_table.edit_user else '' }}">
+            </div>
+            <div class="settings-goals-field">
+              <label for="user-username">Usuário de login</label>
+              <input id="user-username" name="username" type="text" required maxlength="40"
+                value="{{ users_table.edit_user.username if users_table.edit_user else '' }}"
+                placeholder="Ex.: raissa">
+            </div>
+            <div class="settings-goals-field">
+              <label for="user-role">Perfil</label>
+              <select id="user-role" name="role" required>
+                {% for option in role_options %}
+                  {% if option != 'Todos os perfis' %}
+                  <option value="{{ option }}"
+                    {% if users_table.edit_user and users_table.edit_user.role == option %}selected{% elif not users_table.edit_user and option == 'Vendedor' %}selected{% endif %}>
+                    {{ option }}
+                  </option>
+                  {% endif %}
+                {% endfor %}
+              </select>
+            </div>
+            <div class="settings-goals-field">
+              <label for="user-password">
+                Senha
+                {% if users_table.edit_user and not users_table.edit_user.is_new_access %}
+                <span class="settings-field-hint">(deixe em branco para manter)</span>
+                {% endif %}
+              </label>
+              <input id="user-password" name="password" type="password" minlength="6" maxlength="80"
+                {% if not users_table.edit_user or users_table.edit_user.is_new_access %}required{% endif %}
+                placeholder="Mínimo 6 caracteres">
+            </div>
+            <div class="settings-goals-field">
+              <label for="user-active">Status</label>
+              <select id="user-active" name="active">
+                <option value="1" {% if not users_table.edit_user or users_table.edit_user.status_class == 'active' %}selected{% endif %}>Ativo</option>
+                <option value="0" {% if users_table.edit_user and users_table.edit_user.status_class == 'blocked' %}selected{% endif %}>Inativo</option>
+              </select>
+            </div>
+          </div>
+          <div class="settings-user-form-actions">
+            <button type="submit" class="btn">
+              {% if users_table.edit_user %}
+                {% if users_table.edit_user.is_new_access %}Cadastrar acesso{% else %}Salvar alterações{% endif %}
+              {% else %}
+                Cadastrar usuário
+              {% endif %}
+            </button>
+            {% if users_table.edit_user %}
+            <a href="/configuracoes?tab=usuarios" class="settings-outline-btn">Cancelar</a>
+            {% endif %}
+          </div>
+        </form>
+      </div>
+      {% endif %}
+
       <div class="panel settings-users-panel">
         <div class="settings-section-header">
           <div class="section-heading">Usuários da conta</div>
@@ -65,7 +161,8 @@
                 <th>Perfil</th>
                 <th>Status</th>
                 <th>Último acesso</th>
-                <th></th>
+                <th>Origem</th>
+                <th>Ações</th>
               </tr>
             </thead>
             <tbody>
@@ -81,7 +178,23 @@
                 <td><span class="settings-role-badge {{ row.role_class }}">{{ row.role }}</span></td>
                 <td><span class="settings-status-badge {{ row.status_class }}">{{ row.status_label }}</span></td>
                 <td>{{ row.last_access }}</td>
-                <td class="table-actions"><span class="table-menu-btn muted">⋯</span></td>
+                <td>{{ row.source_label }}</td>
+                <td class="table-actions">
+                  {% if is_admin and row.can_edit %}
+                  <a href="/configuracoes?tab=usuarios&amp;edit_user_id={{ row.id | urlencode }}"
+                    class="settings-link-btn">
+                    {% if row.managed %}Editar{% else %}Cadastrar acesso{% endif %}
+                  </a>
+                  {% endif %}
+                  {% if is_admin and row.can_delete %}
+                  <form method="post" action="/configuracoes/usuarios/remover" class="settings-inline-form"
+                    onsubmit="return confirm('Remover o usuário {{ row.name }}?');">
+                    <input type="hidden" name="tab" value="usuarios">
+                    <input type="hidden" name="user_id" value="{{ row.id }}">
+                    <button type="submit" class="settings-link-btn danger">Excluir</button>
+                  </form>
+                  {% endif %}
+                </td>
               </tr>
               {% endfor %}
             </tbody>
