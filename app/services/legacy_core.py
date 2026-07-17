@@ -1437,7 +1437,7 @@ def identify_columns(df: pd.DataFrame) -> dict:
         "capital": first_existing_column(df, ["Capital", "Capital social"]),
         "cnpj": first_existing_column(df, ["CNPJ"]),
         "endereco": first_existing_column(df, ["Endereço", "Endereco"]),
-        "email": first_existing_column(df, ["Email", "E-mail"]),
+        "email": first_existing_column(df, ["Email", "E-mail", "Email empresa", "E-mail empresa", "email_empresa"]),
         "site": first_existing_column(df, ["Site empresa", "Site", "Website"]),
         "telefone_b2b": first_existing_column(df, ["Celular WhatsApp", "Telefone (b2b)", "Telefone b2b", "Telefone"]),
         "telefone_fixo": first_existing_column(df, ["Telefone fixo", "Fixo"]),
@@ -1520,7 +1520,8 @@ def prepare_data(df: pd.DataFrame, columns: dict) -> pd.DataFrame:
 
 
 def _coalesce_dates(*values):
-    for value in values:
+    for raw in values:
+        value = coerce_scalar(raw)
         if value is None or (isinstance(value, float) and pd.isna(value)):
             continue
         try:

@@ -5,7 +5,7 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV PORT=8501
-ENV APP_BUILD=20260717-row-get-fix
+ENV APP_BUILD=20260717-pdf-always-works
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \

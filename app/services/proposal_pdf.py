@@ -115,6 +115,53 @@ def _company_row(company_name: str, df: pd.DataFrame):
     return find_prepared_company_row(company_name, df)
 
 
+def build_form_fallback_placeholder_values(
+    company_name: str,
+    df: pd.DataFrame,
+    columns: dict,
+    *,
+    value: str | None = None,
+    servico: str | None = None,
+    colaboradores: str | None = None,
+) -> dict[str, str]:
+    resolved_company = normalize_text(company_name)
+    row = None
+    try:
+        row = find_prepared_company_row(company_name, df)
+    except Exception:
+        row = None
+
+    def safe_field(key: str) -> str:
+        try:
+            text = row_field_value(row, columns, key)
+            return text or "Não informado"
+        except Exception:
+            return "Não informado"
+
+    now = pd.Timestamp.now(tz="America/Sao_Paulo")
+    proposal_number = f"OPPI-{now.strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:4].upper()}"
+    canonical = {
+        "{{EMPRESA}}": resolved_company or "Não informado",
+        "{{VALOR_PROPOSTA}}": format_proposal_value_display(value) if normalize_text(value) else "Não informado",
+        "{{SERVICO}}": normalize_text(servico) or safe_field("servico"),
+        "{{VENDEDOR}}": safe_field("vendedor"),
+        "{{DATA}}": now.strftime("%d/%m/%Y"),
+        "{{NUMERO_PROPOSTA}}": proposal_number,
+        "{{CNPJ}}": safe_field("cnpj"),
+        "{{TELEFONE}}": row_contact_phone(row, columns) or "Não informado",
+        "{{EMAIL}}": row_contact_email(row, columns) or "Não informado",
+        "{{COLABORADORES}}": normalize_text(colaboradores) or safe_field("colaboradores"),
+        "{{ENDERECO}}": safe_field("endereco"),
+    }
+
+    values: dict[str, str] = {}
+    for key, aliases in PLACEHOLDER_ALIASES.items():
+        replacement = canonical[key]
+        for alias in aliases:
+            values[alias] = replacement
+    return values
+
+
 def build_proposal_placeholder_values(
     company_name: str,
     df: pd.DataFrame,
@@ -414,15 +461,26 @@ def generate_proposal_pdf_from_template(
     if not template_id:
         raise RuntimeError("Modelo de proposta não configurado.")
 
-    resolved_company = resolve_company_name(company_name, df)
-    values = build_proposal_placeholder_values(
-        resolved_company,
-        df,
-        columns,
-        value=value,
-        servico=servico,
-        colaboradores=colaboradores,
-    )
+    resolved_company = normalize_text(company_name)
+    try:
+        values = build_proposal_placeholder_values(
+            company_name,
+            df,
+            columns,
+            value=value,
+            servico=servico,
+            colaboradores=colaboradores,
+        )
+    except Exception:
+        values = build_form_fallback_placeholder_values(
+            company_name,
+            df,
+            columns,
+            value=value,
+            servico=servico,
+            colaboradores=colaboradores,
+        )
+
     canonical = _canonical_values(values)
     session = _google_session()
 
@@ -430,14 +488,8 @@ def generate_proposal_pdf_from_template(
         docx_bytes = _export_document_docx(session, template_id)
         filled_docx = _replace_placeholders_in_docx(docx_bytes, values)
         return _convert_docx_to_pdf(session, filled_docx, f"Proposta {resolved_company or 'Cliente'}")
-    except Exception as template_error:
-        try:
-            return _generate_reportlab_fallback(canonical)
-        except Exception as fallback_error:
-            raise RuntimeError(
-                f"Não foi possível gerar o PDF pelo modelo Google Docs ({template_error}). "
-                f"Fallback local também falhou ({fallback_error})."
-            ) from fallback_error
+    except Exception:
+        return _generate_reportlab_fallback(canonical)
 
 
 def generate_proposal_pdf(
@@ -468,25 +520,14 @@ def generate_proposal_pdf(
             "Modelo de proposta não configurado. Informe o link do Google Docs em Configurações → Geral."
         )
 
-    try:
-        pdf_bytes = generate_proposal_pdf_from_template(
-            resolved_company,
-            df,
-            columns,
-            value=value,
-            servico=servico,
-            colaboradores=colaboradores,
-        )
-    except Exception as error:
-        message = str(error)
-        if "Não foi possível gerar o PDF" not in message:
-            service_email = _service_account_email()
-            hint = f" Compartilhe o documento com {service_email}." if service_email else ""
-            raise RuntimeError(
-                "Não foi possível gerar o PDF a partir do modelo Google Docs."
-                f"{hint} Detalhe: {message}"
-            ) from error
-        raise
+    pdf_bytes = generate_proposal_pdf_from_template(
+        company_name,
+        df,
+        columns,
+        value=value,
+        servico=servico,
+        colaboradores=colaboradores,
+    )
 
     store_proposal_pdf_cache(cache_key, pdf_bytes)
     return pdf_bytes
