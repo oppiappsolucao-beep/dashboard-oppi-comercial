@@ -2077,6 +2077,42 @@ def build_client_commercial_summary(row, columns: dict, pricing_answers: dict | 
     }
 
 
+def find_prepared_company_row(company_name: str, df: pd.DataFrame):
+    clean = normalize_text(company_name)
+    if df.empty or not clean or "_empresa" not in df.columns:
+        return None
+
+    normalized_names = df["_empresa"].astype(str).apply(normalize_text)
+    exact = df[normalized_names == clean].copy()
+    if not exact.empty:
+        if "_sheet_row" in exact.columns:
+            exact = exact.sort_values("_sheet_row", ascending=False)
+        return exact.iloc[0]
+
+    matches = []
+    for _, row in df.iterrows():
+        company_text = normalize_text(row.get("_empresa", ""))
+        if not company_text:
+            continue
+        if flexible_search_match(clean, company_text):
+            matches.append(row)
+
+    if not matches:
+        return None
+
+    matches_df = pd.DataFrame(matches)
+    if "_sheet_row" in matches_df.columns:
+        matches_df = matches_df.sort_values("_sheet_row", ascending=False)
+    return matches_df.iloc[0]
+
+
+def resolve_company_name(company_name: str, df: pd.DataFrame) -> str:
+    row = find_prepared_company_row(company_name, df)
+    if row is not None:
+        return normalize_text(row.get("_empresa", company_name)) or normalize_text(company_name)
+    return normalize_text(company_name)
+
+
 def find_company_sheet_row(company_name: str) -> int | None:
     df = load_sheet_data()
     if df.empty:
@@ -2084,15 +2120,12 @@ def find_company_sheet_row(company_name: str) -> int | None:
 
     columns = identify_columns(df)
     prepared = prepare_data(df, columns)
-    matches = prepared[prepared["_empresa"].astype(str) == normalize_text(company_name)].copy()
+    row = find_prepared_company_row(company_name, prepared)
 
-    if matches.empty:
+    if row is None:
         return None
 
-    if "_sheet_row" in matches.columns:
-        matches = matches.sort_values("_sheet_row", ascending=False)
-
-    return int(matches.iloc[0]["_sheet_row"])
+    return int(row["_sheet_row"])
 
 
 def update_company_commercial_fields(sheet_row: int, payload: dict) -> None:

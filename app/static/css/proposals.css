@@ -354,6 +354,20 @@
   border-radius: 999px;
 }
 
+.proposal-pdf-error {
+  margin-left: auto;
+  background: #FEE2E2;
+  color: #B91C1C;
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 4px 8px;
+  border-radius: 999px;
+}
+
+.proposals-pdf-error {
+  margin: 0 0 12px;
+}
+
 .proposal-pdf-actions {
   display: flex;
   gap: 8px;

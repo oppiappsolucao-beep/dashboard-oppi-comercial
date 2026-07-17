@@ -207,6 +207,7 @@ generated/proposals/*.pdf
 storage/monthly_goals.json
 storage/app_settings.json
 storage/account_users.json
+storage/proposal_pdfs/
 
 # Ruff stuff:
 .ruff_cache/

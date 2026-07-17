@@ -8,8 +8,8 @@ from urllib.parse import quote, urlencode
 import pandas as pd
 
 from app.services.filters import DashboardFilters, apply_dashboard_filters
-from app.services.legacy_core import apply_period_filter, as_python_date, identify_columns, normalize_search_text, normalize_text, parse_money, status_group
-from app.services.proposal_pdf import proposal_pdf_filename
+from app.services.legacy_core import apply_period_filter, as_python_date, find_prepared_company_row, identify_columns, normalize_search_text, normalize_text, parse_money, resolve_company_name, status_group
+from app.services.proposal_pdf import prepare_generated_proposal_pdf, proposal_pdf_filename
 
 PROPOSAL_ROW_STATUSES = {"Proposta", "Fechado", "Conversando", "Reunião"}
 
@@ -310,24 +310,21 @@ def _extract_company(message: str, df: pd.DataFrame) -> str | None:
 
 
 def _company_row(company_name: str, df: pd.DataFrame):
-    if df.empty:
-        return None
-    matches = df[df["_empresa"].astype(str) == normalize_text(company_name)].copy()
-    if matches.empty:
-        return None
-    if "_sheet_row" in matches.columns:
-        matches = matches.sort_values("_sheet_row", ascending=False)
-    return matches.iloc[0]
+    return find_prepared_company_row(company_name, df)
 
 
 def _company_email(company_name: str, df: pd.DataFrame, columns: dict) -> str:
     row = _company_row(company_name, df)
     if row is None:
         return ""
-    email_column = columns.get("email")
-    if not email_column or email_column not in row.index:
-        return ""
-    return normalize_text(row.get(email_column, ""))
+    for key in ("email", "email_socio_1"):
+        email_column = columns.get(key)
+        if not email_column or email_column not in row.index:
+            continue
+        value = normalize_text(row.get(email_column, ""))
+        if value:
+            return value
+    return ""
 
 
 def _proposal_pdf_query(
@@ -354,6 +351,7 @@ def build_generated_proposal(
     servico: str | None = None,
     colaboradores: str | None = None,
 ) -> dict:
+    company = resolve_company_name(company, df)
     encoded_company = quote(company)
     query = _proposal_pdf_query(value, servico, colaboradores)
     preview_query = f"{query}&inline=1" if query else "?inline=1"
@@ -364,6 +362,14 @@ def build_generated_proposal(
             value_label = f"R$ {amount:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
     client_email = _company_email(company, df, columns)
+    pdf_cache_key, pdf_error = prepare_generated_proposal_pdf(
+        company,
+        df,
+        columns,
+        value=value,
+        servico=servico,
+        colaboradores=colaboradores,
+    )
     subject = quote(f"Proposta comercial - {company}")
     body = quote(
         "Prezado(a),\n\n"
@@ -386,6 +392,9 @@ def build_generated_proposal(
         "servico_label": normalize_text(servico) or "",
         "colaboradores_label": normalize_text(colaboradores) or "",
         "client_email": client_email or "Não informado na planilha",
+        "pdf_cache_key": pdf_cache_key,
+        "pdf_error": pdf_error or "",
+        "pdf_ready": not bool(pdf_error),
         "preview_url": f"/propostas/{encoded_company}/pdf{preview_query}",
         "download_url": f"/propostas/{encoded_company}/pdf{query}",
         "email_href": email_href,
@@ -448,13 +457,19 @@ def handle_proposal_chat_message(
     *,
     servico: str | None = None,
     colaboradores: str | None = None,
+    company_override: str | None = None,
 ) -> tuple[list[dict], dict | None]:
     clean_message = normalize_text(message)
     if not clean_message:
         return chat_messages, None
 
     chat_messages.append({"role": "user", "content": clean_message, "time": _now_time()})
-    company = _extract_company(clean_message, df)
+    company = None
+    if normalize_text(company_override):
+        company = resolve_company_name(company_override, df)
+    if not company:
+        extracted = _extract_company(clean_message, df)
+        company = resolve_company_name(extracted, df) if extracted else None
     value = _extract_value(clean_message)
     servico = normalize_text(servico) or _extract_servico(clean_message) or None
     colaboradores = normalize_text(colaboradores) or _extract_colaboradores(clean_message) or None
@@ -483,7 +498,11 @@ def handle_proposal_chat_message(
                 f"Proposta gerada para **{company}**"
                 + (f" no valor de {generated['value_label']}." if generated.get("value_label") else ".")
                 + details_text
-                + "\n\nO PDF já está disponível ao lado, com opções para baixar ou enviar por e-mail."
+                + (
+                    "\n\nNão foi possível gerar o PDF. Verifique o compartilhamento do modelo Google Docs."
+                    if generated.get("pdf_error")
+                    else "\n\nO PDF já está disponível ao lado, com opções para baixar ou enviar por e-mail."
+                )
             ),
             "time": _now_time(),
         })

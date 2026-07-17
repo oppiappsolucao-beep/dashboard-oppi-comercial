@@ -166,6 +166,7 @@ async def proposals_chat(
         columns,
         servico=servico or None,
         colaboradores=colaboradores or None,
+        company_override=empresa.strip() or None,
     )
     request.session["proposals_chat"] = chat_messages
     if generated:

@@ -17,19 +17,32 @@
       </div>
       <div class="proposals-generated-email">E-mail do cliente: {{ generated_proposal.client_email }}</div>
     </div>
+    {% if generated_proposal.pdf_ready %}
     <span class="proposal-pdf-ready">PDF pronto</span>
+    {% else %}
+    <span class="proposal-pdf-error">PDF com erro</span>
+    {% endif %}
   </div>
 
+  {% if generated_proposal.pdf_error %}
+  <div class="settings-alert error proposals-pdf-error">{{ generated_proposal.pdf_error }}</div>
+  {% else %}
   <iframe
     class="proposals-pdf-preview"
     src="{{ generated_proposal.preview_url }}"
     title="Visualização da proposta {{ generated_proposal.company }}"
   ></iframe>
+  {% endif %}
 
   <div class="proposals-generated-actions">
+    {% if generated_proposal.pdf_ready %}
     <a href="{{ generated_proposal.download_url }}" class="btn" download>Baixar PDF</a>
     <a href="{{ generated_proposal.email_href }}" class="btn btn-secondary">Enviar por e-mail</a>
     <a href="{{ generated_proposal.preview_url }}" class="btn btn-secondary" target="_blank" rel="noopener">Abrir em nova aba</a>
+    {% else %}
+    <button type="button" class="btn" disabled>Baixar PDF</button>
+    <button type="button" class="btn btn-secondary" disabled>Enviar por e-mail</button>
+    {% endif %}
     <form
       class="proposals-delete-form"
       hx-post="/propostas/gerada/excluir"
