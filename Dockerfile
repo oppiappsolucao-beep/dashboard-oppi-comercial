@@ -6,7 +6,7 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV PORT=8501
 ENV HOME=/tmp
-ENV APP_BUILD=20260717-libreoffice-fix2
+ENV APP_BUILD=20260717-auto-pdf-setup
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
@@ -14,7 +14,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libreoffice-writer-nogui \
     fontconfig \
     fonts-dejavu-core \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && soffice --version
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt

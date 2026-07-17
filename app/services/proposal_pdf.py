@@ -357,21 +357,84 @@ def _export_document_pdf(session: AuthorizedSession, document_id: str) -> bytes:
     return response.content
 
 
+def _get_template_drive_metadata(session: AuthorizedSession, template_id: str | None) -> dict:
+    if not template_id:
+        return {}
+    response = session.get(
+        f"https://www.googleapis.com/drive/v3/files/{template_id}",
+        params={"fields": "parents,driveId", **DRIVE_PARAMS},
+        timeout=30,
+    )
+    if response.status_code >= 400:
+        return {}
+    payload = response.json()
+    if not isinstance(payload, dict):
+        return {}
+    return payload
+
+
 def _resolve_proposal_upload_folder(session: AuthorizedSession, template_id: str | None) -> str:
     configured = get_proposal_pdf_folder_id()
     if configured:
         return configured
-    if not template_id:
+    metadata = _get_template_drive_metadata(session, template_id)
+    if not metadata.get("driveId"):
         return ""
-    response = session.get(
-        f"https://www.googleapis.com/drive/v3/files/{template_id}",
-        params={"fields": "parents", **DRIVE_PARAMS},
-        timeout=30,
-    )
-    if response.status_code >= 400:
-        return ""
-    parents = response.json().get("parents") or []
+    parents = metadata.get("parents") or []
     return normalize_text(parents[0]) if parents else ""
+
+
+def _can_use_drive_pdf_fallback(session: AuthorizedSession, template_id: str | None) -> bool:
+    if get_proposal_pdf_folder_id():
+        return True
+    metadata = _get_template_drive_metadata(session, template_id)
+    return bool(metadata.get("driveId"))
+
+
+def cleanup_service_account_proposal_files(*, keep_template_id: str | None = None) -> int:
+    """Remove arquivos temporários de proposta da conta de serviço para liberar cota."""
+    keep_template_id = keep_template_id or get_proposal_template_doc_id()
+    session = _google_session()
+    deleted = 0
+    page_token = ""
+    while True:
+        params = {
+            "pageSize": 100,
+            "fields": "nextPageToken,files(id,name,mimeType)",
+            "q": "trashed=false and 'me' in owners and name contains 'Proposta'",
+            "spaces": "drive",
+            **DRIVE_PARAMS,
+        }
+        if page_token:
+            params["pageToken"] = page_token
+        response = session.get("https://www.googleapis.com/drive/v3/files", params=params, timeout=60)
+        if response.status_code >= 400:
+            break
+        payload = response.json()
+        for item in payload.get("files", []):
+            file_id = normalize_text(item.get("id"))
+            if not file_id or file_id == keep_template_id:
+                continue
+            delete_response = session.delete(
+                f"https://www.googleapis.com/drive/v3/files/{file_id}",
+                params=DRIVE_PARAMS,
+                timeout=30,
+            )
+            if delete_response.status_code < 400:
+                deleted += 1
+        page_token = normalize_text(payload.get("nextPageToken"))
+        if not page_token:
+            break
+    return deleted
+
+
+def check_pdf_engine_status() -> dict[str, str | bool]:
+    binary = _libreoffice_binary()
+    return {
+        "libreoffice_installed": bool(binary),
+        "libreoffice_path": binary or "",
+        "app_build": normalize_text(os.environ.get("APP_BUILD", "")),
+    }
 
 
 def _upload_docx_and_export_pdf(
@@ -382,12 +445,19 @@ def _upload_docx_and_export_pdf(
     template_id: str | None = None,
 ) -> bytes:
     folder_id = _resolve_proposal_upload_folder(session, template_id)
+    if not folder_id:
+        raise RuntimeError(
+            "Conversão pelo Google Drive indisponível sem pasta em Shared Drive. "
+            "Use rebuild com LibreOffice ou configure PROPOSAL_PDF_FOLDER_ID."
+        )
+
+    cleanup_service_account_proposal_files(keep_template_id=template_id or get_proposal_template_doc_id())
+
     metadata: dict[str, object] = {
         "name": title[:120],
         "mimeType": "application/vnd.google-apps.document",
+        "parents": [folder_id],
     }
-    if folder_id:
-        metadata["parents"] = [folder_id]
 
     upload_response = session.post(
         "https://www.googleapis.com/upload/drive/v3/files",
@@ -403,8 +473,7 @@ def _upload_docx_and_export_pdf(
         if "storage quota" in message.lower():
             raise RuntimeError(
                 "A cota de armazenamento do Google Drive foi excedida. "
-                "Mova o modelo para um Shared Drive ou configure PROPOSAL_PDF_FOLDER_ID "
-                "com o ID de uma pasta nesse Shared Drive."
+                "Mova o modelo para um Shared Drive ou configure PROPOSAL_PDF_FOLDER_ID."
             )
         raise RuntimeError(message)
 
@@ -489,6 +558,13 @@ def _convert_docx_to_pdf(
     pdf_bytes, lo_error = _convert_docx_with_libreoffice(docx_bytes)
     if pdf_bytes:
         return pdf_bytes
+
+    if not _can_use_drive_pdf_fallback(session, template_id):
+        raise RuntimeError(
+            "Não foi possível converter o modelo para PDF com LibreOffice. "
+            f"Detalhe: {lo_error or 'LibreOffice indisponível'}. "
+            "Faça rebuild completo do serviço no Easypanel."
+        )
 
     try:
         return _upload_docx_and_export_pdf(session, docx_bytes, title, template_id=template_id)

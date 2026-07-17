@@ -1,4 +1,5 @@
 from pathlib import Path
+import threading
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import HTTPException
@@ -69,9 +70,32 @@ app.add_api_route("/configuracoes/permissoes", settings_permissions_toggle, meth
 app.add_api_route("/configuracoes/atualizar", settings_refresh, methods=["POST"], tags=["settings"])
 
 
+@app.on_event("startup")
+async def startup_maintenance() -> None:
+    def _run() -> None:
+        try:
+            from app.services.proposal_pdf import cleanup_service_account_proposal_files
+
+            cleanup_service_account_proposal_files()
+        except Exception:
+            pass
+
+    threading.Thread(target=_run, daemon=True).start()
+
+
 @app.get("/health")
 async def health():
     return JSONResponse({"status": "ok"})
+
+
+@app.get("/health/pdf-engine")
+async def health_pdf_engine():
+    from app.services.proposal_pdf import check_pdf_engine_status
+
+    payload = {"status": "ok", **check_pdf_engine_status()}
+    if not payload.get("libreoffice_installed"):
+        payload["status"] = "missing_libreoffice"
+    return JSONResponse(payload)
 
 
 @app.get("/")
