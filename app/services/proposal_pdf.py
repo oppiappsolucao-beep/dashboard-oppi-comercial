@@ -1,8 +1,13 @@
 """Geração de PDF de proposta a partir de modelo Google Docs."""
 import hashlib
+import io
+import json
 import re
-import threading
+import shutil
+import subprocess
+import tempfile
 import uuid
+import zipfile
 from pathlib import Path
 
 import pandas as pd
@@ -22,13 +27,13 @@ from app.services.legacy_core import (
     resolve_company_name,
 )
 
-GOOGLE_DOCS_SCOPES = [
+GOOGLE_SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive",
-    "https://www.googleapis.com/auth/documents",
 ]
 
 DRIVE_PARAMS = {"supportsAllDrives": "true"}
+DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
 PLACEHOLDER_ALIASES = {
     "{{EMPRESA}}": ["{{EMPRESA}}", "{{empresa}}", "{{NOME_EMPRESA}}", "{{nome_empresa}}"],
@@ -43,10 +48,6 @@ PLACEHOLDER_ALIASES = {
     "{{COLABORADORES}}": ["{{COLABORADORES}}", "{{colaboradores}}"],
     "{{ENDERECO}}": ["{{ENDERECO}}", "{{endereco}}"],
 }
-
-_TEMPLATE_LOCK = threading.Lock()
-_FIELD_ORDER = list(PLACEHOLDER_ALIASES.keys())
-_INVISIBLE = "\u200b"
 
 
 def _proposal_cache_dir() -> Path:
@@ -101,7 +102,7 @@ def _google_session() -> AuthorizedSession:
     credentials_info = _load_google_credentials_info()
     credentials = Credentials.from_service_account_info(
         credentials_info,
-        scopes=GOOGLE_DOCS_SCOPES,
+        scopes=GOOGLE_SCOPES,
     )
     return AuthorizedSession(credentials)
 
@@ -173,57 +174,55 @@ def build_proposal_placeholder_values(
     return values
 
 
-def _invisible_suffix(field_key: str) -> str:
-    index = _FIELD_ORDER.index(field_key) + 1
-    return _INVISIBLE * index
+def _canonical_values(values: dict[str, str]) -> dict[str, str]:
+    return {field_key: values[field_key] for field_key in PLACEHOLDER_ALIASES}
 
 
-def _display_value(raw_value: str, field_key: str) -> str:
-    return (raw_value or "—") + _invisible_suffix(field_key)
-
-
-def _build_inplace_replacement_plan(canonical: dict[str, str]) -> tuple[list[tuple[str, str]], list[tuple[str, str]]]:
-    forward: list[tuple[str, str]] = []
-    restore: list[tuple[str, str]] = []
-
-    for field_key, aliases in PLACEHOLDER_ALIASES.items():
-        replacement = _display_value(canonical[field_key], field_key)
-        for alias in aliases:
-            forward.append((alias, replacement))
-        restore.append((replacement, field_key))
-
-    restore.reverse()
-    return forward, restore
-
-
-def _batch_replace_pairs(
-    session: AuthorizedSession,
-    document_id: str,
-    pairs: list[tuple[str, str]],
-) -> None:
-    if not pairs:
-        return
-
-    requests = []
-    for old_text, new_text in pairs:
-        requests.append({
-            "replaceAllText": {
-                "containsText": {"text": old_text, "matchCase": True},
-                "replaceText": new_text,
-            }
-        })
-
-    response = session.post(
-        f"https://docs.googleapis.com/v1/documents/{document_id}:batchUpdate",
-        json={"requests": requests},
-        timeout=60,
+def _escape_xml(text: str) -> str:
+    return (
+        text.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+        .replace("'", "&apos;")
     )
-    if response.status_code >= 400:
-        raise RuntimeError(f"Erro ao preencher o modelo Google Docs: {response.text[:240]}")
+
+
+def _replace_placeholders_in_docx(docx_bytes: bytes, values: dict[str, str]) -> bytes:
+    input_buffer = io.BytesIO(docx_bytes)
+    output_buffer = io.BytesIO()
+
+    with zipfile.ZipFile(input_buffer, "r") as source, zipfile.ZipFile(output_buffer, "w") as target:
+        for item in source.infolist():
+            content = source.read(item.filename)
+            if item.filename.startswith("word/") and item.filename.endswith(".xml"):
+                text = content.decode("utf-8")
+                for placeholder, replacement in values.items():
+                    safe_replacement = _escape_xml(replacement or "—")
+                    text = text.replace(placeholder, safe_replacement)
+                content = text.encode("utf-8")
+            target.writestr(item, content)
+
+    return output_buffer.getvalue()
 
 
 def _parse_drive_error(response) -> str:
     raw = normalize_text(getattr(response, "text", ""))
+    if raw.startswith("{"):
+        try:
+            payload = json.loads(raw)
+            error = payload.get("error", {})
+            message = normalize_text(error.get("message"))
+            if message:
+                if "docs api has not been used" in message.lower():
+                    return (
+                        "A API Google Docs não está habilitada no projeto Google Cloud. "
+                        "O sistema tentará gerar o PDF pelo modelo exportado."
+                    )
+                return message[:240]
+        except Exception:
+            pass
+
     if response.status_code == 403:
         return "Sem permissão no Google Drive. Verifique o compartilhamento do modelo."
     if response.status_code == 404:
@@ -233,15 +232,138 @@ def _parse_drive_error(response) -> str:
     return "Erro desconhecido ao acessar o Google Drive."
 
 
-def _export_document_pdf(session: AuthorizedSession, document_id: str) -> bytes:
+def _export_document_docx(session: AuthorizedSession, document_id: str) -> bytes:
     response = session.get(
         f"https://www.googleapis.com/drive/v3/files/{document_id}/export",
-        params={"mimeType": "application/pdf", **DRIVE_PARAMS},
+        params={"mimeType": DOCX_MIME, **DRIVE_PARAMS},
         timeout=90,
     )
     if response.status_code >= 400:
         raise RuntimeError(_parse_drive_error(response))
     return response.content
+
+
+def _libreoffice_binary() -> str | None:
+    for candidate in ("soffice", "libreoffice"):
+        path = shutil.which(candidate)
+        if path:
+            return path
+    return None
+
+
+def _convert_docx_to_pdf(docx_bytes: bytes) -> bytes:
+    binary = _libreoffice_binary()
+    if not binary:
+        raise RuntimeError("LibreOffice não está disponível para converter o modelo em PDF.")
+
+    with tempfile.TemporaryDirectory(prefix="oppi-proposal-") as tmp_dir:
+        tmp_path = Path(tmp_dir)
+        docx_path = tmp_path / "proposta.docx"
+        docx_path.write_bytes(docx_bytes)
+
+        result = subprocess.run(
+            [binary, "--headless", "--convert-to", "pdf", "--outdir", str(tmp_path), str(docx_path)],
+            capture_output=True,
+            text=True,
+            timeout=120,
+            check=False,
+        )
+        if result.returncode != 0:
+            detail = normalize_text(result.stderr or result.stdout)[:240]
+            raise RuntimeError(f"Falha ao converter DOCX para PDF. {detail}")
+
+        pdf_path = tmp_path / "proposta.pdf"
+        if not pdf_path.exists():
+            raise RuntimeError("LibreOffice não gerou o arquivo PDF da proposta.")
+        return pdf_path.read_bytes()
+
+
+def _generate_reportlab_fallback(canonical: dict[str, str]) -> bytes:
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+    from reportlab.lib.units import mm
+    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        rightMargin=18 * mm,
+        leftMargin=18 * mm,
+        topMargin=18 * mm,
+        bottomMargin=18 * mm,
+        title=f"Proposta - {canonical['{{EMPRESA}}']}",
+        author="Oppi Comercial",
+    )
+
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        "ProposalTitle",
+        parent=styles["Heading1"],
+        fontName="Helvetica-Bold",
+        fontSize=18,
+        textColor=colors.HexColor("#6D28D9"),
+        spaceAfter=8,
+    )
+    label_style = ParagraphStyle(
+        "ProposalLabel",
+        parent=styles["BodyText"],
+        fontName="Helvetica-Bold",
+        fontSize=10,
+        textColor=colors.HexColor("#271B35"),
+    )
+    value_style = ParagraphStyle(
+        "ProposalValue",
+        parent=styles["BodyText"],
+        fontName="Helvetica",
+        fontSize=10,
+        textColor=colors.HexColor("#2B2237"),
+        spaceAfter=6,
+    )
+
+    rows = [
+        ("Empresa", canonical["{{EMPRESA}}"]),
+        ("Serviço", canonical["{{SERVICO}}"]),
+        ("Valor da proposta", canonical["{{VALOR_PROPOSTA}}"]),
+        ("Colaboradores", canonical["{{COLABORADORES}}"]),
+        ("Vendedor", canonical["{{VENDEDOR}}"]),
+        ("Data", canonical["{{DATA}}"]),
+        ("Número da proposta", canonical["{{NUMERO_PROPOSTA}}"]),
+        ("CNPJ", canonical["{{CNPJ}}"]),
+        ("Telefone", canonical["{{TELEFONE}}"]),
+        ("E-mail", canonical["{{EMAIL}}"]),
+        ("Endereço", canonical["{{ENDERECO}}"]),
+    ]
+
+    story = [
+        Paragraph("Proposta Comercial Oppi", title_style),
+        Spacer(1, 6 * mm),
+        Paragraph(
+            "PDF gerado automaticamente. Para usar o layout completo do Google Docs, "
+            "garanta que o modelo esteja compartilhado com a service account.",
+            value_style,
+        ),
+        Spacer(1, 8 * mm),
+    ]
+
+    table_data = [[Paragraph("Campo", label_style), Paragraph("Valor", label_style)]]
+    for label, value in rows:
+        table_data.append([Paragraph(label, label_style), Paragraph(value or "—", value_style)])
+
+    table = Table(table_data, colWidths=[55 * mm, 115 * mm])
+    table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#EDE9FE")),
+        ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#D8B4FE")),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 8),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+    ]))
+    story.append(table)
+    doc.build(story)
+    return buffer.getvalue()
 
 
 def generate_proposal_pdf_from_template(
@@ -265,16 +387,21 @@ def generate_proposal_pdf_from_template(
         servico=servico,
         colaboradores=colaboradores,
     )
-    canonical = {field_key: values[field_key] for field_key in PLACEHOLDER_ALIASES}
-    forward, restore = _build_inplace_replacement_plan(canonical)
-
+    canonical = _canonical_values(values)
     session = _google_session()
-    with _TEMPLATE_LOCK:
-        _batch_replace_pairs(session, template_id, forward)
+
+    try:
+        docx_bytes = _export_document_docx(session, template_id)
+        filled_docx = _replace_placeholders_in_docx(docx_bytes, values)
+        return _convert_docx_to_pdf(filled_docx)
+    except Exception as template_error:
         try:
-            return _export_document_pdf(session, template_id)
-        finally:
-            _batch_replace_pairs(session, template_id, restore)
+            return _generate_reportlab_fallback(canonical)
+        except Exception as fallback_error:
+            raise RuntimeError(
+                f"Não foi possível gerar o PDF pelo modelo Google Docs ({template_error}). "
+                f"Fallback local também falhou ({fallback_error})."
+            ) from fallback_error
 
 
 def generate_proposal_pdf(
@@ -362,6 +489,14 @@ def _format_pdf_generation_error(error: Exception) -> str:
         "Detalhe: ",
     ):
         message = message.replace(prefix, " ")
+    if message.startswith("{"):
+        try:
+            payload = json.loads(message)
+            api_message = normalize_text(payload.get("error", {}).get("message"))
+            if api_message:
+                return api_message[:500]
+        except Exception:
+            pass
     return normalize_text(message)[:500]
 
 
