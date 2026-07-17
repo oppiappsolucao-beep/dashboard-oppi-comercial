@@ -7,6 +7,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import threading
 import uuid
 import zipfile
 from pathlib import Path
@@ -35,10 +36,16 @@ from app.services.legacy_core import (
 GOOGLE_SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive",
+    "https://www.googleapis.com/auth/documents",
 ]
 
 DRIVE_PARAMS = {"supportsAllDrives": "true"}
 DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+_TEMPLATE_LOCK = threading.Lock()
+DOCS_API_ENABLE_URL = (
+    "https://console.cloud.google.com/apis/library/docs.googleapis.com"
+    "?project=oppi-comercial-dashboard"
+)
 
 PLACEHOLDER_ALIASES = {
     "{{EMPRESA}}": ["{{EMPRESA}}", "{{empresa}}", "{{NOME_EMPRESA}}", "{{nome_empresa}}", "{{CONTRATANTE}}", "{{contratante}}"],
@@ -63,6 +70,98 @@ CONTRATANTE_LABEL_FILLS = (
     ("Bairro: CEP", "{{BAIRRO_CEP}}"),
     ("E-mail", "{{EMAIL}}"),
 )
+
+
+def _cep_from_endereco(endereco: str) -> str:
+    text = normalize_text(endereco)
+    if not text or text == "Não informado":
+        return "Não informado"
+    match = re.search(r"\b(\d{5}-?\d{3})\b", text)
+    return match.group(1) if match else "Não informado"
+
+
+def _build_contratante_docs_replacements(extended: dict[str, str]) -> tuple[list[tuple[str, str]], list[tuple[str, str]]]:
+    empresa = extended.get("{{EMPRESA}}", "—")
+    cnpj = extended.get("{{CNPJ}}", "—")
+    rua = extended.get("{{RUA}}", "—")
+    cep = _cep_from_endereco(extended.get("{{ENDERECO}}", ""))
+    email = extended.get("{{EMAIL}}", "—")
+
+    forward = [
+        ("CONTRATANTE:", f"CONTRATANTE: {empresa}"),
+        ("CNPJ:\nRua:", f"CNPJ: {cnpj}\nRua:"),
+        ("Rua:\nBairro: CEP:", f"Rua: {rua}\nBairro: CEP:"),
+        ("Bairro: CEP:\nE-mail:", f"Bairro: CEP: {cep}\nE-mail:"),
+        ("E-mail:\nCONTRATADO:", f"E-mail: {email}\nCONTRATADO:"),
+    ]
+    restore = [(new, old) for old, new in reversed(forward)]
+    return forward, restore
+
+
+def _build_placeholder_docs_replacements(extended: dict[str, str]) -> tuple[list[tuple[str, str]], list[tuple[str, str]]]:
+    forward: list[tuple[str, str]] = []
+    restore: list[tuple[str, str]] = []
+    for key, aliases in PLACEHOLDER_ALIASES.items():
+        replacement = extended.get(key, "—") or "—"
+        for alias in aliases:
+            if alias.startswith("{{"):
+                forward.append((alias, replacement))
+                restore.append((replacement, alias))
+    restore.reverse()
+    return forward, restore
+
+
+def _batch_replace_pairs(
+    session: AuthorizedSession,
+    document_id: str,
+    pairs: list[tuple[str, str]],
+) -> None:
+    if not pairs:
+        return
+
+    requests = [
+        {
+            "replaceAllText": {
+                "containsText": {"text": old_text, "matchCase": True},
+                "replaceText": new_text,
+            }
+        }
+        for old_text, new_text in pairs
+    ]
+    response = session.post(
+        f"https://docs.googleapis.com/v1/documents/{document_id}:batchUpdate",
+        json={"requests": requests},
+        timeout=90,
+    )
+    if response.status_code >= 400:
+        message = _parse_drive_error(response)
+        raise RuntimeError(message)
+
+
+def _generate_via_google_docs_inplace(
+    session: AuthorizedSession,
+    template_id: str,
+    canonical: dict[str, str],
+) -> bytes:
+    extended = _extend_canonical(canonical)
+    contratante_forward, contratante_restore = _build_contratante_docs_replacements(extended)
+    placeholder_forward, placeholder_restore = _build_placeholder_docs_replacements(extended)
+    forward = contratante_forward + placeholder_forward
+    restore = placeholder_restore + contratante_restore
+
+    with _TEMPLATE_LOCK:
+        _batch_replace_pairs(session, template_id, forward)
+        try:
+            return _export_document_pdf(session, template_id)
+        finally:
+            _batch_replace_pairs(session, template_id, restore)
+
+
+def _docs_api_disabled_message() -> str:
+    return (
+        "Ative a Google Docs API no projeto Google Cloud para exportar o PDF "
+        f"com o layout original do modelo: {DOCS_API_ENABLE_URL}"
+    )
 
 
 def _proposal_cache_dir() -> Path:
@@ -318,10 +417,7 @@ def _parse_drive_error(response) -> str:
             message = normalize_text(error.get("message"))
             if message:
                 if "docs api has not been used" in message.lower():
-                    return (
-                        "A API Google Docs não está habilitada no projeto Google Cloud. "
-                        "O sistema tentará gerar o PDF pelo modelo exportado."
-                    )
+                    return _docs_api_disabled_message()
                 return message[:240]
         except Exception:
             pass
@@ -529,9 +625,12 @@ def _convert_docx_with_libreoffice(docx_bytes: bytes) -> tuple[bytes | None, str
             "SAL_USE_VCLPLUGIN": "gen",
             "LANG": "C.UTF-8",
         }
+        profile_dir = tmp_path / "lo-profile"
+        profile_dir.mkdir(parents=True, exist_ok=True)
         result = subprocess.run(
             [
                 binary,
+                f"-env:UserInstallation=file://{profile_dir.as_posix()}",
                 "--headless",
                 "--invisible",
                 "--norestore",
@@ -539,7 +638,7 @@ def _convert_docx_with_libreoffice(docx_bytes: bytes) -> tuple[bytes | None, str
                 "--nodefault",
                 "--nofirststartwizard",
                 "--convert-to",
-                "pdf",
+                "pdf:writer_pdf_Export",
                 "--outdir",
                 str(tmp_path),
                 str(docx_path),
@@ -564,25 +663,14 @@ def _convert_docx_to_pdf(
     *,
     template_id: str | None = None,
 ) -> bytes:
+    del session, title, template_id
     pdf_bytes, lo_error = _convert_docx_with_libreoffice(docx_bytes)
     if pdf_bytes:
         return pdf_bytes
-
-    if not _can_use_drive_pdf_fallback(session, template_id):
-        raise RuntimeError(
-            "Não foi possível converter o modelo para PDF com LibreOffice. "
-            f"Detalhe: {lo_error or 'LibreOffice indisponível'}. "
-            "Faça rebuild completo do serviço no Easypanel."
-        )
-
-    try:
-        return _upload_docx_and_export_pdf(session, docx_bytes, title, template_id=template_id)
-    except Exception as drive_error:
-        details = normalize_text(str(drive_error))[:240]
-        raise RuntimeError(
-            "Não foi possível converter o modelo Google Docs para PDF. "
-            f"LibreOffice: {lo_error or 'indisponível'}. Drive: {details}"
-        ) from drive_error
+    raise RuntimeError(
+        "Não foi possível converter o modelo para PDF com LibreOffice. "
+        f"Detalhe: {lo_error or 'LibreOffice indisponível'}."
+    )
 
 
 def _generate_reportlab_fallback(canonical: dict[str, str]) -> bytes:
@@ -707,15 +795,30 @@ def generate_proposal_pdf_from_template(
 
     canonical = _canonical_values(values)
     session = _google_session()
+    docs_error: Exception | None = None
+
+    try:
+        return _generate_via_google_docs_inplace(session, template_id, canonical)
+    except Exception as error:
+        docs_error = error
 
     docx_bytes = _export_document_docx(session, template_id)
     filled_docx = _replace_placeholders_in_docx(docx_bytes, values, canonical)
-    return _convert_docx_to_pdf(
-        session,
-        filled_docx,
-        f"Proposta {resolved_company or 'Cliente'}",
-        template_id=template_id,
-    )
+    try:
+        return _convert_docx_to_pdf(
+            session,
+            filled_docx,
+            f"Proposta {resolved_company or 'Cliente'}",
+            template_id=template_id,
+        )
+    except Exception as lo_error:
+        docs_detail = normalize_text(str(docs_error))[:220] if docs_error else ""
+        lo_detail = normalize_text(str(lo_error))[:220]
+        raise RuntimeError(
+            "Não foi possível gerar o PDF com o layout do modelo Google Docs. "
+            f"Google Docs: {docs_detail or 'indisponível'}. "
+            f"LibreOffice: {lo_detail or 'indisponível'}."
+        ) from lo_error
 
 
 def generate_proposal_pdf(

@@ -1,9 +1,9 @@
 [phases.setup]
 nixPkgs = ["...", "libreoffice"]
-aptPkgs = ["...", "fontconfig", "fonts-dejavu-core"]
+aptPkgs = ["...", "libreoffice-writer-nogui", "fontconfig", "fonts-dejavu-core"]
 
 [start]
 cmd = "uvicorn app.main:app --host 0.0.0.0 --port 8501 --proxy-headers"
 
 [variables]
-APP_BUILD = "20260717-nixpacks-libreoffice"
+APP_BUILD = "20260717-google-docs-export"
