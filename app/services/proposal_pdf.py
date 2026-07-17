@@ -501,6 +501,15 @@ def _libreoffice_binary() -> str | None:
         path = shutil.which(candidate)
         if path:
             return path
+
+    nix_root = Path("/nix/store")
+    if nix_root.is_dir():
+        nix_candidates: list[Path] = []
+        nix_candidates.extend(nix_root.glob("*-libreoffice-*/bin/soffice"))
+        nix_candidates.extend(nix_root.glob("*libreoffice*-wrapped/bin/soffice"))
+        nix_candidates.extend(nix_root.glob("*/bin/soffice"))
+        for path in sorted({candidate for candidate in nix_candidates if candidate.is_file()}, reverse=True):
+            return str(path)
     return None
 
 

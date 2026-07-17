@@ -1,0 +1,9 @@
+[phases.setup]
+nixPkgs = ["...", "libreoffice"]
+aptPkgs = ["...", "fontconfig", "fonts-dejavu-core"]
+
+[start]
+cmd = "uvicorn app.main:app --host 0.0.0.0 --port 8501 --proxy-headers"
+
+[variables]
+APP_BUILD = "20260717-nixpacks-libreoffice"
