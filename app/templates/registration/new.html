@@ -30,18 +30,7 @@
   </div>
 
   <div class="section-title">SÓCIOS E RESPONSÁVEIS</div>
-  <div class="form-grid">
-    <div class="form-group"><label>Sócio 1</label><input name="socio_1"></div>
-    <div class="form-group"><label>Telefone do sócio 1</label><input name="telefone_socio_1"></div>
-    <div class="form-group"><label>CPF do sócio 1</label><input name="cpf_socio_1"></div>
-    <div class="form-group"><label>E-mail do sócio 1</label><input name="email_socio_1"></div>
-    <div class="form-group"><label>Sócio 2</label><input name="socio_2"></div>
-    <div class="form-group"><label>Telefone do sócio 2</label><input name="telefone_socio_2"></div>
-    <div class="form-group"><label>CPF do sócio 2</label><input name="cpf_socio_2"></div>
-    <div class="form-group"><label>Sócio 3</label><input name="socio_3"></div>
-    <div class="form-group"><label>Telefone do sócio 3</label><input name="telefone_socio_3"></div>
-    <div class="form-group"><label>CPF do sócio 3</label><input name="cpf_socio_3"></div>
-  </div>
+  {% include "partials/partners_form_fields.html" %}
 
   <div class="section-title">REDES SOCIAIS E ACOMPANHAMENTO</div>
   <div class="form-grid">
@@ -84,4 +73,5 @@
 
   <button type="submit" class="btn" style="margin-top:18px;width:100%">Cadastrar empresa</button>
 </form>
+<script src="/static/js/partners-form.js?v=1" defer></script>
 {% endblock %}

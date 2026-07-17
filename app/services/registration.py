@@ -25,6 +25,16 @@ REGISTRATION_FIELDS = [
 ]
 
 
+def infer_partners_count(values: dict) -> int:
+    if any(normalize_text(values.get(key)) for key in ("socio_3", "telefone_socio_3", "cpf_socio_3")):
+        return 3
+    if any(normalize_text(values.get(key)) for key in ("socio_2", "telefone_socio_2", "cpf_socio_2")):
+        return 2
+    if any(normalize_text(values.get(key)) for key in ("socio_1", "telefone_socio_1", "cpf_socio_1", "email_socio_1")):
+        return 1
+    return 0
+
+
 def validate_registration_form(form: dict) -> str | None:
     empresa = normalize_text(form.get("empresa"))
     cnpj = normalize_text(form.get("cnpj"))

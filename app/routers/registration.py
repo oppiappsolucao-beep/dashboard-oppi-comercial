@@ -6,7 +6,7 @@ from app.dependencies import get_prepared_data, require_auth
 from app.templating import render
 from app.services.commercial_services import get_commercial_service_options
 from app.services.legacy_core import DuplicateRegistrationError, STATUS_OPTIONS, get_colaborador_options, normalize_text
-from app.services.registration import get_seller_options, save_new_company
+from app.services.registration import get_seller_options, infer_partners_count, save_new_company
 
 router = APIRouter()
 
@@ -28,6 +28,7 @@ async def new_registration_page(request: Request):
             "service_options": get_commercial_service_options(),
             "colaborador_options": get_colaborador_options(),
             "today": date.today().isoformat(),
+            "partners_count": 0,
             "error": request.session.pop("registration_error", ""),
         },
     )

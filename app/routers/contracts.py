@@ -24,7 +24,7 @@ from app.services.legacy_core import (
 )
 from app.services.lead_actions_storage import DEFAULT_TENANT_ID, get_lead_action
 from app.services.overview import build_client_action
-from app.services.registration import get_seller_options, save_company_edit
+from app.services.registration import get_seller_options, infer_partners_count, save_company_edit
 
 router = APIRouter()
 
@@ -228,6 +228,16 @@ async def contract_edit_page(request: Request, sheet_row: int):
     except ValueError:
         parsed_date = date.today()
 
+    values = {key: _contract_edit_value(row, columns, key) for key in [
+                "empresa", "data_abertura", "capital", "cnpj", "endereco", "email", "site",
+                "telefone_b2b", "telefone_fixo", "telefone_alternativo",
+                "socio_1", "cpf_socio_1", "email_socio_1", "telefone_socio_1",
+                "socio_2", "telefone_socio_2", "cpf_socio_2",
+                "socio_3", "telefone_socio_3", "cpf_socio_3",
+                "instagram", "linkedin", "observacoes",
+                "servico", "valor_proposta", "colaboradores",
+            ]}
+
     return render(
         request,
         "contracts/edit.html",
@@ -238,15 +248,8 @@ async def contract_edit_page(request: Request, sheet_row: int):
             "status_options": STATUS_OPTIONS,
             "current_status": current_status,
             "data_chamado": parsed_date.isoformat(),
-            "values": {key: _contract_edit_value(row, columns, key) for key in [
-                "empresa", "data_abertura", "capital", "cnpj", "endereco", "email", "site",
-                "telefone_b2b", "telefone_fixo", "telefone_alternativo",
-                "socio_1", "cpf_socio_1", "email_socio_1", "telefone_socio_1",
-                "socio_2", "telefone_socio_2", "cpf_socio_2",
-                "socio_3", "telefone_socio_3", "cpf_socio_3",
-                "instagram", "linkedin", "observacoes",
-                "servico", "valor_proposta", "colaboradores",
-            ]},
+            "values": values,
+            "partners_count": infer_partners_count(values),
             "service_options": get_commercial_service_options(),
             "colaborador_options": get_colaborador_options(),
             "vendedor": normalize_text(row.get("_vendedor", "")) or "Sem vendedor",

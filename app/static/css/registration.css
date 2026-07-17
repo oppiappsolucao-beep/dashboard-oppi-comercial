@@ -55,6 +55,34 @@
   color: #A855F7;
 }
 
+.partners-form {
+  margin-bottom: 8px;
+}
+
+.partners-count-field {
+  max-width: 280px;
+  margin-bottom: 14px;
+}
+
+.partner-block {
+  margin-bottom: 14px;
+  padding: 16px;
+  border: 1px solid #E6EAF2;
+  border-radius: 14px;
+  background: #FAFBFC;
+}
+
+.partner-block.is-hidden {
+  display: none;
+}
+
+.partner-block-title {
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: #475569;
+  margin-bottom: 12px;
+}
+
 .form-actions {
   display: flex;
   gap: 10px;

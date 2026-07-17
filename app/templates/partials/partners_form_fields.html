@@ -1,0 +1,44 @@
+{% set partner_values = values if values is defined else {} %}
+{% set initial_count = partners_count if partners_count is defined else 0 %}
+
+<div class="partners-form" data-initial-count="{{ initial_count }}">
+  <div class="form-group partners-count-field">
+    <label for="partners-count">Quantidade de sócios</label>
+    <select id="partners-count" name="quantidade_socios">
+      <option value="" {% if not initial_count %}selected{% endif %}>Selecione</option>
+      <option value="1" {% if initial_count == 1 %}selected{% endif %}>1</option>
+      <option value="2" {% if initial_count == 2 %}selected{% endif %}>2</option>
+      <option value="3" {% if initial_count == 3 %}selected{% endif %}>3</option>
+    </select>
+  </div>
+
+  <div class="partners-blocks">
+    <div class="partner-block" data-partner="1">
+      <div class="partner-block-title">Sócio 1</div>
+      <div class="form-grid">
+        <div class="form-group"><label>Nome do sócio 1</label><input name="socio_1" value="{{ partner_values.get('socio_1', '') }}"></div>
+        <div class="form-group"><label>Telefone do sócio 1</label><input name="telefone_socio_1" value="{{ partner_values.get('telefone_socio_1', '') }}"></div>
+        <div class="form-group"><label>CPF do sócio 1</label><input name="cpf_socio_1" value="{{ partner_values.get('cpf_socio_1', '') }}"></div>
+        <div class="form-group"><label>E-mail do sócio 1</label><input name="email_socio_1" type="email" value="{{ partner_values.get('email_socio_1', partner_values.get('email', '')) }}"></div>
+      </div>
+    </div>
+
+    <div class="partner-block" data-partner="2">
+      <div class="partner-block-title">Sócio 2</div>
+      <div class="form-grid">
+        <div class="form-group"><label>Nome do sócio 2</label><input name="socio_2" value="{{ partner_values.get('socio_2', '') }}"></div>
+        <div class="form-group"><label>Telefone do sócio 2</label><input name="telefone_socio_2" value="{{ partner_values.get('telefone_socio_2', '') }}"></div>
+        <div class="form-group"><label>CPF do sócio 2</label><input name="cpf_socio_2" value="{{ partner_values.get('cpf_socio_2', '') }}"></div>
+      </div>
+    </div>
+
+    <div class="partner-block" data-partner="3">
+      <div class="partner-block-title">Sócio 3</div>
+      <div class="form-grid">
+        <div class="form-group"><label>Nome do sócio 3</label><input name="socio_3" value="{{ partner_values.get('socio_3', '') }}"></div>
+        <div class="form-group"><label>Telefone do sócio 3</label><input name="telefone_socio_3" value="{{ partner_values.get('telefone_socio_3', '') }}"></div>
+        <div class="form-group"><label>CPF do sócio 3</label><input name="cpf_socio_3" value="{{ partner_values.get('cpf_socio_3', '') }}"></div>
+      </div>
+    </div>
+  </div>
+</div>
