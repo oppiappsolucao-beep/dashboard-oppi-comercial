@@ -17,6 +17,7 @@ from app.services.legacy_core import (
     apply_period_filter,
     as_python_date,
     count_dashboard_status,
+    deal_value_from_row,
     normalize_digits,
     normalize_text,
     row_matches_dashboard_card,
@@ -140,7 +141,7 @@ def _negotiation_value(filtered_df: pd.DataFrame) -> float:
     for _, row in filtered_df.iterrows():
         grouped = status_group(row.get("_status_grupo") or row.get("_status_original", ""))
         if grouped in OPPORTUNITY_STATUSES or grouped == "Novo Lead":
-            total += float(row.get("_capital_num") or 0)
+            total += deal_value_from_row(row)
     return total
 
 
@@ -395,14 +396,14 @@ def build_hot_opportunities(filtered_df: pd.DataFrame) -> list[dict]:
         grouped = status_group(row.get("_status_grupo") or row.get("_status_original", ""))
         if grouped not in OPPORTUNITY_STATUSES and map_etapa(grouped) not in ("Proposta", "Negociação", "Reunião", "Qualificação", "Retorno"):
             continue
-        capital = float(row.get("_capital_num") or 0)
+        deal_value = deal_value_from_row(row)
         etapa = map_etapa(grouped)
         activity_date = _as_date(row.get("_ultima_atualizacao") or row.get("_data_chamado"))
         days_idle = (date.today() - activity_date).days if activity_date else 0
-        if capital >= 20000 or days_idle >= 5 or grouped == "Proposta":
+        if deal_value >= 20000 or days_idle >= 5 or grouped == "Proposta":
             urgency = "Alta"
             urgency_class = "high"
-        elif capital >= 10000 or days_idle >= 2:
+        elif deal_value >= 10000 or days_idle >= 2:
             urgency = "Média"
             urgency_class = "medium"
         else:
@@ -414,8 +415,8 @@ def build_hot_opportunities(filtered_df: pd.DataFrame) -> list[dict]:
             "empresa_initials": _initials(row.get("_empresa", "")),
             "etapa": etapa,
             "etapa_class": ETAPA_BADGE.get(etapa, "novo-lead"),
-            "valor": _format_money(capital),
-            "valor_num": capital,
+            "valor": _format_money(deal_value),
+            "valor_num": deal_value,
             "urgencia": urgency,
             "urgencia_class": urgency_class,
             "sheet_row": int(row.get("_sheet_row", 0) or 0),

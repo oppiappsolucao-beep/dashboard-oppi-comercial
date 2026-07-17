@@ -5,7 +5,7 @@ import pandas as pd
 
 from config.crm_options import PIPELINE_STAGE_BADGE, PIPELINE_STAGE_OPTIONS
 from app.services.crm_validation_service import resolve_pipeline_stage
-from app.services.legacy_core import safe_series, status_group
+from app.services.legacy_core import deal_value_from_row, safe_series, status_group
 
 ETAPA_STAGES = PIPELINE_STAGE_OPTIONS
 ETAPA_BADGE = PIPELINE_STAGE_BADGE
@@ -77,7 +77,7 @@ def build_leads_kpi_cards(filtered_df: pd.DataFrame) -> list[dict]:
                 active += 1
             if etapa in {"Qualificação", "Reunião", "Proposta", "Retorno", "Negociação"} or grouped in OPPORTUNITY_STATUSES:
                 opportunities += 1
-                negotiation_value += float(row.get("_capital_num") or 0)
+                negotiation_value += deal_value_from_row(row)
 
     return [
         {"label": "Total de Leads", "value": total, "note": "no período filtrado", "icon": "👥", "tone": "purple"},
@@ -108,7 +108,7 @@ def apply_leads_view(df: pd.DataFrame, tab: str, stage: str, sort: str) -> pd.Da
     if sort == "name":
         result = result.sort_values("_empresa", ascending=True)
     elif sort == "value":
-        result = result.sort_values("_capital_num", ascending=False)
+        result = result.sort_values("_valor_proposta_num", ascending=False)
     else:
         result = result.sort_values(["_data_chamado", "_empresa"], ascending=[False, True])
 
@@ -146,7 +146,8 @@ def build_leads_table(
             "etapa_class": ETAPA_BADGE.get(etapa, "novo-lead"),
             "status": status_group(status_raw),
             "ultimo_contato": _format_contact_date(row.get("_ultima_atualizacao") or row.get("_data_chamado")),
-            "valor": _format_money(row.get("_capital_num")),
+            "valor": _format_money(deal_value_from_row(row)),
+            "valor_num": deal_value_from_row(row),
             "sheet_row": sheet_row,
             "href": f"/cadastro/todos/{sheet_row}" if sheet_row else "/cadastro/todos",
         })

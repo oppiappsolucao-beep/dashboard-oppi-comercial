@@ -122,6 +122,14 @@ def normalize_text(value) -> str:
     return str(value).strip()
 
 
+def deal_value_from_row(row) -> float:
+    """Valor comercial em negociação — usa valor da proposta, nunca capital social."""
+    try:
+        return float(row.get("_valor_proposta_num") or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
 def normalize_search_text(value) -> str:
     text = normalize_text(value).lower()
     text = unicodedata.normalize("NFKD", text)
@@ -1457,6 +1465,7 @@ def prepare_data(df: pd.DataFrame, columns: dict) -> pd.DataFrame:
     empresa_column = columns.get("empresa") or first_existing_column(result, ["Nome Empresas", "Nome da empresa", "Empresa", "Nome Empresa"])
     result["_empresa"] = safe_series(result, empresa_column)
     result["_capital_num"] = safe_series(result, columns.get("capital")).apply(parse_money)
+    result["_valor_proposta_num"] = safe_series(result, columns.get("valor_proposta")).apply(parse_money)
     result["_status_whatsapp_original"] = safe_series(result, columns.get("status_whatsapp") or columns.get("status"))
     result["_status_ligacao_original"] = safe_series(result, columns.get("status_ligacao"))
     result["_status_original"] = result["_status_whatsapp_original"].replace("", "Novo Lead")

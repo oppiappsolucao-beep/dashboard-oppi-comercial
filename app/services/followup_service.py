@@ -178,13 +178,9 @@ def _whatsapp_href(phone: str) -> str:
 
 
 def _proposal_value(row, columns: dict) -> float:
-    column = columns.get("valor_proposta")
-    if column and column in row.index:
-        raw = normalize_text(row.get(column, ""))
-        if raw:
-            from app.services.legacy_core import parse_money
-            return float(parse_money(raw) or 0)
-    return float(row.get("_capital_num") or 0)
+    from app.services.legacy_core import deal_value_from_row
+
+    return deal_value_from_row(row)
 
 
 def _lead_record(row, columns: dict, tenant_id: str | None = None) -> dict:
