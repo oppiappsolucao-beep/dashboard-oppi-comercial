@@ -35,7 +35,7 @@
   <div class="settings-layout">
     <div class="settings-main">
       {% if is_admin %}
-      <div class="panel settings-user-form-card">
+      <div class="panel settings-user-form-card" id="settings-user-form">
         <div class="section-heading">
           {% if users_table.edit_user %}
             {% if users_table.edit_user.is_new_access %}Cadastrar acesso{% else %}Editar usuário{% endif %}
@@ -134,6 +134,9 @@
         <div class="settings-section-header">
           <div class="section-heading">Usuários da conta</div>
           <div class="settings-table-controls">
+            {% if is_admin and not users_table.edit_user %}
+            <a href="#settings-user-form" class="btn btn-secondary settings-add-user-btn">+ Novo usuário</a>
+            {% endif %}
             <div class="search-wrap settings-search-wrap">
               <span class="search-icon">⌕</span>
               <input type="text" name="search" value="{{ settings_params.search }}" placeholder="Buscar usuário..."
@@ -180,20 +183,24 @@
                 <td>{{ row.last_access }}</td>
                 <td>{{ row.source_label }}</td>
                 <td class="table-actions">
-                  {% if is_admin and row.can_edit %}
-                  <a href="/configuracoes?tab=usuarios&amp;edit_user_id={{ row.id | urlencode }}"
-                    class="settings-link-btn">
-                    {% if row.managed %}Editar{% else %}Cadastrar acesso{% endif %}
-                  </a>
-                  {% endif %}
-                  {% if is_admin and row.can_delete %}
-                  <form method="post" action="/configuracoes/usuarios/remover" class="settings-inline-form"
-                    onsubmit="return confirm('Remover o usuário {{ row.name }}?');">
-                    <input type="hidden" name="tab" value="usuarios">
-                    <input type="hidden" name="user_id" value="{{ row.id }}">
-                    <button type="submit" class="settings-link-btn danger">Excluir</button>
-                  </form>
-                  {% endif %}
+                  <div class="settings-user-actions">
+                    {% if is_admin and row.can_edit %}
+                    <a href="/configuracoes?tab=usuarios&amp;edit_user_id={{ row.id | urlencode }}"
+                      class="settings-action-btn">
+                      {% if row.managed %}Editar{% else %}Cadastrar{% endif %}
+                    </a>
+                    {% endif %}
+                    {% if is_admin and row.can_delete %}
+                    <form method="post" action="/configuracoes/usuarios/remover" class="settings-inline-form"
+                      onsubmit="return confirm('Remover o usuário {{ row.name }}?');">
+                      <input type="hidden" name="tab" value="usuarios">
+                      <input type="hidden" name="user_id" value="{{ row.id }}">
+                      <button type="submit" class="settings-action-btn danger">Excluir</button>
+                    </form>
+                    {% elif is_admin and not row.can_edit and not row.can_delete %}
+                    <span class="settings-action-muted">Protegido</span>
+                    {% endif %}
+                  </div>
                 </td>
               </tr>
               {% endfor %}

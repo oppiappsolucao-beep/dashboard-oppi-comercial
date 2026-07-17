@@ -52,9 +52,9 @@
   flex-direction: column;
 }
 
-.settings-users-table {
-  margin: 0;
-  width: 100%;
+.settings-users-table th:first-child,
+.settings-users-table td:first-child {
+  padding-left: 18px;
 }
 
 .settings-table-wrap {
@@ -304,12 +304,102 @@
   color: var(--muted);
 }
 
-.settings-users-table .table-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
+.settings-users-table {
+  margin: 0;
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.settings-users-table th,
+.settings-users-table td {
+  vertical-align: middle;
+}
+
+.settings-users-table th:nth-child(1),
+.settings-users-table td:nth-child(1) {
+  width: 18%;
+}
+
+.settings-users-table th:nth-child(2),
+.settings-users-table td:nth-child(2) {
+  width: 22%;
+}
+
+.settings-users-table th:nth-child(5),
+.settings-users-table td:nth-child(5) {
+  width: 14%;
+}
+
+.settings-users-table th:nth-child(6),
+.settings-users-table td:nth-child(6) {
+  width: 14%;
+}
+
+.settings-users-table th:nth-child(7),
+.settings-users-table td:nth-child(7) {
+  width: 14%;
+}
+
+.settings-users-table td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.settings-add-user-btn {
+  min-height: 38px;
+  padding: 0 14px;
+  font-size: 0.82rem;
   white-space: nowrap;
+}
+
+.settings-users-table .table-actions {
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.settings-user-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: nowrap;
+}
+
+.settings-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--violet);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.settings-action-btn:hover {
+  border-color: rgba(124, 58, 237, 0.35);
+  background: #F5F3FF;
+}
+
+.settings-action-btn.danger {
+  color: #B91C1C;
+}
+
+.settings-action-btn.danger:hover {
+  border-color: #FECACA;
+  background: #FEF2F2;
+}
+
+.settings-action-muted {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--muted);
 }
 
 .settings-users-table .table-actions .settings-link-btn {
