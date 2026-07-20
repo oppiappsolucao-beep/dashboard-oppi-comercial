@@ -2,11 +2,17 @@
 import json
 from datetime import date, datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
+from config.settings import settings
 from app.services.legacy_core import normalize_text
 
 DEFAULT_TENANT_ID = "default"
 STORAGE_PATH = Path(__file__).resolve().parents[2] / "storage" / "lead_actions.json"
+
+
+def _now() -> datetime:
+    return datetime.now(ZoneInfo(settings.timezone))
 
 
 def _load_all() -> dict:
@@ -53,7 +59,7 @@ def save_lead_action(tenant_id: str | None, sheet_row: int, payload: dict) -> di
         current = {}
 
     current.update(payload)
-    current["updated_at"] = datetime.now().isoformat(timespec="seconds")
+    current["updated_at"] = _now().isoformat(timespec="seconds")
     bucket[str(sheet_row)] = current
     data[tenant] = bucket
     _save_all(data)
@@ -77,7 +83,7 @@ def append_interaction(
         history = []
 
     history.append({
-        "at": datetime.now().isoformat(timespec="seconds"),
+        "at": _now().isoformat(timespec="seconds"),
         "type": interaction_type,
         "description": description,
         "user": user,
@@ -122,13 +128,13 @@ def complete_activity(
         completed = []
 
     completed.append({
-        "completed_at": datetime.now().isoformat(timespec="seconds"),
+        "completed_at": _now().isoformat(timespec="seconds"),
         "result": result,
         "note": note,
         "user": user,
     })
     record["completed_activities"] = completed[-100:]
-    record["last_completed_at"] = datetime.now().isoformat(timespec="seconds")
+    record["last_completed_at"] = _now().isoformat(timespec="seconds")
 
     if next_action_date:
         record["next_action_date"] = next_action_date.isoformat()
@@ -149,14 +155,14 @@ def complete_activity(
     if opportunity_status:
         record["opportunity_status"] = opportunity_status
         if opportunity_status in {"Fechada ganha", "Fechada perdida", "Encerrada"}:
-            record["closed_at"] = datetime.now().isoformat(timespec="seconds")
+            record["closed_at"] = _now().isoformat(timespec="seconds")
     if lost_reason:
         record["lost_reason"] = lost_reason
         record["result_notes"] = lost_reason
 
     record["interactions"] = record.get("interactions") if isinstance(record.get("interactions"), list) else []
     record["interactions"].append({
-        "at": datetime.now().isoformat(timespec="seconds"),
+        "at": _now().isoformat(timespec="seconds"),
         "type": "atividade_concluida",
         "description": f"Atividade concluída: {result}",
         "user": user,

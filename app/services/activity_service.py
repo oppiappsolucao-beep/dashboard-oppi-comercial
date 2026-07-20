@@ -4,8 +4,11 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 import pandas as pd
+
+from config.settings import settings
 
 from config.crm_options import (
     ACTION_DESCRIPTIONS,
@@ -82,7 +85,30 @@ class ActivitiesViewParams:
 
 
 def _now() -> datetime:
-    return datetime.now()
+    return datetime.now(ZoneInfo(settings.timezone))
+
+
+def _resolve_effective_stage(record: dict, tenant_id: str | None = None) -> str:
+    tenant = tenant_id or record.get("tenant_id") or DEFAULT_TENANT_ID
+    sheet_row = int(record.get("sheet_row") or 0)
+    stored = get_lead_action(tenant, sheet_row) if sheet_row else {}
+    override = normalize_legacy_stage((stored or {}).get("stage_override"))
+    if override:
+        return override
+    stage, _ = resolve_display_stage(record.get("stage", ""), stored)
+    return stage or "Novo Lead"
+
+
+def _has_open_activity_for_lead(tenant_id: str | None, sheet_row: int) -> bool:
+    if not sheet_row:
+        return False
+    open_statuses = {"pendente", "em_andamento", "atrasada", "reagendada"}
+    for record in list_activities(tenant_id):
+        if int(record.get("sheet_row") or 0) != sheet_row:
+            continue
+        if record.get("status") in open_statuses:
+            return True
+    return False
 
 
 def _contact_name(row, columns: dict) -> str:
@@ -205,8 +231,9 @@ def sync_auto_activities(
 ) -> None:
     queue = buscar_leads_para_acao(filtered_df, columns, tenant_id=tenant_id)
     for item in queue:
-        activity_id = f"auto_{item['sheet_row']}_{item['rule_code']}"
-        if activity_exists(tenant_id, activity_id):
+        sheet_row = int(item["sheet_row"])
+        activity_id = f"auto_{sheet_row}_{item['rule_code']}"
+        if activity_exists(tenant_id, activity_id) or _has_open_activity_for_lead(tenant_id, sheet_row):
             continue
 
         row_match = filtered_df[filtered_df["_sheet_row"] == item["sheet_row"]]
@@ -258,13 +285,15 @@ def sync_auto_activities(
         })
 
 
-def _serialize_activity(record: dict) -> dict:
+def _serialize_activity(record: dict, tenant_id: str | None = None) -> dict:
+    tenant_id = tenant_id or record.get("tenant_id") or DEFAULT_TENANT_ID
     status = calcular_status_atraso(record)
     when_label, when_date, when_time = _format_when(record.get("scheduled_at"))
     channel = normalize_legacy_channel(record.get("channel"))
     process_action = normalize_legacy_action(record.get("process_action") or record.get("title"))
     stage_raw = record.get("stage", "")
-    stage, stage_legacy = resolve_display_stage(stage_raw)
+    stage = _resolve_effective_stage(record, tenant_id)
+    stage_legacy = stage != normalize_legacy_stage(stage_raw) and bool(stage_raw)
     result = normalize_legacy_result(record.get("result")) or record.get("result") or ""
     if result and result not in ACTIVITY_RESULT_OPTIONS and result != "Selecione":
         result_display = f"{result} (Valor legado)"
@@ -319,6 +348,7 @@ def _serialize_activity(record: dict) -> dict:
         "move_stage": normalize_legacy_stage(record.get("move_stage")) or "",
         "sheet_row": int(record.get("sheet_row") or 0),
         "priority": int(record.get("priority") or 20),
+        "updated_at": record.get("updated_at") or record.get("created_at") or "",
         "show_extra": status == "concluida" or normalize_text(record.get("result")),
         "activity_dt": _parse_datetime(record.get("scheduled_at")),
     }
@@ -338,7 +368,7 @@ def buscar_atividades(
         sheet_row = int(record.get("sheet_row") or 0)
         if allowed_rows and sheet_row not in allowed_rows:
             continue
-        serialized = _serialize_activity(record)
+        serialized = _serialize_activity(record, tenant_id)
         if search:
             blob = " | ".join([
                 serialized["title"],
@@ -384,13 +414,21 @@ def _kanban_lead_key(card: dict) -> str:
 
 
 def _kanban_stage_for_card(card: dict, tenant_id: str | None) -> str:
-    sheet_row = int(card.get("sheet_row") or 0)
-    if sheet_row:
-        stored = get_lead_action(tenant_id, sheet_row) or {}
-        override = normalize_legacy_stage(stored.get("stage_override"))
-        if override:
-            return override
     return normalize_legacy_stage(card.get("stage")) or "Novo Lead"
+
+
+def _pick_kanban_representative(group: list[dict]) -> dict:
+    if len(group) == 1:
+        return group[0]
+    open_cards = [item for item in group if item.get("status") not in {"concluida", "cancelada"}]
+    pool = open_cards or group
+
+    def activity_rank(item: dict) -> tuple:
+        is_auto = str(item.get("id", "")).startswith("auto_")
+        updated = _timeline_sort_value(item.get("updated_at"))
+        return (1 if is_auto else 0, updated, _sla_sort_key(item))
+
+    return max(pool, key=activity_rank)
 
 
 def _prepare_kanban_activities(
@@ -405,16 +443,7 @@ def _prepare_kanban_activities(
     for card in view:
         grouped.setdefault(_kanban_lead_key(card), []).append(card)
 
-    selected: list[dict] = []
-    for group in grouped.values():
-        if len(group) == 1:
-            selected.append(group[0])
-            continue
-        open_cards = [item for item in group if item.get("status") not in {"concluida", "cancelada"}]
-        pool = open_cards or group
-        pool.sort(key=_sla_sort_key)
-        selected.append(pool[0])
-    return selected
+    return [_pick_kanban_representative(group) for group in grouped.values()]
 
 
 def _consolidate_lead_pipeline_activity(
@@ -979,7 +1008,7 @@ def atualizar_atividade_inline(
             lost_reason=result_notes or result,
         )
 
-    return _serialize_activity({"id": activity_id, **saved}), None
+    return _serialize_activity({"id": activity_id, **saved}, tenant_id), None
 
 
 def cancelar_atividade(tenant_id: str | None, activity_id: str, user: str, reason: str = "") -> tuple[bool, str | None]:
@@ -1010,6 +1039,13 @@ def cancelar_atividade(tenant_id: str | None, activity_id: str, user: str, reaso
 
 
 def _format_timeline_at(value) -> str:
+    raw_text = normalize_text(value)
+    date_only = False
+    if isinstance(value, date) and not isinstance(value, datetime):
+        date_only = True
+    elif raw_text and len(raw_text) <= 10 and "T" not in raw_text and " " not in raw_text:
+        date_only = True
+
     dt = as_python_datetime(value) if value else None
     if not dt and value:
         try:
@@ -1018,6 +1054,15 @@ def _format_timeline_at(value) -> str:
             dt = None
     if not dt:
         return "—"
+
+    tz = ZoneInfo(settings.timezone)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=tz)
+    else:
+        dt = dt.astimezone(tz)
+
+    if date_only:
+        return dt.strftime("%d/%m/%Y")
     return dt.strftime("%d/%m/%Y %H:%M")
 
 
@@ -1156,7 +1201,7 @@ def build_activity_timeline_for_activity(
     record = get_activity(tenant_id, activity_id)
     if not record:
         return []
-    activity = _serialize_activity(record)
+    activity = _serialize_activity(record, tenant_id)
     lead_created_at = None
     sheet_row = activity.get("sheet_row")
     if sheet_row and not df.empty:
@@ -1177,7 +1222,7 @@ def build_activity_detail_panel(
     if not record:
         return None
 
-    activity = _serialize_activity(record)
+    activity = _serialize_activity(record, tenant_id)
     stage = activity["stage"]
     sla_deadline = PIPELINE_STAGE_SLA.get(stage, {}).get("label", "—")
     next_action_display = (
@@ -1514,9 +1559,9 @@ def mover_atividade_kanban(
     if not new_stage or new_stage not in PIPELINE_STAGE_OPTIONS:
         return None, "Etapa inválida."
 
-    old_stage = normalize_legacy_stage(current.get("stage")) or "Novo Lead"
+    old_stage = _resolve_effective_stage(current, tenant_id)
     if old_stage == new_stage:
-        return _serialize_activity({"id": activity_id, **current}), None
+        return _serialize_activity({"id": activity_id, **current}, tenant_id), None
 
     saved = save_activity(tenant_id, activity_id, {
         "stage": new_stage,
@@ -1559,7 +1604,7 @@ def mover_atividade_kanban(
         user=user,
     )
 
-    return _serialize_activity({"id": activity_id, **saved}), None
+    return _serialize_activity({"id": activity_id, **saved}, tenant_id), None
 
 
 def registrar_historico_atividade(
@@ -1781,7 +1826,7 @@ def criar_atividade(
             user=user,
         )
 
-    return _serialize_activity({"id": activity_id, **saved}), None
+    return _serialize_activity({"id": activity_id, **saved}, tenant_id), None
 
 
 def build_new_activity_modal_context(

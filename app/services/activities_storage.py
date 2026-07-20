@@ -3,11 +3,17 @@ import json
 import uuid
 from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
+from config.settings import settings
 from app.services.legacy_core import normalize_text
 
 DEFAULT_TENANT_ID = "default"
 STORAGE_PATH = Path(__file__).resolve().parents[2] / "storage" / "activities.json"
+
+
+def _now() -> datetime:
+    return datetime.now(ZoneInfo(settings.timezone))
 
 
 def _load_all() -> dict:
@@ -68,7 +74,7 @@ def save_activity(tenant_id: str | None, activity_id: str | None, payload: dict)
     if not isinstance(current, dict):
         current = {}
     current.update(payload)
-    current["updated_at"] = datetime.now().isoformat(timespec="seconds")
+    current["updated_at"] = _now().isoformat(timespec="seconds")
     if "created_at" not in current:
         current["created_at"] = current["updated_at"]
     activities[activity_id] = current
@@ -82,7 +88,7 @@ def soft_delete_activity(tenant_id: str | None, activity_id: str) -> bool:
     record = get_activity(tenant_id, activity_id)
     if not record:
         return False
-    save_activity(tenant_id, activity_id, {"deleted": True, "deleted_at": datetime.now().isoformat(timespec="seconds")})
+    save_activity(tenant_id, activity_id, {"deleted": True, "deleted_at": _now().isoformat(timespec="seconds")})
     return True
 
 
