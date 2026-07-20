@@ -99,6 +99,24 @@ def _resolve_effective_stage(record: dict, tenant_id: str | None = None) -> str:
     return stage or "Novo Lead"
 
 
+def _resolve_sheet_row_for_activity(activity: dict, df: pd.DataFrame) -> int:
+    sheet_row = int(activity.get("sheet_row") or 0)
+    if sheet_row or df.empty:
+        return sheet_row
+
+    empresa = normalize_text(activity.get("empresa"))
+    if not empresa or empresa == "—":
+        return 0
+
+    if "_empresa" not in df.columns or "_sheet_row" not in df.columns:
+        return 0
+
+    match = df[df["_empresa"].astype(str).str.strip() == empresa]
+    if match.empty:
+        return 0
+    return int(match.iloc[0]["_sheet_row"] or 0)
+
+
 def _has_open_activity_for_lead(tenant_id: str | None, sheet_row: int) -> bool:
     if not sheet_row:
         return False
@@ -1233,7 +1251,8 @@ def build_activity_detail_panel(
     observation = normalize_text(activity["note"]) or normalize_text(activity["description"]) or "—"
 
     lead_created_at = None
-    sheet_row = activity["sheet_row"]
+    sheet_row = _resolve_sheet_row_for_activity(activity, df)
+    activity["sheet_row"] = sheet_row
     if sheet_row and not df.empty:
         row_match = df[df["_sheet_row"] == sheet_row]
         if not row_match.empty:
@@ -1251,7 +1270,7 @@ def build_activity_detail_panel(
         "next_action_display": next_action_display,
         "observation": observation,
         "timeline": timeline,
-        "lead_href": f"/cadastro/todos/{sheet_row}" if sheet_row else "/cadastro/todos",
+        "lead_href": f"/cadastro/todos/{sheet_row}" if sheet_row else "",
         "result_options": [opt for opt in ACTIVITY_RESULT_OPTIONS if opt != "Selecione"],
         "default_next_action": NEXT_ACTION_BY_STAGE.get(stage, activity["title"]),
         "default_next_action_date": suggestion.get("next_action_date", date.today().isoformat()),
