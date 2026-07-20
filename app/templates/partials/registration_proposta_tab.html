@@ -10,16 +10,20 @@
   {% if commercial_summary.has_data %}
   <div class="client-edit-proposal-grid">
     <div class="client-edit-proposal-stat">
-      <span class="client-edit-proposal-label">Serviço escolhido</span>
+      <span class="client-edit-proposal-label">Serviço fechado</span>
       <strong>{{ commercial_summary.servico }}</strong>
     </div>
     <div class="client-edit-proposal-stat highlight">
-      <span class="client-edit-proposal-label">Valor da proposta</span>
+      <span class="client-edit-proposal-label">Valor</span>
       <strong>{{ commercial_summary.valor_proposta }}</strong>
     </div>
     <div class="client-edit-proposal-stat">
-      <span class="client-edit-proposal-label">Colaboradores</span>
-      <strong>{{ commercial_summary.colaboradores }}</strong>
+      <span class="client-edit-proposal-label">Forma de pagamento</span>
+      <strong>{{ commercial_summary.forma_pagamento }}</strong>
+    </div>
+    <div class="client-edit-proposal-stat">
+      <span class="client-edit-proposal-label">Vencimento</span>
+      <strong>{{ commercial_summary.vencimento }}</strong>
     </div>
   </div>
   {% else %}

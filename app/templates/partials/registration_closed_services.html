@@ -1,0 +1,88 @@
+<section class="client-edit-section panel client-closed-services" id="client-closed-services">
+  <div class="client-edit-section-head">
+    <span class="client-edit-section-icon">📄</span>
+    <div>
+      <h2>Serviços fechados</h2>
+      <p>Serviços contratados e informações comerciais.</p>
+    </div>
+  </div>
+
+  <div class="client-closed-services-carousel">
+    <button type="button" class="client-closed-services-nav prev" aria-label="Serviço anterior" disabled>‹</button>
+
+    <div class="client-closed-services-viewport">
+      <div class="client-closed-services-track" id="closed-services-track">
+        {% for item in closed_services %}
+        <div class="client-closed-services-slide">
+          <div class="form-grid client-closed-services-grid">
+            <div class="form-group">
+              <label>Serviço fechado</label>
+              <select name="closed_servico">
+                <option value="">Selecione</option>
+                {% for service in service_options %}
+                <option value="{{ service }}" {% if item.servico == service %}selected{% endif %}>{{ service }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Valor (R$)</label>
+              <input type="text" name="closed_valor" value="{{ item.valor }}" placeholder="R$ 0,00" autocomplete="off">
+            </div>
+            <div class="form-group">
+              <label>Forma de pagamento</label>
+              <select name="closed_forma_pagamento">
+                {% for option in payment_method_options %}
+                <option value="{{ option }}" {% if item.forma_pagamento == option %}selected{% endif %}>{{ option }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Vencimento</label>
+              <input type="date" name="closed_vencimento" value="{{ item.vencimento }}">
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <button type="button" class="client-closed-services-nav next" aria-label="Próximo serviço">›</button>
+  </div>
+
+  <div class="client-closed-services-footer">
+    <span class="client-closed-services-counter" id="closed-services-counter">1 / {{ closed_services|length }}</span>
+    <button type="button" class="btn btn-secondary client-closed-services-add" id="closed-services-add">+ Adicionar serviço</button>
+  </div>
+
+  <template id="closed-services-slide-template">
+    <div class="client-closed-services-slide">
+      <div class="form-grid client-closed-services-grid">
+        <div class="form-group">
+          <label>Serviço fechado</label>
+          <select name="closed_servico">
+            <option value="">Selecione</option>
+            {% for service in service_options %}
+            <option value="{{ service }}">{{ service }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Valor (R$)</label>
+          <input type="text" name="closed_valor" value="" placeholder="R$ 0,00" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label>Forma de pagamento</label>
+          <select name="closed_forma_pagamento">
+            {% for option in payment_method_options %}
+            <option value="{{ option }}" {% if option == 'Mensal' %}selected{% endif %}>{{ option }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Vencimento</label>
+          <input type="date" name="closed_vencimento" value="">
+        </div>
+      </div>
+    </div>
+  </template>
+</section>

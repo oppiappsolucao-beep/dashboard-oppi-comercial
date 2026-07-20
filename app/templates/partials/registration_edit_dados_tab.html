@@ -87,24 +87,5 @@
     </div>
   </section>
 
-  <section class="client-edit-section panel">
-    <div class="client-edit-section-head">
-      <span class="client-edit-section-icon">📄</span>
-      <div>
-        <h2>Proposta comercial</h2>
-        <p>Serviço, valor e condições comerciais.</p>
-      </div>
-    </div>
-    <div class="form-grid">
-      <div class="form-group"><label>Serviço escolhido</label>
-        <select name="servico">
-          <option value="">Selecione</option>
-          {% for service in service_options %}
-          <option value="{{ service }}" {% if values.servico == service %}selected{% endif %}>{{ service }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="form-group"><label>Valor da proposta (R$)</label><input name="valor_proposta" value="{{ values.valor_proposta }}" placeholder="Ex.: R$ 8.500"></div>
-    </div>
-  </section>
+  {% include "partials/registration_closed_services.html" %}
 </div>

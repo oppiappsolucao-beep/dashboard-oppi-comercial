@@ -1298,7 +1298,7 @@
 
 .client-edit-proposal-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
   margin-bottom: 18px;
 }
@@ -1369,6 +1369,84 @@
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
 }
 
+.client-closed-services-carousel {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 12px;
+  align-items: center;
+  margin-top: 16px;
+}
+
+.client-closed-services-viewport {
+  overflow: hidden;
+}
+
+.client-closed-services-track {
+  display: flex;
+  transition: transform 0.25s ease;
+}
+
+.client-closed-services-slide {
+  flex: 0 0 100%;
+  min-width: 100%;
+}
+
+.client-closed-services-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.client-closed-services-nav {
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--muted);
+  font-size: 1.35rem;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.client-closed-services-nav:hover:not(:disabled) {
+  background: #F8FAFC;
+  color: var(--text);
+  border-color: #CBD5E1;
+}
+
+.client-closed-services-nav:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.client-closed-services-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.client-closed-services-counter {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.client-closed-services-add {
+  padding: 8px 14px;
+  font-size: 0.82rem;
+}
+
+.client-edit-form .client-closed-services-grid .form-group input,
+.client-edit-form .client-closed-services-grid .form-group select {
+  width: 100%;
+}
+
 @media (max-width: 1100px) {
   .client-edit-header-main,
   .client-edit-summary-grid,
@@ -1379,6 +1457,10 @@
 
   .client-edit-pipeline {
     justify-content: flex-start;
+  }
+
+  .client-closed-services-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -1393,5 +1475,17 @@
 
   .registration-activities-actions .btn {
     flex: 1;
+  }
+
+  .client-closed-services-carousel {
+    grid-template-columns: 1fr;
+  }
+
+  .client-closed-services-nav {
+    display: none;
+  }
+
+  .client-closed-services-grid {
+    grid-template-columns: 1fr;
   }
 }

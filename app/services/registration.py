@@ -10,9 +10,11 @@ from app.services.legacy_core import (
     DuplicateRegistrationError,
     STATUS_OPTIONS,
     append_company_to_sheet,
+    as_python_date,
     normalize_cnpj_for_duplicate,
     normalize_phone_for_duplicate,
     normalize_text,
+    parse_date,
     status_group,
     update_company_in_sheet,
 )
@@ -286,6 +288,14 @@ def build_cadastro_edit_page_context(
 
     valor_proposta = _format_proposal_value(values.get("valor_proposta", ""))
     servico = normalize_text(values.get("servico"))
+    lead_action = get_lead_action(tenant_id, sheet_row) or {}
+    forma_pagamento = normalize_text(lead_action.get("forma_pagamento")) or "—"
+    vencimento_raw = normalize_text(lead_action.get("vencimento"))
+    vencimento = vencimento_raw or "—"
+    if vencimento_raw:
+        parsed_venc = as_python_date(parse_date(vencimento_raw))
+        if parsed_venc:
+            vencimento = parsed_venc.strftime("%d/%m/%Y")
     proposals_count = 1 if servico or (valor_proposta and valor_proposta != "—") else 0
 
     empresa = normalize_text(values.get("empresa")) or "—"
@@ -333,6 +343,8 @@ def build_cadastro_edit_page_context(
         "commercial_summary": {
             "servico": servico or "—",
             "valor_proposta": valor_proposta,
+            "forma_pagamento": forma_pagamento,
+            "vencimento": vencimento,
             "colaboradores": normalize_text(values.get("colaboradores")) or "—",
             "has_data": bool(servico or (valor_proposta and valor_proposta != "—")),
         },

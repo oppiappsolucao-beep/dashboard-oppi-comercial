@@ -7,6 +7,12 @@ from app.templating import render
 from app.services.filters import DashboardFilters, apply_dashboard_filters, apply_default_period_filters
 from app.services.filters import get_filter_options as get_dashboard_filter_options
 from app.services.commercial_services import get_commercial_service_options
+from app.services.closed_services import (
+    PAYMENT_METHOD_OPTIONS,
+    load_closed_services,
+    parse_closed_services_from_form,
+    save_closed_services,
+)
 from app.services.legacy_core import (
     DuplicateRegistrationError,
     STATUS_OPTIONS,
@@ -270,6 +276,12 @@ async def contract_edit_page(request: Request, sheet_row: int):
         activities=activities_ctx.get("activities", []),
         interactions=activities_ctx.get("interactions", []),
     )
+    closed_services = load_closed_services(
+        DEFAULT_TENANT_ID,
+        sheet_row,
+        servico=values.get("servico", ""),
+        valor_proposta=values.get("valor_proposta", ""),
+    )
 
     return render(
         request,
@@ -284,6 +296,8 @@ async def contract_edit_page(request: Request, sheet_row: int):
             "values": values,
             "partners_count": infer_partners_count(values),
             "service_options": get_commercial_service_options(),
+            "payment_method_options": PAYMENT_METHOD_OPTIONS,
+            "closed_services": closed_services,
             "colaborador_options": get_colaborador_options(),
             "vendedor": normalize_text(row.get("_vendedor", "")) or "Sem vendedor",
             "error": request.session.pop("edit_error", ""),
@@ -310,6 +324,10 @@ async def contract_edit_submit(request: Request, sheet_row: int):
     form_dict["email_empresa"] = form_dict.pop("email", form_dict.get("email_empresa", ""))
 
     try:
+        closed_items = parse_closed_services_from_form(form)
+        primary_closed = save_closed_services(DEFAULT_TENANT_ID, sheet_row, closed_items)
+        form_dict["servico"] = primary_closed.get("servico", "")
+        form_dict["valor_proposta"] = primary_closed.get("valor", "")
         save_company_edit(sheet_row, form_dict)
         save_cadastro_tipo(DEFAULT_TENANT_ID, sheet_row, form_dict.get("cadastro_tipo", "lead"))
         return RedirectResponse(url=f"/cadastro/todos/{sheet_row}", status_code=303)
