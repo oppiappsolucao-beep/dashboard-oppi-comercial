@@ -386,6 +386,7 @@ def build_activities_kanban(
     columns: list[dict] = []
     for index, stage in enumerate(PIPELINE_STAGE_OPTIONS, start=1):
         cards = [item for item in view if item.get("stage") == stage]
+        cards = _dedupe_kanban_cards(cards)
         cards.sort(key=_sla_sort_key)
         columns.append({
             "index": index,
@@ -435,18 +436,114 @@ def atualizar_cards_atividades(activities: list[dict], filters: DashboardFilters
     ]
 
 
-def validar_conclusao(status: str, result: str, next_action: str) -> str | None:
-    return validate_completion(status, result, next_action)
+def validar_conclusao(status: str, result: str, next_action: str, current_stage: str = "") -> str | None:
+    return validate_completion(status, result, next_action, current_stage)
 
 
-def verificar_duplicidade(tenant_id: str | None, origin_id: str, next_action: str, scheduled_date: str) -> bool:
-    normalized_action = normalize_legacy_action(next_action)
-    for record in list_activities(tenant_id):
-        if record.get("origin_activity_id") != origin_id:
+def _dedupe_kanban_cards(cards: list[dict]) -> list[dict]:
+    grouped: dict[str, list[dict]] = {}
+    for card in cards:
+        key = str(int(card.get("sheet_row") or 0) or card.get("id") or card.get("empresa"))
+        grouped.setdefault(key, []).append(card)
+
+    deduped: list[dict] = []
+    for group in grouped.values():
+        if len(group) == 1:
+            deduped.append(group[0])
             continue
-        if normalize_legacy_action(record.get("process_action")) == normalized_action and (record.get("scheduled_date") or "")[:10] == scheduled_date[:10]:
-            if record.get("status") in {"pendente", "em_andamento", "atrasada", "reagendada"}:
-                return True
+        open_cards = [item for item in group if item.get("status") != "concluida"]
+        if open_cards:
+            open_cards.sort(key=_sla_sort_key)
+            deduped.append(open_cards[0])
+            continue
+        group.sort(key=lambda item: item.get("activity_dt") or datetime.min, reverse=True)
+        deduped.append(group[0])
+    deduped.sort(key=_sla_sort_key)
+    return deduped
+
+
+def _should_create_next_activity(
+    *,
+    result: str,
+    final_stage: str,
+    next_activity_stage: str,
+    next_action: str,
+    next_action_date: str,
+) -> bool:
+    if not next_action or not next_action_date:
+        return False
+    if normalize_legacy_result(result) in NO_NEXT_ACTION_RESULTS:
+        return False
+    if normalize_legacy_stage(final_stage) == "Fechado":
+        return False
+    if normalize_legacy_stage(next_activity_stage) == "Fechado":
+        return False
+    return True
+
+
+def _apply_completion_follow_up(
+    *,
+    result: str,
+    current_stage: str,
+    move_stage: str,
+    next_action: str,
+    next_action_date: str,
+    next_action_time: str,
+    next_action_channel: str,
+    channel: str,
+) -> dict:
+    final_stage = normalize_legacy_stage(move_stage or current_stage)
+    normalized_result = normalize_legacy_result(result)
+
+    if normalized_result in NO_NEXT_ACTION_RESULTS or final_stage == "Fechado":
+        return {
+            "next_action": "",
+            "next_action_date": "",
+            "next_action_time": "",
+            "next_action_channel": next_action_channel or channel,
+            "move_stage": move_stage,
+        }
+
+    if normalize_legacy_next_action(next_action):
+        return {
+            "next_action": next_action,
+            "next_action_date": next_action_date,
+            "next_action_time": next_action_time or "10:00",
+            "next_action_channel": next_action_channel or channel,
+            "move_stage": move_stage,
+        }
+
+    suggestion = suggest_from_result(result, current_stage)
+    return {
+        "next_action": suggestion.get("next_action", ""),
+        "next_action_date": next_action_date or suggestion.get("next_action_date", ""),
+        "next_action_time": next_action_time or suggestion.get("next_action_time", "10:00"),
+        "next_action_channel": next_action_channel or suggestion.get("channel", channel),
+        "move_stage": move_stage or suggestion.get("move_stage", ""),
+    }
+
+
+def verificar_duplicidade(
+    tenant_id: str | None,
+    origin_id: str,
+    next_action: str,
+    scheduled_date: str,
+    sheet_row: int = 0,
+) -> bool:
+    normalized_action = normalize_legacy_action(next_action)
+    target_date = (scheduled_date or "")[:10]
+    open_statuses = {"pendente", "em_andamento", "atrasada", "reagendada"}
+    for record in list_activities(tenant_id):
+        if record.get("status") not in open_statuses:
+            continue
+        if normalize_legacy_action(record.get("process_action")) != normalized_action:
+            continue
+        if (record.get("scheduled_date") or "")[:10] != target_date:
+            continue
+        if origin_id and record.get("origin_activity_id") == origin_id:
+            return True
+        if sheet_row and int(record.get("sheet_row") or 0) == int(sheet_row):
+            return True
     return False
 
 
@@ -468,7 +565,7 @@ def criar_proxima_atividade(
     channel = normalize_legacy_channel(channel)
     stage = normalize_legacy_stage(stage) or "Novo Lead"
 
-    if verificar_duplicidade(tenant_id, origin.get("id"), process_action, scheduled_date):
+    if verificar_duplicidade(tenant_id, origin.get("id"), process_action, scheduled_date, sheet_row):
         return None
 
     scheduled_at = _parse_datetime(None, date.fromisoformat(scheduled_date[:10]), scheduled_time).isoformat(timespec="seconds")
@@ -638,7 +735,25 @@ def atualizar_atividade_inline(
         if not scheduled_date:
             return None, "Informe a nova data para reagendar."
 
-    validation_error = validar_conclusao(status, result, next_action)
+    if status == "concluida" and result:
+        follow_up = _apply_completion_follow_up(
+            result=result,
+            current_stage=current_stage,
+            move_stage=move_stage,
+            next_action=next_action,
+            next_action_date=next_action_date,
+            next_action_time=next_action_time,
+            next_action_channel=next_action_channel,
+            channel=channel,
+        )
+        next_action = follow_up["next_action"]
+        next_action_date = follow_up["next_action_date"]
+        next_action_time = follow_up["next_action_time"]
+        next_action_channel = follow_up["next_action_channel"]
+        move_stage = follow_up["move_stage"]
+
+    validation_stage = normalize_legacy_stage(move_stage or current_stage)
+    validation_error = validar_conclusao(status, result, next_action, validation_stage)
     if validation_error:
         return None, validation_error
 
@@ -718,8 +833,15 @@ def atualizar_atividade_inline(
     suggestion = suggest_from_result(result, current_stage) if result else {}
     opportunity_status = suggestion.get("opportunity_status", "")
     next_activity_stage = suggestion.get("activity_stage") or move_stage or current_stage
+    final_stage = normalize_legacy_stage(updates.get("stage") or move_stage or current_stage)
 
-    if status == "concluida" and next_action and next_action_date and result not in NO_NEXT_ACTION_RESULTS:
+    if status == "concluida" and _should_create_next_activity(
+        result=result,
+        final_stage=final_stage,
+        next_activity_stage=next_activity_stage,
+        next_action=next_action,
+        next_action_date=next_action_date,
+    ):
         criar_proxima_atividade(
             tenant_id,
             {"id": activity_id, "priority": current.get("priority", 20), "updated_by": user},
@@ -1172,7 +1294,7 @@ def validar_nova_atividade(payload: dict, *, is_admin_user: bool = False, allow_
             return "Informe data e horário."
 
     if status == "concluida":
-        completion_error = validate_completion(status, result, next_action)
+        completion_error = validate_completion(status, result, next_action, stage)
         if completion_error:
             return completion_error
         if result == "Sem interesse" and not normalize_text(payload.get("lost_reason")):
@@ -1407,7 +1529,13 @@ def criar_atividade(
         if move_stage_confirm and move_stage:
             movimentar_etapa_lead(tenant_id, sheet_row, from_stage=stage, to_stage=move_stage, user=user)
 
-        if next_action and next_action_date and result not in NO_NEXT_ACTION_RESULTS:
+        if _should_create_next_activity(
+            result=result,
+            final_stage=normalize_legacy_stage(move_stage or stage),
+            next_activity_stage=next_activity_stage,
+            next_action=next_action,
+            next_action_date=next_action_date,
+        ):
             criar_proxima_atividade(
                 tenant_id,
                 {"id": activity_id, "priority": _priority_score(priority_label), "updated_by": user},

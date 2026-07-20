@@ -290,7 +290,7 @@ def validate_activity_payload(payload: dict) -> str | None:
     return None
 
 
-def validate_completion(status: str, result: str, next_action: str) -> str | None:
+def validate_completion(status: str, result: str, next_action: str, current_stage: str = "") -> str | None:
     status_key = normalize_legacy_status_key(status)
     if status_key != "concluida":
         return None
@@ -300,6 +300,9 @@ def validate_completion(status: str, result: str, next_action: str) -> str | Non
         return "Selecione o resultado para concluir a atividade."
 
     if normalized_result in NO_NEXT_ACTION_RESULTS:
+        return None
+
+    if normalize_legacy_stage(current_stage) == "Fechado":
         return None
 
     if not normalize_legacy_next_action(next_action):
