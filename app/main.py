@@ -62,12 +62,21 @@ app.add_api_route("/metas-e-relatorios", goals_page, methods=["GET"], tags=["goa
 app.add_api_route("/metas-e-relatorios/filtros", goals_filters, methods=["POST"], tags=["goals"])
 app.add_api_route("/metas-e-relatorios/atualizar", goals_refresh, methods=["POST"], tags=["goals"])
 
-from app.routers.settings import settings_filters, settings_page, settings_permissions_toggle, settings_refresh  # noqa: E402
+from app.routers.settings import (  # noqa: E402
+    settings_add_service,
+    settings_filters,
+    settings_page,
+    settings_permissions_toggle,
+    settings_refresh,
+    settings_remove_service,
+)
 
 app.add_api_route("/configuracoes", settings_page, methods=["GET"], tags=["settings"])
 app.add_api_route("/configuracoes/filtros", settings_filters, methods=["POST"], tags=["settings"])
 app.add_api_route("/configuracoes/permissoes", settings_permissions_toggle, methods=["POST"], tags=["settings"])
 app.add_api_route("/configuracoes/atualizar", settings_refresh, methods=["POST"], tags=["settings"])
+app.add_api_route("/configuracoes/servicos/adicionar", settings_add_service, methods=["POST"], tags=["settings"])
+app.add_api_route("/configuracoes/servicos/remover", settings_remove_service, methods=["POST"], tags=["settings"])
 
 
 @app.on_event("startup")

@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-APP_BUILD = os.getenv("APP_BUILD", "20260720-kanban-v2").strip() or "20260720-kanban-v2"
+APP_BUILD = os.getenv("APP_BUILD", "20260720-servicos-v1").strip() or "20260720-servicos-v1"
 
 
 class Settings:

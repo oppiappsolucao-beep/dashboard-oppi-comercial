@@ -11,8 +11,8 @@ def _normalize_service_name(value: str) -> str:
     return normalize_text(value)
 
 
-def list_commercial_services() -> list[str]:
-    data = load_app_settings()
+def list_commercial_services(*, force_refresh: bool = False) -> list[str]:
+    data = load_app_settings(force_refresh=force_refresh)
     stored = data.get("commercial_services")
     if not isinstance(stored, list):
         return list(DEFAULT_COMMERCIAL_SERVICES)
@@ -52,7 +52,7 @@ def add_commercial_service(name: str) -> None:
     if len(clean) < 2:
         raise ValueError("O nome do serviço deve ter pelo menos 2 caracteres.")
 
-    services = list_commercial_services()
+    services = list_commercial_services(force_refresh=True)
     if any(existing.lower() == clean.lower() for existing in services):
         raise ValueError("Este serviço já está cadastrado.")
 
@@ -62,7 +62,7 @@ def add_commercial_service(name: str) -> None:
 
 def remove_commercial_service(name: str) -> None:
     clean = _normalize_service_name(name)
-    services = list_commercial_services()
+    services = list_commercial_services(force_refresh=True)
     filtered = [item for item in services if item.lower() != clean.lower()]
     if len(filtered) == len(services):
         raise ValueError("Serviço não encontrado.")

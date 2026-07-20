@@ -1,5 +1,6 @@
 """Configurações administrativas persistidas localmente."""
 import json
+import os
 import threading
 from pathlib import Path
 
@@ -10,8 +11,21 @@ _lock = threading.Lock()
 _cache: dict | None = None
 
 
+def _storage_dir() -> Path:
+    configured = os.getenv("APP_STORAGE_DIR", "").strip()
+    if configured:
+        return Path(configured)
+    return Path(__file__).resolve().parent.parent.parent / "storage"
+
+
 def _settings_path() -> Path:
-    return Path(__file__).resolve().parent.parent.parent / "storage" / "app_settings.json"
+    return _storage_dir() / "app_settings.json"
+
+
+def invalidate_app_settings_cache() -> None:
+    global _cache
+    with _lock:
+        _cache = None
 
 
 def _default_settings() -> dict:
@@ -50,11 +64,18 @@ def load_app_settings(force_refresh: bool = False) -> dict:
 
 def save_app_settings(values: dict) -> None:
     global _cache
-    current = load_app_settings()
+    invalidate_app_settings_cache()
+    current = load_app_settings(force_refresh=True)
     current.update(values)
     path = _settings_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(current, ensure_ascii=False, indent=2), encoding="utf-8")
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(current, ensure_ascii=False, indent=2), encoding="utf-8")
+    except OSError as error:
+        raise OSError(
+            f"Não foi possível salvar as configurações em {path}. "
+            "Verifique permissões de escrita ou configure APP_STORAGE_DIR."
+        ) from error
     with _lock:
         _cache = dict(current)
 

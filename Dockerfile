@@ -6,7 +6,7 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV PORT=8501
 ENV HOME=/tmp
-ENV APP_BUILD=20260720-kanban-v2
+ENV APP_BUILD=20260720-servicos-v1
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
