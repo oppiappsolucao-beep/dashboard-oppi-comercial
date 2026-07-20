@@ -1268,6 +1268,55 @@ def validate_unique_company_registration(payload: dict, worksheet, ignore_sheet_
     )
 
 
+
+def compose_endereco(payload: dict) -> str:
+    logradouro = normalize_text(payload.get("endereco"))
+    numero = normalize_text(payload.get("endereco_numero"))
+    complemento = normalize_text(payload.get("endereco_complemento"))
+    bairro = normalize_text(payload.get("bairro"))
+    municipio = normalize_text(payload.get("municipio"))
+    uf = normalize_text(payload.get("uf"))
+    cep = normalize_text(payload.get("cep"))
+
+    if not any([logradouro, numero, complemento, bairro, municipio, uf, cep]):
+        return ""
+
+    street_parts = [logradouro]
+    if numero:
+        street_parts.append(numero)
+    if complemento:
+        street_parts.append(complemento)
+    line = ", ".join(part for part in street_parts if part)
+
+    location_parts = []
+    if bairro:
+        location_parts.append(bairro)
+    city_state = "/".join(part for part in [municipio, uf] if part)
+    if city_state:
+        location_parts.append(city_state)
+    if cep:
+        location_parts.append(f"CEP {cep}")
+
+    if location_parts:
+        return f"{line} - {', '.join(location_parts)}" if line else ", ".join(location_parts)
+    return line
+
+
+def _apply_address_fields(row_values: list, headers: list, payload: dict) -> None:
+    composed = compose_endereco(payload)
+    logradouro = normalize_text(payload.get("endereco"))
+    full_address = composed or logradouro
+
+    _set_sheet_value_by_header(row_values, headers, ["Endereço", "Endereco"], full_address)
+    _set_sheet_value_by_header(row_values, headers, ["Logradouro", "Rua", "Endereço logradouro"], logradouro)
+    _set_sheet_value_by_header(row_values, headers, ["Número", "Numero", "Nº", "No"], payload.get("endereco_numero"))
+    _set_sheet_value_by_header(row_values, headers, ["Complemento", "Compl"], payload.get("endereco_complemento"))
+    _set_sheet_value_by_header(row_values, headers, ["CEP"], payload.get("cep"))
+    _set_sheet_value_by_header(row_values, headers, ["Bairro", "Bairro/Distrito", "Bairro Distrito", "Distrito"], payload.get("bairro"))
+    _set_sheet_value_by_header(row_values, headers, ["Município", "Municipio", "Cidade"], payload.get("municipio"))
+    _set_sheet_value_by_header(row_values, headers, ["UF", "Estado"], payload.get("uf"))
+
+
 def append_company_to_sheet(payload: dict) -> int:
     """Adiciona uma nova empresa na aba principal respeitando a estrutura atual da planilha."""
     client = get_gsheet_client()
@@ -1286,7 +1335,7 @@ def append_company_to_sheet(payload: dict) -> int:
     _set_sheet_value_by_header(row_values, headers, ["Data de abertura", "Data abertura"], payload.get("data_abertura"))
     _set_sheet_value_by_header(row_values, headers, ["Capital", "Capital social"], payload.get("capital"))
     _set_sheet_value_by_header(row_values, headers, ["CNPJ"], payload.get("cnpj"))
-    _set_sheet_value_by_header(row_values, headers, ["Endereço", "Endereco"], payload.get("endereco"))
+    _apply_address_fields(row_values, headers, payload)
     _set_sheet_value_by_header(row_values, headers, ["Email", "E-mail"], payload.get("email_empresa"))
     _set_sheet_value_by_header(row_values, headers, ["Site empresa", "Site", "Website"], payload.get("site"))
 
@@ -1367,7 +1416,7 @@ def update_company_in_sheet(sheet_row: int, payload: dict) -> None:
     _set_sheet_value_by_header(row_values, headers, ["Data de abertura", "Data abertura"], payload.get("data_abertura"))
     _set_sheet_value_by_header(row_values, headers, ["Capital", "Capital social"], payload.get("capital"))
     _set_sheet_value_by_header(row_values, headers, ["CNPJ"], payload.get("cnpj"))
-    _set_sheet_value_by_header(row_values, headers, ["Endereço", "Endereco"], payload.get("endereco"))
+    _apply_address_fields(row_values, headers, payload)
     _set_sheet_value_by_header(row_values, headers, ["Email", "E-mail"], payload.get("email_empresa"))
     _set_sheet_value_by_header(row_values, headers, ["Site empresa", "Site", "Website"], payload.get("site"))
 
@@ -1437,7 +1486,13 @@ def identify_columns(df: pd.DataFrame) -> dict:
         "data_abertura": first_existing_column(df, ["Data de abertura", "Data abertura"]),
         "capital": first_existing_column(df, ["Capital", "Capital social"]),
         "cnpj": first_existing_column(df, ["CNPJ"]),
-        "endereco": first_existing_column(df, ["Endereço", "Endereco"]),
+        "endereco": first_existing_column(df, ["Endereço", "Endereco", "Logradouro", "Rua"]),
+        "endereco_numero": first_existing_column(df, ["Número", "Numero", "Nº", "No"]),
+        "endereco_complemento": first_existing_column(df, ["Complemento", "Compl"]),
+        "cep": first_existing_column(df, ["CEP"]),
+        "bairro": first_existing_column(df, ["Bairro", "Bairro/Distrito", "Bairro Distrito", "Distrito"]),
+        "municipio": first_existing_column(df, ["Município", "Municipio", "Cidade"]),
+        "uf": first_existing_column(df, ["UF", "Estado"]),
         "email": first_existing_column(df, ["Email", "E-mail", "Email empresa", "E-mail empresa", "email_empresa"]),
         "site": first_existing_column(df, ["Site empresa", "Site", "Website"]),
         "telefone_b2b": first_existing_column(df, ["Celular WhatsApp", "Telefone (b2b)", "Telefone b2b", "Telefone"]),

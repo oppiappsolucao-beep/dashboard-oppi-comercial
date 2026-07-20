@@ -31,9 +31,21 @@
           <div class="form-grid">
             <div class="form-group"><label>Nome da empresa *</label><input name="empresa" required value="{{ values.get('empresa', '') }}"></div>
             <div class="form-group"><label>Data de abertura</label><input name="data_abertura" placeholder="DD/MM/AAAA" value="{{ values.get('data_abertura', '') }}"></div>
-            <div class="form-group"><label>CNPJ *</label><input name="cnpj" required placeholder="00.000.000/0000-00" value="{{ values.get('cnpj', '') }}"></div>
+            <div class="form-group"><label>CNPJ</label><input name="cnpj" placeholder="00.000.000/0000-00" value="{{ values.get('cnpj', '') }}"></div>
             <div class="form-group"><label>Capital social</label><input name="capital" placeholder="Ex.: R$ 100.000,00" value="{{ values.get('capital', '') }}"></div>
-            <div class="form-group full"><label>Endereço</label><input name="endereco" value="{{ values.get('endereco', '') }}"></div>
+          </div>
+          <div class="form-grid registration-address-line cols-address-top">
+            <div class="form-group address-endereco"><label>Endereço</label><input name="endereco" value="{{ values.get('endereco', '') }}"></div>
+            <div class="form-group address-numero"><label>Número</label><input name="endereco_numero" value="{{ values.get('endereco_numero', '') }}"></div>
+            <div class="form-group address-complemento"><label>Complemento</label><input name="endereco_complemento" value="{{ values.get('endereco_complemento', '') }}"></div>
+          </div>
+          <div class="form-grid registration-address-line cols-address-bottom">
+            <div class="form-group"><label>CEP</label><input name="cep" placeholder="00000-000" value="{{ values.get('cep', '') }}"></div>
+            <div class="form-group"><label>Bairro/Distrito</label><input name="bairro" value="{{ values.get('bairro', '') }}"></div>
+            <div class="form-group"><label>Município</label><input name="municipio" value="{{ values.get('municipio', '') }}"></div>
+            <div class="form-group"><label>UF</label><input name="uf" maxlength="2" placeholder="SP" value="{{ values.get('uf', '') }}"></div>
+          </div>
+          <div class="form-grid">
             <div class="form-group"><label>Site</label><input name="site" placeholder="https://" value="{{ values.get('site', '') }}"></div>
             <div class="form-group"><label>E-mail da empresa</label><input name="email_empresa" type="email" value="{{ values.get('email_empresa', '') }}"></div>
           </div>

@@ -229,7 +229,8 @@ async def contract_edit_page(request: Request, sheet_row: int):
         parsed_date = date.today()
 
     values = {key: _contract_edit_value(row, columns, key) for key in [
-                "empresa", "data_abertura", "capital", "cnpj", "endereco", "email", "site",
+                "empresa", "data_abertura", "capital", "cnpj", "endereco", "endereco_numero", "endereco_complemento",
+                "cep", "bairro", "municipio", "uf", "email", "site",
                 "telefone_b2b", "telefone_fixo", "telefone_alternativo",
                 "socio_1", "cpf_socio_1", "email_socio_1", "telefone_socio_1",
                 "socio_2", "telefone_socio_2", "cpf_socio_2",

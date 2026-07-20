@@ -37,7 +37,17 @@
 }
 
 .form-grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
+.form-grid.cols-address-top { grid-template-columns: 2fr 0.75fr 1fr; margin-top: 14px; }
+.form-grid.cols-address-bottom { grid-template-columns: 0.9fr 1.2fr 1.2fr 0.55fr; margin-top: 14px; }
 .form-grid .full { grid-column: 1 / -1; }
+
+.registration-new-section .form-grid + .form-grid {
+  margin-top: 0;
+}
+
+.form-card .form-grid + .form-grid {
+  margin-top: 0;
+}
 
 .form-group label {
   display: block;
@@ -810,7 +820,11 @@
   .registration-new-summary-grid,
   .registration-funnel,
   .registration-new-page .form-grid,
-  .registration-new-page .form-grid.cols-3 {
+  .registration-new-page .form-grid.cols-3,
+  .registration-new-page .form-grid.cols-address-top,
+  .registration-new-page .form-grid.cols-address-bottom,
+  .form-card .form-grid.cols-address-top,
+  .form-card .form-grid.cols-address-bottom {
     grid-template-columns: 1fr;
   }
 

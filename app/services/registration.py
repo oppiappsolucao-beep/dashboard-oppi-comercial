@@ -15,7 +15,8 @@ from app.services.legacy_core import (
 
 
 REGISTRATION_FIELDS = [
-    "empresa", "data_abertura", "capital", "cnpj", "endereco", "email_empresa", "site",
+    "empresa", "data_abertura", "capital", "cnpj", "endereco", "endereco_numero", "endereco_complemento",
+    "cep", "bairro", "municipio", "uf", "email_empresa", "site",
     "telefone_b2b", "telefone_fixo", "telefone_alternativo",
     "socio_1", "cpf_socio_1", "email_socio_1", "telefone_socio_1",
     "socio_2", "telefone_socio_2", "cpf_socio_2",
@@ -44,9 +45,7 @@ def validate_registration_form(form: dict) -> str | None:
 
     if not empresa:
         return "Preencha o nome da empresa para concluir o cadastro."
-    if not cnpj:
-        return "Preencha o CNPJ para concluir o cadastro."
-    if not normalize_cnpj_for_duplicate(cnpj):
+    if cnpj and not normalize_cnpj_for_duplicate(cnpj):
         return "Digite um CNPJ válido com 14 números."
 
     for label, phone in [
