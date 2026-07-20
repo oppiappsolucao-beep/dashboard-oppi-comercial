@@ -1,11 +1,11 @@
-<article draggable="true"
+<article
   class="activities-kanban-card sla-{{ card.sla_class }}"
-  title="{{ card.title }} · {{ card.vendedor }}"
+  title="Arraste para mover · {{ card.title }} · {{ card.vendedor }}"
   data-activity-id="{{ card.id }}"
   data-current-stage="{{ card.stage }}"
   role="button"
-  tabindex="0"
-  aria-grabbed="false">
+  tabindex="0">
+  <span class="activities-kanban-card-grip" aria-hidden="true">⋮⋮</span>
   <div class="activities-kanban-card-title">{{ card.empresa }}</div>
   <div class="activities-kanban-card-when">
     <span class="activities-kanban-card-when-icon" aria-hidden="true">📅</span>

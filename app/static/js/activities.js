@@ -56,114 +56,176 @@
   }
 
   function initKanbanDragDrop(root) {
-    if (!root) return;
+    if (!root || root.dataset.kanbanPointerBound === "1") return;
+    root.dataset.kanbanPointerBound = "1";
 
-    let draggedCard = null;
-    let dragMoved = false;
-    let suppressClickUntil = 0;
+    const THRESHOLD = 6;
+    let activeDrag = null;
 
-    root.querySelectorAll(".activities-kanban-card[draggable='true']").forEach(function (card) {
-      if (card.dataset.kanbanBound === "1") return;
-      card.dataset.kanbanBound = "1";
+    function clearDropTargets() {
+      root.querySelectorAll(".activities-kanban-column-body.is-drop-target").forEach(function (el) {
+        el.classList.remove("is-drop-target");
+      });
+    }
 
-      card.addEventListener("dragstart", function (event) {
-        draggedCard = card;
-        dragMoved = true;
-        card.classList.add("is-dragging");
-        card.setAttribute("aria-grabbed", "true");
-        if (event.dataTransfer) {
-          event.dataTransfer.effectAllowed = "move";
-          event.dataTransfer.setData("text/plain", card.getAttribute("data-activity-id") || "");
+    function findDropColumn(clientX, clientY) {
+      if (typeof document.elementsFromPoint !== "function") return null;
+      const elements = document.elementsFromPoint(clientX, clientY);
+      for (let i = 0; i < elements.length; i++) {
+        const column = elements[i].closest(".activities-kanban-column-body[data-drop-stage]");
+        if (column && root.contains(column)) return column;
+      }
+      return null;
+    }
+
+    function moveActivity(activityId, newStage) {
+      const filtersForm = document.getElementById("activities-filters");
+      const formData = filtersForm ? new FormData(filtersForm) : new FormData();
+      formData.set("stage_target", newStage);
+      return fetch("/atividades/" + encodeURIComponent(activityId) + "/mover-etapa", {
+        method: "POST",
+        body: formData,
+        headers: { "HX-Request": "true" },
+      }).then(function (response) {
+        return response.text();
+      });
+    }
+
+    function openActivityPanel(card) {
+      activitySelectCard(card);
+      if (typeof htmx === "undefined") return;
+      htmx.ajax("GET", "/atividades/" + encodeURIComponent(card.getAttribute("data-activity-id")) + "/painel", {
+        target: "#activity-drawer-root",
+        swap: "innerHTML",
+      });
+    }
+
+    function cleanupDragState() {
+      if (!activeDrag) return;
+      if (activeDrag.card.releasePointerCapture && activeDrag.pointerId != null) {
+        try {
+          activeDrag.card.releasePointerCapture(activeDrag.pointerId);
+        } catch (error) {
+          /* ignore */
         }
-      });
+      }
+      activeDrag.card.classList.remove("is-dragging");
+      if (activeDrag.ghost && activeDrag.ghost.parentNode) {
+        activeDrag.ghost.parentNode.removeChild(activeDrag.ghost);
+      }
+      document.body.classList.remove("activity-kanban-dragging");
+      clearDropTargets();
+      activeDrag = null;
+    }
 
-      card.addEventListener("dragend", function () {
-        card.classList.remove("is-dragging");
-        card.setAttribute("aria-grabbed", "false");
-        root.querySelectorAll(".activities-kanban-column-body.is-drop-target").forEach(function (column) {
-          column.classList.remove("is-drop-target");
-        });
-        if (dragMoved) {
-          suppressClickUntil = Date.now() + 250;
+    function onPointerMove(event) {
+      if (!activeDrag) return;
+
+      const dx = event.clientX - activeDrag.startX;
+      const dy = event.clientY - activeDrag.startY;
+
+      if (!activeDrag.dragging) {
+        if (Math.abs(dx) < THRESHOLD && Math.abs(dy) < THRESHOLD) return;
+        activeDrag.dragging = true;
+        activeDrag.card.classList.add("is-dragging");
+        document.body.classList.add("activity-kanban-dragging");
+
+        const rect = activeDrag.card.getBoundingClientRect();
+        const ghost = activeDrag.card.cloneNode(true);
+        ghost.classList.add("activities-kanban-card-ghost");
+        ghost.setAttribute("aria-hidden", "true");
+        ghost.style.width = rect.width + "px";
+        ghost.style.left = rect.left + "px";
+        ghost.style.top = rect.top + "px";
+        document.body.appendChild(ghost);
+        activeDrag.ghost = ghost;
+        activeDrag.offsetX = activeDrag.startX - rect.left;
+        activeDrag.offsetY = activeDrag.startY - rect.top;
+      }
+
+      if (activeDrag.ghost) {
+        activeDrag.ghost.style.left = (event.clientX - activeDrag.offsetX) + "px";
+        activeDrag.ghost.style.top = (event.clientY - activeDrag.offsetY) + "px";
+      }
+
+      clearDropTargets();
+      const column = findDropColumn(event.clientX, event.clientY);
+      activeDrag.dropColumn = column;
+      if (column) column.classList.add("is-drop-target");
+    }
+
+    function onPointerUp(event) {
+      if (!activeDrag) return;
+
+      const card = activeDrag.card;
+      const wasDragging = activeDrag.dragging;
+      const dropColumn = wasDragging
+        ? findDropColumn(event.clientX, event.clientY)
+        : null;
+
+      cleanupDragState();
+      document.removeEventListener("pointermove", onPointerMove);
+      document.removeEventListener("pointerup", onPointerUp);
+      document.removeEventListener("pointercancel", onPointerUp);
+
+      if (!wasDragging) {
+        openActivityPanel(card);
+        return;
+      }
+
+      if (!dropColumn) return;
+
+      const newStage = dropColumn.getAttribute("data-drop-stage") || "";
+      const activityId = card.getAttribute("data-activity-id") || "";
+      const currentStage = card.getAttribute("data-current-stage") || "";
+      if (!activityId || !newStage || newStage === currentStage) return;
+
+      moveActivity(activityId, newStage).then(function (html) {
+        const boardRoot = document.getElementById("activities-root");
+        if (!boardRoot) return;
+        boardRoot.innerHTML = html;
+        if (typeof htmx !== "undefined") {
+          htmx.process(boardRoot);
         }
-        dragMoved = false;
-        draggedCard = null;
+        initActivitiesInline();
+      }).catch(function () {
+        window.alert("Não foi possível mover a atividade. Tente novamente.");
       });
+    }
 
-      card.addEventListener("click", function (event) {
-        if (Date.now() < suppressClickUntil) {
-          event.preventDefault();
-          return;
-        }
-        activitySelectCard(card);
-        if (typeof htmx === "undefined") return;
-        htmx.ajax("GET", "/atividades/" + encodeURIComponent(card.getAttribute("data-activity-id")) + "/painel", {
-          target: "#activity-drawer-root",
-          swap: "innerHTML",
-        });
-      });
+    root.addEventListener("pointerdown", function (event) {
+      if (event.button !== 0) return;
+      const card = event.target.closest(".activities-kanban-card");
+      if (!card || !root.contains(card)) return;
+      if (activeDrag) return;
 
-      card.addEventListener("keydown", function (event) {
-        if (event.key !== "Enter" && event.key !== " ") return;
-        event.preventDefault();
-        card.click();
-      });
+      activeDrag = {
+        card: card,
+        startX: event.clientX,
+        startY: event.clientY,
+        dragging: false,
+        ghost: null,
+        dropColumn: null,
+        offsetX: 0,
+        offsetY: 0,
+        pointerId: event.pointerId,
+      };
+
+      if (card.setPointerCapture) {
+        card.setPointerCapture(event.pointerId);
+      }
+
+      document.addEventListener("pointermove", onPointerMove);
+      document.addEventListener("pointerup", onPointerUp);
+      document.addEventListener("pointercancel", onPointerUp);
     });
 
-    root.querySelectorAll(".activities-kanban-column-body[data-drop-stage]").forEach(function (column) {
-      if (column.dataset.dropBound === "1") return;
-      column.dataset.dropBound = "1";
-
-      column.addEventListener("dragover", function (event) {
-        event.preventDefault();
-        column.classList.add("is-drop-target");
-        if (event.dataTransfer) {
-          event.dataTransfer.dropEffect = "move";
-        }
-      });
-
-      column.addEventListener("dragleave", function (event) {
-        if (event.currentTarget.contains(event.relatedTarget)) return;
-        column.classList.remove("is-drop-target");
-      });
-
-      column.addEventListener("drop", function (event) {
-        event.preventDefault();
-        column.classList.remove("is-drop-target");
-
-        const activityId = (event.dataTransfer && event.dataTransfer.getData("text/plain"))
-          || (draggedCard && draggedCard.getAttribute("data-activity-id"))
-          || "";
-        const newStage = column.getAttribute("data-drop-stage") || "";
-        const currentStage = draggedCard && draggedCard.getAttribute("data-current-stage");
-
-        if (!activityId || !newStage || currentStage === newStage) return;
-
-        dragMoved = true;
-        suppressClickUntil = Date.now() + 250;
-
-        const filtersForm = document.getElementById("activities-filters");
-        const formData = filtersForm ? new FormData(filtersForm) : new FormData();
-        formData.set("stage_target", newStage);
-
-        fetch("/atividades/" + encodeURIComponent(activityId) + "/mover-etapa", {
-          method: "POST",
-          body: formData,
-          headers: { "HX-Request": "true" },
-        }).then(function (response) {
-          return response.text();
-        }).then(function (html) {
-          const boardRoot = document.getElementById("activities-root");
-          if (!boardRoot) return;
-          boardRoot.innerHTML = html;
-          if (typeof htmx !== "undefined") {
-            htmx.process(boardRoot);
-          }
-          initActivitiesInline();
-        }).catch(function () {
-          window.alert("Não foi possível mover a atividade. Tente novamente.");
-        });
-      });
+    root.addEventListener("keydown", function (event) {
+      const card = event.target.closest(".activities-kanban-card");
+      if (!card || !root.contains(card)) return;
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      openActivityPanel(card);
     });
   }
 
