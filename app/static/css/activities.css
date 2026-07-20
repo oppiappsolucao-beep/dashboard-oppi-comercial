@@ -118,10 +118,17 @@ body.activity-kanban-dragging .activities-kanban-board {
 
 .activities-kanban-column-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 8px;
   padding: 0 2px;
+}
+
+.activities-kanban-column-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
 }
 
 .activities-kanban-column-title {
@@ -129,6 +136,13 @@ body.activity-kanban-dragging .activities-kanban-board {
   font-weight: 800;
   color: var(--text);
   line-height: 1.25;
+}
+
+.activities-kanban-column-sla {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--muted);
+  line-height: 1.2;
 }
 
 .activities-kanban-column-count {

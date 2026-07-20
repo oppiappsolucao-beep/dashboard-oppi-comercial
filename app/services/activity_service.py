@@ -250,37 +250,105 @@ def _format_when(scheduled_at: str | None) -> tuple[str, str, str]:
     return dt.strftime("%d/%m/%Y, %H:%M"), d.strftime("%d/%m/%Y"), time_part
 
 
-def calcular_sla_atividade(record: dict, status: str, now: datetime | None = None) -> tuple[str, str, str]:
-    """Retorna (sla_key, sla_label, sla_class) para o card do kanban."""
+def _stamp_stage_entered(updates: dict, new_stage: str, old_stage: str | None = None) -> dict:
+    normalized_new = normalize_legacy_stage(new_stage)
+    normalized_old = normalize_legacy_stage(old_stage) if old_stage else None
+    if normalized_new and normalized_new != normalized_old:
+        updates["stage_entered_at"] = _now().isoformat(timespec="seconds")
+    return updates
+
+
+def _resolve_stage_entered_at(record: dict, stage: str, tenant_id: str | None = None) -> datetime:
+    tenant = tenant_id or record.get("tenant_id") or DEFAULT_TENANT_ID
+    stage = normalize_legacy_stage(stage) or "Novo Lead"
+    activity_stage = normalize_legacy_stage(record.get("stage"))
+
+    entered_raw = record.get("stage_entered_at")
+    if entered_raw and activity_stage == stage:
+        return _parse_datetime(entered_raw)
+
+    sheet_row = int(record.get("sheet_row") or 0)
+    if sheet_row:
+        stored = get_lead_action(tenant, sheet_row) or {}
+        override = normalize_legacy_stage(stored.get("stage_override"))
+        if stored.get("stage_entered_at") and (not override or override == stage):
+            return _parse_datetime(stored["stage_entered_at"])
+
+    for key in ("created_at", "updated_at"):
+        if record.get(key):
+            return _parse_datetime(record[key])
+
+    if record.get("scheduled_at"):
+        return _parse_datetime(record["scheduled_at"])
+
+    return _now()
+
+
+def calcular_sla_atividade(
+    record: dict,
+    status: str,
+    now: datetime | None = None,
+    tenant_id: str | None = None,
+    stage: str | None = None,
+) -> tuple[str, str, str]:
+    """Retorna (sla_key, sla_label, sla_class) com base na etapa e tempo na etapa."""
+    stage = normalize_legacy_stage(stage or record.get("stage")) or "Novo Lead"
+    sla = PIPELINE_STAGE_SLA.get(stage, {})
+
+    if stage == "Fechado" or sla.get("completed"):
+        return "concluido", "Concluído", "concluido"
     if status == "concluida":
         return "concluido", "Concluído", "concluido"
     if status == "cancelada":
         return "cancelada", "Cancelada", "cancelada"
 
     now = now or _now()
-    scheduled_at = record.get("scheduled_at")
-    if not scheduled_at:
-        return "no_prazo", "No prazo", "no_prazo"
-
-    dt = _parse_datetime(scheduled_at)
-    today = now.date()
-    scheduled_day = dt.date()
+    entered_at = _resolve_stage_entered_at(record, stage, tenant_id)
     priority = int(record.get("priority") or 0)
 
-    if status == "atrasada" or dt < now:
-        days_late = max(0, (today - scheduled_day).days)
-        hours_late = max(0, (now - dt).total_seconds() / 3600)
-        stage = normalize_legacy_stage(record.get("stage")) or "Novo Lead"
-        sla = PIPELINE_STAGE_SLA.get(stage, {})
-        critical_days = max(3, int(sla.get("max_days", 2) or 2) + 1)
-        critical_hours = max(24, int(sla.get("max_hours", 24) or 24) * 2)
+    if sla.get("max_hours"):
+        max_hours = int(sla["max_hours"])
+        deadline = entered_at + timedelta(hours=max_hours)
+        remaining = (deadline - now).total_seconds()
+        elapsed_hours = max(0, (now - entered_at).total_seconds() / 3600)
 
-        if priority >= 100 or days_late >= critical_days or hours_late >= critical_hours:
-            return "critico", "Crítico", "critico"
-        return "atrasado", "Atrasado", "atrasado"
+        if now >= deadline:
+            critical_hours = max(24, max_hours * 2)
+            if priority >= 100 or elapsed_hours >= critical_hours:
+                return "critico", "Crítico", "critico"
+            return "atrasado", "Atrasado", "atrasado"
 
-    if scheduled_day == today:
-        return "vence_hoje", "Vence hoje", "vence_hoje"
+        warn_seconds = max(900, max_hours * 3600 * 0.25)
+        if remaining <= warn_seconds:
+            return "vence_hoje", "Vence hoje", "vence_hoje"
+        return "no_prazo", "No prazo", "no_prazo"
+
+    if sla.get("same_day"):
+        entered_date = entered_at.date()
+        today = now.date()
+        if today > entered_date:
+            days_late = (today - entered_date).days
+            if priority >= 100 or days_late >= 2:
+                return "critico", "Crítico", "critico"
+            return "atrasado", "Atrasado", "atrasado"
+        if today == entered_date and now.hour >= 17:
+            return "vence_hoje", "Vence hoje", "vence_hoje"
+        return "no_prazo", "No prazo", "no_prazo"
+
+    max_days = int(sla.get("max_days", 0) or 0)
+    if max_days:
+        entered_date = entered_at.date()
+        today = now.date()
+        days_elapsed = (today - entered_date).days
+
+        if days_elapsed > max_days:
+            critical_days = max(3, max_days + 1)
+            if priority >= 100 or days_elapsed >= critical_days + max_days:
+                return "critico", "Crítico", "critico"
+            return "atrasado", "Atrasado", "atrasado"
+        if days_elapsed == max_days:
+            return "vence_hoje", "Vence hoje", "vence_hoje"
+        return "no_prazo", "No prazo", "no_prazo"
 
     return "no_prazo", "No prazo", "no_prazo"
 
@@ -357,6 +425,7 @@ def sync_auto_activities(
             "description": ACTION_DESCRIPTIONS.get(process_action, item["next_action"]),
             "channel": channel,
             "stage": stage,
+            "stage_entered_at": _now().isoformat(timespec="seconds"),
             "result": "",
             "result_notes": "",
             "scheduled_at": scheduled_at,
@@ -392,7 +461,7 @@ def _serialize_activity(record: dict, tenant_id: str | None = None) -> dict:
         result_display = result
     vendedor = normalize_text(record.get("assigned_user_id")) or "Sem vendedor"
     status_label = ACTIVITY_STATUS_LABELS.get(status, status.title())
-    sla_key, sla_label, sla_class = calcular_sla_atividade(record, status)
+    sla_key, sla_label, sla_class = calcular_sla_atividade(record, status, tenant_id=tenant_id, stage=stage)
     allowed_next_actions = get_next_action_options(record.get("next_action", ""))
     next_action_value = normalize_legacy_next_action(record.get("next_action")) or ""
     next_action_raw = normalize_text(record.get("next_action"))
@@ -557,11 +626,11 @@ def _consolidate_lead_pipeline_activity(
             continue
         activity_id = record.get("id")
         if activity_id == active_activity_id:
-            save_activity(tenant_id, activity_id, {
+            save_activity(tenant_id, activity_id, _stamp_stage_entered({
                 "stage": stage,
                 "move_stage": stage,
                 "updated_by": user,
-            })
+            }, stage, _resolve_effective_stage(record, tenant_id)))
             continue
         if record.get("status") not in open_statuses:
             continue
@@ -589,6 +658,7 @@ def build_activities_kanban(
             "index": index,
             "stage": stage,
             "label": f"{index}. {stage}",
+            "sla_hint": PIPELINE_STAGE_SLA.get(stage, {}).get("label", ""),
             "count": len(cards),
             "cards": cards,
         })
@@ -782,6 +852,7 @@ def criar_proxima_atividade(
         "description": ACTION_DESCRIPTIONS.get(process_action, ""),
         "channel": channel,
         "stage": stage,
+        "stage_entered_at": _now().isoformat(timespec="seconds"),
         "result": "",
         "scheduled_at": scheduled_at,
         "scheduled_date": scheduled_date[:10],
@@ -982,6 +1053,7 @@ def atualizar_atividade_inline(
         "stage": move_stage or current_stage,
         "updated_by": user,
     }
+    _stamp_stage_entered(updates, updates["stage"], current_stage)
 
     if status == "concluida":
         updates["completed_at"] = _now().isoformat(timespec="seconds")
@@ -1378,6 +1450,7 @@ def atualizar_proxima_acao_atividade(
     if target_stage:
         activity_updates["stage"] = target_stage
         activity_updates["move_stage"] = target_stage
+        _stamp_stage_entered(activity_updates, target_stage, current_stage)
 
     save_activity(tenant_id, activity_id, activity_updates)
 
@@ -1657,11 +1730,11 @@ def mover_atividade_kanban(
     if old_stage == new_stage:
         return _serialize_activity({"id": activity_id, **current}, tenant_id), None
 
-    saved = save_activity(tenant_id, activity_id, {
+    saved = save_activity(tenant_id, activity_id, _stamp_stage_entered({
         "stage": new_stage,
         "move_stage": new_stage,
         "updated_by": user,
-    })
+    }, new_stage, old_stage))
 
     sheet_row = int(current.get("sheet_row") or 0)
     if sheet_row:
@@ -1808,6 +1881,7 @@ def criar_atividade(
         "channel": channel,
         "channel_other": channel_other,
         "stage": stage,
+        "stage_entered_at": _now().isoformat(timespec="seconds"),
         "result": result,
         "result_notes": result_notes or lost_reason,
         "note": note,

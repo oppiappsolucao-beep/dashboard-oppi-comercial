@@ -322,6 +322,99 @@ def run_qa() -> QAResult:
         else:
             result.ok("Sheet_row resolvido pela empresa abre edição do cadastro")
 
+        # 10) SLA por etapa — Novo Lead dentro de 1h = no prazo
+        now = activity_service._now()
+        sla_ok, _, _ = activity_service.calcular_sla_atividade(
+            {
+                "stage": "Novo Lead",
+                "stage_entered_at": (now - timedelta(minutes=30)).isoformat(timespec="seconds"),
+                "priority": 20,
+            },
+            "pendente",
+            now=now,
+        )
+        if sla_ok != "no_prazo":
+            result.fail(f"Novo Lead 30min deveria ser no_prazo, veio: {sla_ok}")
+        else:
+            result.ok("SLA Novo Lead: no prazo dentro de 1 hora")
+
+        sla_late, label_late, _ = activity_service.calcular_sla_atividade(
+            {
+                "stage": "Novo Lead",
+                "stage_entered_at": (now - timedelta(hours=2)).isoformat(timespec="seconds"),
+                "priority": 20,
+            },
+            "pendente",
+            now=now,
+        )
+        if sla_late != "atrasado":
+            result.fail(f"Novo Lead 2h deveria ser atrasado, veio: {sla_late} ({label_late})")
+        else:
+            result.ok("SLA Novo Lead: atrasado após 1 hora")
+
+        sla_contato, _, _ = activity_service.calcular_sla_atividade(
+            {
+                "stage": "Contato",
+                "stage_entered_at": now.replace(hour=9, minute=0).isoformat(timespec="seconds"),
+                "priority": 20,
+            },
+            "pendente",
+            now=now.replace(hour=10, minute=0),
+        )
+        if sla_contato != "no_prazo":
+            result.fail(f"Contato no mesmo dia de manhã deveria ser no_prazo, veio: {sla_contato}")
+        else:
+            result.ok("SLA Contato: no prazo no mesmo dia")
+
+        sla_contato_late, _, _ = activity_service.calcular_sla_atividade(
+            {
+                "stage": "Contato",
+                "stage_entered_at": (now - timedelta(days=1)).isoformat(timespec="seconds"),
+                "priority": 20,
+            },
+            "pendente",
+            now=now,
+        )
+        if sla_contato_late != "atrasado":
+            result.fail(f"Contato de ontem deveria ser atrasado, veio: {sla_contato_late}")
+        else:
+            result.ok("SLA Contato: atrasado após o dia")
+
+        sla_reuniao_warn, _, _ = activity_service.calcular_sla_atividade(
+            {
+                "stage": "Reunião",
+                "stage_entered_at": (now - timedelta(days=7)).isoformat(timespec="seconds"),
+                "priority": 20,
+            },
+            "pendente",
+            now=now,
+        )
+        if sla_reuniao_warn != "vence_hoje":
+            result.fail(f"Reunião no 7º dia deveria ser vence_hoje, veio: {sla_reuniao_warn}")
+        else:
+            result.ok("SLA Reunião: vence hoje no último dia")
+
+        sla_fechado, label_fechado, _ = activity_service.calcular_sla_atividade(
+            {"stage": "Fechado", "priority": 20},
+            "pendente",
+            now=now,
+        )
+        if sla_fechado != "concluido":
+            result.fail(f"Fechado deveria ser concluído, veio: {sla_fechado} ({label_fechado})")
+        else:
+            result.ok("SLA Fechado: processo concluído")
+
+        # 11) Mover card reinicia SLA na nova etapa
+        moved, err = mover_atividade_kanban(tenant, activity_id, "Qualificação", user)
+        if err:
+            result.fail(f"Mover para Qualificação (SLA): {err}")
+        else:
+            sla_after_move = moved.get("sla_key")
+            if sla_after_move != "no_prazo":
+                result.fail(f"Após mover etapa, SLA deveria reiniciar (no_prazo), veio: {sla_after_move}")
+            else:
+                result.ok("SLA reinicia ao mover card de etapa")
+
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

@@ -14,11 +14,11 @@ PIPELINE_STAGE_OPTIONS = [
 PIPELINE_STAGE_SLA = {
     "Novo Lead": {"label": "Até 1 hora", "max_hours": 1},
     "Contato": {"label": "No mesmo dia", "same_day": True},
-    "Qualificação": {"label": "1 a 3 dias", "max_days": 3},
+    "Qualificação": {"label": "1 a 3 dias", "min_days": 1, "max_days": 3},
     "Reunião": {"label": "Até 7 dias", "max_days": 7},
     "Proposta": {"label": "Até 24 horas", "max_hours": 24},
     "Retorno": {"label": "2 dias", "max_days": 2},
-    "Negociação": {"label": "3 a 7 dias", "max_days": 7},
+    "Negociação": {"label": "3 a 7 dias", "min_days": 3, "max_days": 7},
     "Fechado": {"label": "Processo concluído", "completed": True},
 }
 
