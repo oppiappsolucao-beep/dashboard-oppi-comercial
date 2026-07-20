@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
-from app.config import settings
+from app.config import APP_BUILD, settings
 from app.routers import auth, activities, contracts, funnel, goals_reports, leads, overview, proposals, registration
 from app.routers import settings as settings_router
 from app.templating import render
@@ -85,7 +85,7 @@ async def startup_maintenance() -> None:
 
 @app.get("/health")
 async def health():
-    return JSONResponse({"status": "ok"})
+    return JSONResponse({"status": "ok", "build": APP_BUILD})
 
 
 @app.get("/health/pdf-engine")

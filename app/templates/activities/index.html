@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
-<link rel="stylesheet" href="/static/css/activities.css?v=12">
+<link rel="stylesheet" href="/static/css/activities.css?v={{ static_version }}">
 <link rel="stylesheet" href="/static/css/next-action-picker.css?v=1">
 <div class="page-header">
   <div>
@@ -27,6 +27,7 @@
   {% include "partials/activities_content.html" %}
 </div>
 
-<script src="/static/js/activities.js?v=8"></script>
+<script src="/static/js/activities-kanban.js?v={{ static_version }}"></script>
+<script src="/static/js/activities.js?v={{ static_version }}"></script>
 <script src="/static/js/next-action-picker.js?v=2"></script>
 {% endblock %}
