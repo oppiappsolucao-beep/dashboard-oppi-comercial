@@ -2,13 +2,13 @@ import csv
 import io
 
 from fastapi import APIRouter, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 
 from app.dependencies import get_prepared_data, require_auth
 from app.services.filters import apply_dashboard_filters, apply_default_period_filters, get_filter_options, parse_dashboard_filters
 from app.services.lead_actions_storage import DEFAULT_TENANT_ID
-from app.services.leads import ETAPA_STAGES, build_leads_export_rows, build_leads_kpi_cards, build_leads_table
-from app.services.legacy_core import invalidate_sheet_cache
+from app.services.leads import ETAPA_STAGES, atualizar_proxima_acao_lead, build_leads_export_rows, build_leads_kpi_cards, build_leads_table
+from app.services.legacy_core import invalidate_sheet_cache, normalize_text
 from app.templating import render
 
 router = APIRouter()
@@ -115,6 +115,25 @@ async def leads_filters(
         "per_page": per_page,
     })
     return render(request, "partials/leads_content.html", _leads_context(request, filters, leads_params))
+
+
+@router.post("/leads-e-empresas/{sheet_row}/proxima-acao")
+async def leads_update_next_action(
+    request: Request,
+    sheet_row: int,
+    next_action: str = Form(...),
+):
+    redirect = require_auth(request)
+    if redirect:
+        return JSONResponse({"error": "Não autenticado."}, status_code=401)
+
+    user = normalize_text(request.session.get("username", "")) or "Usuário"
+    try:
+        normalized = atualizar_proxima_acao_lead(DEFAULT_TENANT_ID, sheet_row, next_action, user)
+    except ValueError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=400)
+
+    return JSONResponse({"ok": True, "next_action": normalized})
 
 
 @router.get("/leads-e-empresas/exportar")

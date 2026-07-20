@@ -180,15 +180,14 @@
             </div>
           </td>
           <td>
-            {% if row.proxima_acao != "—" %}
-            <div class="next-action-cell">
-              <span class="next-action-icon" aria-hidden="true">{{ row.next_action_icon }}</span>
-              <div>
-                <div class="next-action-title">{{ row.proxima_acao }}</div>
-                {% if row.proxima_acao_horario %}
-                <div class="next-action-schedule">{{ row.proxima_acao_horario }}</div>
-                {% endif %}
-              </div>
+            {% if row.sheet_row and row.next_action_options %}
+            <div class="leads-next-action-wrap">
+              {% with save_url='/leads-e-empresas/' ~ row.sheet_row ~ '/proxima-acao', options_json=row.next_action_options_json, current_action=row.next_action_current, options=row.next_action_options %}
+              {% include "partials/next_action_picker.html" %}
+              {% endwith %}
+              {% if row.proxima_acao_horario and row.proxima_acao_horario != "—" %}
+              <div class="next-action-schedule-below">{{ row.proxima_acao_horario }}</div>
+              {% endif %}
             </div>
             {% else %}
             <span class="contact-empty">—</span>

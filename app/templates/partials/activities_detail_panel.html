@@ -43,10 +43,9 @@
 
     <section class="activity-drawer-section">
       <div class="activity-drawer-section-label">Próxima ação</div>
-      <div class="activity-drawer-next-action">
-        <span>{{ next_action_display }}</span>
-        <span class="activity-drawer-chevron" aria-hidden="true">›</span>
-      </div>
+      {% with save_url='/atividades/' ~ activity.id ~ '/proxima-acao', options_json=next_action_options_json, current_action=next_action_current, options=next_action_options %}
+      {% include "partials/next_action_picker.html" %}
+      {% endwith %}
     </section>
 
     <section class="activity-drawer-section">

@@ -17,6 +17,7 @@ from app.services.activity_service import (
     criar_atividade,
     mover_atividade_kanban,
     sugerir_fluxo_por_resultado,
+    atualizar_proxima_acao_atividade,
 )
 from app.services.activities_storage import DEFAULT_TENANT_ID, soft_delete_activity
 from app.services.filters import apply_default_period_filters, apply_dashboard_filters, get_filter_options, parse_dashboard_filters
@@ -134,6 +135,24 @@ async def activities_detail_panel(request: Request, activity_id: str):
         return HTMLResponse("Atividade não encontrada.", status_code=404)
 
     return render(request, "partials/activities_detail_panel.html", panel)
+
+
+@router.post("/atividades/{activity_id}/proxima-acao")
+async def activities_update_next_action(
+    request: Request,
+    activity_id: str,
+    next_action: str = Form(...),
+):
+    redirect = require_auth(request)
+    if redirect:
+        return JSONResponse({"error": "Não autenticado."}, status_code=401)
+
+    user = normalize_text(request.session.get("username", "")) or "Usuário"
+    normalized, error = atualizar_proxima_acao_atividade(DEFAULT_TENANT_ID, activity_id, next_action, user)
+    if error:
+        return JSONResponse({"error": error}, status_code=400)
+
+    return JSONResponse({"ok": True, "next_action": normalized})
 
 
 @router.post("/atividades/{activity_id}/mover-etapa", response_class=HTMLResponse)

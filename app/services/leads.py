@@ -1,13 +1,14 @@
 """Leads e Empresas — KPIs e tabela."""
+import json
 from datetime import date, datetime, timedelta
 
 import pandas as pd
 
-from config.crm_options import NEXT_ACTION_BY_STAGE, PIPELINE_STAGE_BADGE, PIPELINE_STAGE_OPTIONS
-from app.services.crm_validation_service import resolve_pipeline_stage
+from config.crm_options import NEXT_ACTION_BY_STAGE, NEXT_ACTION_OPTIONS, PIPELINE_STAGE_BADGE, PIPELINE_STAGE_OPTIONS
+from app.services.crm_validation_service import get_next_action_options, normalize_legacy_next_action, resolve_pipeline_stage
 from app.services.followup_service import _email_for_row, _phone_for_row, _whatsapp_href
-from app.services.lead_actions_storage import get_lead_action
-from app.services.legacy_core import deal_value_from_row, row_field_value, safe_series, status_group
+from app.services.lead_actions_storage import append_interaction, get_lead_action, save_lead_action
+from app.services.legacy_core import deal_value_from_row, normalize_text, row_field_value, safe_series, status_group
 
 ETAPA_STAGES = PIPELINE_STAGE_OPTIONS
 ETAPA_BADGE = PIPELINE_STAGE_BADGE
@@ -251,9 +252,13 @@ def _build_row(row, columns: dict, tab: str, tenant_id: str | None) -> dict:
     if next_action_completed or not next_action_date:
         proxima_acao = "—"
         proxima_acao_horario = ""
+        next_action_current = NEXT_ACTION_BY_STAGE.get(etapa, NEXT_ACTION_OPTIONS[0])
     else:
         proxima_acao = next_action_description or NEXT_ACTION_BY_STAGE.get(etapa, "Definir próxima ação")
         proxima_acao_horario = _format_next_action_schedule(next_action_date, next_action_time)
+        next_action_current = normalize_legacy_next_action(proxima_acao) or proxima_acao
+
+    next_action_options = get_next_action_options(next_action_current)
 
     tipo_label = "Empresa" if tab == "empresas" else "Lead"
 
@@ -274,6 +279,9 @@ def _build_row(row, columns: dict, tab: str, tenant_id: str | None) -> dict:
         "proxima_acao": proxima_acao,
         "proxima_acao_horario": proxima_acao_horario,
         "next_action_icon": _next_action_icon(next_action_type),
+        "next_action_current": next_action_current,
+        "next_action_options": next_action_options,
+        "next_action_options_json": json.dumps(next_action_options, ensure_ascii=False),
         "valor": _format_money(deal_value_from_row(row)),
         "valor_num": deal_value_from_row(row),
         "whatsapp_href": _whatsapp_href(telefone if telefone != "—" else ""),
@@ -318,3 +326,35 @@ def build_leads_table(
 def build_leads_export_rows(filtered_df: pd.DataFrame, columns: dict, tab: str, stage: str, sort: str, tenant_id: str | None) -> list[dict]:
     view_df = apply_leads_view(filtered_df, tab, stage, sort)
     return [_build_row(row, columns, tab, tenant_id) for _, row in view_df.iterrows()]
+
+
+def atualizar_proxima_acao_lead(
+    tenant_id: str | None,
+    sheet_row: int,
+    next_action: str,
+    user: str,
+) -> str:
+    normalized = normalize_legacy_next_action(next_action) or normalize_text(next_action)
+    if not normalized:
+        raise ValueError("Próxima ação inválida.")
+
+    record = get_lead_action(tenant_id, sheet_row) or {}
+    save_lead_action(
+        tenant_id,
+        sheet_row,
+        {
+            "next_action_description": normalized,
+            "next_action_date": record.get("next_action_date") or date.today().isoformat(),
+            "next_action_time": record.get("next_action_time") or "09:00",
+            "next_action_type": record.get("next_action_type") or "whatsapp",
+            "next_action_completed": False,
+        },
+    )
+    append_interaction(
+        tenant_id,
+        sheet_row,
+        interaction_type="next_action_update",
+        description=f"Próxima ação alterada para: {normalized}",
+        user=user,
+    )
+    return normalized

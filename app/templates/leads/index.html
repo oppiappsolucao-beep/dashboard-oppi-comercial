@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 <link rel="stylesheet" href="/static/css/leads.css?v=4">
+<link rel="stylesheet" href="/static/css/next-action-picker.css?v=1">
 <div class="page-header">
   <div>
     <div class="page-title">Leads e Empresas</div>
@@ -18,6 +19,7 @@
   {% include "partials/leads_content.html" %}
 </div>
 
+<script src="/static/js/next-action-picker.js?v=1"></script>
 <script>
 function exportLeadsCsv() {
   var form = document.getElementById('leads-filters');

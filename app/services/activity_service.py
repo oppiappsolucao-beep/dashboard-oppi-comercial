@@ -1,6 +1,7 @@
 """Serviço de atividades comerciais — conectado à Visão Geral."""
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 
@@ -775,6 +776,8 @@ def build_activity_detail_panel(
     )
     next_action_at = record.get("updated_at") or activity_created
     suggestion = suggest_from_result("Cliente respondeu", stage)
+    next_action_current = normalize_legacy_next_action(next_action_display) or next_action_display
+    next_action_options = get_next_action_options(activity.get("proxima_acao_value") or next_action_current)
 
     timeline = [
         {
@@ -805,8 +808,37 @@ def build_activity_detail_panel(
         "default_next_action": NEXT_ACTION_BY_STAGE.get(stage, activity["title"]),
         "default_next_action_date": suggestion.get("next_action_date", date.today().isoformat()),
         "default_next_action_time": suggestion.get("next_action_time", "10:00"),
+        "next_action_current": next_action_current,
+        "next_action_options": next_action_options,
+        "next_action_options_json": json.dumps(next_action_options, ensure_ascii=False),
         "channels": CHANNEL_OPTIONS,
     }
+
+
+def atualizar_proxima_acao_atividade(
+    tenant_id: str | None,
+    activity_id: str,
+    next_action: str,
+    user: str,
+) -> tuple[str | None, str | None]:
+    from app.services.activities_storage import get_activity, save_activity
+    from app.services.leads import atualizar_proxima_acao_lead
+
+    record = get_activity(tenant_id, activity_id)
+    if not record:
+        return None, "Atividade não encontrada."
+
+    normalized = normalize_legacy_next_action(next_action) or normalize_text(next_action)
+    if not normalized:
+        return None, "Próxima ação inválida."
+
+    save_activity(tenant_id, activity_id, {"next_action": normalized})
+
+    sheet_row = int(record.get("sheet_row") or 0)
+    if sheet_row:
+        atualizar_proxima_acao_lead(tenant_id, sheet_row, normalized, user)
+
+    return normalized, None
 
 
 def build_activity_page_context(

@@ -1,0 +1,18 @@
+<div class="next-action-picker"
+  data-save-url="{{ save_url }}"
+  data-options='{{ options_json }}'
+  data-current="{{ current_action }}">
+  <button type="button" class="next-action-picker-nav prev" aria-label="Ação anterior">‹</button>
+  <div class="next-action-picker-main">
+    <button type="button" class="next-action-picker-pill" aria-label="Alterar próxima ação">
+      <span class="next-action-picker-label">{{ current_action }}</span>
+      <span class="next-action-picker-chevron" aria-hidden="true">›</span>
+    </button>
+    <select class="next-action-picker-select" aria-label="Selecionar próxima ação">
+      {% for option in options %}
+      <option value="{{ option }}" {% if option == current_action %}selected{% endif %}>{{ option }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <button type="button" class="next-action-picker-nav next" aria-label="Próxima ação">›</button>
+</div>
