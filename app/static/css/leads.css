@@ -38,32 +38,6 @@
   margin-bottom: 18px;
 }
 
-.leads-kpi-card {
-  position: relative;
-}
-
-.leads-kpi-top {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  margin-bottom: 10px;
-}
-
-.leads-kpi-info {
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  border: 1px solid #D1D5DB;
-  color: #9CA3AF;
-  font-size: 0.68rem;
-  font-weight: 800;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 1;
-  cursor: help;
-}
-
 .leads-toolbar {
   display: flex;
   align-items: center;

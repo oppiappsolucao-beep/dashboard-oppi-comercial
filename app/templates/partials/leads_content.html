@@ -75,9 +75,8 @@
   <div class="metric-grid metric-grid-leads">
     {% for card in kpi_cards %}
     <div class="metric-card leads-kpi-card">
-      <div class="leads-kpi-top">
+      <div class="metric-top">
         <div class="metric-icon tone-{{ card.tone }}">{{ card.icon }}</div>
-        <span class="leads-kpi-info" title="{{ card.label }}">i</span>
       </div>
       <div class="metric-label">{{ card.label }}</div>
       <div class="metric-value">{{ card.value }}</div>
