@@ -50,6 +50,7 @@ from app.services.crm_validation_service import (
     normalize_opportunity_status,
     resolve_display_stage,
     resolve_pipeline_stage,
+    stage_for_next_action,
     suggest_from_result,
     validate_activity_payload,
     validate_completion,
@@ -378,15 +379,91 @@ def apply_activities_view(activities: list[dict], params: ActivitiesViewParams) 
     return result
 
 
-def build_activities_kanban(
+def _kanban_lead_key(card: dict) -> str:
+    return str(int(card.get("sheet_row") or 0) or card.get("id") or card.get("empresa"))
+
+
+def _kanban_stage_for_card(card: dict, tenant_id: str | None) -> str:
+    sheet_row = int(card.get("sheet_row") or 0)
+    if sheet_row:
+        stored = get_lead_action(tenant_id, sheet_row) or {}
+        override = normalize_legacy_stage(stored.get("stage_override"))
+        if override:
+            return override
+    return normalize_legacy_stage(card.get("stage")) or "Novo Lead"
+
+
+def _prepare_kanban_activities(
     activities: list[dict],
     params: ActivitiesViewParams,
 ) -> list[dict]:
     view = apply_activities_view(activities, params)
+    if params.tab == "todas":
+        view = [item for item in view if item.get("status") not in {"concluida", "cancelada"}]
+
+    grouped: dict[str, list[dict]] = {}
+    for card in view:
+        grouped.setdefault(_kanban_lead_key(card), []).append(card)
+
+    selected: list[dict] = []
+    for group in grouped.values():
+        if len(group) == 1:
+            selected.append(group[0])
+            continue
+        open_cards = [item for item in group if item.get("status") not in {"concluida", "cancelada"}]
+        pool = open_cards or group
+        pool.sort(key=_sla_sort_key)
+        selected.append(pool[0])
+    return selected
+
+
+def _consolidate_lead_pipeline_activity(
+    tenant_id: str | None,
+    sheet_row: int,
+    *,
+    active_activity_id: str,
+    stage: str,
+    user: str,
+) -> None:
+    if not sheet_row or not active_activity_id:
+        return
+    stage = normalize_legacy_stage(stage)
+    if not stage:
+        return
+
+    open_statuses = {"pendente", "em_andamento", "atrasada", "reagendada"}
+    for record in list_activities(tenant_id):
+        if int(record.get("sheet_row") or 0) != sheet_row:
+            continue
+        activity_id = record.get("id")
+        if activity_id == active_activity_id:
+            save_activity(tenant_id, activity_id, {
+                "stage": stage,
+                "move_stage": stage,
+                "updated_by": user,
+            })
+            continue
+        if record.get("status") not in open_statuses:
+            continue
+        save_activity(tenant_id, activity_id, {
+            "status": "concluida",
+            "completed_at": _now().isoformat(timespec="seconds"),
+            "stage": stage,
+            "result": "Substituída",
+            "note": "Encerrada automaticamente ao mudar de etapa.",
+            "updated_by": user,
+        })
+
+
+def build_activities_kanban(
+    activities: list[dict],
+    params: ActivitiesViewParams,
+    tenant_id: str | None = None,
+) -> list[dict]:
+    view = _prepare_kanban_activities(activities, params)
     columns: list[dict] = []
     for index, stage in enumerate(PIPELINE_STAGE_OPTIONS, start=1):
-        cards = [item for item in view if item.get("stage") == stage]
-        cards = _dedupe_kanban_cards(cards)
+        cards = [item for item in view if _kanban_stage_for_card(item, tenant_id) == stage]
         cards.sort(key=_sla_sort_key)
         columns.append({
             "index": index,
@@ -505,12 +582,14 @@ def _apply_completion_follow_up(
         }
 
     if normalize_legacy_next_action(next_action):
+        suggested = suggest_from_result(result, current_stage) if result else {}
+        resolved_move = move_stage or suggested.get("move_stage") or suggested.get("activity_stage") or ""
         return {
             "next_action": next_action,
             "next_action_date": next_action_date,
             "next_action_time": next_action_time or "10:00",
             "next_action_channel": next_action_channel or channel,
-            "move_stage": move_stage,
+            "move_stage": resolved_move,
         }
 
     suggestion = suggest_from_result(result, current_stage)
@@ -751,6 +830,9 @@ def atualizar_atividade_inline(
         next_action_time = follow_up["next_action_time"]
         next_action_channel = follow_up["next_action_channel"]
         move_stage = follow_up["move_stage"]
+        if not move_stage and result:
+            stage_suggestion = suggest_from_result(result, current_stage)
+            move_stage = stage_suggestion.get("move_stage") or stage_suggestion.get("activity_stage") or ""
 
     validation_stage = normalize_legacy_stage(move_stage or current_stage)
     validation_error = validar_conclusao(status, result, next_action, validation_stage)
@@ -841,7 +923,8 @@ def atualizar_atividade_inline(
         next_action=next_action,
         next_action_date=next_action_date,
     ):
-        criar_proxima_atividade(
+        effective_move = normalize_legacy_stage(move_stage or next_activity_stage)
+        new_activity = criar_proxima_atividade(
             tenant_id,
             {"id": activity_id, "priority": current.get("priority", 20), "updated_by": user},
             process_action=next_action,
@@ -854,6 +937,14 @@ def atualizar_atividade_inline(
             contato=current.get("contato", "—"),
             stage=next_activity_stage,
         )
+        if sheet_row and effective_move and effective_move != current_stage:
+            movimentar_etapa_lead(
+                tenant_id,
+                sheet_row,
+                from_stage=current_stage,
+                to_stage=effective_move,
+                user=user,
+            )
         atualizar_lead_pela_atividade(
             tenant_id,
             sheet_row,
@@ -861,11 +952,19 @@ def atualizar_atividade_inline(
             next_action_date=next_action_date,
             next_action_time=next_action_time,
             channel=next_action_channel,
-            move_stage=move_stage,
+            move_stage=effective_move,
             user=user,
             opportunity_status=opportunity_status,
             lost_reason=result_notes if result == "Sem interesse" else "",
         )
+        if new_activity and sheet_row:
+            _consolidate_lead_pipeline_activity(
+                tenant_id,
+                sheet_row,
+                active_activity_id=new_activity["id"],
+                stage=effective_move or next_activity_stage,
+                user=user,
+            )
     elif status == "concluida" and result in NO_NEXT_ACTION_RESULTS:
         atualizar_lead_pela_atividade(
             tenant_id,
@@ -1136,12 +1235,34 @@ def atualizar_proxima_acao_atividade(
     if not normalized:
         return None, "Próxima ação inválida."
 
-    save_activity(tenant_id, activity_id, {"next_action": normalized})
+    current_stage = normalize_legacy_stage(record.get("stage")) or "Novo Lead"
+    target_stage = stage_for_next_action(normalized)
+    activity_updates: dict = {"next_action": normalized}
+    if target_stage and target_stage != current_stage:
+        activity_updates["stage"] = target_stage
+        activity_updates["move_stage"] = target_stage
+
+    save_activity(tenant_id, activity_id, activity_updates)
 
     sheet_row = int(record.get("sheet_row") or 0)
     history_label = f"Próxima ação alterada para: {normalized}"
     if sheet_row:
         atualizar_proxima_acao_lead(tenant_id, sheet_row, normalized, user)
+        if target_stage and target_stage != current_stage:
+            movimentar_etapa_lead(
+                tenant_id,
+                sheet_row,
+                from_stage=current_stage,
+                to_stage=target_stage,
+                user=user,
+            )
+            _consolidate_lead_pipeline_activity(
+                tenant_id,
+                sheet_row,
+                active_activity_id=activity_id,
+                stage=target_stage,
+                user=user,
+            )
     _append_activity_timeline(
         tenant_id,
         activity_id,
@@ -1162,7 +1283,7 @@ def build_activity_page_context(
     filtered_df = apply_dashboard_filters(df, columns, filters)
     activities = buscar_atividades(filtered_df, columns, tenant_id, search=filters.search)
     table = build_activities_table(activities, params)
-    kanban = build_activities_kanban(activities, params)
+    kanban = build_activities_kanban(activities, params, tenant_id)
     stage_options = ["Todas as etapas"] + PIPELINE_STAGE_OPTIONS
     return {
         "activities": activities,
@@ -1422,6 +1543,14 @@ def mover_atividade_kanban(
             move_stage=new_stage,
             interaction_type="atividade_movida",
         )
+
+    _consolidate_lead_pipeline_activity(
+        tenant_id,
+        sheet_row,
+        active_activity_id=activity_id,
+        stage=new_stage,
+        user=user,
+    )
 
     _append_activity_timeline(
         tenant_id,

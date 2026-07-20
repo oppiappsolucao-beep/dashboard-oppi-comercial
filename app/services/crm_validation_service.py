@@ -146,6 +146,16 @@ def resolve_display_stage(raw_stage: str, stored: dict | None = None) -> tuple[s
     return text, True
 
 
+def stage_for_next_action(next_action: str) -> str:
+    normalized = normalize_legacy_next_action(next_action)
+    if not normalized:
+        return ""
+    for stage, action in NEXT_ACTION_BY_STAGE.items():
+        if action == normalized:
+            return stage
+    return ""
+
+
 def get_actions_for_stage(stage: str, include_current: str = "") -> list[str]:
     normalized = normalize_legacy_stage(stage) or "Novo Lead"
     actions = list(PROCESS_ACTIONS_BY_STAGE.get(normalized, PROCESS_ACTION_OPTIONS))
