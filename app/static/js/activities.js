@@ -59,8 +59,9 @@
     if (!root || root.dataset.kanbanPointerBound === "1") return;
     root.dataset.kanbanPointerBound = "1";
 
-    const THRESHOLD = 6;
+    const THRESHOLD = 4;
     let activeDrag = null;
+    let suppressCardClick = false;
 
     function clearDropTargets() {
       root.querySelectorAll(".activities-kanban-column-body.is-drop-target").forEach(function (el) {
@@ -126,7 +127,9 @@
 
       if (!activeDrag.dragging) {
         if (Math.abs(dx) < THRESHOLD && Math.abs(dy) < THRESHOLD) return;
+        event.preventDefault();
         activeDrag.dragging = true;
+        suppressCardClick = true;
         activeDrag.card.classList.add("is-dragging");
         document.body.classList.add("activity-kanban-dragging");
 
@@ -141,6 +144,10 @@
         activeDrag.ghost = ghost;
         activeDrag.offsetX = activeDrag.startX - rect.left;
         activeDrag.offsetY = activeDrag.startY - rect.top;
+      }
+
+      if (activeDrag.dragging) {
+        event.preventDefault();
       }
 
       if (activeDrag.ghost) {
@@ -169,7 +176,6 @@
       document.removeEventListener("pointercancel", onPointerUp);
 
       if (!wasDragging) {
-        openActivityPanel(card);
         return;
       }
 
@@ -195,9 +201,13 @@
 
     root.addEventListener("pointerdown", function (event) {
       if (event.button !== 0) return;
+      const grip = event.target.closest(".activities-kanban-card-grip");
       const card = event.target.closest(".activities-kanban-card");
-      if (!card || !root.contains(card)) return;
+      if (!grip || !card || !root.contains(card)) return;
       if (activeDrag) return;
+
+      event.preventDefault();
+      event.stopPropagation();
 
       activeDrag = {
         card: card,
@@ -215,9 +225,20 @@
         card.setPointerCapture(event.pointerId);
       }
 
-      document.addEventListener("pointermove", onPointerMove);
+      document.addEventListener("pointermove", onPointerMove, { passive: false });
       document.addEventListener("pointerup", onPointerUp);
       document.addEventListener("pointercancel", onPointerUp);
+    }, { passive: false });
+
+    root.addEventListener("click", function (event) {
+      if (suppressCardClick) {
+        suppressCardClick = false;
+        return;
+      }
+      const card = event.target.closest(".activities-kanban-card");
+      if (!card || !root.contains(card)) return;
+      if (event.target.closest(".activities-kanban-card-grip")) return;
+      openActivityPanel(card);
     });
 
     root.addEventListener("keydown", function (event) {
