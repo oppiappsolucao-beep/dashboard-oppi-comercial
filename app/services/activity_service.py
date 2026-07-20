@@ -85,7 +85,7 @@ class ActivitiesViewParams:
 
 
 def _now() -> datetime:
-    return datetime.now(ZoneInfo(settings.timezone))
+    return datetime.now(ZoneInfo(settings.timezone)).replace(tzinfo=None)
 
 
 def _resolve_effective_stage(record: dict, tenant_id: str | None = None) -> str:

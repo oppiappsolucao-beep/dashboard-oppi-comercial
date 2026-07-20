@@ -13,7 +13,7 @@ STORAGE_PATH = Path(__file__).resolve().parents[2] / "storage" / "activities.jso
 
 
 def _now() -> datetime:
-    return datetime.now(ZoneInfo(settings.timezone))
+    return datetime.now(ZoneInfo(settings.timezone)).replace(tzinfo=None)
 
 
 def _load_all() -> dict:
