@@ -19,8 +19,9 @@ from app.services.activity_service import (
     mover_atividade_kanban,
     sugerir_fluxo_por_resultado,
     atualizar_proxima_acao_atividade,
+    _serialize_activity,
 )
-from app.services.activities_storage import DEFAULT_TENANT_ID, soft_delete_activity
+from app.services.activities_storage import DEFAULT_TENANT_ID, get_activity, soft_delete_activity
 from app.services.filters import apply_default_period_filters, apply_dashboard_filters, get_filter_options, parse_dashboard_filters
 from app.services.followup_service import apply_seller_scope
 from app.services.legacy_core import invalidate_sheet_cache, normalize_text
@@ -155,7 +156,14 @@ async def activities_update_next_action(
 
     df, columns = get_prepared_data()
     timeline = build_activity_timeline_for_activity(DEFAULT_TENANT_ID, activity_id, df, columns)
-    return JSONResponse({"ok": True, "next_action": normalized, "timeline": timeline})
+    record = get_activity(DEFAULT_TENANT_ID, activity_id)
+    stage = _serialize_activity(record, DEFAULT_TENANT_ID).get("stage", "") if record else ""
+    return JSONResponse({
+        "ok": True,
+        "next_action": normalized,
+        "timeline": timeline,
+        "stage": stage,
+    })
 
 
 @router.post("/atividades/{activity_id}/mover-etapa", response_class=HTMLResponse)

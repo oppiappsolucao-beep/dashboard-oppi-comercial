@@ -1280,10 +1280,10 @@ def atualizar_proxima_acao_atividade(
     if not normalized:
         return None, "Próxima ação inválida."
 
-    current_stage = normalize_legacy_stage(record.get("stage")) or "Novo Lead"
+    current_stage = _resolve_effective_stage(record, tenant_id)
     target_stage = stage_for_next_action(normalized)
     activity_updates: dict = {"next_action": normalized}
-    if target_stage and target_stage != current_stage:
+    if target_stage:
         activity_updates["stage"] = target_stage
         activity_updates["move_stage"] = target_stage
 
@@ -1293,6 +1293,7 @@ def atualizar_proxima_acao_atividade(
     history_label = f"Próxima ação alterada para: {normalized}"
     if sheet_row:
         atualizar_proxima_acao_lead(tenant_id, sheet_row, normalized, user)
+        final_stage = target_stage or current_stage
         if target_stage and target_stage != current_stage:
             movimentar_etapa_lead(
                 tenant_id,
@@ -1301,11 +1302,12 @@ def atualizar_proxima_acao_atividade(
                 to_stage=target_stage,
                 user=user,
             )
+        if final_stage:
             _consolidate_lead_pipeline_activity(
                 tenant_id,
                 sheet_row,
                 active_activity_id=activity_id,
-                stage=target_stage,
+                stage=final_stage,
                 user=user,
             )
     _append_activity_timeline(

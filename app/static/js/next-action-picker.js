@@ -47,6 +47,16 @@
     }).join("");
   }
 
+  function refreshActivitiesBoard() {
+    var filtersForm = document.getElementById("activities-filters");
+    if (!filtersForm || typeof htmx === "undefined") return;
+    htmx.ajax("POST", "/atividades/filtros", {
+      target: "#activities-root",
+      swap: "innerHTML",
+      source: filtersForm,
+    });
+  }
+
   function saveNextAction(picker, value) {
     var url = picker.dataset.saveUrl;
     if (!url || !value) return;
@@ -78,6 +88,7 @@
         if (data.timeline) {
           renderTimeline(data.timeline);
         }
+        refreshActivitiesBoard();
       })
       .catch(function (error) {
         window.alert(error.message || "Não foi possível salvar a próxima ação.");
