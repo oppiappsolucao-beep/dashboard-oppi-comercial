@@ -1,14 +1,41 @@
 from datetime import date
 
-from fastapi import APIRouter, Form, Request
+from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from app.dependencies import get_prepared_data, require_auth
-from app.templating import render
+
+from app.dependencies import get_prepared_data, is_admin, require_auth
+from app.services.activities_storage import DEFAULT_TENANT_ID
+from app.services.activity_service import criar_atividade
 from app.services.commercial_services import get_commercial_service_options
+from app.services.crm_validation_service import get_actions_for_stage, normalize_legacy_stage
 from app.services.legacy_core import DuplicateRegistrationError, STATUS_OPTIONS, get_colaborador_options, normalize_text
 from app.services.registration import get_seller_options, infer_partners_count, save_new_company
+from app.templating import render
+from config.crm_options import CHANNEL_OPTIONS, PIPELINE_STAGE_OPTIONS, PRIORITY_OPTIONS
 
 router = APIRouter()
+
+
+def _registration_page_context(request: Request, df, *, error: str = "", values: dict | None = None) -> dict:
+    default_stage = "Novo Lead"
+    activity_actions = get_actions_for_stage(default_stage)
+    return {
+        "active_page": "registration_new",
+        "seller_options": get_seller_options(df),
+        "status_options": STATUS_OPTIONS,
+        "service_options": get_commercial_service_options(),
+        "colaborador_options": get_colaborador_options(),
+        "pipeline_stages": PIPELINE_STAGE_OPTIONS,
+        "channel_options": CHANNEL_OPTIONS,
+        "priority_options": PRIORITY_OPTIONS,
+        "activity_actions": activity_actions,
+        "default_activity_action": activity_actions[0] if activity_actions else "Fazer primeiro contato",
+        "today": date.today().isoformat(),
+        "default_time": "09:00",
+        "partners_count": infer_partners_count(values or {}),
+        "values": values or {},
+        "error": error or request.session.pop("registration_error", ""),
+    }
 
 
 @router.get("/cadastro/novo", response_class=HTMLResponse)
@@ -17,21 +44,8 @@ async def new_registration_page(request: Request):
     if redirect:
         return redirect
 
-    df, columns = get_prepared_data()
-    return render(
-        request,
-        "registration/new.html",
-        {
-            "active_page": "registration_new",
-            "seller_options": get_seller_options(df),
-            "status_options": STATUS_OPTIONS,
-            "service_options": get_commercial_service_options(),
-            "colaborador_options": get_colaborador_options(),
-            "today": date.today().isoformat(),
-            "partners_count": 0,
-            "error": request.session.pop("registration_error", ""),
-        },
-    )
+    df, _columns = get_prepared_data()
+    return render(request, "registration/new.html", _registration_page_context(request, df))
 
 
 @router.post("/cadastro/novo")
@@ -42,13 +56,49 @@ async def new_registration_submit(request: Request):
 
     form = await request.form()
     form_dict = dict(form)
+    user = normalize_text(request.session.get("username", "")) or "Usuário"
 
     try:
-        save_new_company(form_dict)
+        sheet_row = save_new_company(form_dict)
         empresa = normalize_text(form_dict.get("empresa"))
         status = normalize_text(form_dict.get("status"))
+
+        create_activity = normalize_text(form_dict.get("create_first_activity")) in {"1", "on", "true", "yes"}
+        activity_warning = ""
+        if create_activity:
+            stage = normalize_legacy_stage(form_dict.get("status")) or "Novo Lead"
+            scheduled_date = normalize_text(form_dict.get("activity_date")) or date.today().isoformat()
+            scheduled_time = normalize_text(form_dict.get("activity_time")) or "09:00"
+            responsible = (
+                normalize_text(form_dict.get("activity_responsible"))
+                or normalize_text(form_dict.get("vendedor"))
+            )
+            _, activity_error = criar_atividade(
+                DEFAULT_TENANT_ID,
+                {
+                    "sheet_row": sheet_row,
+                    "empresa": empresa,
+                    "contato": normalize_text(form_dict.get("socio_1")) or "—",
+                    "stage": stage,
+                    "activity_type": "Contato",
+                    "process_action": normalize_text(form_dict.get("activity_action")) or "Fazer primeiro contato",
+                    "channel": normalize_text(form_dict.get("activity_channel")) or "WhatsApp",
+                    "assigned_user_id": responsible,
+                    "scheduled_date": scheduled_date,
+                    "scheduled_time": scheduled_time,
+                    "status": "pendente",
+                    "priority": normalize_text(form_dict.get("activity_priority")) or "Média",
+                    "description": normalize_text(form_dict.get("activity_description")),
+                    "next_action": normalize_text(form_dict.get("activity_next_action")),
+                },
+                user,
+                is_admin_user=is_admin(request),
+            )
+            if activity_error:
+                activity_warning = f" Empresa cadastrada, mas a primeira atividade não foi criada: {activity_error}"
+
         request.session["company_registration_success"] = (
-            f'Empresa "{empresa}" cadastrada com sucesso na planilha com o status "{status}".'
+            f'Empresa "{empresa}" cadastrada com sucesso na planilha com o status "{status}".{activity_warning}'
         )
         return RedirectResponse(url="/visao-geral", status_code=303)
     except DuplicateRegistrationError as error:

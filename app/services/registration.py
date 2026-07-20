@@ -73,11 +73,11 @@ def build_registration_payload(form: dict) -> dict:
     return payload
 
 
-def save_new_company(form: dict) -> None:
+def save_new_company(form: dict) -> int:
     error = validate_registration_form(form)
     if error:
         raise ValueError(error)
-    append_company_to_sheet(build_registration_payload(form))
+    return append_company_to_sheet(build_registration_payload(form))
 
 
 def save_company_edit(sheet_row: int, form: dict) -> None:

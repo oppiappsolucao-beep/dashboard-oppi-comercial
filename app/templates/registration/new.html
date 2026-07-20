@@ -1,77 +1,239 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="registration-header-card">
-  <div class="registration-kicker">OPPI COMERCIAL • NOVO CADASTRO</div>
-  <div class="registration-title">Novo cadastro</div>
-  <div class="registration-subtitle">Registre uma nova empresa e envie os dados diretamente para a planilha comercial.</div>
+<div class="registration-new-page">
+  <header class="registration-new-header">
+    <div>
+      <h1 class="registration-new-title">Novo cadastro</h1>
+      <p class="registration-new-subtitle">Cadastre uma nova empresa ou lead e já defina a primeira atividade comercial.</p>
+    </div>
+    <div class="registration-new-header-actions">
+      <a href="/leads-e-empresas" class="btn btn-secondary">Cancelar</a>
+      <button type="submit" form="registration-new-form" class="btn registration-new-save-btn">💾 Salvar cadastro</button>
+    </div>
+  </header>
+
+  {% if error %}
+  <div class="alert-error registration-new-alert">{{ error }}</div>
+  {% endif %}
+
+  <form method="post" action="/cadastro/novo" id="registration-new-form" class="registration-new-form">
+    <input type="hidden" name="create_first_activity" id="create-first-activity" value="1">
+
+    <div class="registration-new-layout">
+      <div class="registration-new-main panel">
+        <section class="registration-new-section">
+          <div class="registration-new-section-head">
+            <span class="registration-new-section-icon">🏢</span>
+            <div>
+              <h2>1. Dados da empresa</h2>
+            </div>
+          </div>
+          <div class="form-grid">
+            <div class="form-group"><label>Nome da empresa *</label><input name="empresa" required value="{{ values.get('empresa', '') }}"></div>
+            <div class="form-group"><label>Data de abertura</label><input name="data_abertura" placeholder="DD/MM/AAAA" value="{{ values.get('data_abertura', '') }}"></div>
+            <div class="form-group"><label>CNPJ *</label><input name="cnpj" required placeholder="00.000.000/0000-00" value="{{ values.get('cnpj', '') }}"></div>
+            <div class="form-group"><label>Capital social</label><input name="capital" placeholder="Ex.: R$ 100.000,00" value="{{ values.get('capital', '') }}"></div>
+            <div class="form-group full"><label>Endereço</label><input name="endereco" value="{{ values.get('endereco', '') }}"></div>
+            <div class="form-group"><label>Site</label><input name="site" placeholder="https://" value="{{ values.get('site', '') }}"></div>
+            <div class="form-group"><label>E-mail da empresa</label><input name="email_empresa" type="email" value="{{ values.get('email_empresa', '') }}"></div>
+          </div>
+        </section>
+
+        <section class="registration-new-section">
+          <div class="registration-new-section-head">
+            <span class="registration-new-section-icon">📞</span>
+            <div><h2>2. Telefones da empresa</h2></div>
+          </div>
+          <div class="form-grid cols-3">
+            <div class="form-group">
+              <label>Celular WhatsApp</label>
+              <div class="registration-input-icon-wrap">
+                <span aria-hidden="true">💬</span>
+                <input name="telefone_b2b" value="{{ values.get('telefone_b2b', '') }}">
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Telefone fixo</label>
+              <div class="registration-input-icon-wrap">
+                <span aria-hidden="true">📞</span>
+                <input name="telefone_fixo" value="{{ values.get('telefone_fixo', '') }}">
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Telefone alternativo</label>
+              <div class="registration-input-icon-wrap">
+                <span aria-hidden="true">📱</span>
+                <input name="telefone_alternativo" value="{{ values.get('telefone_alternativo', '') }}">
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="registration-new-section">
+          <div class="registration-new-section-head">
+            <span class="registration-new-section-icon">👥</span>
+            <div><h2>3. Sócios e responsáveis</h2></div>
+          </div>
+          {% include "partials/partners_form_fields.html" %}
+        </section>
+
+        <section class="registration-new-section">
+          <div class="registration-new-section-head">
+            <span class="registration-new-section-icon">📣</span>
+            <div><h2>4. Redes sociais e acompanhamento</h2></div>
+          </div>
+          <div class="form-grid">
+            <div class="form-group"><label>Instagram</label><input name="instagram" value="{{ values.get('instagram', '') }}"></div>
+            <div class="form-group"><label>LinkedIn</label><input name="linkedin" value="{{ values.get('linkedin', '') }}"></div>
+            <div class="form-group"><label>Vendedor *</label>
+              <select name="vendedor" id="registration-vendedor" required>
+                {% for seller in seller_options %}<option value="{{ seller }}">{{ seller }}</option>{% endfor %}
+              </select>
+            </div>
+            <div class="form-group"><label>Status comercial *</label>
+              <select name="status" id="registration-status" required>
+                {% for status in status_options %}
+                <option value="{{ status }}" {% if status == 'Novo Lead' %}selected{% endif %}>{{ status }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="form-group"><label>Data do chamado *</label><input type="date" name="data_chamado" value="{{ today }}" required></div>
+            <div class="form-group full"><label>Observações</label><textarea name="observacoes" rows="3">{{ values.get('observacoes', '') }}</textarea></div>
+          </div>
+        </section>
+
+        <section class="registration-new-section">
+          <div class="registration-new-section-head">
+            <span class="registration-new-section-icon">📄</span>
+            <div><h2>5. Proposta comercial</h2></div>
+          </div>
+          <div class="form-grid">
+            <div class="form-group"><label>Serviço escolhido</label>
+              <select name="servico">
+                <option value="">Selecione</option>
+                {% for service in service_options %}
+                <option value="{{ service }}">{{ service }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="form-group"><label>Valor da proposta</label><input name="valor_proposta" placeholder="Ex.: R$ 8.500"></div>
+            <div class="form-group"><label>Quantidade de colaboradores</label>
+              <select name="colaboradores">
+                <option value="">Selecione</option>
+                {% for option in colaborador_options %}
+                <option value="{{ option }}">{{ option }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <aside class="registration-new-sidebar panel" id="registration-activity-panel">
+        <div class="registration-new-sidebar-head">
+          <span class="registration-new-section-icon">📅</span>
+          <div>
+            <h2>Primeira atividade</h2>
+            <p>Agende o primeiro contato comercial.</p>
+          </div>
+        </div>
+
+        <label class="registration-new-toggle">
+          <span>Criar primeira atividade junto com o cadastro</span>
+          <span class="registration-toggle-switch">
+            <input type="checkbox" id="create-first-activity-toggle" checked>
+            <span class="registration-toggle-slider"></span>
+          </span>
+        </label>
+
+        <div class="registration-activity-fields" id="registration-activity-fields">
+          <div class="form-group"><label>Atividade</label>
+            <select name="activity_action" id="registration-activity-action">
+              {% for action in activity_actions %}
+              <option value="{{ action }}" {% if action == default_activity_action %}selected{% endif %}>{{ action }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-group"><label>Canal</label>
+            <select name="activity_channel">
+              {% for channel in channel_options %}
+              <option value="{{ channel }}" {% if channel == 'WhatsApp' %}selected{% endif %}>{{ channel }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-grid registration-activity-datetime">
+            <div class="form-group"><label>Data</label><input type="date" name="activity_date" id="registration-activity-date" value="{{ today }}"></div>
+            <div class="form-group"><label>Hora</label><input type="time" name="activity_time" value="{{ default_time }}"></div>
+          </div>
+          <div class="form-group"><label>Responsável</label>
+            <select name="activity_responsible" id="registration-activity-responsible">
+              <option value="">Selecione o responsável</option>
+              {% for seller in seller_options %}
+              <option value="{{ seller }}">{{ seller }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-group"><label>Prioridade</label>
+            <select name="activity_priority">
+              {% for priority in priority_options %}
+              <option value="{{ priority }}" {% if priority == 'Média' %}selected{% endif %}>{{ priority }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-group"><label>Objetivo / descrição</label><textarea name="activity_description" rows="3" placeholder="Descreva o objetivo desta atividade..."></textarea></div>
+          <div class="form-group"><label>Próxima ação sugerida</label><textarea name="activity_next_action" rows="2" placeholder="Ex.: Qualificar lead após retorno"></textarea></div>
+
+          <div class="registration-funnel-wrap">
+            <div class="registration-funnel-label">Etapas do funil</div>
+            <div class="registration-funnel" id="registration-funnel" data-stages="{{ pipeline_stages | join('|') }}">
+              {% for stage in pipeline_stages %}
+              <div class="registration-funnel-step {% if stage == 'Novo Lead' %}active{% endif %}" data-stage="{{ stage }}">
+                <span class="registration-funnel-dot">{{ loop.index }}</span>
+                <span class="registration-funnel-name">{{ stage }}</span>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+      </aside>
+    </div>
+
+    <footer class="registration-new-summary panel">
+      <div class="registration-new-summary-title">Resumo do que será criado</div>
+      <div class="registration-new-summary-grid">
+        <div class="registration-new-summary-item">
+          <span class="registration-new-summary-icon">🏢</span>
+          <div>
+            <strong>Empresa</strong>
+            <span id="summary-company">Nova empresa ou lead será cadastrado</span>
+          </div>
+        </div>
+        <div class="registration-new-summary-item">
+          <span class="registration-new-summary-icon">📊</span>
+          <div>
+            <strong>Etapa inicial</strong>
+            <span id="summary-stage">Novo Lead (entrada no funil)</span>
+          </div>
+        </div>
+        <div class="registration-new-summary-item">
+          <span class="registration-new-summary-icon">📅</span>
+          <div>
+            <strong>Primeira atividade</strong>
+            <span id="summary-activity">Será agendada conforme os dados ao lado</span>
+          </div>
+        </div>
+        <div class="registration-new-summary-item">
+          <span class="registration-new-summary-icon">⏱</span>
+          <div>
+            <strong>Prazo ideal</strong>
+            <span id="summary-deadline">Definido na data e hora da primeira atividade</span>
+          </div>
+        </div>
+      </div>
+    </footer>
+  </form>
 </div>
 
-{% if error %}
-<div class="alert-error">{{ error }}</div>
-{% endif %}
-
-<form method="post" action="/cadastro/novo" class="form-card">
-  <div class="section-title">DADOS DA EMPRESA</div>
-  <div class="form-grid">
-    <div class="form-group"><label>Nome da empresa *</label><input name="empresa" required></div>
-    <div class="form-group"><label>Data de abertura</label><input name="data_abertura" placeholder="DD/MM/AAAA"></div>
-    <div class="form-group"><label>CNPJ *</label><input name="cnpj" required></div>
-    <div class="form-group"><label>Capital social</label><input name="capital"></div>
-    <div class="form-group full"><label>Endereço</label><input name="endereco"></div>
-    <div class="form-group"><label>E-mail da empresa</label><input name="email_empresa" type="email"></div>
-    <div class="form-group"><label>Site</label><input name="site"></div>
-  </div>
-
-  <div class="section-title">TELEFONES DA EMPRESA</div>
-  <div class="form-grid cols-3">
-    <div class="form-group"><label>Celular WhatsApp</label><input name="telefone_b2b"></div>
-    <div class="form-group"><label>Telefone fixo</label><input name="telefone_fixo"></div>
-    <div class="form-group"><label>Telefone alternativo</label><input name="telefone_alternativo"></div>
-  </div>
-
-  <div class="section-title">SÓCIOS E RESPONSÁVEIS</div>
-  {% include "partials/partners_form_fields.html" %}
-
-  <div class="section-title">REDES SOCIAIS E ACOMPANHAMENTO</div>
-  <div class="form-grid">
-    <div class="form-group"><label>Instagram</label><input name="instagram"></div>
-    <div class="form-group"><label>LinkedIn</label><input name="linkedin"></div>
-    <div class="form-group"><label>Vendedor *</label>
-      <select name="vendedor" required>
-        {% for seller in seller_options %}<option value="{{ seller }}">{{ seller }}</option>{% endfor %}
-      </select>
-    </div>
-    <div class="form-group"><label>Status comercial *</label>
-      <select name="status" required>
-        {% for status in status_options %}<option value="{{ status }}">{{ status }}</option>{% endfor %}
-      </select>
-    </div>
-    <div class="form-group"><label>Data do chamado *</label><input type="date" name="data_chamado" value="{{ today }}" required></div>
-    <div class="form-group full"><label>Observações</label><textarea name="observacoes" rows="4"></textarea></div>
-  </div>
-
-  <div class="section-title">PROPOSTA COMERCIAL</div>
-  <div class="form-grid">
-    <div class="form-group"><label>Serviço escolhido</label>
-      <select name="servico">
-        <option value="">Selecione</option>
-        {% for service in service_options %}
-        <option value="{{ service }}">{{ service }}</option>
-        {% endfor %}
-      </select>
-    </div>
-    <div class="form-group"><label>Valor da proposta</label><input name="valor_proposta" placeholder="Ex.: R$ 8.500"></div>
-    <div class="form-group"><label>Quantidade de colaboradores</label>
-      <select name="colaboradores">
-        <option value="">Selecione</option>
-        {% for option in colaborador_options %}
-        <option value="{{ option }}">{{ option }}</option>
-        {% endfor %}
-      </select>
-    </div>
-  </div>
-
-  <button type="submit" class="btn" style="margin-top:18px;width:100%">Cadastrar empresa</button>
-</form>
 <script src="/static/js/partners-form.js?v=1" defer></script>
+<script src="/static/js/registration-new.js?v=1" defer></script>
 {% endblock %}

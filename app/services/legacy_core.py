@@ -1268,7 +1268,7 @@ def validate_unique_company_registration(payload: dict, worksheet, ignore_sheet_
     )
 
 
-def append_company_to_sheet(payload: dict) -> None:
+def append_company_to_sheet(payload: dict) -> int:
     """Adiciona uma nova empresa na aba principal respeitando a estrutura atual da planilha."""
     client = get_gsheet_client()
     spreadsheet = client.open_by_key(settings.sheet_id)
@@ -1340,6 +1340,7 @@ def append_company_to_sheet(payload: dict) -> None:
     )
 
     invalidate_sheet_cache()
+    return worksheet.row_count
 
 
 def update_company_in_sheet(sheet_row: int, payload: dict) -> None:
