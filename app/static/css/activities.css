@@ -154,6 +154,11 @@ body.activity-kanban-dragging .activities-kanban-board {
   transition: background 0.15s ease, outline 0.15s ease;
 }
 
+.activities-kanban-column-body.is-drop-target,
+.activities-kanban-column-body.is-drop-target .activities-kanban-empty {
+  background: transparent;
+}
+
 .activities-kanban-card.is-dragging {
   opacity: 0.35;
 }
@@ -197,7 +202,7 @@ body.activity-kanban-dragging * {
   color: inherit;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
   transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
-  cursor: pointer;
+  cursor: grab;
   font: inherit;
   user-select: none;
   touch-action: none;
@@ -205,23 +210,13 @@ body.activity-kanban-dragging * {
 
 .activities-kanban-card-grip {
   position: absolute;
-  top: 6px;
-  right: 6px;
-  color: #94A3B8;
+  top: 10px;
+  right: 10px;
+  color: #CBD5E1;
   font-size: 0.72rem;
   letter-spacing: -0.12em;
   line-height: 1;
-  padding: 6px;
-  border-radius: 8px;
-  cursor: grab;
-  touch-action: none;
-  pointer-events: auto;
-}
-
-.activities-kanban-card-grip:active {
-  cursor: grabbing;
-  color: #64748B;
-  background: #F8FAFC;
+  pointer-events: none;
 }
 
 .activities-kanban-card:active {

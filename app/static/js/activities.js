@@ -56,12 +56,12 @@
   }
 
   function initKanbanDragDrop(root) {
-    if (!root || root.dataset.kanbanPointerBound === "1") return;
-    root.dataset.kanbanPointerBound = "1";
+    if (!root || root.dataset.kanbanDragBound === "1") return;
+    root.dataset.kanbanDragBound = "1";
 
-    const THRESHOLD = 4;
-    let activeDrag = null;
-    let suppressCardClick = false;
+    let suppressClickUntil = 0;
+    let draggedActivityId = "";
+    let draggedStage = "";
 
     function clearDropTargets() {
       root.querySelectorAll(".activities-kanban-column-body.is-drop-target").forEach(function (el) {
@@ -69,14 +69,14 @@
       });
     }
 
-    function findDropColumn(clientX, clientY) {
-      if (typeof document.elementsFromPoint !== "function") return null;
-      const elements = document.elementsFromPoint(clientX, clientY);
-      for (let i = 0; i < elements.length; i++) {
-        const column = elements[i].closest(".activities-kanban-column-body[data-drop-stage]");
-        if (column && root.contains(column)) return column;
+    function refreshBoard(html) {
+      const boardRoot = document.getElementById("activities-root");
+      if (!boardRoot) return;
+      boardRoot.innerHTML = html;
+      if (typeof htmx !== "undefined") {
+        htmx.process(boardRoot);
       }
-      return null;
+      initActivitiesInline();
     }
 
     function moveActivity(activityId, newStage) {
@@ -88,6 +88,9 @@
         body: formData,
         headers: { "HX-Request": "true" },
       }).then(function (response) {
+        if (!response.ok) {
+          throw new Error("move_failed");
+        }
         return response.text();
       });
     }
@@ -101,143 +104,82 @@
       });
     }
 
-    function cleanupDragState() {
-      if (!activeDrag) return;
-      if (activeDrag.card.releasePointerCapture && activeDrag.pointerId != null) {
-        try {
-          activeDrag.card.releasePointerCapture(activeDrag.pointerId);
-        } catch (error) {
-          /* ignore */
-        }
-      }
-      activeDrag.card.classList.remove("is-dragging");
-      if (activeDrag.ghost && activeDrag.ghost.parentNode) {
-        activeDrag.ghost.parentNode.removeChild(activeDrag.ghost);
-      }
-      document.body.classList.remove("activity-kanban-dragging");
-      clearDropTargets();
-      activeDrag = null;
-    }
-
-    function onPointerMove(event) {
-      if (!activeDrag) return;
-
-      const dx = event.clientX - activeDrag.startX;
-      const dy = event.clientY - activeDrag.startY;
-
-      if (!activeDrag.dragging) {
-        if (Math.abs(dx) < THRESHOLD && Math.abs(dy) < THRESHOLD) return;
-        event.preventDefault();
-        activeDrag.dragging = true;
-        suppressCardClick = true;
-        activeDrag.card.classList.add("is-dragging");
-        document.body.classList.add("activity-kanban-dragging");
-
-        const rect = activeDrag.card.getBoundingClientRect();
-        const ghost = activeDrag.card.cloneNode(true);
-        ghost.classList.add("activities-kanban-card-ghost");
-        ghost.setAttribute("aria-hidden", "true");
-        ghost.style.width = rect.width + "px";
-        ghost.style.left = rect.left + "px";
-        ghost.style.top = rect.top + "px";
-        document.body.appendChild(ghost);
-        activeDrag.ghost = ghost;
-        activeDrag.offsetX = activeDrag.startX - rect.left;
-        activeDrag.offsetY = activeDrag.startY - rect.top;
-      }
-
-      if (activeDrag.dragging) {
-        event.preventDefault();
-      }
-
-      if (activeDrag.ghost) {
-        activeDrag.ghost.style.left = (event.clientX - activeDrag.offsetX) + "px";
-        activeDrag.ghost.style.top = (event.clientY - activeDrag.offsetY) + "px";
-      }
-
-      clearDropTargets();
-      const column = findDropColumn(event.clientX, event.clientY);
-      activeDrag.dropColumn = column;
-      if (column) column.classList.add("is-drop-target");
-    }
-
-    function onPointerUp(event) {
-      if (!activeDrag) return;
-
-      const card = activeDrag.card;
-      const wasDragging = activeDrag.dragging;
-      const dropColumn = wasDragging
-        ? findDropColumn(event.clientX, event.clientY)
-        : null;
-
-      cleanupDragState();
-      document.removeEventListener("pointermove", onPointerMove);
-      document.removeEventListener("pointerup", onPointerUp);
-      document.removeEventListener("pointercancel", onPointerUp);
-
-      if (!wasDragging) {
-        return;
-      }
-
-      if (!dropColumn) return;
-
-      const newStage = dropColumn.getAttribute("data-drop-stage") || "";
-      const activityId = card.getAttribute("data-activity-id") || "";
-      const currentStage = card.getAttribute("data-current-stage") || "";
-      if (!activityId || !newStage || newStage === currentStage) return;
-
-      moveActivity(activityId, newStage).then(function (html) {
-        const boardRoot = document.getElementById("activities-root");
-        if (!boardRoot) return;
-        boardRoot.innerHTML = html;
-        if (typeof htmx !== "undefined") {
-          htmx.process(boardRoot);
-        }
-        initActivitiesInline();
-      }).catch(function () {
-        window.alert("Não foi possível mover a atividade. Tente novamente.");
-      });
-    }
-
-    root.addEventListener("pointerdown", function (event) {
-      if (event.button !== 0) return;
-      const grip = event.target.closest(".activities-kanban-card-grip");
-      const card = event.target.closest(".activities-kanban-card");
-      if (!grip || !card || !root.contains(card)) return;
-      if (activeDrag) return;
-
-      event.preventDefault();
-      event.stopPropagation();
-
-      activeDrag = {
-        card: card,
-        startX: event.clientX,
-        startY: event.clientY,
-        dragging: false,
-        ghost: null,
-        dropColumn: null,
-        offsetX: 0,
-        offsetY: 0,
-        pointerId: event.pointerId,
-      };
-
-      if (card.setPointerCapture) {
-        card.setPointerCapture(event.pointerId);
-      }
-
-      document.addEventListener("pointermove", onPointerMove, { passive: false });
-      document.addEventListener("pointerup", onPointerUp);
-      document.addEventListener("pointercancel", onPointerUp);
-    }, { passive: false });
-
-    root.addEventListener("click", function (event) {
-      if (suppressCardClick) {
-        suppressCardClick = false;
-        return;
-      }
+    root.addEventListener("dragstart", function (event) {
       const card = event.target.closest(".activities-kanban-card");
       if (!card || !root.contains(card)) return;
-      if (event.target.closest(".activities-kanban-card-grip")) return;
+
+      draggedActivityId = card.getAttribute("data-activity-id") || "";
+      draggedStage = card.getAttribute("data-current-stage") || "";
+      if (!draggedActivityId) {
+        event.preventDefault();
+        return;
+      }
+
+      card.classList.add("is-dragging");
+      document.body.classList.add("activity-kanban-dragging");
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", draggedActivityId);
+      event.dataTransfer.setData("application/x-activity-stage", draggedStage);
+
+      if (event.dataTransfer.setDragImage) {
+        const rect = card.getBoundingClientRect();
+        event.dataTransfer.setDragImage(
+          card,
+          Math.max(0, event.clientX - rect.left),
+          Math.max(0, event.clientY - rect.top)
+        );
+      }
+    });
+
+    root.addEventListener("dragend", function (event) {
+      const card = event.target.closest(".activities-kanban-card");
+      if (card) card.classList.remove("is-dragging");
+      document.body.classList.remove("activity-kanban-dragging");
+      clearDropTargets();
+      suppressClickUntil = Date.now() + 250;
+      draggedActivityId = "";
+      draggedStage = "";
+    });
+
+    root.addEventListener("dragover", function (event) {
+      const column = event.target.closest(".activities-kanban-column-body[data-drop-stage]");
+      if (!column || !root.contains(column)) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "move";
+      clearDropTargets();
+      column.classList.add("is-drop-target");
+    });
+
+    root.addEventListener("dragleave", function (event) {
+      const column = event.target.closest(".activities-kanban-column-body[data-drop-stage]");
+      if (!column || !root.contains(column)) return;
+      const related = event.relatedTarget;
+      if (related && column.contains(related)) return;
+      column.classList.remove("is-drop-target");
+    });
+
+    root.addEventListener("drop", function (event) {
+      event.preventDefault();
+      clearDropTargets();
+
+      const column = event.target.closest(".activities-kanban-column-body[data-drop-stage]");
+      if (!column || !root.contains(column)) return;
+
+      const activityId = event.dataTransfer.getData("text/plain") || draggedActivityId;
+      const currentStage = event.dataTransfer.getData("application/x-activity-stage") || draggedStage;
+      const newStage = column.getAttribute("data-drop-stage") || "";
+      if (!activityId || !newStage || newStage === currentStage) return;
+
+      suppressClickUntil = Date.now() + 250;
+      moveActivity(activityId, newStage).then(refreshBoard).catch(function () {
+        window.alert("Não foi possível mover a atividade. Tente novamente.");
+      });
+    });
+
+    root.addEventListener("click", function (event) {
+      if (Date.now() < suppressClickUntil) return;
+      const card = event.target.closest(".activities-kanban-card");
+      if (!card || !root.contains(card)) return;
       openActivityPanel(card);
     });
 

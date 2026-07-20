@@ -1,10 +1,11 @@
 <article
   class="activities-kanban-card sla-{{ card.sla_class }}"
-  title="{{ card.title }} · {{ card.vendedor }} · Clique para abrir · Arraste pelo ⋮⋮"
+  title="{{ card.title }} · {{ card.vendedor }} · Arraste para mover · Clique para abrir"
   data-activity-id="{{ card.id }}"
   data-current-stage="{{ card.stage }}"
-  role="button"
-  tabindex="0">
+  draggable="true"
+  tabindex="0"
+  aria-grabbed="false">
   <span class="activities-kanban-card-grip" aria-hidden="true" title="Arrastar para mover de coluna">⋮⋮</span>
   <div class="activities-kanban-card-title">{{ card.empresa }}</div>
   <div class="activities-kanban-card-when">
