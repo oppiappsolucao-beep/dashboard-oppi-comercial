@@ -24,7 +24,16 @@ from app.services.legacy_core import (
 )
 from app.services.lead_actions_storage import DEFAULT_TENANT_ID, get_lead_action
 from app.services.overview import build_client_action
-from app.services.registration import get_seller_options, infer_partners_count, save_company_edit
+from app.services.activity_service import build_cadastro_activities_context
+from app.services.registration import (
+    CADASTRO_TIPO_OPTIONS,
+    build_cadastro_edit_page_context,
+    get_seller_options,
+    infer_partners_count,
+    resolve_cadastro_tipo,
+    save_cadastro_tipo,
+    save_company_edit,
+)
 
 router = APIRouter()
 
@@ -222,9 +231,9 @@ async def contract_edit_page(request: Request, sheet_row: int):
     if current_status not in STATUS_OPTIONS:
         current_status = "Novo Lead"
 
-    data_chamado = _contract_edit_value(row, columns, "data_chamado")
+    data_chamado_raw = _contract_edit_value(row, columns, "data_chamado")
     try:
-        parsed_date = date.fromisoformat(data_chamado) if "-" in data_chamado else date.today()
+        parsed_date = date.fromisoformat(data_chamado_raw) if "-" in data_chamado_raw else date.today()
     except ValueError:
         parsed_date = date.today()
 
@@ -238,6 +247,29 @@ async def contract_edit_page(request: Request, sheet_row: int):
                 "instagram", "linkedin", "observacoes",
                 "servico", "valor_proposta", "colaboradores",
             ]}
+
+    cadastro_tipo = resolve_cadastro_tipo(DEFAULT_TENANT_ID, sheet_row, cnpj=values.get("cnpj", ""))
+    active_tab = normalize_text(request.query_params.get("tab")) or "dados"
+    tab_aliases = {"cadastro": "dados", "dados": "dados", "atividades": "atividades", "proposta": "proposta"}
+    active_tab = tab_aliases.get(active_tab, "dados")
+    activities_ctx = build_cadastro_activities_context(
+        DEFAULT_TENANT_ID,
+        sheet_row,
+        values.get("empresa", ""),
+    )
+    page_ctx = build_cadastro_edit_page_context(
+        tenant_id=DEFAULT_TENANT_ID,
+        sheet_row=sheet_row,
+        row=row,
+        columns=columns,
+        values=values,
+        vendedor=normalize_text(row.get("_vendedor", "")) or "Sem vendedor",
+        current_status=current_status,
+        data_chamado=data_chamado_raw or parsed_date.isoformat(),
+        cadastro_tipo=cadastro_tipo,
+        activities=activities_ctx.get("activities", []),
+        interactions=activities_ctx.get("interactions", []),
+    )
 
     return render(
         request,
@@ -255,6 +287,11 @@ async def contract_edit_page(request: Request, sheet_row: int):
             "colaborador_options": get_colaborador_options(),
             "vendedor": normalize_text(row.get("_vendedor", "")) or "Sem vendedor",
             "error": request.session.pop("edit_error", ""),
+            "cadastro_tipo": cadastro_tipo,
+            "cadastro_tipo_options": CADASTRO_TIPO_OPTIONS,
+            "active_tab": active_tab,
+            **activities_ctx,
+            **page_ctx,
         },
     )
 
@@ -274,6 +311,7 @@ async def contract_edit_submit(request: Request, sheet_row: int):
 
     try:
         save_company_edit(sheet_row, form_dict)
+        save_cadastro_tipo(DEFAULT_TENANT_ID, sheet_row, form_dict.get("cadastro_tipo", "lead"))
         return RedirectResponse(url=f"/cadastro/todos/{sheet_row}", status_code=303)
     except DuplicateRegistrationError as error:
         request.session["edit_error"] = str(error)
@@ -283,6 +321,17 @@ async def contract_edit_submit(request: Request, sheet_row: int):
         request.session["edit_error"] = f"Não consegui salvar: {error}"
 
     return RedirectResponse(url=f"/cadastro/todos/{sheet_row}/editar", status_code=303)
+
+
+@router.post("/cadastro/todos/{sheet_row}/tipo")
+async def contract_update_tipo(request: Request, sheet_row: int, cadastro_tipo: str = Form(...)):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+
+    save_cadastro_tipo(DEFAULT_TENANT_ID, sheet_row, cadastro_tipo)
+    referer = request.headers.get("referer") or f"/cadastro/todos/{sheet_row}/editar"
+    return RedirectResponse(url=referer, status_code=303)
 
 
 @router.post("/cadastro/todos/{sheet_row}/status", response_class=HTMLResponse)

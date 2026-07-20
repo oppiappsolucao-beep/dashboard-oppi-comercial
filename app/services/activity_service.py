@@ -1485,6 +1485,41 @@ def atualizar_proxima_acao_atividade(
     return normalized, None
 
 
+def buscar_atividades_do_cadastro(
+    tenant_id: str | None,
+    sheet_row: int,
+) -> list[dict]:
+    if not sheet_row:
+        return []
+
+    items: list[dict] = []
+    for record in list_activities(tenant_id):
+        if int(record.get("sheet_row") or 0) != int(sheet_row):
+            continue
+        items.append(_serialize_activity(record, tenant_id))
+    items.sort(key=lambda item: item.get("activity_dt") or datetime.min, reverse=True)
+    return items
+
+
+def build_cadastro_activities_context(
+    tenant_id: str | None,
+    sheet_row: int,
+    empresa: str,
+) -> dict:
+    activities = buscar_atividades_do_cadastro(tenant_id, sheet_row)
+    lead_action = get_lead_action(tenant_id, sheet_row) or {}
+    interactions = lead_action.get("interactions") if isinstance(lead_action.get("interactions"), list) else []
+    interactions = list(reversed(interactions))
+    query = urlencode({"sheet_row": sheet_row, "empresa": empresa})
+    return {
+        "activities": activities,
+        "activities_count": len(activities),
+        "interactions": interactions,
+        "activities_href": "/atividades",
+        "new_activity_href": f"/atividades?{query}",
+    }
+
+
 def build_activity_page_context(
     df: pd.DataFrame,
     columns: dict,

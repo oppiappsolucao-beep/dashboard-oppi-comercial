@@ -23,6 +23,17 @@
       <div class="registration-new-main panel">
         <section class="registration-new-section">
           <div class="registration-new-section-head">
+            <span class="registration-new-section-icon">🏷</span>
+            <div>
+              <h2>Tipo de cadastro</h2>
+              <p>Escolha se está registrando um novo lead ou uma empresa completa.</p>
+            </div>
+          </div>
+          {% include "partials/registration_tipo_switch.html" %}
+        </section>
+
+        <section class="registration-new-section">
+          <div class="registration-new-section-head">
             <span class="registration-new-section-icon">🏢</span>
             <div>
               <h2>1. Dados da empresa</h2>
@@ -211,6 +222,13 @@
       <div class="registration-new-summary-title">Resumo do que será criado</div>
       <div class="registration-new-summary-grid">
         <div class="registration-new-summary-item">
+          <span class="registration-new-summary-icon">🏷</span>
+          <div>
+            <strong>Tipo</strong>
+            <span id="summary-tipo">{{ 'Empresa' if cadastro_tipo == 'empresa' else 'Lead' }}</span>
+          </div>
+        </div>
+        <div class="registration-new-summary-item">
           <span class="registration-new-summary-icon">🏢</span>
           <div>
             <strong>Empresa</strong>
@@ -244,5 +262,6 @@
 </div>
 
 <script src="/static/js/partners-form.js?v=1" defer></script>
-<script src="/static/js/registration-new.js?v=1" defer></script>
+<script src="/static/js/registration-edit.js?v=1" defer></script>
+<script src="/static/js/registration-new.js?v=2" defer></script>
 {% endblock %}

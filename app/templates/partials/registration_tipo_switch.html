@@ -1,0 +1,15 @@
+<div class="registration-tipo-block">
+  <div class="registration-tipo-switch" role="radiogroup" aria-label="Tipo de cadastro">
+    {% for option in cadastro_tipo_options %}
+    <label class="registration-tipo-option {% if cadastro_tipo == option.value %}is-active{% endif %}">
+      <input type="radio"
+        name="cadastro_tipo"
+        value="{{ option.value }}"
+        {% if form_id %}form="{{ form_id }}"{% endif %}
+        {% if cadastro_tipo == option.value %}checked{% endif %}>
+      <span>{{ option.label }}</span>
+    </label>
+    {% endfor %}
+  </div>
+  <p class="registration-tipo-hint">Ao fechar o negócio, altere de Lead para Empresa.</p>
+</div>

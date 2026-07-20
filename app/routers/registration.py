@@ -9,7 +9,13 @@ from app.services.activity_service import criar_atividade
 from app.services.commercial_services import get_commercial_service_options
 from app.services.crm_validation_service import get_actions_for_stage, normalize_legacy_stage
 from app.services.legacy_core import DuplicateRegistrationError, STATUS_OPTIONS, get_colaborador_options, normalize_text
-from app.services.registration import get_seller_options, infer_partners_count, save_new_company
+from app.services.registration import (
+    CADASTRO_TIPO_OPTIONS,
+    get_seller_options,
+    infer_partners_count,
+    save_cadastro_tipo,
+    save_new_company,
+)
 from app.templating import render
 from config.crm_options import CHANNEL_OPTIONS, PIPELINE_STAGE_OPTIONS, PRIORITY_OPTIONS
 
@@ -25,6 +31,9 @@ def _registration_page_context(request: Request, df, *, error: str = "", values:
         or (activity_actions[0] if activity_actions else "Fazer primeiro contato")
     )
     default_date = normalize_text(values.get("data_chamado") or values.get("activity_date")) or date.today().isoformat()
+    cadastro_tipo = normalize_text(values.get("cadastro_tipo")).lower()
+    if cadastro_tipo not in {"lead", "empresa"}:
+        cadastro_tipo = "lead"
     return {
         "active_page": "registration_new",
         "seller_options": get_seller_options(df),
@@ -40,6 +49,8 @@ def _registration_page_context(request: Request, df, *, error: str = "", values:
         "default_time": normalize_text(values.get("activity_time")) or "09:00",
         "partners_count": infer_partners_count(values),
         "values": values,
+        "cadastro_tipo": cadastro_tipo,
+        "cadastro_tipo_options": CADASTRO_TIPO_OPTIONS,
         "error": error or request.session.pop("registration_error", ""),
     }
 
@@ -67,6 +78,7 @@ async def new_registration_submit(request: Request):
 
     try:
         sheet_row = save_new_company(form_dict)
+        save_cadastro_tipo(DEFAULT_TENANT_ID, sheet_row, form_dict.get("cadastro_tipo", "lead"))
         empresa = normalize_text(form_dict.get("empresa"))
         status = normalize_text(form_dict.get("status"))
 

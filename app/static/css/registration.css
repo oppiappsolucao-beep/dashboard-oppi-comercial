@@ -836,3 +836,562 @@
     flex: 1;
   }
 }
+
+.registration-edit-toolbar {
+  margin-bottom: 14px;
+  padding: 10px 12px;
+}
+
+.registration-edit-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.registration-edit-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 700;
+  text-decoration: none;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.registration-edit-tab:hover {
+  border-color: #D8B4FE;
+  color: var(--text);
+}
+
+.registration-edit-tab.is-active {
+  background: #7C3AED;
+  border-color: #7C3AED;
+  color: #fff;
+}
+
+.registration-tipo-switch {
+  display: inline-flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+
+.registration-edit-form .registration-tipo-switch,
+.registration-new-section .registration-tipo-switch {
+  margin-bottom: 0;
+}
+
+.registration-tipo-option {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--text);
+  font-size: 0.84rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+
+.registration-tipo-option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.registration-tipo-option.is-active,
+.registration-tipo-option:has(input:checked) {
+  border-color: #7C3AED;
+  background: #F5F3FF;
+  box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.12);
+}
+
+.registration-activities-panel {
+  padding: 18px;
+}
+
+.registration-activities-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.registration-activities-head h2 {
+  margin: 0 0 4px;
+  font-size: 1.05rem;
+}
+
+.registration-activities-head p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.registration-activities-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.registration-activities-list {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 22px;
+}
+
+.registration-activity-card {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px;
+  background: #fff;
+}
+
+.registration-activity-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.registration-activity-title {
+  font-size: 0.92rem;
+  font-weight: 800;
+}
+
+.registration-activity-meta {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.registration-activity-status {
+  font-size: 0.74rem;
+  font-weight: 800;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #F3F4F6;
+}
+
+.registration-activity-card-body {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  margin-top: 10px;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.registration-activity-sla {
+  font-weight: 700;
+}
+
+.registration-activity-card-actions {
+  margin-top: 12px;
+}
+
+.registration-activities-empty {
+  padding: 18px;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  color: var(--muted);
+  text-align: center;
+  margin-bottom: 18px;
+}
+
+.registration-activities-timeline {
+  margin-top: 8px;
+}
+
+.client-edit-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.client-edit-header {
+  padding: 18px 20px;
+}
+
+.client-edit-header-main {
+  display: grid;
+  grid-template-columns: minmax(240px, 1.2fr) minmax(220px, 0.9fr) minmax(280px, 1fr);
+  gap: 18px;
+  align-items: center;
+}
+
+.client-edit-identity {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.client-edit-avatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #EDE9FE, #DDD6FE);
+  color: #6D28D9;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+.client-edit-title {
+  margin: 0;
+  font-size: 1.35rem;
+  line-height: 1.2;
+}
+
+.client-edit-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.client-edit-id-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #F3E8FF;
+  color: #7C3AED;
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+
+.client-edit-header-center {
+  display: flex;
+  justify-content: center;
+}
+
+.registration-tipo-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.registration-tipo-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.72rem;
+  text-align: center;
+  max-width: 240px;
+}
+
+.client-edit-pipeline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  justify-content: flex-end;
+}
+
+.client-edit-pipeline-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.client-edit-pipeline-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  border: 2px solid #D1D5DB;
+  background: #fff;
+  flex-shrink: 0;
+}
+
+.client-edit-pipeline-step.is-done .client-edit-pipeline-dot {
+  border-color: #7C3AED;
+  background: #7C3AED;
+}
+
+.client-edit-pipeline-step.is-active {
+  color: #7C3AED;
+}
+
+.client-edit-pipeline-step.is-active .client-edit-pipeline-dot {
+  border-color: #7C3AED;
+  box-shadow: inset 0 0 0 3px #fff;
+  background: #7C3AED;
+}
+
+.client-edit-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.client-edit-summary-card {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 14px 16px;
+  min-height: 96px;
+}
+
+.client-edit-summary-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: #F5F3FF;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.client-edit-summary-label,
+.client-edit-summary-hint {
+  display: block;
+  color: var(--muted);
+  font-size: 0.74rem;
+}
+
+.client-edit-summary-value {
+  display: block;
+  margin: 4px 0;
+  font-size: 0.95rem;
+  line-height: 1.25;
+}
+
+.client-edit-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.client-edit-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px 18px;
+  text-decoration: none;
+  color: var(--muted);
+  border-bottom: 3px solid transparent;
+  background: #fff;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.client-edit-tab:hover {
+  background: #FAFAFA;
+  color: var(--text);
+}
+
+.client-edit-tab.is-active {
+  color: #7C3AED;
+  border-bottom-color: #7C3AED;
+  background: #FCFAFF;
+}
+
+.client-edit-tab-title {
+  font-size: 0.92rem;
+  font-weight: 800;
+}
+
+.client-edit-tab-sub {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.74rem;
+}
+
+.client-edit-tab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #EDE9FE;
+  color: #7C3AED;
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+
+.client-edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.client-edit-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.client-edit-section {
+  padding: 18px;
+}
+
+.client-edit-section-head,
+.registration-activities-head,
+.client-edit-proposal-panel .client-edit-section-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.client-edit-section-head h2,
+.registration-activities-head h2,
+.client-edit-proposal-panel h2 {
+  margin: 0 0 4px;
+  font-size: 1rem;
+}
+
+.client-edit-section-head p,
+.registration-activities-head p,
+.client-edit-proposal-panel p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.client-edit-section-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: #F5F3FF;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.client-edit-footer {
+  display: flex;
+  gap: 10px;
+  padding: 16px 18px;
+}
+
+.client-edit-proposal-panel {
+  padding: 18px;
+}
+
+.client-edit-proposal-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.client-edit-proposal-stat {
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fff;
+}
+
+.client-edit-proposal-stat.highlight {
+  border-color: #DDD6FE;
+  background: #FAF5FF;
+}
+
+.client-edit-proposal-label {
+  display: block;
+  color: var(--muted);
+  font-size: 0.74rem;
+  margin-bottom: 6px;
+}
+
+.client-edit-proposal-stat strong {
+  font-size: 0.95rem;
+}
+
+.client-edit-proposal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.registration-tipo-switch {
+  display: inline-flex;
+  padding: 4px;
+  border-radius: 999px;
+  background: #F3F4F6;
+  gap: 4px;
+}
+
+.registration-tipo-option {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 18px;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.registration-tipo-option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.registration-tipo-option.is-active,
+.registration-tipo-option:has(input:checked) {
+  background: #fff;
+  color: #7C3AED;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+}
+
+@media (max-width: 1100px) {
+  .client-edit-header-main,
+  .client-edit-summary-grid,
+  .client-edit-tabs,
+  .client-edit-proposal-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .client-edit-pipeline {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 768px) {
+  .registration-activities-head {
+    flex-direction: column;
+  }
+
+  .registration-activities-actions {
+    width: 100%;
+  }
+
+  .registration-activities-actions .btn {
+    flex: 1;
+  }
+}

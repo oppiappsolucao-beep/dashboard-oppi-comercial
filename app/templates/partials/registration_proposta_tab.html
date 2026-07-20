@@ -1,0 +1,36 @@
+<div class="client-edit-proposal-panel panel">
+  <div class="client-edit-section-head">
+    <span class="client-edit-section-icon">📄</span>
+    <div>
+      <h2>Proposta comercial</h2>
+      <p>Último PDF anexado e resumo comercial do cadastro.</p>
+    </div>
+  </div>
+
+  {% if commercial_summary.has_data %}
+  <div class="client-edit-proposal-grid">
+    <div class="client-edit-proposal-stat">
+      <span class="client-edit-proposal-label">Serviço escolhido</span>
+      <strong>{{ commercial_summary.servico }}</strong>
+    </div>
+    <div class="client-edit-proposal-stat highlight">
+      <span class="client-edit-proposal-label">Valor da proposta</span>
+      <strong>{{ commercial_summary.valor_proposta }}</strong>
+    </div>
+    <div class="client-edit-proposal-stat">
+      <span class="client-edit-proposal-label">Colaboradores</span>
+      <strong>{{ commercial_summary.colaboradores }}</strong>
+    </div>
+  </div>
+  {% else %}
+  <div class="registration-activities-empty">
+    Nenhuma proposta registrada para este cadastro ainda.
+  </div>
+  {% endif %}
+
+  <div class="client-edit-proposal-actions">
+    <a href="{{ proposals_href }}" class="btn btn-secondary">Ver propostas</a>
+    <a href="{{ proposals_href }}" class="btn">Gerar / baixar PDF</a>
+    <a href="/cadastro/todos/{{ sheet_row }}/editar?tab=dados" class="btn btn-secondary">Editar dados comerciais</a>
+  </div>
+</div>

@@ -1,0 +1,66 @@
+<div class="registration-activities-panel panel">
+  <div class="registration-activities-head">
+    <div>
+      <h2>Atividades comerciais</h2>
+      <p>Acompanhe tarefas, follow-ups e histórico deste cadastro.</p>
+    </div>
+    <div class="registration-activities-actions">
+      <a href="{{ activities_href }}" class="btn btn-secondary">Ver em Atividades</a>
+      <a href="{{ new_activity_href }}" class="btn">＋ Nova atividade</a>
+    </div>
+  </div>
+
+  {% if activities %}
+  <div class="registration-activities-list">
+    {% for activity in activities %}
+    <article class="registration-activity-card sla-{{ activity.sla_class }}">
+      <div class="registration-activity-card-head">
+        <div>
+          <div class="registration-activity-title">{{ activity.title }}</div>
+          <div class="registration-activity-meta">
+            {{ activity.stage }} · {{ activity.channel }} · {{ activity.vendedor }}
+          </div>
+        </div>
+        <span class="registration-activity-status status-{{ activity.status_class }}">{{ activity.status_label }}</span>
+      </div>
+      <div class="registration-activity-card-body">
+        <span class="registration-activity-when">
+          {% if activity.when_date != '—' %}{{ activity.when_date }} {{ activity.when_time }}{% else %}Sem data{% endif %}
+        </span>
+        <span class="registration-activity-sla">{{ activity.sla_label }}</span>
+        {% if activity.proxima_acao and activity.proxima_acao != '—' %}
+        <span class="registration-activity-next">Próxima: {{ activity.proxima_acao }}</span>
+        {% endif %}
+      </div>
+      <div class="registration-activity-card-actions">
+        <a href="/atividades?activity_id={{ activity.id }}" class="btn btn-secondary btn-small">Abrir atividade</a>
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="registration-activities-empty">
+    Nenhuma atividade registrada para este cadastro ainda.
+  </div>
+  {% endif %}
+
+  <div class="registration-activities-timeline">
+    <div class="section-heading">Linha do tempo</div>
+    <div class="section-subtitle">Interações e movimentações registradas automaticamente.</div>
+    {% if interactions %}
+    <div class="operational-timeline">
+      {% for item in interactions %}
+      <div class="operational-timeline-item">
+        <div class="operational-timeline-time">{{ item.at }}</div>
+        <div class="operational-timeline-body">
+          <div class="operational-timeline-title">{{ item.description }}</div>
+          <div class="operational-timeline-meta">{{ item.user }}{% if item.note %} · {{ item.note }}{% endif %}</div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="registration-activities-empty">Nenhuma interação registrada ainda.</div>
+    {% endif %}
+  </div>
+</div>

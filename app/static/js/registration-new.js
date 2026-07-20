@@ -48,6 +48,7 @@
     const activityTimeInput = form.querySelector('input[name="activity_time"]');
     const activityActionSelect = document.getElementById("registration-activity-action");
     const funnel = document.getElementById("registration-funnel");
+    const summaryTipo = document.getElementById("summary-tipo");
 
     function setActivityEnabled(enabled) {
       if (hiddenFlag) hiddenFlag.value = enabled ? "1" : "";
@@ -85,6 +86,10 @@
         summaryCompany.textContent = empresa
           ? 'Empresa "' + empresa + '" será cadastrada'
           : "Nova empresa ou lead será cadastrado";
+      }
+      if (summaryTipo) {
+        const checked = form.querySelector('input[name="cadastro_tipo"]:checked');
+        summaryTipo.textContent = checked && checked.value === "empresa" ? "Empresa" : "Novo Lead";
       }
       if (summaryStage) {
         summaryStage.textContent = stage + " (entrada no funil)";
@@ -128,6 +133,8 @@
       field.addEventListener("input", updateSummary);
       field.addEventListener("change", updateSummary);
     });
+
+    document.addEventListener("registration-tipo-changed", updateSummary);
 
     updateSummary();
   }
