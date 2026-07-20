@@ -1,13 +1,14 @@
 """Leads e Empresas — KPIs e tabela."""
-import json
 from datetime import date, datetime, timedelta
 
 import pandas as pd
 
 from config.crm_options import NEXT_ACTION_BY_STAGE, NEXT_ACTION_OPTIONS, PIPELINE_STAGE_BADGE, PIPELINE_STAGE_OPTIONS
+from app.services.closed_services import summarize_closed_services_for_display
 from app.services.crm_validation_service import get_next_action_options, normalize_legacy_next_action, resolve_pipeline_stage
 from app.services.followup_service import _email_for_row, _phone_for_row, _whatsapp_href
 from app.services.lead_actions_storage import append_interaction, get_lead_action, save_lead_action
+from app.services.registration import resolve_cadastro_tipo
 from app.services.legacy_core import deal_value_from_row, normalize_text, row_field_value, safe_series, status_group
 
 ETAPA_STAGES = PIPELINE_STAGE_OPTIONS
@@ -203,10 +204,36 @@ def build_leads_kpi_cards(filtered_df: pd.DataFrame) -> list[dict]:
     ]
 
 
-def apply_leads_view(df: pd.DataFrame, tab: str, stage: str, sort: str) -> pd.DataFrame:
+def apply_leads_view(
+    df: pd.DataFrame,
+    tab: str,
+    stage: str,
+    sort: str,
+    *,
+    tenant_id: str | None = None,
+    columns: dict | None = None,
+) -> pd.DataFrame:
     result = df.copy()
     if result.empty:
         return result
+
+    columns = columns or {}
+
+    if tab in {"leads", "empresas"} and tenant_id:
+        filtered_rows = []
+        for _, row in result.iterrows():
+            sheet_row = int(row.get("_sheet_row", 0) or 0)
+            cnpj = row_field_value(row, columns, "cnpj")
+            cadastro_tipo = resolve_cadastro_tipo(tenant_id, sheet_row, cnpj=cnpj)
+            if tab == "leads" and cadastro_tipo != "lead":
+                continue
+            if tab == "empresas" and cadastro_tipo != "empresa":
+                continue
+            filtered_rows.append(row)
+        if filtered_rows:
+            result = pd.DataFrame(filtered_rows)
+        else:
+            return result.iloc[0:0]
 
     if tab == "empresas":
         result = result.sort_values(["_empresa", "_data_chamado"], ascending=[True, False])
@@ -242,25 +269,18 @@ def _build_row(row, columns: dict, tab: str, tenant_id: str | None) -> dict:
     telefone = _phone_for_row(row, columns) or "—"
     email = _email_for_row(row, columns) or "—"
     last_contact_raw = row.get("_ultima_atualizacao") or row.get("_data_chamado")
+    cnpj = row_field_value(row, columns, "cnpj")
+    cadastro_tipo = resolve_cadastro_tipo(tenant_id, sheet_row, cnpj=cnpj)
+    servico = row_field_value(row, columns, "servico")
+    valor_proposta = row_field_value(row, columns, "valor_proposta")
+    closed_services = summarize_closed_services_for_display(
+        tenant_id,
+        sheet_row,
+        servico=servico,
+        valor_proposta=valor_proposta,
+    )
 
-    next_action_date = stored.get("next_action_date")
-    next_action_time = str(stored.get("next_action_time") or "09:00")
-    next_action_completed = bool(stored.get("next_action_completed"))
-    next_action_type = str(stored.get("next_action_type") or "whatsapp")
-    next_action_description = str(stored.get("next_action_description") or "").strip()
-
-    if next_action_completed or not next_action_date:
-        proxima_acao = "—"
-        proxima_acao_horario = ""
-        next_action_current = NEXT_ACTION_BY_STAGE.get(etapa, NEXT_ACTION_OPTIONS[0])
-    else:
-        proxima_acao = next_action_description or NEXT_ACTION_BY_STAGE.get(etapa, "Definir próxima ação")
-        proxima_acao_horario = _format_next_action_schedule(next_action_date, next_action_time)
-        next_action_current = normalize_legacy_next_action(proxima_acao) or proxima_acao
-
-    next_action_options = get_next_action_options(next_action_current)
-
-    tipo_label = "Empresa" if tab == "empresas" else "Lead"
+    tipo_label = "Empresa" if cadastro_tipo == "empresa" else "Lead"
 
     return {
         "nome": nome_display,
@@ -276,17 +296,13 @@ def _build_row(row, columns: dict, tab: str, tenant_id: str | None) -> dict:
         "status": status_group(status_raw),
         "ultimo_contato": _format_contact_date(last_contact_raw),
         "ultimo_contato_relativo": _format_relative_days(last_contact_raw),
-        "proxima_acao": proxima_acao,
-        "proxima_acao_horario": proxima_acao_horario,
-        "next_action_icon": _next_action_icon(next_action_type),
-        "next_action_current": next_action_current,
-        "next_action_options": next_action_options,
-        "next_action_options_json": json.dumps(next_action_options, ensure_ascii=False),
+        "closed_services_title": closed_services["closed_services_title"],
+        "closed_services_meta": closed_services["closed_services_meta"],
         "valor": _format_money(deal_value_from_row(row)),
         "valor_num": deal_value_from_row(row),
         "whatsapp_href": _whatsapp_href(telefone if telefone != "—" else ""),
         "sheet_row": sheet_row,
-        "href": f"/cadastro/todos/{sheet_row}" if sheet_row else "/cadastro/todos",
+        "href": f"/cadastro/todos/{sheet_row}/editar" if sheet_row else "/cadastro/todos",
     }
 
 
@@ -300,7 +316,14 @@ def build_leads_table(
     per_page: int = 10,
     tenant_id: str | None = None,
 ) -> dict:
-    view_df = apply_leads_view(filtered_df, tab, stage, sort)
+    view_df = apply_leads_view(
+        filtered_df,
+        tab,
+        stage,
+        sort,
+        tenant_id=tenant_id,
+        columns=columns,
+    )
     total = len(view_df)
     total_pages = max(1, (total + per_page - 1) // per_page)
     page = max(1, min(page, total_pages))
@@ -324,7 +347,14 @@ def build_leads_table(
 
 
 def build_leads_export_rows(filtered_df: pd.DataFrame, columns: dict, tab: str, stage: str, sort: str, tenant_id: str | None) -> list[dict]:
-    view_df = apply_leads_view(filtered_df, tab, stage, sort)
+    view_df = apply_leads_view(
+        filtered_df,
+        tab,
+        stage,
+        sort,
+        tenant_id=tenant_id,
+        columns=columns,
+    )
     return [_build_row(row, columns, tab, tenant_id) for _, row in view_df.iterrows()]
 
 

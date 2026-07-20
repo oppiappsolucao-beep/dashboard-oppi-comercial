@@ -214,6 +214,24 @@
   padding-left: 22px;
 }
 
+.leads-closed-services-cell {
+  min-width: 180px;
+  max-width: 260px;
+}
+
+.leads-closed-services-title {
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.leads-closed-services-meta {
+  margin-top: 4px;
+  font-size: 0.76rem;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
 .next-action-cell {
   display: flex;
   align-items: flex-start;

@@ -87,7 +87,7 @@
 
   <div class="leads-toolbar">
     <div class="leads-tabs">
-      {% for tab_id, tab_label in [('todos', 'Todos'), ('leads', 'Leads'), ('empresas', 'Empresas')] %}
+      {% for tab_id, tab_label in [('leads', 'Leads'), ('empresas', 'Empresa'), ('todos', 'Todos')] %}
       <button type="button"
         class="leads-tab {% if leads_params.tab == tab_id %}active{% endif %}"
         onclick="document.getElementById('leads-tab-input').value='{{ tab_id }}'; document.getElementById('leads-page-input').value='1'; document.getElementById('leads-filters').requestSubmit();">
@@ -123,7 +123,7 @@
           <th>Etapa atual</th>
           <th>Responsável</th>
           <th>Último contato</th>
-          <th>Próxima ação</th>
+          <th>Serviços fechados e Proposta</th>
           <th>Valor estimado</th>
           <th>Ação</th>
         </tr>
@@ -180,18 +180,12 @@
             </div>
           </td>
           <td>
-            {% if row.sheet_row and row.next_action_options %}
-            <div class="leads-next-action-wrap">
-              {% with save_url='/leads-e-empresas/' ~ row.sheet_row ~ '/proxima-acao', options_json=row.next_action_options_json, current_action=row.next_action_current, options=row.next_action_options %}
-              {% include "partials/next_action_picker.html" %}
-              {% endwith %}
-              {% if row.proxima_acao_horario and row.proxima_acao_horario != "—" %}
-              <div class="next-action-schedule-below">{{ row.proxima_acao_horario }}</div>
+            <div class="leads-closed-services-cell">
+              <div class="leads-closed-services-title">{{ row.closed_services_title }}</div>
+              {% if row.closed_services_meta %}
+              <div class="leads-closed-services-meta">{{ row.closed_services_meta }}</div>
               {% endif %}
             </div>
-            {% else %}
-            <span class="contact-empty">—</span>
-            {% endif %}
           </td>
           <td class="value-cell">{{ row.valor }}</td>
           <td class="table-actions">
@@ -199,7 +193,7 @@
             <a href="{{ row.whatsapp_href }}" class="btn btn-small leads-wa-btn" target="_blank" rel="noopener" aria-label="WhatsApp">💬</a>
             {% endif %}
             {% if row.sheet_row %}
-            <a href="/cadastro/todos/{{ row.sheet_row }}" class="btn btn-small btn-secondary">Ver</a>
+            <a href="/cadastro/todos/{{ row.sheet_row }}/editar" class="btn btn-small btn-secondary">Ver</a>
             {% endif %}
           </td>
         </tr>

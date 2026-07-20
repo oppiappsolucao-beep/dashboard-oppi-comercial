@@ -19,7 +19,7 @@ def _parse_leads_params(request: Request, form: dict | None = None) -> dict:
     if not data and request.query_params:
         data = dict(request.query_params)
 
-    tab = data.get("tab", "todos")
+    tab = data.get("tab", "leads")
     stage = data.get("stage", "Todas as etapas")
     sort = data.get("sort", "recent")
     try:
@@ -32,7 +32,7 @@ def _parse_leads_params(request: Request, form: dict | None = None) -> dict:
         per_page = 10
 
     return {
-        "tab": tab if tab in ("todos", "leads", "empresas") else "todos",
+        "tab": tab if tab in ("todos", "leads", "empresas") else "leads",
         "stage": stage,
         "sort": sort if sort in ("recent", "name", "value") else "recent",
         "page": max(1, page),
@@ -88,7 +88,7 @@ async def leads_filters(
     niche: str = Form("Todos os nichos"),
     state: str = Form("Todos os estados"),
     search: str = Form(""),
-    tab: str = Form("todos"),
+    tab: str = Form("leads"),
     stage: str = Form("Todas as etapas"),
     sort: str = Form("recent"),
     page: int = Form(1),
@@ -167,8 +167,8 @@ async def leads_export(request: Request):
         "Etapa",
         "Responsável",
         "Último contato",
-        "Próxima ação",
-        "Horário próxima ação",
+        "Serviços fechados e Proposta",
+        "Detalhes serviços / proposta",
         "Valor estimado",
     ])
     for row in rows:
@@ -181,8 +181,8 @@ async def leads_export(request: Request):
             row["etapa"],
             row["vendedor"],
             row["ultimo_contato"],
-            row["proxima_acao"],
-            row["proxima_acao_horario"],
+            row["closed_services_title"],
+            row["closed_services_meta"],
             row["valor"],
         ])
 

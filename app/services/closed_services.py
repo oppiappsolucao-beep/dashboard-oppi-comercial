@@ -119,3 +119,56 @@ def save_closed_services(
         },
     )
     return primary
+
+
+def _format_vencimento_display(value: str) -> str:
+    raw = normalize_text(value)
+    if not raw:
+        return ""
+    parsed = as_python_date(parse_date(raw)) or as_python_date(raw)
+    if parsed:
+        return parsed.strftime("%d/%m/%Y")
+    return raw
+
+
+def summarize_closed_services_for_display(
+    tenant_id: str | None,
+    sheet_row: int,
+    *,
+    servico: str = "",
+    valor_proposta: str = "",
+) -> dict:
+    items = load_closed_services(
+        tenant_id,
+        sheet_row,
+        servico=servico,
+        valor_proposta=valor_proposta,
+    )
+    active_items = [item for item in items if _has_data(item)]
+    if not active_items:
+        return {
+            "closed_services_title": "—",
+            "closed_services_meta": "",
+        }
+
+    first = active_items[0]
+    title = normalize_text(first.get("servico")) or "Proposta comercial"
+    meta_parts: list[str] = []
+    if normalize_text(first.get("valor")):
+        meta_parts.append(normalize_text(first["valor"]))
+    if normalize_text(first.get("forma_pagamento")):
+        meta_parts.append(normalize_text(first["forma_pagamento"]))
+    vencimento = _format_vencimento_display(first.get("vencimento", ""))
+    if vencimento:
+        meta_parts.append(vencimento)
+
+    meta = " · ".join(meta_parts)
+    extra_count = len(active_items) - 1
+    if extra_count > 0:
+        suffix = f"+{extra_count} serviço(s)"
+        meta = f"{meta} · {suffix}" if meta else suffix
+
+    return {
+        "closed_services_title": title,
+        "closed_services_meta": meta,
+    }
