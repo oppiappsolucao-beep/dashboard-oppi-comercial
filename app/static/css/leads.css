@@ -1,5 +1,12 @@
 .leads-search-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   margin-bottom: 16px;
+}
+
+.leads-search-wrap {
+  flex: 1;
 }
 
 .leads-search-wrap input {
@@ -7,8 +14,54 @@
   height: 44px;
 }
 
+.leads-filter-toggle,
+.leads-export-btn {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.leads-btn-icon {
+  display: inline-flex;
+  margin-right: 4px;
+  font-weight: 700;
+}
+
+.leads-advanced-filters {
+  margin-bottom: 16px;
+}
+
+.leads-advanced-filters[hidden] {
+  display: none;
+}
+
 .metric-grid-leads {
   margin-bottom: 18px;
+}
+
+.leads-kpi-card {
+  position: relative;
+}
+
+.leads-kpi-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.leads-kpi-info {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid #D1D5DB;
+  color: #9CA3AF;
+  font-size: 0.68rem;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  cursor: help;
 }
 
 .leads-toolbar {
@@ -65,10 +118,27 @@
   color: var(--text);
 }
 
-.leads-count {
-  font-size: 0.82rem;
+.leads-refresh-form {
+  margin: 0;
+}
+
+.leads-refresh-btn {
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
   color: var(--muted);
-  font-weight: 600;
+  cursor: pointer;
+  font-size: 1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.leads-refresh-btn:hover {
+  color: var(--violet);
+  border-color: #DDD6FE;
 }
 
 .leads-table-card {
@@ -78,6 +148,11 @@
 
 .leads-table {
   margin: 0;
+}
+
+.leads-table th:last-child,
+.leads-table td:last-child {
+  width: 120px;
 }
 
 .leads-table th:first-child,
@@ -101,14 +176,29 @@
   line-height: 1.45;
 }
 
+.contact-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.contact-icon {
+  font-size: 0.82rem;
+  opacity: 0.75;
+  flex-shrink: 0;
+}
+
 .contact-email {
   color: var(--muted);
   font-size: 0.78rem;
 }
 
-.stage-badge.contato,
-.stage-badge.primeiro-contato { background: #FCE7F3; color: #DB2777; }
-.stage-badge.retorno { background: #EDE9FE; color: #7C3AED; }
+.contact-empty {
+  color: var(--muted);
+}
+
+.stage-badge.contato { background: #EDE9FE; color: #6D28D9; }
+.stage-badge.retorno { background: #FCE7F3; color: #DB2777; }
 .stage-badge.negociacao { background: #FEF3C7; color: #B45309; }
 
 .owner-cell {
@@ -132,21 +222,63 @@
   flex-shrink: 0;
 }
 
-.next-action-cell {
+.last-contact-cell {
+  font-size: 0.82rem;
+}
+
+.last-contact-date {
   display: flex;
   align-items: center;
   gap: 6px;
+  color: var(--text);
+}
+
+.last-contact-relative {
+  color: var(--muted);
+  font-size: 0.76rem;
+  margin-top: 2px;
+  padding-left: 22px;
+}
+
+.next-action-cell {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
   font-size: 0.82rem;
   color: var(--text);
 }
 
 .next-action-icon {
-  font-size: 0.9rem;
+  font-size: 0.95rem;
+  margin-top: 1px;
+  flex-shrink: 0;
+}
+
+.next-action-title {
+  font-weight: 600;
+}
+
+.next-action-schedule {
+  color: var(--muted);
+  font-size: 0.76rem;
+  margin-top: 2px;
 }
 
 .value-cell {
   font-weight: 700;
   white-space: nowrap;
+}
+
+.table-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.leads-wa-btn {
+  min-width: 34px;
+  padding: 0 8px;
 }
 
 .leads-pagination {
@@ -163,18 +295,27 @@
 .leads-pagination-pages {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   justify-content: center;
 }
 
 .page-btn {
-  width: 32px;
+  min-width: 32px;
   height: 32px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface);
   cursor: pointer;
-  font-size: 1rem;
+  font-size: 0.86rem;
+  color: var(--text);
+  padding: 0 8px;
+}
+
+.page-btn.active {
+  background: var(--violet);
+  border-color: var(--violet);
+  color: #fff;
+  font-weight: 700;
 }
 
 .page-current {
@@ -213,6 +354,11 @@
 }
 
 @media (max-width: 900px) {
+  .leads-search-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
   .leads-toolbar {
     flex-direction: column;
     align-items: stretch;
