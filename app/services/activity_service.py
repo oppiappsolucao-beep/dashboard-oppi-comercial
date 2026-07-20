@@ -821,14 +821,13 @@ def atualizar_atividade_inline(
         move_stage=move_stage,
         interaction_type=interaction_type,
     )
-    if not sheet_row:
-        _append_activity_timeline(
-            tenant_id,
-            activity_id,
-            label=history_label,
-            user=user,
-            note=note or result_notes,
-        )
+    _append_activity_timeline(
+        tenant_id,
+        activity_id,
+        label=history_label,
+        user=user,
+        note=note or result_notes,
+    )
 
     suggestion = suggest_from_result(result, current_stage) if result else {}
     opportunity_status = suggestion.get("opportunity_status", "")
@@ -899,6 +898,14 @@ def cancelar_atividade(tenant_id: str | None, activity_id: str, user: str, reaso
         previous_status=current.get("status", ""),
         new_status="cancelada",
         note=reason,
+        interaction_type="atividade_cancelada",
+    )
+    _append_activity_timeline(
+        tenant_id,
+        activity_id,
+        label="Atividade cancelada",
+        user=user,
+        note=reason,
     )
     return True, None
 
@@ -930,6 +937,27 @@ def _timeline_meta(user: str = "", note: str = "") -> str:
     return " · ".join(part for part in parts if part)
 
 
+def _timeline_step_key(label: str, sort_at) -> tuple[str, str]:
+    return normalize_text(label).lower(), str(sort_at or "")
+
+
+def _make_timeline_step(
+    *,
+    label: str,
+    sort_at,
+    user: str = "",
+    note: str = "",
+    state: str = "done",
+) -> dict:
+    return {
+        "label": label,
+        "at": _format_timeline_at(sort_at),
+        "meta": _timeline_meta(user, note),
+        "state": state,
+        "sort_at": sort_at,
+    }
+
+
 def _interaction_to_timeline_step(interaction: dict) -> dict:
     description = normalize_text(interaction.get("description")) or "Ação registrada"
     return {
@@ -948,26 +976,41 @@ def _build_activity_timeline(
     lead_created_at,
 ) -> list[dict]:
     steps: list[dict] = []
+    seen: set[tuple[str, str]] = set()
     activity_created = record.get("created_at")
     sheet_row = int(activity.get("sheet_row") or 0)
+    process_action = normalize_text(activity.get("title")) or "Atividade"
+    result = normalize_text(activity.get("result_value") or "")
+
+    def add_step(step: dict) -> None:
+        key = _timeline_step_key(step.get("label", ""), step.get("sort_at"))
+        if key in seen:
+            return
+        seen.add(key)
+        steps.append(step)
 
     if lead_created_at or activity_created:
-        steps.append({
-            "label": "Lead entrou",
-            "at": _format_timeline_at(lead_created_at or activity_created),
-            "meta": "",
-            "state": "done",
-            "sort_at": lead_created_at or activity_created,
-        })
+        add_step(_make_timeline_step(
+            label="Lead entrou",
+            sort_at=lead_created_at or activity_created,
+        ))
 
-    process_action = normalize_text(activity.get("title")) or "Atividade"
-    steps.append({
-        "label": f"Atividade criada: {process_action}",
-        "at": _format_timeline_at(activity_created),
-        "meta": normalize_text(activity.get("vendedor")),
-        "state": "done",
-        "sort_at": activity_created,
-    })
+    add_step(_make_timeline_step(
+        label=f"Atividade criada: {process_action}",
+        sort_at=activity_created,
+        user=normalize_text(activity.get("vendedor")),
+    ))
+
+    activity_timeline = record.get("timeline") if isinstance(record.get("timeline"), list) else []
+    for item in activity_timeline:
+        if not isinstance(item, dict):
+            continue
+        add_step(_make_timeline_step(
+            label=normalize_text(item.get("label")) or "Ação registrada",
+            sort_at=item.get("at"),
+            user=item.get("user", ""),
+            note=item.get("note", ""),
+        ))
 
     if sheet_row:
         stored = get_lead_action(tenant_id, sheet_row) or {}
@@ -977,19 +1020,20 @@ def _build_activity_timeline(
                 continue
             if interaction.get("type") == "atividade_criada":
                 continue
-            steps.append(_interaction_to_timeline_step(interaction))
-    else:
-        activity_timeline = record.get("timeline") if isinstance(record.get("timeline"), list) else []
-        for item in activity_timeline:
-            if not isinstance(item, dict):
-                continue
-            steps.append({
-                "label": normalize_text(item.get("label")) or "Ação registrada",
-                "at": _format_timeline_at(item.get("at")),
-                "meta": _timeline_meta(item.get("user", ""), item.get("note", "")),
-                "state": "done",
-                "sort_at": item.get("at"),
-            })
+            step = _interaction_to_timeline_step(interaction)
+            step["sort_at"] = interaction.get("at")
+            add_step(step)
+
+    if activity.get("status") == "concluida" and record.get("completed_at"):
+        completion_label = f"Atividade concluída: {process_action}"
+        if result and result != "Selecione":
+            completion_label = f"{completion_label} — {result}"
+        add_step(_make_timeline_step(
+            label=completion_label,
+            sort_at=record.get("completed_at"),
+            user=normalize_text(record.get("updated_by") or activity.get("vendedor")),
+            note=normalize_text(activity.get("note") or activity.get("result_notes") or ""),
+        ))
 
     steps.sort(key=lambda step: _timeline_sort_value(step.get("sort_at")))
 
@@ -1098,13 +1142,12 @@ def atualizar_proxima_acao_atividade(
     history_label = f"Próxima ação alterada para: {normalized}"
     if sheet_row:
         atualizar_proxima_acao_lead(tenant_id, sheet_row, normalized, user)
-    elif not sheet_row:
-        _append_activity_timeline(
-            tenant_id,
-            activity_id,
-            label=history_label,
-            user=user,
-        )
+    _append_activity_timeline(
+        tenant_id,
+        activity_id,
+        label=history_label,
+        user=user,
+    )
 
     return normalized, None
 
@@ -1377,7 +1420,15 @@ def mover_atividade_kanban(
             previous_status=current.get("status", ""),
             new_status=current.get("status", ""),
             move_stage=new_stage,
+            interaction_type="atividade_movida",
         )
+
+    _append_activity_timeline(
+        tenant_id,
+        activity_id,
+        label=f"Atividade movida para {new_stage}",
+        user=user,
+    )
 
     return _serialize_activity({"id": activity_id, **saved}), None
 

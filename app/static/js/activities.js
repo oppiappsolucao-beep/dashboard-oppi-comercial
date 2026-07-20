@@ -502,6 +502,18 @@
     }
   }
 
+  function refreshActivityDrawer() {
+    const drawerRoot = document.getElementById("activity-drawer-root");
+    const drawer = drawerRoot && drawerRoot.querySelector(".activity-drawer");
+    if (!drawer || typeof htmx === "undefined") return;
+    const activityId = drawer.getAttribute("data-activity-id");
+    if (!activityId) return;
+    htmx.ajax("GET", "/atividades/" + encodeURIComponent(activityId) + "/painel", {
+      target: "#activity-drawer-root",
+      swap: "innerHTML",
+    });
+  }
+
   window.activityHandleCreateResponse = function (event) {
     if (event.detail.successful) {
       window.activityCloseModal();
@@ -519,7 +531,7 @@
   document.body.addEventListener("htmx:afterSwap", function (event) {
     if (event.target && event.target.id === "activities-root") {
       initActivitiesInline();
-      activityCloseDrawer();
+      refreshActivityDrawer();
     }
     if (event.target && event.target.id === "activity-modal-root") {
       document.body.classList.add("activity-modal-open");
