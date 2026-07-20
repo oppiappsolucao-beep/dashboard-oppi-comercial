@@ -54,6 +54,8 @@ REGISTRATION_FIELDS = [
     "servico", "valor_proposta", "colaboradores",
 ]
 
+EDIT_FIELDS_PRESERVE_WHEN_ABSENT = ("status", "data_chamado")
+
 
 def infer_partners_count(values: dict) -> int:
     if any(normalize_text(values.get(key)) for key in ("socio_3", "telefone_socio_3", "cpf_socio_3")):
@@ -108,11 +110,39 @@ def save_new_company(form: dict) -> int:
     return append_company_to_sheet(build_registration_payload(form))
 
 
+def _existing_edit_field_values(sheet_row: int) -> dict[str, str]:
+    from app.dependencies import get_prepared_data
+    from app.services.legacy_core import status_group
+
+    df, columns = get_prepared_data()
+    matches = df[df["_sheet_row"] == int(sheet_row)]
+    if matches.empty:
+        return {}
+
+    row = matches.iloc[0]
+
+    def cell(key: str) -> str:
+        column_name = columns.get(key)
+        if column_name and column_name in row.index:
+            return normalize_text(row.get(column_name, ""))
+        return ""
+
+    return {
+        "status": status_group(row.get("_status_original", row.get("_status_grupo", "Novo Lead"))),
+        "data_chamado": cell("data_chamado"),
+    }
+
+
 def save_company_edit(sheet_row: int, form: dict) -> None:
     error = validate_registration_form(form)
     if error:
         raise ValueError(error)
-    update_company_in_sheet(sheet_row, build_registration_payload(form))
+    payload = build_registration_payload(form)
+    existing = _existing_edit_field_values(sheet_row)
+    for field in EDIT_FIELDS_PRESERVE_WHEN_ABSENT:
+        if field not in form:
+            payload[field] = normalize_text(existing.get(field, ""))
+    update_company_in_sheet(sheet_row, payload)
 
 
 def get_seller_options(df) -> list[str]:

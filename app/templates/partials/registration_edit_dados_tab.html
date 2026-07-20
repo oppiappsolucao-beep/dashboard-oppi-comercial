@@ -70,7 +70,7 @@
       <span class="client-edit-section-icon">🌐</span>
       <div>
         <h2>Redes sociais e acompanhamento</h2>
-        <p>Origem, status comercial e observações.</p>
+        <p>Redes sociais, vendedor e observações.</p>
       </div>
     </div>
     <div class="form-grid">
@@ -83,14 +83,6 @@
           {% endfor %}
         </select>
       </div>
-      <div class="form-group"><label>Status do lead</label>
-        <select name="status">
-          {% for status in status_options %}
-          <option value="{{ status }}" {% if current_status == status %}selected{% endif %}>{{ status }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="form-group"><label>Data do chamado</label><input type="date" name="data_chamado" value="{{ data_chamado }}"></div>
       <div class="form-group full"><label>Observações</label><textarea name="observacoes" rows="4">{{ values.observacoes }}</textarea></div>
     </div>
   </section>
