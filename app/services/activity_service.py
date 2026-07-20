@@ -508,17 +508,46 @@ def registrar_historico(
     result: str = "",
     note: str = "",
     move_stage: str = "",
+    interaction_type: str = "atividade_atualizada",
 ) -> None:
+    if not sheet_row:
+        return
+    meta_note = f"{result}. {note}".strip(". ")
     append_interaction(
         tenant_id,
         sheet_row,
-        interaction_type="atividade_atualizada",
+        interaction_type=interaction_type,
         description=description,
         user=user,
         previous_stage=previous_status,
         new_stage=move_stage or new_status,
-        note=f"{result}. {note}".strip(". "),
+        note=meta_note,
     )
+
+
+def _append_activity_timeline(
+    tenant_id: str | None,
+    activity_id: str,
+    *,
+    label: str,
+    user: str,
+    note: str = "",
+) -> None:
+    from app.services.activities_storage import get_activity, save_activity
+
+    record = get_activity(tenant_id, activity_id)
+    if not record:
+        return
+    timeline = record.get("timeline")
+    if not isinstance(timeline, list):
+        timeline = []
+    timeline.append({
+        "at": _now().isoformat(timespec="seconds"),
+        "label": label,
+        "user": user,
+        "note": note,
+    })
+    save_activity(tenant_id, activity_id, {"timeline": timeline[-100:]})
 
 
 def atualizar_lead_pela_atividade(
@@ -650,17 +679,41 @@ def atualizar_atividade_inline(
     saved = save_activity(tenant_id, activity_id, updates)
 
     sheet_row = int(current.get("sheet_row") or 0)
+    process_action = normalize_text(current.get("process_action")) or "Atividade"
+    if status == "concluida":
+        history_label = f"Atividade concluída: {process_action}"
+        if result:
+            history_label = f"{history_label} — {result}"
+        interaction_type = "atividade_concluida"
+    elif status == "reagendada":
+        sd = normalize_text(updates.get("scheduled_date") or payload.get("scheduled_date") or "")
+        st = normalize_text(updates.get("scheduled_time") or payload.get("scheduled_time") or "")
+        history_label = f"Atividade reagendada para {sd} às {st}".strip()
+        interaction_type = "atividade_reagendada"
+    else:
+        history_label = f"Atividade atualizada: {process_action}"
+        interaction_type = "atividade_atualizada"
+
     registrar_historico(
         tenant_id,
         sheet_row,
         user=user,
-        description=f"Atividade atualizada: {current.get('process_action')}",
+        description=history_label,
         previous_status=current.get("status", ""),
         new_status=updates["status"],
         result=result,
         note=note or result_notes,
         move_stage=move_stage,
+        interaction_type=interaction_type,
     )
+    if not sheet_row:
+        _append_activity_timeline(
+            tenant_id,
+            activity_id,
+            label=history_label,
+            user=user,
+            note=note or result_notes,
+        )
 
     suggestion = suggest_from_result(result, current_stage) if result else {}
     opportunity_status = suggestion.get("opportunity_status", "")
@@ -740,6 +793,115 @@ def _format_timeline_at(value) -> str:
     return dt.strftime("%d/%m/%Y %H:%M")
 
 
+def _timeline_sort_value(value) -> datetime:
+    dt = as_python_datetime(value)
+    if dt:
+        return dt
+    try:
+        return _parse_datetime(str(value))
+    except (TypeError, ValueError):
+        return datetime.min
+
+
+def _timeline_meta(user: str = "", note: str = "") -> str:
+    parts = [normalize_text(user), normalize_text(note)]
+    return " · ".join(part for part in parts if part)
+
+
+def _interaction_to_timeline_step(interaction: dict) -> dict:
+    description = normalize_text(interaction.get("description")) or "Ação registrada"
+    return {
+        "label": description,
+        "at": _format_timeline_at(interaction.get("at")),
+        "meta": _timeline_meta(interaction.get("user", ""), interaction.get("note", "")),
+        "state": "done",
+        "sort_at": interaction.get("at"),
+    }
+
+
+def _build_activity_timeline(
+    tenant_id: str | None,
+    record: dict,
+    activity: dict,
+    lead_created_at,
+) -> list[dict]:
+    steps: list[dict] = []
+    activity_created = record.get("created_at")
+    sheet_row = int(activity.get("sheet_row") or 0)
+
+    if lead_created_at or activity_created:
+        steps.append({
+            "label": "Lead entrou",
+            "at": _format_timeline_at(lead_created_at or activity_created),
+            "meta": "",
+            "state": "done",
+            "sort_at": lead_created_at or activity_created,
+        })
+
+    process_action = normalize_text(activity.get("title")) or "Atividade"
+    steps.append({
+        "label": f"Atividade criada: {process_action}",
+        "at": _format_timeline_at(activity_created),
+        "meta": normalize_text(activity.get("vendedor")),
+        "state": "done",
+        "sort_at": activity_created,
+    })
+
+    if sheet_row:
+        stored = get_lead_action(tenant_id, sheet_row) or {}
+        interactions = stored.get("interactions") if isinstance(stored.get("interactions"), list) else []
+        for interaction in interactions:
+            if not isinstance(interaction, dict):
+                continue
+            if interaction.get("type") == "atividade_criada":
+                continue
+            steps.append(_interaction_to_timeline_step(interaction))
+    else:
+        activity_timeline = record.get("timeline") if isinstance(record.get("timeline"), list) else []
+        for item in activity_timeline:
+            if not isinstance(item, dict):
+                continue
+            steps.append({
+                "label": normalize_text(item.get("label")) or "Ação registrada",
+                "at": _format_timeline_at(item.get("at")),
+                "meta": _timeline_meta(item.get("user", ""), item.get("note", "")),
+                "state": "done",
+                "sort_at": item.get("at"),
+            })
+
+    steps.sort(key=lambda step: _timeline_sort_value(step.get("sort_at")))
+
+    if activity.get("status") != "concluida" and steps:
+        for step in steps:
+            step["state"] = "done"
+        steps[-1]["state"] = "current"
+
+    for step in steps:
+        step.pop("sort_at", None)
+
+    return steps
+
+
+def build_activity_timeline_for_activity(
+    tenant_id: str | None,
+    activity_id: str,
+    df: pd.DataFrame,
+    columns: dict,
+) -> list[dict]:
+    record = get_activity(tenant_id, activity_id)
+    if not record:
+        return []
+    activity = _serialize_activity(record)
+    lead_created_at = None
+    sheet_row = activity.get("sheet_row")
+    if sheet_row and not df.empty:
+        row_match = df[df["_sheet_row"] == sheet_row]
+        if not row_match.empty:
+            lead = _lead_record(row_match.iloc[0], columns, tenant_id)
+            lead_created_at = lead.get("created_at")
+    return _build_activity_timeline(tenant_id, record, activity, lead_created_at)
+
+
 def build_activity_detail_panel(
     tenant_id: str | None,
     activity_id: str,
@@ -768,34 +930,10 @@ def build_activity_detail_panel(
             lead = _lead_record(row_match.iloc[0], columns, tenant_id)
             lead_created_at = lead.get("created_at")
 
-    activity_created = record.get("created_at")
-    has_next_action = bool(
-        normalize_text(record.get("next_action"))
-        or normalize_text(activity["proxima_acao_value"])
-        or NEXT_ACTION_BY_STAGE.get(stage)
-    )
-    next_action_at = record.get("updated_at") or activity_created
     suggestion = suggest_from_result("Cliente respondeu", stage)
     next_action_current = normalize_legacy_next_action(next_action_display) or next_action_display
     next_action_options = get_next_action_options(activity.get("proxima_acao_value") or next_action_current)
-
-    timeline = [
-        {
-            "label": "Lead entrou",
-            "at": _format_timeline_at(lead_created_at or activity_created),
-            "state": "done",
-        },
-        {
-            "label": "Atividade criada",
-            "at": _format_timeline_at(activity_created),
-            "state": "done" if activity["status"] == "concluida" else "current",
-        },
-        {
-            "label": "Próxima ação definida",
-            "at": _format_timeline_at(next_action_at) if has_next_action else "—",
-            "state": "done" if has_next_action else "pending",
-        },
-    ]
+    timeline = _build_activity_timeline(tenant_id, record, activity, lead_created_at)
 
     return {
         "activity": activity,
@@ -835,8 +973,16 @@ def atualizar_proxima_acao_atividade(
     save_activity(tenant_id, activity_id, {"next_action": normalized})
 
     sheet_row = int(record.get("sheet_row") or 0)
+    history_label = f"Próxima ação alterada para: {normalized}"
     if sheet_row:
         atualizar_proxima_acao_lead(tenant_id, sheet_row, normalized, user)
+    elif not sheet_row:
+        _append_activity_timeline(
+            tenant_id,
+            activity_id,
+            label=history_label,
+            user=user,
+        )
 
     return normalized, None
 

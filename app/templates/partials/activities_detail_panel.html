@@ -55,13 +55,16 @@
 
     <section class="activity-drawer-section">
       <div class="activity-drawer-section-label">Linha do tempo</div>
-      <div class="activity-drawer-timeline">
+      <div class="activity-drawer-timeline" id="activity-drawer-timeline">
         {% for step in timeline %}
         <div class="activity-drawer-timeline-step state-{{ step.state }}">
           <span class="activity-drawer-timeline-dot" aria-hidden="true"></span>
           <div class="activity-drawer-timeline-body">
             <strong>{{ step.label }}</strong>
             <span>{{ step.at }}</span>
+            {% if step.meta %}
+            <span class="activity-drawer-timeline-meta">{{ step.meta }}</span>
+            {% endif %}
           </div>
         </div>
         {% endfor %}

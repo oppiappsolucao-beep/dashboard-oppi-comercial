@@ -27,6 +27,26 @@
     });
   }
 
+  function renderTimeline(timeline) {
+    var container = document.getElementById("activity-drawer-timeline");
+    if (!container || !Array.isArray(timeline)) return;
+    container.innerHTML = timeline.map(function (step) {
+      var meta = step.meta
+        ? '<span class="activity-drawer-timeline-meta">' + step.meta + "</span>"
+        : "";
+      return (
+        '<div class="activity-drawer-timeline-step state-' + (step.state || "done") + '">' +
+          '<span class="activity-drawer-timeline-dot" aria-hidden="true"></span>' +
+          '<div class="activity-drawer-timeline-body">' +
+            "<strong>" + step.label + "</strong>" +
+            "<span>" + step.at + "</span>" +
+            meta +
+          "</div>" +
+        "</div>"
+      );
+    }).join("");
+  }
+
   function saveNextAction(picker, value) {
     var url = picker.dataset.saveUrl;
     if (!url || !value) return;
@@ -54,6 +74,9 @@
       .then(function (data) {
         if (data.next_action) {
           setLabel(picker, data.next_action);
+        }
+        if (data.timeline) {
+          renderTimeline(data.timeline);
         }
       })
       .catch(function (error) {

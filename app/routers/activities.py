@@ -10,6 +10,7 @@ from app.services.activity_service import (
     atualizar_atividade_inline,
     build_activity_detail_panel,
     build_activity_page_context,
+    build_activity_timeline_for_activity,
     build_new_activity_modal_context,
     buscar_acoes_por_etapa,
     buscar_leads_para_atividade,
@@ -152,7 +153,9 @@ async def activities_update_next_action(
     if error:
         return JSONResponse({"error": error}, status_code=400)
 
-    return JSONResponse({"ok": True, "next_action": normalized})
+    df, columns = get_prepared_data()
+    timeline = build_activity_timeline_for_activity(DEFAULT_TENANT_ID, activity_id, df, columns)
+    return JSONResponse({"ok": True, "next_action": normalized, "timeline": timeline})
 
 
 @router.post("/atividades/{activity_id}/mover-etapa", response_class=HTMLResponse)

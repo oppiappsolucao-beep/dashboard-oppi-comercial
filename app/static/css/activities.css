@@ -415,6 +415,18 @@ body.activity-drawer-open {
   margin-bottom: 8px;
 }
 
+.activity-drawer-timeline-body span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.78rem;
+  margin-top: 2px;
+}
+
+.activity-drawer-timeline-meta {
+  color: #9CA3AF !important;
+  font-size: 0.74rem !important;
+}
+
 .activity-drawer-next-action {
   display: flex;
   align-items: center;
