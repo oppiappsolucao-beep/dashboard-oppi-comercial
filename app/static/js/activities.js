@@ -287,6 +287,46 @@
     document.body.classList.remove("activity-modal-open");
   };
 
+  window.activityCloseDrawer = function (event) {
+    if (event && event.target && !event.target.classList.contains("activity-drawer-backdrop")) return;
+    const root = document.getElementById("activity-drawer-root");
+    if (root) root.innerHTML = "";
+    document.body.classList.remove("activity-drawer-open");
+    document.querySelectorAll(".activities-kanban-card.is-selected").forEach(function (card) {
+      card.classList.remove("is-selected");
+    });
+  };
+
+  window.activitySelectCard = function (button) {
+    document.querySelectorAll(".activities-kanban-card.is-selected").forEach(function (card) {
+      card.classList.remove("is-selected");
+    });
+    if (button) button.classList.add("is-selected");
+  };
+
+  window.activityToggleCompleteForm = function () {
+    const form = document.getElementById("activity-complete-form");
+    const reschedule = document.getElementById("activity-reschedule-form");
+    if (!form) return;
+    if (reschedule) reschedule.classList.add("is-hidden");
+    form.classList.toggle("is-hidden");
+  };
+
+  window.activityToggleRescheduleForm = function () {
+    const form = document.getElementById("activity-reschedule-form");
+    const complete = document.getElementById("activity-complete-form");
+    if (!form) return;
+    if (complete) complete.classList.add("is-hidden");
+    form.classList.toggle("is-hidden");
+  };
+
+  function initActivityDrawer() {
+    const drawerRoot = document.getElementById("activity-drawer-root");
+    if (drawerRoot && drawerRoot.querySelector(".activity-drawer")) {
+      document.body.classList.add("activity-drawer-open");
+    }
+  }
+
   window.activityHandleCreateResponse = function (event) {
     if (event.detail.successful) {
       window.activityCloseModal();
@@ -298,15 +338,20 @@
 
   document.addEventListener("DOMContentLoaded", function () {
     initActivitiesInline();
+    initActivityDrawer();
   });
 
   document.body.addEventListener("htmx:afterSwap", function (event) {
     if (event.target && event.target.id === "activities-root") {
       initActivitiesInline();
+      activityCloseDrawer();
     }
     if (event.target && event.target.id === "activity-modal-root") {
       document.body.classList.add("activity-modal-open");
       initNewActivityModal();
+    }
+    if (event.target && event.target.id === "activity-drawer-root") {
+      initActivityDrawer();
     }
   });
 

@@ -8,6 +8,7 @@ from app.dependencies import get_prepared_data, is_admin, require_auth
 from app.services.activity_service import (
     ActivitiesViewParams,
     atualizar_atividade_inline,
+    build_activity_detail_panel,
     build_activity_page_context,
     build_new_activity_modal_context,
     buscar_acoes_por_etapa,
@@ -113,6 +114,25 @@ async def activities_new_modal(request: Request):
     if redirect:
         return redirect
     return render(request, "partials/activities_new_modal.html", _modal_context(request))
+
+
+@router.get("/atividades/{activity_id}/painel", response_class=HTMLResponse)
+async def activities_detail_panel(request: Request, activity_id: str):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+
+    df, columns = get_prepared_data()
+    options = get_filter_options(df)
+    filters = apply_default_period_filters(parse_dashboard_filters(request), df)
+    filters = apply_seller_scope(request, filters, options["seller_options"], is_admin(request))
+    scoped_df = apply_dashboard_filters(df, columns, filters)
+
+    panel = build_activity_detail_panel(DEFAULT_TENANT_ID, activity_id, scoped_df, columns)
+    if not panel:
+        return HTMLResponse("Atividade não encontrada.", status_code=404)
+
+    return render(request, "partials/activities_detail_panel.html", panel)
 
 
 @router.get("/atividades/api/leads")

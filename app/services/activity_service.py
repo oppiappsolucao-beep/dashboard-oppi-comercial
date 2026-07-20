@@ -17,6 +17,7 @@ from config.crm_options import (
     CHANNEL_OPTIONS,
     LOST_REASON_OPTIONS,
     NEW_ACTIVITY_STATUS_KEYS,
+    NEXT_ACTION_BY_STAGE,
     NEXT_ACTION_OPTIONS,
     NO_NEXT_ACTION_RESULTS,
     OVERVIEW_ACTION_TO_PROCESS,
@@ -55,7 +56,7 @@ from app.services.crm_validation_service import (
 from app.services.filters import DashboardFilters, apply_dashboard_filters
 from app.services.followup_service import _lead_record, buscar_leads_para_acao, _minutes_since
 from app.services.lead_actions_storage import append_interaction, get_lead_action, save_lead_action
-from app.services.legacy_core import normalize_digits, normalize_text, safe_series
+from app.services.legacy_core import as_python_datetime, normalize_digits, normalize_text, safe_series
 
 STATUS_CLASS = {
     "pendente": "pendente",
@@ -724,6 +725,88 @@ def cancelar_atividade(tenant_id: str | None, activity_id: str, user: str, reaso
         note=reason,
     )
     return True, None
+
+
+def _format_timeline_at(value) -> str:
+    dt = as_python_datetime(value) if value else None
+    if not dt and value:
+        try:
+            dt = _parse_datetime(str(value))
+        except (TypeError, ValueError):
+            dt = None
+    if not dt:
+        return "—"
+    return dt.strftime("%d/%m/%Y %H:%M")
+
+
+def build_activity_detail_panel(
+    tenant_id: str | None,
+    activity_id: str,
+    df: pd.DataFrame,
+    columns: dict,
+) -> dict | None:
+    record = get_activity(tenant_id, activity_id)
+    if not record:
+        return None
+
+    activity = _serialize_activity(record)
+    stage = activity["stage"]
+    sla_deadline = PIPELINE_STAGE_SLA.get(stage, {}).get("label", "—")
+    next_action_display = (
+        activity["proxima_acao"]
+        if activity["proxima_acao"] and activity["proxima_acao"] != "—"
+        else NEXT_ACTION_BY_STAGE.get(stage, activity["title"])
+    )
+    observation = normalize_text(activity["note"]) or normalize_text(activity["description"]) or "—"
+
+    lead_created_at = None
+    sheet_row = activity["sheet_row"]
+    if sheet_row and not df.empty:
+        row_match = df[df["_sheet_row"] == sheet_row]
+        if not row_match.empty:
+            lead = _lead_record(row_match.iloc[0], columns, tenant_id)
+            lead_created_at = lead.get("created_at")
+
+    activity_created = record.get("created_at")
+    has_next_action = bool(
+        normalize_text(record.get("next_action"))
+        or normalize_text(activity["proxima_acao_value"])
+        or NEXT_ACTION_BY_STAGE.get(stage)
+    )
+    next_action_at = record.get("updated_at") or activity_created
+    suggestion = suggest_from_result("Cliente respondeu", stage)
+
+    timeline = [
+        {
+            "label": "Lead entrou",
+            "at": _format_timeline_at(lead_created_at or activity_created),
+            "state": "done",
+        },
+        {
+            "label": "Atividade criada",
+            "at": _format_timeline_at(activity_created),
+            "state": "done" if activity["status"] == "concluida" else "current",
+        },
+        {
+            "label": "Próxima ação definida",
+            "at": _format_timeline_at(next_action_at) if has_next_action else "—",
+            "state": "done" if has_next_action else "pending",
+        },
+    ]
+
+    return {
+        "activity": activity,
+        "sla_deadline": sla_deadline,
+        "next_action_display": next_action_display,
+        "observation": observation,
+        "timeline": timeline,
+        "lead_href": f"/cadastro/todos/{sheet_row}" if sheet_row else "/cadastro/todos",
+        "result_options": [opt for opt in ACTIVITY_RESULT_OPTIONS if opt != "Selecione"],
+        "default_next_action": NEXT_ACTION_BY_STAGE.get(stage, activity["title"]),
+        "default_next_action_date": suggestion.get("next_action_date", date.today().isoformat()),
+        "default_next_action_time": suggestion.get("next_action_time", "10:00"),
+        "channels": CHANNEL_OPTIONS,
+    }
 
 
 def build_activity_page_context(

@@ -1,6 +1,11 @@
-<a href="/cadastro/todos/{{ card.sheet_row }}"
+<button type="button"
   class="activities-kanban-card sla-{{ card.sla_class }}"
-  title="{{ card.title }} · {{ card.vendedor }}">
+  title="{{ card.title }} · {{ card.vendedor }}"
+  data-activity-id="{{ card.id }}"
+  hx-get="/atividades/{{ card.id }}/painel"
+  hx-target="#activity-drawer-root"
+  hx-swap="innerHTML"
+  onclick="activitySelectCard(this)">
   <div class="activities-kanban-card-title">{{ card.empresa }}</div>
   <div class="activities-kanban-card-when">
     <span class="activities-kanban-card-when-icon" aria-hidden="true">📅</span>
@@ -24,4 +29,4 @@
     {% endif %}
     <span>{{ card.sla_label }}</span>
   </div>
-</a>
+</button>
