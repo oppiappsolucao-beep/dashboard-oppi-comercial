@@ -1,0 +1,27 @@
+<a href="/cadastro/todos/{{ card.sheet_row }}"
+  class="activities-kanban-card sla-{{ card.sla_class }}"
+  title="{{ card.title }} · {{ card.vendedor }}">
+  <div class="activities-kanban-card-title">{{ card.empresa }}</div>
+  <div class="activities-kanban-card-when">
+    <span class="activities-kanban-card-when-icon" aria-hidden="true">📅</span>
+    {% if card.when_date != '—' %}
+    <span>{{ card.when_date }} {{ card.when_time }}</span>
+    {% else %}
+    <span>Sem data</span>
+    {% endif %}
+  </div>
+  <div class="activities-kanban-card-status">
+    {% if card.sla_key == 'no_prazo' %}
+    <span class="activities-sla-dot green" aria-hidden="true"></span>
+    {% elif card.sla_key == 'vence_hoje' %}
+    <span class="activities-sla-dot yellow" aria-hidden="true"></span>
+    {% elif card.sla_key == 'atrasado' %}
+    <span class="activities-sla-icon warn" aria-hidden="true">⚠</span>
+    {% elif card.sla_key == 'critico' %}
+    <span class="activities-sla-icon critical" aria-hidden="true">!</span>
+    {% elif card.sla_key == 'concluido' %}
+    <span class="activities-sla-icon done" aria-hidden="true">✓</span>
+    {% endif %}
+    <span>{{ card.sla_label }}</span>
+  </div>
+</a>

@@ -4,14 +4,13 @@
   hx-swap="innerHTML"
 >
   <input type="hidden" name="tab" value="{{ activities_params.tab }}" id="activities-tab-input">
-  <input type="hidden" name="page" value="{{ table.page }}" id="activities-page-input">
+  <input type="hidden" name="page" value="1" id="activities-page-input">
   <input type="hidden" name="seller" value="{{ filters.seller }}">
   <input type="hidden" name="status" value="{{ filters.status }}">
-  <input type="hidden" name="period_start" value="{{ filters.period_start }}">
-  <input type="hidden" name="period_end" value="{{ filters.period_end }}">
   <input type="hidden" name="niche" value="{{ filters.niche }}">
   <input type="hidden" name="state" value="{{ filters.state }}">
-  <input type="hidden" name="search" value="{{ filters.search }}">
+  <input type="hidden" name="activity_type" value="{{ activities_params.activity_type }}">
+  <input type="hidden" name="stage" value="{{ activities_params.stage }}">
 
   {% if success %}
   <div class="alert-success activities-flash">{{ success }}</div>
@@ -20,64 +19,40 @@
   <div class="alert-error activities-flash">{{ error }}</div>
   {% endif %}
 
-  <div class="funnel-kpi-grid activities-kpi-grid">
-    {% for card in kpi_cards %}
-    <div class="funnel-kpi-card panel">
-      <div class="funnel-kpi-icon tone-{{ card.tone }}">{{ card.icon }}</div>
-      <div class="funnel-kpi-body">
-        <div class="funnel-kpi-label">{{ card.label }}</div>
-        <div class="funnel-kpi-value">{{ card.value }}</div>
-        <div class="funnel-kpi-note">{{ card.note }}</div>
-      </div>
-    </div>
-    {% endfor %}
-  </div>
-
-  <div class="activities-toolbar">
-    <div class="activities-tabs">
-      {% for tab_id, tab_label in [
-        ('todas', 'Todas'),
-        ('pendentes', 'Pendentes'),
-        ('concluidas', 'Concluídas'),
-        ('atrasadas', 'Atrasadas')
-      ] %}
-      <button type="button"
-        class="activities-tab {% if activities_params.tab == tab_id %}active{% endif %}"
-        onclick="document.getElementById('activities-tab-input').value='{{ tab_id }}'; document.getElementById('activities-page-input').value='1'; document.getElementById('activities-filters').requestSubmit();">
-        {{ tab_label }}
-      </button>
-      {% endfor %}
-    </div>
-
-    <div class="activities-toolbar-right">
-      <select name="activity_type" onchange="document.getElementById('activities-page-input').value='1'; document.getElementById('activities-filters').requestSubmit();">
-        {% for option in type_options %}
-        <option value="{{ option }}" {% if activities_params.activity_type == option %}selected{% endif %}>{{ option }}</option>
-        {% endfor %}
-      </select>
-      <select name="channel" onchange="document.getElementById('activities-page-input').value='1'; document.getElementById('activities-filters').requestSubmit();">
-        {% for option in channel_options %}
-        <option value="{{ option }}" {% if activities_params.channel == option %}selected{% endif %}>{{ option }}</option>
-        {% endfor %}
-      </select>
-      <select name="responsible" onchange="document.getElementById('activities-page-input').value='1'; document.getElementById('activities-filters').requestSubmit();">
+  <div class="activities-filter-bar panel">
+    <div class="activities-filter-field">
+      <label for="activities-responsible">Responsável</label>
+      <select id="activities-responsible" name="responsible"
+        onchange="document.getElementById('activities-filters').requestSubmit();">
         {% for option in responsible_options %}
         <option value="{{ option }}" {% if activities_params.responsible == option %}selected{% endif %}>{{ option }}</option>
         {% endfor %}
       </select>
-      <select name="stage" onchange="document.getElementById('activities-page-input').value='1'; document.getElementById('activities-filters').requestSubmit();">
-        {% for option in stage_options %}
-        <option value="{{ option }}" {% if activities_params.stage == option %}selected{% endif %}>{{ option }}</option>
+    </div>
+
+    <div class="activities-filter-field">
+      <label for="activities-channel">Canal</label>
+      <select id="activities-channel" name="channel"
+        onchange="document.getElementById('activities-filters').requestSubmit();">
+        {% for option in channel_options %}
+        <option value="{{ option }}" {% if activities_params.channel == option %}selected{% endif %}>{{ option }}</option>
         {% endfor %}
       </select>
+    </div>
+
+    <div class="activities-filter-field activities-filter-period">
+      <label>Período</label>
       <div class="activities-date-range">
-        <span class="activities-date-icon">📅</span>
+        <span class="activities-date-icon" aria-hidden="true">📅</span>
         <input type="date" name="period_start" value="{{ filters.period_start }}"
-          onchange="document.getElementById('activities-page-input').value='1'; document.getElementById('activities-filters').requestSubmit();">
+          onchange="document.getElementById('activities-filters').requestSubmit();">
         <span class="activities-date-sep">—</span>
         <input type="date" name="period_end" value="{{ filters.period_end }}"
-          onchange="document.getElementById('activities-page-input').value='1'; document.getElementById('activities-filters').requestSubmit();">
+          onchange="document.getElementById('activities-filters').requestSubmit();">
       </div>
+    </div>
+
+    <div class="activities-filter-search">
       <div class="search-wrap activities-search-wrap">
         <span class="search-icon">⌕</span>
         <input type="text" name="search" value="{{ filters.search }}"
@@ -91,69 +66,44 @@
     </div>
   </div>
 
-  <div class="panel-card panel activities-table-card">
-    {% if table.rows %}
-    <div class="activities-table-wrap">
-      <table class="data-table activities-table">
-        <thead>
-          <tr>
-            <th>Atividade</th>
-            <th>Lead / Empresa</th>
-            <th>Etapa</th>
-            <th>Canal</th>
-            <th>Responsável</th>
-            <th>Data / Hora</th>
-            <th>Status</th>
-            <th>Resultado</th>
-            <th>Próxima ação</th>
-            <th>Ação</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for row in table.rows %}
-          {% include "partials/activities_row.html" %}
-          {% endfor %}
-        </tbody>
-      </table>
+  <div class="activities-sla-legend panel">
+    <div class="activities-sla-legend-item">
+      <span class="activities-sla-dot green" aria-hidden="true"></span>
+      <span><strong>No prazo</strong> Dentro do SLA</span>
     </div>
+    <div class="activities-sla-legend-item">
+      <span class="activities-sla-dot yellow" aria-hidden="true"></span>
+      <span><strong>Vence hoje</strong> Atenção necessária</span>
+    </div>
+    <div class="activities-sla-legend-item">
+      <span class="activities-sla-icon warn" aria-hidden="true">⚠</span>
+      <span><strong>Atrasado</strong> Fora do prazo</span>
+    </div>
+    <div class="activities-sla-legend-item">
+      <span class="activities-sla-icon critical" aria-hidden="true">!</span>
+      <span><strong>Crítico</strong> Atraso significativo</span>
+    </div>
+    <div class="activities-sla-legend-item">
+      <span class="activities-sla-icon done" aria-hidden="true">✓</span>
+      <span><strong>Concluído</strong> Processo concluído</span>
+    </div>
+  </div>
 
-    <div class="activities-pagination">
-      <div class="activities-pagination-info">
-        Mostrando {{ table.from_record }} a {{ table.to_record }} de {{ table.total }} atividades
-      </div>
-      <div class="activities-pagination-controls">
-        {% if table.page > 1 %}
-        <button type="button" class="page-btn"
-          onclick="document.getElementById('activities-page-input').value='{{ table.page - 1 }}'; document.getElementById('activities-filters').requestSubmit();">‹</button>
-        {% endif %}
-        {% for p in range(1, table.total_pages + 1) %}
-          {% if p == table.page %}
-          <span class="page-btn active">{{ p }}</span>
-          {% elif p <= 3 or p > table.total_pages - 1 or (p >= table.page - 1 and p <= table.page + 1) %}
-          <button type="button" class="page-btn"
-            onclick="document.getElementById('activities-page-input').value='{{ p }}'; document.getElementById('activities-filters').requestSubmit();">{{ p }}</button>
-          {% elif p == 4 and table.page > 5 %}
-          <span class="page-ellipsis">…</span>
-          {% endif %}
+  <div class="activities-kanban-board">
+    {% for column in kanban %}
+    <section class="activities-kanban-column">
+      <header class="activities-kanban-column-header">
+        <span class="activities-kanban-column-title">{{ column.label }}</span>
+        <span class="activities-kanban-column-count">{{ column.count }}</span>
+      </header>
+      <div class="activities-kanban-column-body">
+        {% for card in column.cards %}
+        {% include "partials/activities_kanban_card.html" %}
+        {% else %}
+        <div class="activities-kanban-empty">Nenhuma atividade</div>
         {% endfor %}
-        {% if table.page < table.total_pages %}
-        <button type="button" class="page-btn"
-          onclick="document.getElementById('activities-page-input').value='{{ table.page + 1 }}'; document.getElementById('activities-filters').requestSubmit();">›</button>
-        {% endif %}
       </div>
-      <div class="activities-per-page">
-        <label>Registros por página:</label>
-        <select name="per_page" onchange="document.getElementById('activities-page-input').value='1'; document.getElementById('activities-filters').requestSubmit();">
-          {% for size in [10, 25, 50] %}
-          <option value="{{ size }}" {% if table.per_page == size %}selected{% endif %}>{{ size }}</option>
-          {% endfor %}
-        </select>
-      </div>
-    </div>
-    {% else %}
-    <div class="activities-empty">
-      Nenhuma atividade encontrada para os filtros selecionados.
-    </div>
-    {% endif %}
+    </section>
+    {% endfor %}
   </div>
 </form>

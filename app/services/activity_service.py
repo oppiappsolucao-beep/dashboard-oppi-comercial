@@ -21,6 +21,7 @@ from config.crm_options import (
     NO_NEXT_ACTION_RESULTS,
     OVERVIEW_ACTION_TO_PROCESS,
     PIPELINE_STAGE_OPTIONS,
+    PIPELINE_STAGE_SLA,
     PRIORITY_OPTIONS,
     PRIORITY_SCORE_VALUES,
     PROCESS_ACTION_OPTIONS,
@@ -129,6 +130,56 @@ def _format_when(scheduled_at: str | None) -> tuple[str, str, str]:
     return dt.strftime("%d/%m/%Y, %H:%M"), d.strftime("%d/%m/%Y"), time_part
 
 
+def calcular_sla_atividade(record: dict, status: str, now: datetime | None = None) -> tuple[str, str, str]:
+    """Retorna (sla_key, sla_label, sla_class) para o card do kanban."""
+    if status == "concluida":
+        return "concluido", "Concluído", "concluido"
+    if status == "cancelada":
+        return "cancelada", "Cancelada", "cancelada"
+
+    now = now or _now()
+    scheduled_at = record.get("scheduled_at")
+    if not scheduled_at:
+        return "no_prazo", "No prazo", "no_prazo"
+
+    dt = _parse_datetime(scheduled_at)
+    today = now.date()
+    scheduled_day = dt.date()
+    priority = int(record.get("priority") or 0)
+
+    if status == "atrasada" or dt < now:
+        days_late = max(0, (today - scheduled_day).days)
+        hours_late = max(0, (now - dt).total_seconds() / 3600)
+        stage = normalize_legacy_stage(record.get("stage")) or "Novo Lead"
+        sla = PIPELINE_STAGE_SLA.get(stage, {})
+        critical_days = max(3, int(sla.get("max_days", 2) or 2) + 1)
+        critical_hours = max(24, int(sla.get("max_hours", 24) or 24) * 2)
+
+        if priority >= 100 or days_late >= critical_days or hours_late >= critical_hours:
+            return "critico", "Crítico", "critico"
+        return "atrasado", "Atrasado", "atrasado"
+
+    if scheduled_day == today:
+        return "vence_hoje", "Vence hoje", "vence_hoje"
+
+    return "no_prazo", "No prazo", "no_prazo"
+
+
+def _sla_sort_key(item: dict) -> tuple:
+    order = {
+        "critico": 0,
+        "atrasado": 1,
+        "vence_hoje": 2,
+        "no_prazo": 3,
+        "concluido": 4,
+        "cancelada": 5,
+    }
+    return (
+        order.get(item.get("sla_key", "no_prazo"), 9),
+        item.get("activity_dt") or datetime.max,
+    )
+
+
 def sugerir_proxima_acao(result: str) -> dict:
     return suggest_from_result(result)
 
@@ -218,6 +269,7 @@ def _serialize_activity(record: dict) -> dict:
         result_display = result
     vendedor = normalize_text(record.get("assigned_user_id")) or "Sem vendedor"
     status_label = ACTIVITY_STATUS_LABELS.get(status, status.title())
+    sla_key, sla_label, sla_class = calcular_sla_atividade(record, status)
     allowed_next_actions = get_next_action_options(record.get("next_action", ""))
     next_action_value = normalize_legacy_next_action(record.get("next_action")) or ""
     next_action_raw = normalize_text(record.get("next_action"))
@@ -248,6 +300,9 @@ def _serialize_activity(record: dict) -> dict:
         "status": status,
         "status_label": status_label,
         "status_class": STATUS_CLASS.get(status, "pendente"),
+        "sla_key": sla_key,
+        "sla_label": sla_label,
+        "sla_class": sla_class,
         "result": result_display,
         "result_value": result,
         "result_notes": record.get("result_notes") or "",
@@ -319,6 +374,25 @@ def apply_activities_view(activities: list[dict], params: ActivitiesViewParams) 
         result = [a for a in result if a["stage"] == params.stage]
 
     return result
+
+
+def build_activities_kanban(
+    activities: list[dict],
+    params: ActivitiesViewParams,
+) -> list[dict]:
+    view = apply_activities_view(activities, params)
+    columns: list[dict] = []
+    for index, stage in enumerate(PIPELINE_STAGE_OPTIONS, start=1):
+        cards = [item for item in view if item.get("stage") == stage]
+        cards.sort(key=_sla_sort_key)
+        columns.append({
+            "index": index,
+            "stage": stage,
+            "label": f"{index}. {stage}",
+            "count": len(cards),
+            "cards": cards,
+        })
+    return columns
 
 
 def build_activities_table(
@@ -662,10 +736,12 @@ def build_activity_page_context(
     filtered_df = apply_dashboard_filters(df, columns, filters)
     activities = buscar_atividades(filtered_df, columns, tenant_id, search=filters.search)
     table = build_activities_table(activities, params)
+    kanban = build_activities_kanban(activities, params)
     stage_options = ["Todas as etapas"] + PIPELINE_STAGE_OPTIONS
     return {
         "activities": activities,
         "table": table,
+        "kanban": kanban,
         "kpi_cards": atualizar_cards_atividades(activities, filters),
         "process_actions": PROCESS_ACTION_OPTIONS,
         "channels": CHANNEL_OPTIONS,
