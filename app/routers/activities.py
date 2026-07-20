@@ -15,6 +15,7 @@ from app.services.activity_service import (
     buscar_leads_para_atividade,
     cancelar_atividade,
     criar_atividade,
+    mover_atividade_kanban,
     sugerir_fluxo_por_resultado,
 )
 from app.services.activities_storage import DEFAULT_TENANT_ID, soft_delete_activity
@@ -133,6 +134,58 @@ async def activities_detail_panel(request: Request, activity_id: str):
         return HTMLResponse("Atividade não encontrada.", status_code=404)
 
     return render(request, "partials/activities_detail_panel.html", panel)
+
+
+@router.post("/atividades/{activity_id}/mover-etapa", response_class=HTMLResponse)
+async def activities_move_stage(
+    request: Request,
+    activity_id: str,
+    stage_target: str = Form(...),
+    seller: str = Form("Todos os vendedores"),
+    status: str = Form("Todos os status"),
+    period_start: str = Form(""),
+    period_end: str = Form(""),
+    niche: str = Form("Todos os nichos"),
+    state: str = Form("Todos os estados"),
+    search: str = Form(""),
+    tab: str = Form("todas"),
+    activity_type: str = Form("Todos os tipos"),
+    channel: str = Form("Todos os canais"),
+    responsible: str = Form("Todos os responsáveis"),
+    stage: str = Form("Todas as etapas"),
+):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+
+    user = normalize_text(request.session.get("username", "")) or "Usuário"
+    _, error = mover_atividade_kanban(DEFAULT_TENANT_ID, activity_id, stage_target, user)
+
+    filters = parse_dashboard_filters(request, {
+        "seller": seller,
+        "status": status,
+        "period_start": period_start,
+        "period_end": period_end,
+        "niche": niche,
+        "state": state,
+        "search": search,
+    })
+    activities_params = _parse_activities_params(request, {
+        "tab": tab,
+        "activity_type": activity_type,
+        "channel": channel,
+        "responsible": responsible,
+        "stage": stage,
+    })
+
+    if error:
+        return _render_content(request, filters, activities_params, error=error)
+    return _render_content(
+        request,
+        filters,
+        activities_params,
+        success=f"Atividade movida para {stage_target}.",
+    )
 
 
 @router.get("/atividades/api/leads")

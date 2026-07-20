@@ -145,6 +145,26 @@
   flex-direction: column;
   gap: 10px;
   min-height: 120px;
+  padding: 4px;
+  transition: background 0.15s ease, outline 0.15s ease;
+}
+
+.activities-kanban-card.is-dragging {
+  opacity: 0.55;
+  transform: rotate(2deg);
+  cursor: grabbing;
+}
+
+.activities-kanban-card.is-dragging,
+.activities-kanban-card.is-dragging * {
+  pointer-events: none;
+}
+
+.activities-kanban-column-body.is-drop-target {
+  background: #F5F3FF;
+  border-radius: 12px;
+  outline: 2px dashed #C4B5FD;
+  outline-offset: -2px;
 }
 
 .activities-kanban-card {
@@ -159,8 +179,13 @@
   color: inherit;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
   transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
-  cursor: pointer;
+  cursor: grab;
   font: inherit;
+  user-select: none;
+}
+
+.activities-kanban-card:active {
+  cursor: grabbing;
 }
 
 .activities-kanban-card.is-selected {

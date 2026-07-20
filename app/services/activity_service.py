@@ -1036,6 +1036,52 @@ def movimentar_etapa_lead(
     )
 
 
+def mover_atividade_kanban(
+    tenant_id: str | None,
+    activity_id: str,
+    new_stage: str,
+    user: str,
+) -> tuple[dict | None, str | None]:
+    current = get_activity(tenant_id, activity_id)
+    if not current:
+        return None, "Atividade não encontrada."
+
+    new_stage = normalize_legacy_stage(new_stage)
+    if not new_stage or new_stage not in PIPELINE_STAGE_OPTIONS:
+        return None, "Etapa inválida."
+
+    old_stage = normalize_legacy_stage(current.get("stage")) or "Novo Lead"
+    if old_stage == new_stage:
+        return _serialize_activity({"id": activity_id, **current}), None
+
+    saved = save_activity(tenant_id, activity_id, {
+        "stage": new_stage,
+        "move_stage": new_stage,
+        "updated_by": user,
+    })
+
+    sheet_row = int(current.get("sheet_row") or 0)
+    if sheet_row:
+        movimentar_etapa_lead(
+            tenant_id,
+            sheet_row,
+            from_stage=old_stage,
+            to_stage=new_stage,
+            user=user,
+        )
+        registrar_historico(
+            tenant_id,
+            sheet_row,
+            user=user,
+            description=f"Atividade movida para {new_stage}",
+            previous_status=current.get("status", ""),
+            new_status=current.get("status", ""),
+            move_stage=new_stage,
+        )
+
+    return _serialize_activity({"id": activity_id, **saved}), None
+
+
 def registrar_historico_atividade(
     tenant_id: str | None,
     sheet_row: int,

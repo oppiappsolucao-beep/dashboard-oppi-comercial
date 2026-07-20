@@ -96,7 +96,7 @@
         <span class="activities-kanban-column-title">{{ column.label }}</span>
         <span class="activities-kanban-column-count">{{ column.count }}</span>
       </header>
-      <div class="activities-kanban-column-body">
+      <div class="activities-kanban-column-body" data-drop-stage="{{ column.stage }}">
         {% for card in column.cards %}
         {% include "partials/activities_kanban_card.html" %}
         {% else %}

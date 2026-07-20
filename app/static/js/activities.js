@@ -52,6 +52,119 @@
   function initActivitiesInline() {
     enableSaveButtons(document.getElementById("activities-root") || document);
     bindStatusExpand(document.getElementById("activities-root") || document);
+    initKanbanDragDrop(document.getElementById("activities-root") || document);
+  }
+
+  function initKanbanDragDrop(root) {
+    if (!root) return;
+
+    let draggedCard = null;
+    let dragMoved = false;
+    let suppressClickUntil = 0;
+
+    root.querySelectorAll(".activities-kanban-card[draggable='true']").forEach(function (card) {
+      if (card.dataset.kanbanBound === "1") return;
+      card.dataset.kanbanBound = "1";
+
+      card.addEventListener("dragstart", function (event) {
+        draggedCard = card;
+        dragMoved = true;
+        card.classList.add("is-dragging");
+        card.setAttribute("aria-grabbed", "true");
+        if (event.dataTransfer) {
+          event.dataTransfer.effectAllowed = "move";
+          event.dataTransfer.setData("text/plain", card.getAttribute("data-activity-id") || "");
+        }
+      });
+
+      card.addEventListener("dragend", function () {
+        card.classList.remove("is-dragging");
+        card.setAttribute("aria-grabbed", "false");
+        root.querySelectorAll(".activities-kanban-column-body.is-drop-target").forEach(function (column) {
+          column.classList.remove("is-drop-target");
+        });
+        if (dragMoved) {
+          suppressClickUntil = Date.now() + 250;
+        }
+        dragMoved = false;
+        draggedCard = null;
+      });
+
+      card.addEventListener("click", function (event) {
+        if (Date.now() < suppressClickUntil) {
+          event.preventDefault();
+          return;
+        }
+        activitySelectCard(card);
+        if (typeof htmx === "undefined") return;
+        htmx.ajax("GET", "/atividades/" + encodeURIComponent(card.getAttribute("data-activity-id")) + "/painel", {
+          target: "#activity-drawer-root",
+          swap: "innerHTML",
+        });
+      });
+
+      card.addEventListener("keydown", function (event) {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        card.click();
+      });
+    });
+
+    root.querySelectorAll(".activities-kanban-column-body[data-drop-stage]").forEach(function (column) {
+      if (column.dataset.dropBound === "1") return;
+      column.dataset.dropBound = "1";
+
+      column.addEventListener("dragover", function (event) {
+        event.preventDefault();
+        column.classList.add("is-drop-target");
+        if (event.dataTransfer) {
+          event.dataTransfer.dropEffect = "move";
+        }
+      });
+
+      column.addEventListener("dragleave", function (event) {
+        if (event.currentTarget.contains(event.relatedTarget)) return;
+        column.classList.remove("is-drop-target");
+      });
+
+      column.addEventListener("drop", function (event) {
+        event.preventDefault();
+        column.classList.remove("is-drop-target");
+
+        const activityId = (event.dataTransfer && event.dataTransfer.getData("text/plain"))
+          || (draggedCard && draggedCard.getAttribute("data-activity-id"))
+          || "";
+        const newStage = column.getAttribute("data-drop-stage") || "";
+        const currentStage = draggedCard && draggedCard.getAttribute("data-current-stage");
+
+        if (!activityId || !newStage || currentStage === newStage) return;
+
+        dragMoved = true;
+        suppressClickUntil = Date.now() + 250;
+
+        const filtersForm = document.getElementById("activities-filters");
+        const formData = filtersForm ? new FormData(filtersForm) : new FormData();
+        formData.set("stage_target", newStage);
+
+        fetch("/atividades/" + encodeURIComponent(activityId) + "/mover-etapa", {
+          method: "POST",
+          body: formData,
+          headers: { "HX-Request": "true" },
+        }).then(function (response) {
+          return response.text();
+        }).then(function (html) {
+          const boardRoot = document.getElementById("activities-root");
+          if (!boardRoot) return;
+          boardRoot.innerHTML = html;
+          if (typeof htmx !== "undefined") {
+            htmx.process(boardRoot);
+          }
+          initActivitiesInline();
+        }).catch(function () {
+          window.alert("Não foi possível mover a atividade. Tente novamente.");
+        });
+      });
+    });
   }
 
   function addDays(baseDate, days, businessOnly) {
