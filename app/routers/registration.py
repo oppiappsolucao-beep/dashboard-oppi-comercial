@@ -17,8 +17,14 @@ router = APIRouter()
 
 
 def _registration_page_context(request: Request, df, *, error: str = "", values: dict | None = None) -> dict:
-    default_stage = "Novo Lead"
+    values = values or {}
+    default_stage = normalize_legacy_stage(values.get("status")) or "Novo Lead"
     activity_actions = get_actions_for_stage(default_stage)
+    default_activity_action = (
+        normalize_text(values.get("activity_action"))
+        or (activity_actions[0] if activity_actions else "Fazer primeiro contato")
+    )
+    default_date = normalize_text(values.get("data_chamado") or values.get("activity_date")) or date.today().isoformat()
     return {
         "active_page": "registration_new",
         "seller_options": get_seller_options(df),
@@ -29,11 +35,11 @@ def _registration_page_context(request: Request, df, *, error: str = "", values:
         "channel_options": CHANNEL_OPTIONS,
         "priority_options": PRIORITY_OPTIONS,
         "activity_actions": activity_actions,
-        "default_activity_action": activity_actions[0] if activity_actions else "Fazer primeiro contato",
-        "today": date.today().isoformat(),
-        "default_time": "09:00",
-        "partners_count": infer_partners_count(values or {}),
-        "values": values or {},
+        "default_activity_action": default_activity_action,
+        "today": default_date,
+        "default_time": normalize_text(values.get("activity_time")) or "09:00",
+        "partners_count": infer_partners_count(values),
+        "values": values,
         "error": error or request.session.pop("registration_error", ""),
     }
 
@@ -45,7 +51,8 @@ async def new_registration_page(request: Request):
         return redirect
 
     df, _columns = get_prepared_data()
-    return render(request, "registration/new.html", _registration_page_context(request, df))
+    values = {key: normalize_text(value) for key, value in request.query_params.items()}
+    return render(request, "registration/new.html", _registration_page_context(request, df, values=values))
 
 
 @router.post("/cadastro/novo")

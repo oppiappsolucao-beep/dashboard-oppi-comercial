@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
+from urllib.parse import urlencode
 from zoneinfo import ZoneInfo
 
 import pandas as pd
@@ -26,6 +27,7 @@ from config.crm_options import (
     NO_NEXT_ACTION_RESULTS,
     OVERVIEW_ACTION_TO_PROCESS,
     PIPELINE_STAGE_OPTIONS,
+    PIPELINE_STAGE_SHEET_STATUSES,
     PIPELINE_STAGE_SLA,
     PRIORITY_OPTIONS,
     PRIORITY_SCORE_VALUES,
@@ -61,7 +63,7 @@ from app.services.crm_validation_service import (
 from app.services.filters import DashboardFilters, apply_dashboard_filters
 from app.services.followup_service import _lead_record, buscar_leads_para_acao, _minutes_since
 from app.services.lead_actions_storage import append_interaction, get_lead_action, save_lead_action
-from app.services.legacy_core import as_python_datetime, normalize_digits, normalize_text, safe_series
+from app.services.legacy_core import STATUS_OPTIONS, as_python_datetime, normalize_digits, normalize_text, safe_series
 
 STATUS_CLASS = {
     "pendente": "pendente",
@@ -115,6 +117,77 @@ def _resolve_sheet_row_for_activity(activity: dict, df: pd.DataFrame) -> int:
     if match.empty:
         return 0
     return int(match.iloc[0]["_sheet_row"] or 0)
+
+
+def _status_for_pipeline_stage(stage: str) -> str:
+    normalized_stage = normalize_legacy_stage(stage) or normalize_text(stage) or "Novo Lead"
+    for status in PIPELINE_STAGE_SHEET_STATUSES.get(normalized_stage, []):
+        if status in STATUS_OPTIONS:
+            return status
+    if normalized_stage in STATUS_OPTIONS:
+        return normalized_stage
+    return "Novo Lead"
+
+
+def _build_registration_prefill_params(activity: dict) -> dict[str, str]:
+    empresa = normalize_text(activity.get("empresa"))
+    if not empresa or empresa == "—":
+        return {}
+
+    stage = normalize_text(activity.get("stage")) or "Novo Lead"
+    vendedor = normalize_text(activity.get("vendedor"))
+    if vendedor == "Sem vendedor":
+        vendedor = ""
+
+    params: dict[str, str] = {
+        "empresa": empresa,
+        "status": _status_for_pipeline_stage(stage),
+        "create_first_activity": "1",
+    }
+    if vendedor:
+        params["vendedor"] = vendedor
+        params["activity_responsible"] = vendedor
+
+    note = normalize_text(activity.get("note"))
+    if note:
+        params["observacoes"] = note
+
+    title = normalize_text(activity.get("title"))
+    if title and title != "—":
+        params["activity_action"] = title
+
+    channel = normalize_text(activity.get("channel"))
+    if channel and channel != "—":
+        params["activity_channel"] = channel
+
+    scheduled_date = normalize_text(activity.get("scheduled_date"))
+    if scheduled_date:
+        params["activity_date"] = scheduled_date[:10]
+        params["data_chamado"] = scheduled_date[:10]
+
+    scheduled_time = normalize_text(activity.get("scheduled_time"))
+    if scheduled_time:
+        params["activity_time"] = scheduled_time
+
+    description = normalize_text(activity.get("description"))
+    if description:
+        params["activity_description"] = description
+
+    next_action = normalize_text(activity.get("proxima_acao_value") or activity.get("proxima_acao"))
+    if next_action and next_action != "—":
+        params["activity_next_action"] = next_action
+
+    return params
+
+
+def _build_lead_href_for_activity(activity: dict, sheet_row: int) -> str:
+    if sheet_row:
+        return f"/cadastro/todos/{sheet_row}/editar"
+
+    params = _build_registration_prefill_params(activity)
+    if not params:
+        return ""
+    return f"/cadastro/novo?{urlencode(params)}"
 
 
 def _has_open_activity_for_lead(tenant_id: str | None, sheet_row: int) -> bool:
@@ -1270,7 +1343,7 @@ def build_activity_detail_panel(
         "next_action_display": next_action_display,
         "observation": observation,
         "timeline": timeline,
-        "lead_href": f"/cadastro/todos/{sheet_row}" if sheet_row else "",
+        "lead_href": _build_lead_href_for_activity(activity, sheet_row),
         "result_options": [opt for opt in ACTIVITY_RESULT_OPTIONS if opt != "Selecione"],
         "default_next_action": NEXT_ACTION_BY_STAGE.get(stage, activity["title"]),
         "default_next_action_date": suggestion.get("next_action_date", date.today().isoformat()),
