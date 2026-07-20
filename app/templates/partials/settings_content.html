@@ -1,4 +1,4 @@
-<form id="settings-filters"
+<div id="settings-filters"
   hx-post="/configuracoes/filtros"
   hx-target="#settings-root"
   hx-swap="innerHTML"
@@ -25,7 +25,7 @@
     {% for tab_id, tab_label in settings_tabs %}
     <button type="button"
       class="settings-tab {% if settings_params.tab == tab_id %}active{% endif %}"
-      onclick="document.getElementById('settings-tab-input').value='{{ tab_id }}'; document.getElementById('settings-page-input').value='1'; document.getElementById('settings-filters').requestSubmit();">
+      onclick="settingsSwitchTab('{{ tab_id }}');">
       {{ tab_label }}
     </button>
     {% endfor %}
@@ -58,7 +58,7 @@
         <div class="settings-alert error">{{ user_error }}</div>
         {% endif %}
 
-        <form method="post"
+        <form id="settings-user-form" method="post"
           action="{% if users_table.edit_user %}/configuracoes/usuarios/editar{% else %}/configuracoes/usuarios/adicionar{% endif %}"
           class="settings-goals-form settings-user-form">
           <input type="hidden" name="tab" value="usuarios">
@@ -146,7 +146,7 @@
                 hx-swap="innerHTML"
                 hx-include="#settings-filters">
             </div>
-            <select name="role" onchange="document.getElementById('settings-page-input').value='1'; document.getElementById('settings-filters').requestSubmit();">
+            <select name="role" onchange="settingsFiltersSubmit({ page: '1' });">
               {% for option in role_options %}
               <option value="{{ option }}" {% if settings_params.role == option %}selected{% endif %}>{{ option }}</option>
               {% endfor %}
@@ -215,24 +215,24 @@
           <div class="settings-pagination-controls">
             {% if users_table.page > 1 %}
             <button type="button" class="settings-page-btn"
-              onclick="document.getElementById('settings-page-input').value='{{ users_table.page - 1 }}'; document.getElementById('settings-filters').requestSubmit();">‹</button>
+              onclick="settingsFiltersSubmit({ page: '{{ users_table.page - 1 }}' });">‹</button>
             {% endif %}
             {% for p in range(1, users_table.total_pages + 1) %}
               {% if p == users_table.page %}
               <span class="settings-page-btn active">{{ p }}</span>
               {% elif p <= 3 or p > users_table.total_pages - 1 %}
               <button type="button" class="settings-page-btn"
-                onclick="document.getElementById('settings-page-input').value='{{ p }}'; document.getElementById('settings-filters').requestSubmit();">{{ p }}</button>
+                onclick="settingsFiltersSubmit({ page: '{{ p }}' });">{{ p }}</button>
               {% endif %}
             {% endfor %}
             {% if users_table.page < users_table.total_pages %}
             <button type="button" class="settings-page-btn"
-              onclick="document.getElementById('settings-page-input').value='{{ users_table.page + 1 }}'; document.getElementById('settings-filters').requestSubmit();">›</button>
+              onclick="settingsFiltersSubmit({ page: '{{ users_table.page + 1 }}' });">›</button>
             {% endif %}
           </div>
           <div class="settings-per-page">
             <label for="settings-per-page-select">Registros por página:</label>
-            <select id="settings-per-page-select" name="per_page" onchange="document.getElementById('settings-page-input').value='1'; document.getElementById('settings-filters').requestSubmit();">
+            <select id="settings-per-page-select" name="per_page" onchange="settingsFiltersSubmit({ page: '1' });">
               {% for size in [10, 25, 50] %}
               <option value="{{ size }}" {% if users_table.per_page == size %}selected{% endif %}>{{ size }}</option>
               {% endfor %}
@@ -257,7 +257,7 @@
           {% endfor %}
         </div>
         <button type="button" class="settings-link-btn"
-          onclick="document.getElementById('settings-tab-input').value='servicos'; document.getElementById('settings-filters').requestSubmit();">
+          onclick="settingsSwitchTab('servicos');">
           Ver todos os serviços →
         </button>
       </div>
@@ -296,7 +296,7 @@
         <div><span class="settings-company-label">Próxima renovação</span><strong>{{ company.renewal_date }}</strong></div>
       </div>
       <button type="button" class="btn btn-secondary settings-outline-btn"
-        onclick="document.getElementById('settings-tab-input').value='faturamento'; document.getElementById('settings-filters').requestSubmit();">
+        onclick="settingsSwitchTab('faturamento');">
         Gerenciar assinatura →
       </button>
     </div>
@@ -315,7 +315,7 @@
         {% endfor %}
       </div>
       <button type="button" class="settings-link-btn"
-        onclick="document.getElementById('settings-tab-input').value='integracoes'; document.getElementById('settings-filters').requestSubmit();">
+        onclick="settingsSwitchTab('integracoes');">
         Gerenciar integrações →
       </button>
     </div>
@@ -542,4 +542,4 @@
     </div>
   </div>
   {% endif %}
-</form>
+</div>

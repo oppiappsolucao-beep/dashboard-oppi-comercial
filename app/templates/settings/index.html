@@ -17,4 +17,26 @@
 <div id="settings-root">
   {% include "partials/settings_content.html" %}
 </div>
+<script>
+  function settingsFiltersSubmit(options) {
+    options = options || {};
+    const container = document.getElementById("settings-filters");
+    if (!container || typeof htmx === "undefined") return;
+    if (options.tab) {
+      document.getElementById("settings-tab-input").value = options.tab;
+    }
+    if (options.page) {
+      document.getElementById("settings-page-input").value = options.page;
+    }
+    htmx.ajax("POST", "/configuracoes/filtros", {
+      target: "#settings-root",
+      swap: "innerHTML",
+      values: htmx.values(container),
+    });
+  }
+
+  function settingsSwitchTab(tabId) {
+    settingsFiltersSubmit({ tab: tabId, page: "1" });
+  }
+</script>
 {% endblock %}
