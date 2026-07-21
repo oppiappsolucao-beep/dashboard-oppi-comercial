@@ -109,6 +109,9 @@ async def startup_maintenance() -> None:
             load_monthly_goals(force_refresh=True)
             reload_activities_store(force_refresh=True)
             reload_lead_actions_store(force_refresh=True)
+            from app.services.seed_fake_company import ensure_fake_test_company_on_startup
+
+            ensure_fake_test_company_on_startup()
         except Exception:
             pass
 

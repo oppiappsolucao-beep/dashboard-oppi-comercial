@@ -468,10 +468,6 @@ async def settings_seed_fake_company(request: Request):
     if redirect:
         return redirect
 
-    if not is_admin(request):
-        request.session["settings_seed_fake_error"] = "Somente administradores podem cadastrar a empresa de teste."
-        return RedirectResponse(url="/configuracoes?tab=integracoes", status_code=303)
-
     try:
         from app.services.legacy_core import invalidate_sheet_cache
         from app.services.seed_fake_company import seed_fake_test_company

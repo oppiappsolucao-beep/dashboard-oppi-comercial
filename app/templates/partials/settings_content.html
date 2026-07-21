@@ -580,12 +580,14 @@
         <em>Aplicar na planilha</em>.
       </p>
     </div>
+    {% endif %}
 
     <div class="panel settings-single-card">
       <div class="section-heading">Empresa FAKE de teste</div>
       <div class="section-subtitle">
-        Cadastra <strong>EMPRESA FAKE TESTE OPPI LTDA</strong> com todos os campos do formulário preenchidos
-        (dados, sócios, endereço, serviço fechado e primeira atividade) para validar a planilha.
+        Cadastra ou verifica <strong>EMPRESA FAKE TESTE OPPI LTDA</strong> na planilha
+        (todos os campos: dados, sócios, endereço, serviço e atividade).
+        Também roda automaticamente ao iniciar o sistema.
       </div>
 
       {% if seed_fake_success %}
@@ -601,7 +603,6 @@
         <button type="submit" class="btn">Cadastrar empresa FAKE</button>
       </form>
     </div>
-    {% endif %}
   </div>
 
   {% elif settings_params.tab == 'faturamento' %}
