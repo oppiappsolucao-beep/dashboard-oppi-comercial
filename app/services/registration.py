@@ -157,36 +157,73 @@ def delete_company_registration(tenant_id: str | None, sheet_row: int) -> None:
     delete_lead_action(tenant_id, sheet_row)
 
 
-COMMERCIAL_TEAM_ROLES = {"Vendedor", "Gerente", "Administrador", "Analista"}
+SELLER_ROLES = {"Vendedor"}
+_FAKE_SELLER_USERNAMES = frozenset({"usuario.fake", "usuario.fake.test"})
+_DEFAULT_ALLOWED_SELLERS = ("Raissa", "Raíssa", "Higo Silva")
+
+
+def _normalize_person_name(value: str) -> str:
+    return normalize_text(value)
+
+
+def _is_fake_or_test_seller(name: str, username: str = "") -> bool:
+    lowered_name = _normalize_person_name(name).lower()
+    lowered_username = _normalize_person_name(username).lower()
+    if not lowered_name and not lowered_username:
+        return True
+    if "fake" in lowered_name or " fake " in f" {lowered_name} ":
+        return True
+    if lowered_username in _FAKE_SELLER_USERNAMES:
+        return True
+    return False
+
+
+def _is_admin_login(name: str) -> bool:
+    from app.config import settings
+
+    admin_login = _normalize_person_name(settings.app_username).lower()
+    return bool(admin_login) and _normalize_person_name(name).lower() == admin_login
+
+
+def _allowed_seller_names() -> set[str]:
+    import os
+
+    raw = os.getenv("ALLOWED_SELLERS", "").strip()
+    if raw:
+        parts = [_normalize_person_name(part).lower() for part in raw.split(",")]
+        return {part for part in parts if part}
+    return {_normalize_person_name(part).lower() for part in _DEFAULT_ALLOWED_SELLERS}
 
 
 def get_seller_options(df) -> list[str]:
     names: set[str] = set()
 
-    if df is not None and not getattr(df, "empty", True) and "_vendedor" in df.columns:
-        for value in df["_vendedor"].tolist():
-            clean = normalize_text(value)
-            if clean and clean != "Sem vendedor":
-                names.add(clean)
-
     try:
-        from app.config import settings
         from app.services.account_users import load_account_users
-
-        admin_name = normalize_text(settings.app_username)
-        if admin_name:
-            names.add(admin_name)
 
         for user in load_account_users():
             if not user.get("active", True):
                 continue
-            if user.get("role") not in COMMERCIAL_TEAM_ROLES:
+            if user.get("role") not in SELLER_ROLES:
                 continue
-            name = normalize_text(user.get("name", ""))
-            if name and name != "Sem vendedor":
-                names.add(name)
+            name = _normalize_person_name(user.get("name", ""))
+            username = _normalize_person_name(user.get("username", ""))
+            if not name or name == "Sem vendedor":
+                continue
+            if _is_fake_or_test_seller(name, username) or _is_admin_login(name):
+                continue
+            names.add(name)
     except Exception:
         pass
+
+    if df is not None and not getattr(df, "empty", True) and "_vendedor" in df.columns:
+        for value in df["_vendedor"].tolist():
+            clean = _normalize_person_name(value)
+            if not clean or clean == "Sem vendedor":
+                continue
+            if _is_fake_or_test_seller(clean) or _is_admin_login(clean):
+                continue
+            names.add(clean)
 
     return sorted(names, key=str.lower) or ["Sem vendedor"]
 
