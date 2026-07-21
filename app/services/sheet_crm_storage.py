@@ -34,8 +34,13 @@ def _open_spreadsheet():
     return client.open_by_key(settings.sheet_id)
 
 
-def ensure_crm_storage_tabs() -> dict[str, bool]:
+def ensure_crm_storage_tabs(force: bool = False) -> dict[str, bool]:
     """Garante que as abas auxiliares do CRM existam na planilha."""
+    from app.services.sheet_read_cache import mark_tabs_ensured, should_skip_ensure_tabs
+
+    if should_skip_ensure_tabs(force=force):
+        return {name: True for name in CRM_STORAGE_TABS}
+
     result = {name: False for name in CRM_STORAGE_TABS}
     spreadsheet = _open_spreadsheet()
     if spreadsheet is None:
@@ -57,6 +62,7 @@ def ensure_crm_storage_tabs() -> dict[str, bool]:
                 result[tab_name] = False
         except Exception:
             result[tab_name] = False
+    mark_tabs_ensured()
     return result
 
 

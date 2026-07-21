@@ -96,15 +96,24 @@ def _parse_activity_row(row: list[str], indexes: dict[str, int]) -> tuple[str, d
     return activity_id, record
 
 
-def _load_from_sheet() -> dict | None:
+def _load_from_sheet(force_refresh: bool = False) -> dict | None:
     if not settings.sheets_configured:
         return None
     worksheet = get_worksheet(ACTIVITIES_WORKSHEET)
     if worksheet is None:
         return None
+
+    from app.services.sheet_read_cache import get_cached_worksheet_values
+
     try:
-        rows = worksheet.get_all_values()
+        rows = get_cached_worksheet_values(
+            ACTIVITIES_WORKSHEET,
+            worksheet.get_all_values,
+            force_refresh=force_refresh,
+        )
     except Exception:
+        return None
+    if rows is None:
         return None
     if len(rows) < 2:
         return _empty_store()
@@ -183,7 +192,7 @@ def _load_store(force_refresh: bool = False) -> dict:
             return json.loads(json.dumps(_cache, default=str))
 
         file_store = _load_from_file()
-        sheet_store = _load_from_sheet()
+        sheet_store = _load_from_sheet(force_refresh=force_refresh)
         merged = _merge_stores(file_store, sheet_store)
 
         if merged != file_store:
@@ -199,6 +208,9 @@ def _load_store(force_refresh: bool = False) -> dict:
 
 def invalidate_activities_cache() -> None:
     global _cache
+    from app.services.sheet_read_cache import invalidate_worksheet_cache
+
+    invalidate_worksheet_cache(ACTIVITIES_WORKSHEET)
     with _lock:
         _cache = None
 

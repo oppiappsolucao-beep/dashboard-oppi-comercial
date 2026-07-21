@@ -27,6 +27,12 @@ def invalidate_sheet_cache() -> None:
     global _gsheet_client
     _sheet_cache.clear()
     _gsheet_client = None
+    try:
+        from app.services.sheet_read_cache import invalidate_worksheet_cache
+
+        invalidate_worksheet_cache(settings.worksheet_name)
+    except Exception:
+        pass
 
 
 

@@ -95,13 +95,16 @@ async def startup_maintenance() -> None:
         log = logging.getLogger(__name__)
         try:
             from app.services.sheet_crm_storage import ensure_crm_storage_tabs
-            from app.services.account_users import invalidate_account_users_cache, load_account_users
+            from app.services.app_settings import load_app_settings
+            from app.services.account_users import load_account_users
+            from app.services.monthly_goals import load_monthly_goals
 
             ensure_crm_storage_tabs()
-            invalidate_account_users_cache()
-            load_account_users(force_refresh=True)
+            load_account_users()
+            load_app_settings()
+            load_monthly_goals()
         except Exception as error:
-            log.error("Startup crítico (planilha/usuários): %s", error)
+            log.error("Startup crítico (planilha): %s", error)
 
         try:
             from app.services.seed_fake_user import ensure_fake_test_user_on_startup
@@ -126,27 +129,12 @@ async def startup_maintenance() -> None:
             pass
 
         try:
-            from app.services.account_users import invalidate_account_users_cache, load_account_users
-            from app.services.app_settings import invalidate_app_settings_cache, load_app_settings
-            from app.services.monthly_goals import invalidate_monthly_goals_cache, load_monthly_goals
-            from app.services.activities_storage import invalidate_activities_cache, reload_activities_store
-            from app.services.lead_actions_storage import invalidate_lead_actions_cache, reload_lead_actions_store
             from app.services.seed_fake_company import ensure_fake_test_company_on_startup
 
-            invalidate_account_users_cache()
-            invalidate_app_settings_cache()
-            invalidate_monthly_goals_cache()
-            invalidate_activities_cache()
-            invalidate_lead_actions_cache()
-            load_account_users(force_refresh=True)
-            load_app_settings(force_refresh=True)
-            load_monthly_goals(force_refresh=True)
-            reload_activities_store(force_refresh=True)
-            reload_lead_actions_store(force_refresh=True)
             ensure_fake_test_company_on_startup()
         except Exception as error:
             import logging
-            logging.getLogger(__name__).warning("Startup em background: %s", error)
+            logging.getLogger(__name__).warning("Seed empresa FAKE: %s", error)
 
     await asyncio.to_thread(_run_critical)
     threading.Thread(target=_run_background, daemon=True).start()

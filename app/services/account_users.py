@@ -192,15 +192,24 @@ def _user_row_from_sheet(row: list[str], indexes: dict[str, int]) -> dict | None
         return None
 
 
-def _load_from_sheet() -> list[dict] | None:
+def _load_from_sheet(force_refresh: bool = False) -> list[dict] | None:
     if not settings.sheets_configured:
         return None
     worksheet = get_worksheet(USERS_WORKSHEET)
     if worksheet is None:
         return None
+
+    from app.services.sheet_read_cache import get_cached_worksheet_values
+
     try:
-        rows = worksheet.get_all_values()
+        rows = get_cached_worksheet_values(
+            USERS_WORKSHEET,
+            worksheet.get_all_values,
+            force_refresh=force_refresh,
+        )
     except Exception:
+        return None
+    if rows is None:
         return None
     if len(rows) < 2:
         return []
@@ -254,10 +263,9 @@ def _save_to_sheet(users: list[dict]) -> bool:
             [{"range": range_name, "values": rows}],
             value_input_option="USER_ENTERED",
         )
+        from app.services.sheet_read_cache import invalidate_worksheet_cache
 
-        existing_count = len(worksheet.get_all_values())
-        if existing_count > len(rows):
-            worksheet.batch_clear([f"A{len(rows) + 1}:{end_col}{existing_count}"])
+        invalidate_worksheet_cache(USERS_WORKSHEET)
         return True
     except Exception as error:
         logger.exception("Falha ao salvar aba Usuarios: %s", error)
@@ -276,7 +284,9 @@ def append_account_user_to_sheet(user: dict) -> None:
     client = get_gsheet_client()
     worksheet = client.open_by_key(settings.sheet_id).worksheet(USERS_WORKSHEET)
 
-    existing = worksheet.get_all_values()
+    from app.services.sheet_read_cache import get_cached_worksheet_values
+
+    existing = get_cached_worksheet_values(USERS_WORKSHEET, worksheet.get_all_values) or []
     if not existing:
         worksheet.update(
             values=[USERS_HEADERS],
@@ -289,6 +299,9 @@ def append_account_user_to_sheet(user: dict) -> None:
         value_input_option="USER_ENTERED",
         insert_data_option="INSERT_ROWS",
     )
+    from app.services.sheet_read_cache import invalidate_worksheet_cache
+
+    invalidate_worksheet_cache(USERS_WORKSHEET)
 
 
 def user_exists_in_sheet(username: str) -> bool:
@@ -299,10 +312,12 @@ def user_exists_in_sheet(username: str) -> bool:
     if worksheet is None:
         return False
     try:
-        rows = worksheet.get_all_values()
+        from app.services.sheet_read_cache import get_cached_worksheet_values
+
+        rows = get_cached_worksheet_values(USERS_WORKSHEET, worksheet.get_all_values)
     except Exception:
         return False
-    if len(rows) < 2:
+    if not rows or len(rows) < 2:
         return False
     indexes = header_indexes(rows[0], USERS_HEADERS)
     if indexes is None:
@@ -327,7 +342,7 @@ def load_account_users(force_refresh: bool = False) -> list[dict]:
             return [dict(user) for user in _cache]
 
         file_users = _load_from_file()
-        sheet_users = _load_from_sheet()
+        sheet_users = _load_from_sheet(force_refresh=force_refresh)
         merged_by_id: dict[str, dict] = {user["id"]: user for user in file_users}
         if sheet_users is not None:
             for user in sheet_users:
@@ -346,6 +361,9 @@ def load_account_users(force_refresh: bool = False) -> list[dict]:
 
 def invalidate_account_users_cache() -> None:
     global _cache
+    from app.services.sheet_read_cache import invalidate_worksheet_cache
+
+    invalidate_worksheet_cache(USERS_WORKSHEET)
     with _lock:
         _cache = None
 

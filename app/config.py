@@ -6,13 +6,13 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-APP_BUILD = os.getenv("APP_BUILD", "20260721-metas-comissao-v1").strip() or "20260721-metas-comissao-v1"
+APP_BUILD = os.getenv("APP_BUILD", "20260721-sheet-cache-v1").strip() or "20260721-sheet-cache-v1"
 
 
 class Settings:
     sheet_id: str = "1GAbrca0NSiJfPXaSte1qGxXCsGkQPacoRsm0PVB51gE"
     worksheet_name: str = "Folha1"
-    cache_ttl_seconds: int = 30
+    cache_ttl_seconds: int = 120
     proposal_template_doc_id: str = "1iTBG1ZUMCVB-aS7QoYiC4Sym6Dgn9Z7gMN-LGLgyprI"
     proposal_pdf_folder_id: str = ""
     support_whatsapp_number: str = "5511942157917"
@@ -42,6 +42,12 @@ class Settings:
             os.getenv("GCP_SERVICE_ACCOUNT_B64", "").strip()
             or os.getenv("GOOGLE_SERVICE_ACCOUNT_B64", "").strip()
         )
+        cache_ttl = os.getenv("SHEET_CACHE_TTL_SECONDS", "").strip()
+        if cache_ttl:
+            try:
+                self.cache_ttl_seconds = max(30, int(cache_ttl))
+            except ValueError:
+                pass
         self.proposal_template_doc_id = (
             os.getenv("PROPOSAL_TEMPLATE_DOC_ID", self.proposal_template_doc_id).strip()
             or self.proposal_template_doc_id

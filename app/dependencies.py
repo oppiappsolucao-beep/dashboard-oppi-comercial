@@ -28,7 +28,16 @@ def get_prepared_data(refresh: bool = False):
     try:
         df = load_sheet_data()
     except Exception as error:
-        raise HTTPException(status_code=503, detail=str(error)) from error
+        message = str(error)
+        if "429" in message or "Quota exceeded" in message:
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "Limite de leituras da planilha Google atingido. "
+                    "Aguarde cerca de 1 minuto e atualize a página."
+                ),
+            ) from error
+        raise HTTPException(status_code=503, detail=message) from error
 
     if df.empty:
         return df, {}

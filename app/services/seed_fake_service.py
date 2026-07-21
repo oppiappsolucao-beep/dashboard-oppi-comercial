@@ -14,7 +14,7 @@ FAKE_SERVICE_NAME = "Consultoria Comercial FAKE"
 
 def find_fake_test_service() -> str | None:
     target = FAKE_SERVICE_NAME.lower()
-    for name in list_commercial_services(force_refresh=True):
+    for name in list_commercial_services():
         if name.lower() == target:
             return name
     return None

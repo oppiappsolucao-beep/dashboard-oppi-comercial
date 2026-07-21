@@ -30,6 +30,9 @@ def _settings_path() -> Path:
 
 def invalidate_app_settings_cache() -> None:
     global _cache
+    from app.services.sheet_read_cache import invalidate_worksheet_cache
+
+    invalidate_worksheet_cache(CONFIG_WORKSHEET)
     with _lock:
         _cache = None
 
@@ -66,15 +69,24 @@ def _decode_config_value(key: str, value: str):
     return text
 
 
-def _load_from_sheet() -> dict | None:
+def _load_from_sheet(force_refresh: bool = False) -> dict | None:
     if not settings.sheets_configured:
         return None
     worksheet = get_worksheet(CONFIG_WORKSHEET)
     if worksheet is None:
         return None
+
+    from app.services.sheet_read_cache import get_cached_worksheet_values
+
     try:
-        rows = worksheet.get_all_values()
+        rows = get_cached_worksheet_values(
+            CONFIG_WORKSHEET,
+            worksheet.get_all_values,
+            force_refresh=force_refresh,
+        )
     except Exception:
+        return None
+    if rows is None:
         return None
     if len(rows) < 2:
         return {}
@@ -112,10 +124,9 @@ def _save_to_sheet(values: dict) -> bool:
             [{"range": range_name, "values": rows}],
             value_input_option="USER_ENTERED",
         )
+        from app.services.sheet_read_cache import invalidate_worksheet_cache
 
-        existing_count = len(worksheet.get_all_values())
-        if existing_count > len(rows):
-            worksheet.batch_clear([f"A{len(rows) + 1}:B{existing_count}"])
+        invalidate_worksheet_cache(CONFIG_WORKSHEET)
         return True
     except Exception as error:
         logger.exception("Falha ao salvar aba Configuracoes: %s", error)
@@ -140,7 +151,7 @@ def load_app_settings(force_refresh: bool = False) -> dict:
                 stored = {}
 
         merged = {**defaults, **stored}
-        sheet_store = _load_from_sheet()
+        sheet_store = _load_from_sheet(force_refresh=force_refresh)
         if sheet_store is not None:
             merged.update(sheet_store)
             if merged != {**defaults, **stored}:

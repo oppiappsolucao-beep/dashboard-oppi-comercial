@@ -131,7 +131,7 @@ def _save_to_file(store: dict[str, dict]) -> None:
     path.write_text(json.dumps(store, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def _load_from_sheet() -> dict[str, dict] | None:
+def _load_from_sheet(force_refresh: bool = False) -> dict[str, dict] | None:
     if not settings.sheets_configured:
         return None
 
@@ -139,10 +139,22 @@ def _load_from_sheet() -> dict[str, dict] | None:
         client = get_gsheet_client()
         spreadsheet = client.open_by_key(settings.sheet_id)
         worksheet = spreadsheet.worksheet(GOALS_WORKSHEET)
-        rows = worksheet.get_all_values()
     except WorksheetNotFound:
         return None
     except Exception:
+        return None
+
+    from app.services.sheet_read_cache import get_cached_worksheet_values
+
+    try:
+        rows = get_cached_worksheet_values(
+            GOALS_WORKSHEET,
+            worksheet.get_all_values,
+            force_refresh=force_refresh,
+        )
+    except Exception:
+        return None
+    if rows is None:
         return None
 
     if len(rows) < 2:
@@ -216,10 +228,9 @@ def _save_to_sheet(store: dict[str, dict]) -> bool:
             [{"range": range_name, "values": rows}],
             value_input_option="USER_ENTERED",
         )
+        from app.services.sheet_read_cache import invalidate_worksheet_cache
 
-        existing_count = len(worksheet.get_all_values())
-        if existing_count > len(rows):
-            worksheet.batch_clear([f"A{len(rows) + 1}:E{existing_count}"])
+        invalidate_worksheet_cache(GOALS_WORKSHEET)
         return True
     except Exception as error:
         logger.exception("Falha ao salvar aba Metas: %s", error)
@@ -241,7 +252,7 @@ def load_monthly_goals(force_refresh: bool = False) -> dict[str, dict]:
             return {key: dict(value) for key, value in _file_cache.items()}
 
         file_store = _load_from_file()
-        sheet_store = _load_from_sheet()
+        sheet_store = _load_from_sheet(force_refresh=force_refresh)
 
         if sheet_store is not None:
             merged = {**file_store, **sheet_store}
@@ -258,6 +269,9 @@ def load_monthly_goals(force_refresh: bool = False) -> dict[str, dict]:
 
 def invalidate_monthly_goals_cache() -> None:
     global _file_cache
+    from app.services.sheet_read_cache import invalidate_worksheet_cache
+
+    invalidate_worksheet_cache(GOALS_WORKSHEET)
     with _lock:
         _file_cache = None
 
