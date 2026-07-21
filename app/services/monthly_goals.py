@@ -29,6 +29,18 @@ def _goal_key(year: int, month: int, seller: str) -> str:
     return f"{int(year)}-{int(month):02d}|{_normalize_seller(seller)}"
 
 
+def _parse_goal_key(key: str) -> tuple[int, int, str]:
+    parts = key.split("|")
+    if len(parts) == 2:
+        period, seller = parts
+        year_text, month_text = period.split("-", 1)
+    elif len(parts) == 3:
+        year_text, month_text, seller = parts
+    else:
+        raise ValueError(f"Chave de meta inválida: {key}")
+    return int(year_text), int(month_text), seller
+
+
 def _parse_amount(value) -> float | None:
     if value is None:
         return None
@@ -132,10 +144,10 @@ def _save_to_sheet(store: dict[str, float]) -> bool:
 
         rows = [GOALS_HEADERS]
         for key in sorted(store.keys()):
-            year_text, month_text, seller = key.split("|", 2)
+            year, month, seller = _parse_goal_key(key)
             amount = store[key]
             amount_text = str(int(amount)) if float(amount).is_integer() else str(amount)
-            rows.append([year_text, str(int(month_text)), seller, amount_text])
+            rows.append([str(year), str(month), seller, amount_text])
 
         worksheet.clear()
         worksheet.update(rows, value_input_option="USER_ENTERED")
@@ -200,14 +212,17 @@ def list_monthly_goals(limit: int = 12) -> list[dict]:
     store = load_monthly_goals()
     rows = []
     for key, amount in store.items():
-        year_text, month_text, seller = key.split("|", 2)
+        try:
+            year, month, seller = _parse_goal_key(key)
+        except ValueError:
+            continue
         rows.append({
-            "year": int(year_text),
-            "month": int(month_text),
+            "year": year,
+            "month": month,
             "seller": seller,
             "amount": amount,
             "amount_label": f"R$ {amount:,.0f}".replace(",", "."),
-            "sort_key": (int(year_text), int(month_text), seller.lower()),
+            "sort_key": (year, month, seller.lower()),
         })
     rows.sort(key=lambda item: item["sort_key"], reverse=True)
     return rows[:limit]
