@@ -85,7 +85,24 @@ app.add_api_route("/configuracoes/seed/usuario-fake", settings_seed_fake_user, m
 
 @app.on_event("startup")
 async def startup_maintenance() -> None:
-    def _run() -> None:
+    import asyncio
+
+    def _run_critical() -> None:
+        import logging
+
+        from app.services.sheet_crm_storage import ensure_crm_storage_tabs
+        from app.services.account_users import invalidate_account_users_cache, load_account_users
+        from app.services.seed_fake_user import ensure_fake_test_user_on_startup
+
+        ensure_crm_storage_tabs()
+        invalidate_account_users_cache()
+        load_account_users(force_refresh=True)
+        try:
+            ensure_fake_test_user_on_startup()
+        except Exception as error:
+            logging.getLogger(__name__).error("Seed usuário FAKE falhou: %s", error)
+
+    def _run_background() -> None:
         try:
             from app.services.proposal_pdf import cleanup_service_account_proposal_files
 
@@ -94,19 +111,12 @@ async def startup_maintenance() -> None:
             pass
 
         try:
-            from app.services.sheet_crm_storage import ensure_crm_storage_tabs
-
-            ensure_crm_storage_tabs()
-        except Exception as error:
-            import logging
-            logging.getLogger(__name__).warning("Abas auxiliares da planilha: %s", error)
-
-        try:
             from app.services.account_users import invalidate_account_users_cache, load_account_users
             from app.services.app_settings import invalidate_app_settings_cache, load_app_settings
             from app.services.monthly_goals import invalidate_monthly_goals_cache, load_monthly_goals
             from app.services.activities_storage import invalidate_activities_cache, reload_activities_store
             from app.services.lead_actions_storage import invalidate_lead_actions_cache, reload_lead_actions_store
+            from app.services.seed_fake_company import ensure_fake_test_company_on_startup
 
             invalidate_account_users_cache()
             invalidate_app_settings_cache()
@@ -118,27 +128,13 @@ async def startup_maintenance() -> None:
             load_monthly_goals(force_refresh=True)
             reload_activities_store(force_refresh=True)
             reload_lead_actions_store(force_refresh=True)
-        except Exception as error:
-            import logging
-            logging.getLogger(__name__).warning("Recarga de stores no startup: %s", error)
-
-        try:
-            from app.services.seed_fake_user import ensure_fake_test_user_on_startup
-
-            ensure_fake_test_user_on_startup()
-        except Exception as error:
-            import logging
-            logging.getLogger(__name__).warning("Seed usuário FAKE: %s", error)
-
-        try:
-            from app.services.seed_fake_company import ensure_fake_test_company_on_startup
-
             ensure_fake_test_company_on_startup()
         except Exception as error:
             import logging
-            logging.getLogger(__name__).warning("Seed empresa FAKE: %s", error)
+            logging.getLogger(__name__).warning("Startup em background: %s", error)
 
-    threading.Thread(target=_run, daemon=True).start()
+    await asyncio.to_thread(_run_critical)
+    threading.Thread(target=_run_background, daemon=True).start()
 
 
 @app.get("/health")

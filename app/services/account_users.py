@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 import threading
 import uuid
@@ -14,6 +15,8 @@ from app.config import settings
 from app.services.legacy_core import normalize_text
 from app.services.sheet_crm_storage import CRM_STORAGE_TABS, get_worksheet, header_indexes
 from app.services.storage_paths import get_storage_dir
+
+logger = logging.getLogger(__name__)
 
 ROLE_CLASS = {
     "Administrador": "admin",
@@ -209,6 +212,26 @@ def _load_from_sheet() -> list[dict] | None:
     return users
 
 
+def _user_sheet_row(user: dict) -> list[str]:
+    return [
+        user["id"],
+        user["name"],
+        user["email"],
+        user["username"],
+        _sheet_escape_hash(user["password_hash"]),
+        user["role"],
+        "1" if user["active"] else "0",
+        user.get("last_access", ""),
+        user.get("created_at", ""),
+        user.get("updated_at", ""),
+    ]
+
+
+def _users_sheet_range(row_count: int) -> str:
+    end_col = chr(ord("A") + len(USERS_HEADERS) - 1)
+    return f"A1:{end_col}{max(row_count, 1)}"
+
+
 def _save_to_sheet(users: list[dict]) -> bool:
     if not settings.sheets_configured:
         return False
@@ -218,28 +241,29 @@ def _save_to_sheet(users: list[dict]) -> bool:
     try:
         rows = [USERS_HEADERS]
         for user in sorted(users, key=lambda item: item.get("username", "").lower()):
-            rows.append([
-                user["id"],
-                user["name"],
-                user["email"],
-                user["username"],
-                _sheet_escape_hash(user["password_hash"]),
-                user["role"],
-                "1" if user["active"] else "0",
-                user.get("last_access", ""),
-                user.get("created_at", ""),
-                user.get("updated_at", ""),
-            ])
-        worksheet.clear()
-        worksheet.update(rows, value_input_option="USER_ENTERED")
+            rows.append(_user_sheet_row(user))
+
+        range_name = _users_sheet_range(len(rows))
+        worksheet.update(
+            values=rows,
+            range_name=range_name,
+            value_input_option="USER_ENTERED",
+        )
+
+        existing_count = len(worksheet.get_all_values())
+        if existing_count > len(rows):
+            end_col = chr(ord("A") + len(USERS_HEADERS) - 1)
+            worksheet.batch_clear([f"A{len(rows) + 1}:{end_col}{existing_count}"])
         return True
-    except Exception:
+    except Exception as error:
+        logger.exception("Falha ao salvar aba Usuarios: %s", error)
         return False
 
 
 def _persist_users(users: list[dict]) -> None:
     _save_to_file(users)
-    _save_to_sheet(users)
+    if settings.sheets_configured and not _save_to_sheet(users):
+        raise RuntimeError("Não foi possível salvar os usuários na aba Usuarios da planilha.")
 
 
 def load_account_users(force_refresh: bool = False) -> list[dict]:

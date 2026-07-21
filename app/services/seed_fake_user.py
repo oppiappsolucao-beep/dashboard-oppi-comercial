@@ -69,8 +69,5 @@ def seed_fake_test_user() -> dict:
 
 
 def ensure_fake_test_user_on_startup() -> None:
-    try:
-        result = seed_fake_test_user()
-        logger.info("Seed usuário FAKE: %s", result.get("message"))
-    except Exception as error:
-        logger.warning("Seed usuário FAKE não executado: %s", error)
+    result = seed_fake_test_user()
+    logger.info("Seed usuário FAKE: %s", result.get("message"))
