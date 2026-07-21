@@ -1,267 +1,100 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="registration-new-page">
-  <header class="registration-new-header">
-    <div>
-      <h1 class="registration-new-title">Novo cadastro</h1>
-      <p class="registration-new-subtitle">Cadastre uma nova empresa ou lead e já defina a primeira atividade comercial.</p>
-    </div>
-    <div class="registration-new-header-actions">
-      <a href="/leads-e-empresas" class="btn btn-secondary">Cancelar</a>
-      <button type="submit" form="registration-new-form" class="btn registration-new-save-btn">💾 Salvar cadastro</button>
+<div class="client-edit-page">
+  {% if from_page %}
+  <div class="client-edit-backbar">
+    <a href="{{ back_href }}" class="btn btn-secondary btn-small">← Voltar para {{ back_label }}</a>
+  </div>
+  {% endif %}
+
+  <header class="client-edit-header panel">
+    <div class="client-edit-header-main">
+      <div class="client-edit-identity">
+        <span class="client-edit-avatar">{{ header_initials }}</span>
+        <div>
+          <h1 class="client-edit-title" id="registration-client-title">{{ client_edit_title }}</h1>
+          <div class="client-edit-meta">
+            <span>{{ header_subtitle }}</span>
+            <span class="client-edit-id-badge">{{ header_id }}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="client-edit-header-center">
+        {% with form_id='registration-new-form' %}
+        {% include "partials/registration_tipo_switch.html" %}
+        {% endwith %}
+      </div>
+
+      <div class="client-edit-pipeline" aria-label="Progresso comercial">
+        {% for step in pipeline_steps %}
+        <div class="client-edit-pipeline-step {% if step.is_active %}is-active{% elif step.is_done %}is-done{% endif %}">
+          <span class="client-edit-pipeline-dot"></span>
+          <span>{{ step.label }}</span>
+        </div>
+        {% endfor %}
+      </div>
     </div>
   </header>
 
-  {% if error %}
-  <div class="alert-error registration-new-alert">{{ error }}</div>
-  {% endif %}
+  {% if error %}<div class="alert-error">{{ error }}</div>{% endif %}
 
-  <form method="post" action="/cadastro/novo" id="registration-new-form" class="registration-new-form">
-    <input type="hidden" name="create_first_activity" id="create-first-activity" value="1">
-
-    <div class="registration-new-layout">
-      <div class="registration-new-main panel">
-        <section class="registration-new-section">
-          <div class="registration-new-section-head">
-            <span class="registration-new-section-icon">🏷</span>
-            <div>
-              <h2>Tipo de cadastro</h2>
-              <p>Escolha se está registrando um novo lead ou uma empresa completa.</p>
-            </div>
-          </div>
-          {% include "partials/registration_tipo_switch.html" %}
-        </section>
-
-        <section class="registration-new-section">
-          <div class="registration-new-section-head">
-            <span class="registration-new-section-icon">🏢</span>
-            <div>
-              <h2>1. Dados da empresa</h2>
-            </div>
-          </div>
-          <div class="form-grid">
-            <div class="form-group"><label>Nome da empresa *</label><input name="empresa" required value="{{ values.get('empresa', '') }}"></div>
-            <div class="form-group"><label>Data de abertura</label><input name="data_abertura" placeholder="DD/MM/AAAA" value="{{ values.get('data_abertura', '') }}"></div>
-            <div class="form-group"><label>CNPJ</label><input name="cnpj" placeholder="00.000.000/0000-00" value="{{ values.get('cnpj', '') }}"></div>
-            <div class="form-group"><label>Capital social</label><input name="capital" placeholder="Ex.: R$ 100.000,00" value="{{ values.get('capital', '') }}"></div>
-          </div>
-          <div class="form-grid registration-address-line cols-address-top">
-            <div class="form-group address-endereco"><label>Endereço</label><input name="endereco" value="{{ values.get('endereco', '') }}"></div>
-            <div class="form-group address-numero"><label>Número</label><input name="endereco_numero" value="{{ values.get('endereco_numero', '') }}"></div>
-            <div class="form-group address-complemento"><label>Complemento</label><input name="endereco_complemento" value="{{ values.get('endereco_complemento', '') }}"></div>
-          </div>
-          <div class="form-grid registration-address-line cols-address-bottom">
-            <div class="form-group"><label>CEP</label><input name="cep" placeholder="00000-000" value="{{ values.get('cep', '') }}"></div>
-            <div class="form-group"><label>Bairro/Distrito</label><input name="bairro" value="{{ values.get('bairro', '') }}"></div>
-            <div class="form-group"><label>Município</label><input name="municipio" value="{{ values.get('municipio', '') }}"></div>
-            <div class="form-group"><label>UF</label><input name="uf" maxlength="2" placeholder="SP" value="{{ values.get('uf', '') }}"></div>
-          </div>
-          <div class="form-grid">
-            <div class="form-group"><label>Site</label><input name="site" placeholder="https://" value="{{ values.get('site', '') }}"></div>
-            <div class="form-group"><label>E-mail da empresa</label><input name="email_empresa" type="email" value="{{ values.get('email_empresa', '') }}"></div>
-          </div>
-        </section>
-
-        <section class="registration-new-section">
-          <div class="registration-new-section-head">
-            <span class="registration-new-section-icon">📞</span>
-            <div><h2>2. Telefones da empresa</h2></div>
-          </div>
-          <div class="form-grid cols-3">
-            <div class="form-group">
-              <label>Celular WhatsApp</label>
-              <div class="registration-input-icon-wrap">
-                <span aria-hidden="true">💬</span>
-                <input name="telefone_b2b" value="{{ values.get('telefone_b2b', '') }}">
-              </div>
-            </div>
-            <div class="form-group">
-              <label>Telefone fixo</label>
-              <div class="registration-input-icon-wrap">
-                <span aria-hidden="true">📞</span>
-                <input name="telefone_fixo" value="{{ values.get('telefone_fixo', '') }}">
-              </div>
-            </div>
-            <div class="form-group">
-              <label>Telefone alternativo</label>
-              <div class="registration-input-icon-wrap">
-                <span aria-hidden="true">📱</span>
-                <input name="telefone_alternativo" value="{{ values.get('telefone_alternativo', '') }}">
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section class="registration-new-section">
-          <div class="registration-new-section-head">
-            <span class="registration-new-section-icon">👥</span>
-            <div><h2>3. Sócios e responsáveis</h2></div>
-          </div>
-          {% include "partials/partners_form_fields.html" %}
-        </section>
-
-        <section class="registration-new-section">
-          <div class="registration-new-section-head">
-            <span class="registration-new-section-icon">📣</span>
-            <div><h2>4. Redes sociais e acompanhamento</h2></div>
-          </div>
-          <div class="form-grid">
-            <div class="form-group"><label>Instagram</label><input name="instagram" value="{{ values.get('instagram', '') }}"></div>
-            <div class="form-group"><label>LinkedIn</label><input name="linkedin" value="{{ values.get('linkedin', '') }}"></div>
-            <div class="form-group"><label>Vendedor *</label>
-              <select name="vendedor" id="registration-vendedor" required>
-                {% for seller in seller_options %}
-                <option value="{{ seller }}" {% if seller == values.get('vendedor') %}selected{% endif %}>{{ seller }}</option>
-                {% endfor %}
-              </select>
-            </div>
-            <div class="form-group"><label>Status comercial *</label>
-              <select name="status" id="registration-status" required>
-                {% for status in status_options %}
-                <option value="{{ status }}" {% if status == values.get('status', 'Novo Lead') %}selected{% endif %}>{{ status }}</option>
-                {% endfor %}
-              </select>
-            </div>
-            <div class="form-group"><label>Data do chamado *</label><input type="date" name="data_chamado" value="{{ values.get('data_chamado', today) }}" required></div>
-            <div class="form-group full"><label>Observações</label><textarea name="observacoes" rows="3">{{ values.get('observacoes', '') }}</textarea></div>
-          </div>
-        </section>
-
-        <section class="registration-new-section">
-          <div class="registration-new-section-head">
-            <span class="registration-new-section-icon">📄</span>
-            <div><h2>5. Proposta comercial</h2></div>
-          </div>
-          <div class="form-grid">
-            <div class="form-group"><label>Serviço escolhido</label>
-              <select name="servico">
-                <option value="">Selecione</option>
-                {% for service in service_options %}
-                <option value="{{ service }}">{{ service }}</option>
-                {% endfor %}
-              </select>
-            </div>
-            <div class="form-group"><label>Valor da proposta</label><input name="valor_proposta" placeholder="Ex.: R$ 8.500"></div>
-            <div class="form-group"><label>Quantidade de colaboradores</label>
-              <input name="colaboradores" value="{{ values.get('colaboradores', '') }}" placeholder="Ex.: 12 colaboradores">
-            </div>
-          </div>
-        </section>
+  <div class="client-edit-summary-grid">
+    {% for card in summary_cards %}
+    <article class="client-edit-summary-card panel">
+      <span class="client-edit-summary-icon" aria-hidden="true">{{ card.icon }}</span>
+      <div>
+        <span class="client-edit-summary-label">{{ card.label }}</span>
+        <strong class="client-edit-summary-value">{{ card.value }}</strong>
+        <span class="client-edit-summary-hint">{{ card.hint }}</span>
       </div>
+    </article>
+    {% endfor %}
+  </div>
 
-      <aside class="registration-new-sidebar panel" id="registration-activity-panel">
-        <div class="registration-new-sidebar-head">
-          <span class="registration-new-section-icon">📅</span>
-          <div>
-            <h2>Primeira atividade</h2>
-            <p>Agende o primeiro contato comercial.</p>
-          </div>
-        </div>
+  <nav class="client-edit-tabs panel client-edit-tabs-interactive" aria-label="Abas do cadastro">
+    <button type="button" class="client-edit-tab is-active" data-registration-tab="dados">
+      <span class="client-edit-tab-title">Dados gerais</span>
+      <span class="client-edit-tab-sub">Informações da empresa</span>
+    </button>
+    <button type="button" class="client-edit-tab" data-registration-tab="atividades">
+      <span class="client-edit-tab-title">Atividades</span>
+      <span class="client-edit-tab-sub">Primeira atividade comercial</span>
+    </button>
+    <button type="button" class="client-edit-tab" data-registration-tab="proposta">
+      <span class="client-edit-tab-title">Proposta</span>
+      <span class="client-edit-tab-sub">Resumo comercial</span>
+    </button>
+  </nav>
 
-        <label class="registration-new-toggle">
-          <span>Criar primeira atividade junto com o cadastro</span>
-          <span class="registration-toggle-switch">
-            <input type="checkbox" id="create-first-activity-toggle" {% if values.get('create_first_activity', '1') != '0' %}checked{% endif %}>
-            <span class="registration-toggle-slider"></span>
-          </span>
-        </label>
+  <form method="post" action="/cadastro/novo" class="client-edit-form" id="registration-new-form">
+    <input type="hidden" name="create_first_activity" id="create-first-activity" value="1">
+    <input type="hidden" name="status" value="Novo Lead">
+    <input type="hidden" name="data_chamado" value="{{ today }}">
+    {% if from_page %}<input type="hidden" name="from" value="{{ from_page }}">{% endif %}
 
-        <div class="registration-activity-fields" id="registration-activity-fields">
-          <div class="form-group"><label>Atividade</label>
-            <select name="activity_action" id="registration-activity-action">
-              {% for action in activity_actions %}
-              <option value="{{ action }}" {% if action == default_activity_action %}selected{% endif %}>{{ action }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div class="form-group"><label>Canal</label>
-            <select name="activity_channel">
-              {% for channel in channel_options %}
-              <option value="{{ channel }}" {% if channel == values.get('activity_channel', 'WhatsApp') %}selected{% endif %}>{{ channel }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div class="form-grid registration-activity-datetime">
-            <div class="form-group"><label>Data</label><input type="date" name="activity_date" id="registration-activity-date" value="{{ values.get('activity_date', today) }}"></div>
-            <div class="form-group"><label>Hora</label><input type="time" name="activity_time" value="{{ values.get('activity_time', default_time) }}"></div>
-          </div>
-          <div class="form-group"><label>Responsável</label>
-            <select name="activity_responsible" id="registration-activity-responsible">
-              <option value="">Selecione o responsável</option>
-              {% for seller in seller_options %}
-              <option value="{{ seller }}" {% if seller == values.get('activity_responsible', values.get('vendedor')) %}selected{% endif %}>{{ seller }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div class="form-group"><label>Prioridade</label>
-            <select name="activity_priority">
-              {% for priority in priority_options %}
-              <option value="{{ priority }}" {% if priority == values.get('activity_priority', 'Média') %}selected{% endif %}>{{ priority }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div class="form-group"><label>Objetivo / descrição</label><textarea name="activity_description" rows="3" placeholder="Descreva o objetivo desta atividade...">{{ values.get('activity_description', '') }}</textarea></div>
-          <div class="form-group"><label>Próxima ação sugerida</label><textarea name="activity_next_action" rows="2" placeholder="Ex.: Qualificar lead após retorno">{{ values.get('activity_next_action', '') }}</textarea></div>
-
-          <div class="registration-funnel-wrap">
-            <div class="registration-funnel-label">Etapas do funil</div>
-            <div class="registration-funnel" id="registration-funnel" data-stages="{{ pipeline_stages | join('|') }}">
-              {% for stage in pipeline_stages %}
-              <div class="registration-funnel-step {% if stage == 'Novo Lead' %}active{% endif %}" data-stage="{{ stage }}">
-                <span class="registration-funnel-dot">{{ loop.index }}</span>
-                <span class="registration-funnel-name">{{ stage }}</span>
-              </div>
-              {% endfor %}
-            </div>
-          </div>
-        </div>
-      </aside>
+    <div class="client-edit-tab-panel" data-registration-panel="dados">
+      {% include "partials/registration_edit_dados_tab.html" %}
     </div>
 
-    <footer class="registration-new-summary panel">
-      <div class="registration-new-summary-title">Resumo do que será criado</div>
-      <div class="registration-new-summary-grid">
-        <div class="registration-new-summary-item">
-          <span class="registration-new-summary-icon">🏷</span>
-          <div>
-            <strong>Tipo</strong>
-            <span id="summary-tipo">{{ 'Empresa' if cadastro_tipo == 'empresa' else 'Lead' }}</span>
-          </div>
-        </div>
-        <div class="registration-new-summary-item">
-          <span class="registration-new-summary-icon">🏢</span>
-          <div>
-            <strong>Empresa</strong>
-            <span id="summary-company">Nova empresa ou lead será cadastrado</span>
-          </div>
-        </div>
-        <div class="registration-new-summary-item">
-          <span class="registration-new-summary-icon">📊</span>
-          <div>
-            <strong>Etapa inicial</strong>
-            <span id="summary-stage">Novo Lead (entrada no funil)</span>
-          </div>
-        </div>
-        <div class="registration-new-summary-item">
-          <span class="registration-new-summary-icon">📅</span>
-          <div>
-            <strong>Primeira atividade</strong>
-            <span id="summary-activity">Será agendada conforme os dados ao lado</span>
-          </div>
-        </div>
-        <div class="registration-new-summary-item">
-          <span class="registration-new-summary-icon">⏱</span>
-          <div>
-            <strong>Prazo ideal</strong>
-            <span id="summary-deadline">Definido na data e hora da primeira atividade</span>
-          </div>
-        </div>
+    <div class="client-edit-tab-panel is-hidden" data-registration-panel="atividades">
+      {% include "partials/registration_new_activities_tab.html" %}
+    </div>
+
+    <div class="client-edit-tab-panel is-hidden" data-registration-panel="proposta">
+      {% include "partials/registration_new_proposta_tab.html" %}
+    </div>
+
+    <footer class="client-edit-footer panel">
+      <div class="client-edit-footer-actions">
+        <button type="submit" class="btn">Salvar cadastro</button>
+        <a href="{{ back_href }}" class="btn btn-secondary">Cancelar</a>
       </div>
     </footer>
   </form>
 </div>
 
 <script src="/static/js/partners-form.js?v=1" defer></script>
-<script src="/static/js/registration-edit.js?v=1" defer></script>
-<script src="/static/js/registration-new.js?v=2" defer></script>
+<script src="/static/js/registration-edit.js?v=4" defer></script>
+<script src="/static/js/registration-new.js?v=3" defer></script>
 {% endblock %}

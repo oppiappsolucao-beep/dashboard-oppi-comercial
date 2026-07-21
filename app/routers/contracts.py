@@ -300,8 +300,14 @@ async def contract_edit_page(request: Request, sheet_row: int):
         valor_proposta=values.get("valor_proposta", ""),
     )
 
-    back_href = "/leads-e-empresas" if from_page == "leads" else "/cadastro/todos"
-    active_sidebar = "leads" if from_page == "leads" else "contracts"
+    back_href = {
+        "leads": "/leads-e-empresas",
+        "activities": "/atividades",
+    }.get(from_page, "/cadastro/todos")
+    active_sidebar = {
+        "leads": "leads",
+        "activities": "activities",
+    }.get(from_page, "contracts")
 
     return render(
         request,
@@ -310,7 +316,10 @@ async def contract_edit_page(request: Request, sheet_row: int):
             "active_page": active_sidebar,
             "from_page": from_page,
             "back_href": back_href,
-            "back_label": "Leads e Empresas" if from_page == "leads" else "Todos os cadastros",
+            "back_label": {
+                "leads": "Leads e Empresas",
+                "activities": "Atividades",
+            }.get(from_page, "Todos os cadastros"),
             "sheet_row": sheet_row,
             "seller_options": get_seller_options(df),
             "status_options": STATUS_OPTIONS,
@@ -344,6 +353,8 @@ async def contract_edit_submit(request: Request, sheet_row: int):
     if form.get("action") == "cancel":
         if from_page == "leads":
             return RedirectResponse(url="/leads-e-empresas", status_code=303)
+        if from_page == "activities":
+            return RedirectResponse(url="/atividades", status_code=303)
         return RedirectResponse(url=_edit_page_url(sheet_row, from_page=from_page), status_code=303)
 
     form_dict = dict(form)
@@ -400,7 +411,10 @@ async def contract_delete(
         request.session["edit_error"] = f"Não consegui excluir o cadastro: {error}"
         return RedirectResponse(url=edit_url, status_code=303)
 
-    return RedirectResponse(url="/leads-e-empresas" if from_page == "leads" else "/cadastro/todos", status_code=303)
+    return RedirectResponse(url={
+        "leads": "/leads-e-empresas",
+        "activities": "/atividades",
+    }.get(from_page, "/cadastro/todos"), status_code=303)
 
 
 @router.post("/cadastro/todos/{sheet_row}/tipo")

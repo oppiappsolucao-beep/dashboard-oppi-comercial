@@ -1191,6 +1191,22 @@
   overflow: hidden;
 }
 
+.client-edit-tabs-interactive .client-edit-tab {
+  border: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  width: 100%;
+}
+
+.client-edit-tab-panel.is-hidden {
+  display: none;
+}
+
+.is-hidden {
+  display: none !important;
+}
+
 .client-edit-tab {
   display: flex;
   flex-direction: column;

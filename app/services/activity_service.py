@@ -143,6 +143,7 @@ def _build_registration_prefill_params(activity: dict) -> dict[str, str]:
         "empresa": empresa,
         "status": _status_for_pipeline_stage(stage),
         "create_first_activity": "1",
+        "from": "activities",
     }
     if vendedor:
         params["vendedor"] = vendedor
@@ -182,7 +183,7 @@ def _build_registration_prefill_params(activity: dict) -> dict[str, str]:
 
 def _build_lead_href_for_activity(activity: dict, sheet_row: int) -> str:
     if sheet_row:
-        return f"/cadastro/todos/{sheet_row}/editar"
+        return f"/cadastro/todos/{sheet_row}/editar?from=activities"
 
     params = _build_registration_prefill_params(activity)
     if not params:

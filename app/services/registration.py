@@ -357,3 +357,64 @@ def build_cadastro_edit_page_context(
             "has_data": bool(servico or (valor_proposta and valor_proposta != "—")),
         },
     }
+
+
+def build_cadastro_new_page_context(
+    *,
+    values: dict,
+    cadastro_tipo: str,
+    vendedor: str,
+) -> dict:
+    empresa = normalize_text(values.get("empresa"))
+    tipo_label = "Lead" if cadastro_tipo == "lead" else "Empresa"
+    display_name = empresa or "Novo cadastro"
+
+    return {
+        "header_initials": _cadastro_initials(empresa) if empresa else "NL",
+        "header_subtitle": f"{tipo_label} · cadastro em andamento",
+        "header_id": "Novo cadastro",
+        "client_edit_title": display_name,
+        "pipeline_steps": _build_pipeline_steps("novo"),
+        "summary_cards": [
+            {
+                "icon": "🚩",
+                "label": "Etapa atual",
+                "value": "Novo Lead",
+                "hint": STAGE_SUMMARY_HINTS.get("Novo Lead", "Início do relacionamento"),
+            },
+            {
+                "icon": "👤",
+                "label": "Vendedor responsável",
+                "value": vendedor or "Selecionar",
+                "hint": "Responsável comercial",
+            },
+            {
+                "icon": "📞",
+                "label": "Última atividade",
+                "value": "—",
+                "hint": "Nenhuma atividade ainda",
+            },
+            {
+                "icon": "📅",
+                "label": "Próxima ação",
+                "value": "Primeira atividade",
+                "hint": "Configure na aba Atividades",
+            },
+            {
+                "icon": "💰",
+                "label": "Valor da proposta",
+                "value": "—",
+                "hint": "Proposta em elaboração",
+            },
+        ],
+        "proposals_count": 0,
+        "proposals_href": "/propostas",
+        "commercial_summary": {
+            "servico": "—",
+            "valor_proposta": "—",
+            "forma_pagamento": "—",
+            "vencimento": "—",
+            "colaboradores": "—",
+            "has_data": False,
+        },
+    }

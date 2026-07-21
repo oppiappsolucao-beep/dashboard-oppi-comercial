@@ -1,0 +1,55 @@
+<div class="registration-new-activity-panel panel">
+  <div class="client-edit-section-head">
+    <span class="client-edit-section-icon">📅</span>
+    <div>
+      <h2>Primeira atividade</h2>
+      <p>Agende o primeiro contato comercial junto com o cadastro.</p>
+    </div>
+  </div>
+
+  <label class="registration-new-toggle">
+    <span>Criar primeira atividade junto com o cadastro</span>
+    <span class="registration-toggle-switch">
+      <input type="checkbox" id="create-first-activity-toggle" {% if values.get('create_first_activity', '1') != '0' %}checked{% endif %}>
+      <span class="registration-toggle-slider"></span>
+    </span>
+  </label>
+
+  <div class="registration-activity-fields" id="registration-activity-fields">
+    <div class="form-grid">
+      <div class="form-group"><label>Atividade</label>
+        <select name="activity_action" id="registration-activity-action">
+          {% for action in activity_actions %}
+          <option value="{{ action }}" {% if action == default_activity_action %}selected{% endif %}>{{ action }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group"><label>Canal</label>
+        <select name="activity_channel">
+          {% for channel in channel_options %}
+          <option value="{{ channel }}" {% if channel == values.get('activity_channel', 'WhatsApp') %}selected{% endif %}>{{ channel }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group"><label>Data</label><input type="date" name="activity_date" id="registration-activity-date" value="{{ values.get('activity_date', today) }}"></div>
+      <div class="form-group"><label>Hora</label><input type="time" name="activity_time" value="{{ values.get('activity_time', default_time) }}"></div>
+      <div class="form-group"><label>Responsável</label>
+        <select name="activity_responsible" id="registration-activity-responsible">
+          <option value="">Selecione o responsável</option>
+          {% for seller in seller_options %}
+          <option value="{{ seller }}" {% if seller == values.get('activity_responsible', vendedor) %}selected{% endif %}>{{ seller }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group"><label>Prioridade</label>
+        <select name="activity_priority">
+          {% for priority in priority_options %}
+          <option value="{{ priority }}" {% if priority == values.get('activity_priority', 'Média') %}selected{% endif %}>{{ priority }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group full"><label>Objetivo / descrição</label><textarea name="activity_description" rows="3" placeholder="Descreva o objetivo desta atividade...">{{ values.get('activity_description', '') }}</textarea></div>
+      <div class="form-group full"><label>Próxima ação sugerida</label><textarea name="activity_next_action" rows="2" placeholder="Ex.: Qualificar lead após retorno">{{ values.get('activity_next_action', '') }}</textarea></div>
+    </div>
+  </div>
+</div>
