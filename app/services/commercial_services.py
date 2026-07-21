@@ -4,18 +4,17 @@ from __future__ import annotations
 from app.services.app_settings import load_app_settings, save_app_settings
 from app.services.legacy_core import normalize_text
 
-DEFAULT_COMMERCIAL_SERVICES = ["Oppi Vision", "Oppi Flow", "Oppi Track"]
+# Exemplos antigos do código — não devem reaparecer como cadastro automático.
+_LEGACY_DEFAULT_SERVICE_NAMES = frozenset({"oppi vision", "oppi flow", "oppi track"})
 
 
 def _normalize_service_name(value: str) -> str:
     return normalize_text(value)
 
 
-def list_commercial_services(*, force_refresh: bool = False) -> list[str]:
-    data = load_app_settings(force_refresh=force_refresh)
-    stored = data.get("commercial_services")
+def _normalize_service_list(stored) -> list[str]:
     if not isinstance(stored, list):
-        return list(DEFAULT_COMMERCIAL_SERVICES)
+        return []
 
     services: list[str] = []
     seen: set[str] = set()
@@ -26,8 +25,24 @@ def list_commercial_services(*, force_refresh: bool = False) -> list[str]:
             continue
         seen.add(key)
         services.append(name)
+    return services
 
-    return services or list(DEFAULT_COMMERCIAL_SERVICES)
+
+def _strip_legacy_defaults(services: list[str]) -> list[str]:
+    if not services:
+        return []
+    if {name.lower() for name in services} == _LEGACY_DEFAULT_SERVICE_NAMES:
+        return []
+    return services
+
+
+def list_commercial_services(*, force_refresh: bool = False) -> list[str]:
+    data = load_app_settings(force_refresh=force_refresh)
+    stored = data.get("commercial_services")
+    services = _strip_legacy_defaults(_normalize_service_list(stored))
+    if services != _normalize_service_list(stored):
+        save_app_settings({"commercial_services": services})
+    return services
 
 
 def get_commercial_service_options() -> list[str]:
@@ -66,6 +81,4 @@ def remove_commercial_service(name: str) -> None:
     filtered = [item for item in services if item.lower() != clean.lower()]
     if len(filtered) == len(services):
         raise ValueError("Serviço não encontrado.")
-    if not filtered:
-        raise ValueError("Cadastre pelo menos um serviço comercial.")
     save_app_settings({"commercial_services": filtered})
