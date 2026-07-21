@@ -97,6 +97,8 @@ def _settings_context(request: Request, settings_params: dict):
         "seed_fake_error": request.session.pop("settings_seed_fake_error", ""),
         "seed_fake_user_success": request.session.pop("settings_seed_fake_user_success", ""),
         "seed_fake_user_error": request.session.pop("settings_seed_fake_user_error", ""),
+        "seed_fake_service_success": request.session.pop("settings_seed_fake_service_success", ""),
+        "seed_fake_service_error": request.session.pop("settings_seed_fake_service_error", ""),
     }
 
 
@@ -500,6 +502,26 @@ async def settings_seed_fake_user(request: Request):
         request.session["settings_seed_fake_user_success"] = result["message"]
     except Exception as error:
         request.session["settings_seed_fake_user_error"] = f"Não consegui cadastrar o usuário FAKE: {error}"
+
+    return RedirectResponse(url="/configuracoes?tab=integracoes", status_code=303)
+
+
+@router.post("/configuracoes/seed/servico-fake")
+async def settings_seed_fake_service(request: Request):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+
+    try:
+        from app.services.app_settings import invalidate_app_settings_cache, load_app_settings
+        from app.services.seed_fake_service import seed_fake_test_service
+
+        result = seed_fake_test_service()
+        invalidate_app_settings_cache()
+        load_app_settings(force_refresh=True)
+        request.session["settings_seed_fake_service_success"] = result["message"]
+    except Exception as error:
+        request.session["settings_seed_fake_service_error"] = f"Não consegui cadastrar o serviço FAKE: {error}"
 
     return RedirectResponse(url="/configuracoes?tab=integracoes", status_code=303)
 

@@ -71,6 +71,7 @@ from app.routers.settings import (  # noqa: E402
     settings_remove_service,
     settings_seed_fake_company,
     settings_seed_fake_user,
+    settings_seed_fake_service,
 )
 
 app.add_api_route("/configuracoes", settings_page, methods=["GET"], tags=["settings"])
@@ -81,6 +82,7 @@ app.add_api_route("/configuracoes/servicos/adicionar", settings_add_service, met
 app.add_api_route("/configuracoes/servicos/remover", settings_remove_service, methods=["POST"], tags=["settings"])
 app.add_api_route("/configuracoes/seed/empresa-fake", settings_seed_fake_company, methods=["POST"], tags=["settings"])
 app.add_api_route("/configuracoes/seed/usuario-fake", settings_seed_fake_user, methods=["POST"], tags=["settings"])
+app.add_api_route("/configuracoes/seed/servico-fake", settings_seed_fake_service, methods=["POST"], tags=["settings"])
 
 
 @app.on_event("startup")
@@ -107,6 +109,13 @@ async def startup_maintenance() -> None:
             ensure_fake_test_user_on_startup()
         except Exception as error:
             log.error("Seed usuário FAKE falhou: %s", error)
+
+        try:
+            from app.services.seed_fake_service import ensure_fake_test_service_on_startup
+
+            ensure_fake_test_service_on_startup()
+        except Exception as error:
+            log.error("Seed serviço FAKE falhou: %s", error)
 
     def _run_background() -> None:
         try:

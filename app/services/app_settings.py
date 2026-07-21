@@ -1,5 +1,6 @@
 """Configurações administrativas persistidas localmente e na planilha."""
 import json
+import logging
 import threading
 from pathlib import Path
 
@@ -7,6 +8,8 @@ from app.config import settings
 from app.services.legacy_core import normalize_text
 from app.services.sheet_crm_storage import CRM_STORAGE_TABS, get_worksheet, header_indexes
 from app.services.storage_paths import get_storage_dir
+
+logger = logging.getLogger(__name__)
 
 CONFIG_WORKSHEET = "Configuracoes"
 CONFIG_HEADERS = CRM_STORAGE_TABS[CONFIG_WORKSHEET]
@@ -103,10 +106,19 @@ def _save_to_sheet(values: dict) -> bool:
             if key not in values:
                 continue
             rows.append([key, _encode_config_value(key, values[key])])
-        worksheet.clear()
-        worksheet.update(rows, value_input_option="USER_ENTERED")
+
+        range_name = f"A1:B{len(rows)}"
+        worksheet.batch_update(
+            [{"range": range_name, "values": rows}],
+            value_input_option="USER_ENTERED",
+        )
+
+        existing_count = len(worksheet.get_all_values())
+        if existing_count > len(rows):
+            worksheet.batch_clear([f"A{len(rows) + 1}:B{existing_count}"])
         return True
-    except Exception:
+    except Exception as error:
+        logger.exception("Falha ao salvar aba Configuracoes: %s", error)
         return False
 
 
@@ -158,7 +170,8 @@ def save_app_settings(values: dict) -> None:
             f"Não foi possível salvar as configurações em {path}. "
             "Verifique permissões de escrita ou configure APP_STORAGE_DIR."
         ) from error
-    _save_to_sheet(current)
+    if settings.sheets_configured and not _save_to_sheet(current):
+        raise RuntimeError("Não foi possível salvar configurações na aba Configuracoes da planilha.")
     with _lock:
         _cache = dict(current)
 
