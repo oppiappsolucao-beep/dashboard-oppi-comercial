@@ -54,6 +54,25 @@ def closed_services_has_data(items: list[dict]) -> bool:
     return any(_has_data(item) for item in items if isinstance(item, dict))
 
 
+def _items_from_sheet_mirror(servico: str, valor_proposta: str, lead_action: dict) -> list[dict]:
+    servicos = [part.strip() for part in normalize_text(servico).split("|") if part.strip()]
+    valores = [part.strip() for part in normalize_text(valor_proposta).split("|") if part.strip()]
+    total = max(len(servicos), len(valores), 1)
+    items: list[dict] = []
+    for index in range(total):
+        items.append(
+            _normalize_item(
+                {
+                    "servico": servicos[index] if index < len(servicos) else "",
+                    "valor": valores[index] if index < len(valores) else "",
+                    "forma_pagamento": lead_action.get("forma_pagamento", "Mensal"),
+                    "vencimento": lead_action.get("vencimento", ""),
+                }
+            )
+        )
+    return items or [_EMPTY_ITEM.copy()]
+
+
 def load_closed_services(
     tenant_id: str | None,
     sheet_row: int,
@@ -67,16 +86,10 @@ def load_closed_services(
         items = [_normalize_item(item) for item in stored if isinstance(item, dict)]
         return items or [_EMPTY_ITEM.copy()]
 
-    return [
-        _normalize_item(
-            {
-                "servico": servico,
-                "valor": valor_proposta,
-                "forma_pagamento": lead_action.get("forma_pagamento", "Mensal"),
-                "vencimento": lead_action.get("vencimento", ""),
-            }
-        )
-    ]
+    if normalize_text(servico) or normalize_text(valor_proposta):
+        return _items_from_sheet_mirror(servico, valor_proposta, lead_action)
+
+    return [_EMPTY_ITEM.copy()]
 
 
 def parse_closed_services_from_form(form: FormData) -> list[dict]:
@@ -103,6 +116,42 @@ def parse_closed_services_from_form(form: FormData) -> list[dict]:
     return filtered or [_EMPTY_ITEM.copy()]
 
 
+def closed_services_sheet_values(items: list[dict]) -> dict[str, str]:
+    """Monta valores espelhados na planilha: serviços e valores alinhados por item."""
+    active_items = [item for item in items if _has_data(item)]
+    if not active_items:
+        return {"servico": "", "valor_proposta": ""}
+
+    servicos: list[str] = []
+    valores: list[str] = []
+    for item in active_items:
+        servico = normalize_text(item.get("servico"))
+        valor = normalize_text(item.get("valor"))
+        if servico:
+            servicos.append(servico)
+        if valor:
+            valores.append(valor)
+
+    return {
+        "servico": " | ".join(servicos),
+        "valor_proposta": " | ".join(valores),
+    }
+
+
+def sync_closed_services_to_sheet(sheet_row: int, tenant_id: str | None, items: list[dict]) -> None:
+    """Espelha serviços fechados nas colunas dedicadas da planilha."""
+    if not sheet_row:
+        return
+
+    from app.services.legacy_core import update_company_commercial_fields
+
+    mirror = closed_services_sheet_values(items)
+    if not mirror["servico"] and not mirror["valor_proposta"]:
+        return
+
+    update_company_commercial_fields(sheet_row, mirror)
+
+
 def save_closed_services(
     tenant_id: str | None,
     sheet_row: int,
@@ -122,6 +171,7 @@ def save_closed_services(
             "vencimento": primary.get("vencimento", ""),
         },
     )
+    sync_closed_services_to_sheet(sheet_row, tenant_id, normalized)
     return primary
 
 

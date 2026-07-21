@@ -1113,6 +1113,113 @@ def _set_sheet_value_by_header(
     return False
 
 
+SHEET_SERVICO_ALIASES = [
+    "Serviços fechados",
+    "Servicos fechados",
+    "Servico fechado",
+    "Serviço fechado",
+    "Serviço",
+    "Servico",
+    "Serviço escolhido",
+    "Solução",
+    "Solucao",
+    "Produto Oppi",
+]
+
+SHEET_VALOR_SERVICO_ALIASES = [
+    "Valor do serviço",
+    "Valor do servico",
+    "Valor serviço",
+    "Valor servico",
+    "Valor da proposta",
+    "Valor proposta",
+    "Valor Proposta",
+]
+
+REGISTRATION_OPTIONAL_COLUMNS: list[tuple[str, list[str]]] = [
+    ("Serviços fechados", SHEET_SERVICO_ALIASES),
+    ("Valor do serviço", SHEET_VALOR_SERVICO_ALIASES),
+    ("Número", ["Número", "Numero", "Nº", "No"]),
+    ("Complemento", ["Complemento", "Compl"]),
+    ("CEP", ["CEP"]),
+    ("Bairro", ["Bairro", "Bairro/Distrito", "Bairro Distrito", "Distrito"]),
+    ("Município", ["Município", "Municipio", "Cidade"]),
+    ("UF", ["UF", "Estado"]),
+    ("Endereço completo", ["Endereço completo", "Endereco completo", "Endereço Completo"]),
+]
+
+
+def _worksheet_has_header(headers: list[str], aliases: list[str]) -> bool:
+    normalized_headers = {normalize_search_text(header) for header in headers if normalize_text(header)}
+    return any(normalize_search_text(alias) in normalized_headers for alias in aliases)
+
+
+def ensure_registration_sheet_columns(worksheet) -> list[str]:
+    """Garante colunas de serviços, valores e endereço detalhado na planilha."""
+    headers = worksheet.row_values(1)
+    if not headers:
+        raise RuntimeError("A primeira linha da planilha precisa conter os cabeçalhos.")
+
+    cells: list[gspread.Cell] = []
+    next_col = len(headers) + 1
+    for column_name, aliases in REGISTRATION_OPTIONAL_COLUMNS:
+        if _worksheet_has_header(headers, aliases):
+            continue
+        cells.append(gspread.Cell(1, next_col, column_name))
+        headers.append(column_name)
+        next_col += 1
+
+    if cells:
+        worksheet.update_cells(cells, value_input_option="USER_ENTERED")
+        invalidate_sheet_cache()
+
+    return headers
+
+
+def _apply_commercial_fields(row_values: list[str], headers: list[str], payload: dict) -> None:
+    _set_sheet_value_by_header(row_values, headers, SHEET_SERVICO_ALIASES, payload.get("servico"))
+    _set_sheet_value_by_header(row_values, headers, SHEET_VALOR_SERVICO_ALIASES, payload.get("valor_proposta"))
+    _set_sheet_value_by_header(
+        row_values,
+        headers,
+        ["Colaboradores", "Qtd colaboradores", "Quantidade de colaboradores", "Qtd. colaboradores"],
+        payload.get("colaboradores"),
+    )
+
+
+def update_company_registration_fields(sheet_row: int, payload: dict) -> None:
+    """Atualiza campos de endereço e serviços de uma linha sem sobrescrever o cadastro inteiro."""
+    client = get_gsheet_client()
+    spreadsheet = client.open_by_key(settings.sheet_id)
+    worksheet = _open_worksheet(spreadsheet, settings.worksheet_name)
+    headers = ensure_registration_sheet_columns(worksheet)
+
+    current_row = worksheet.row_values(int(sheet_row))
+    row_values = list(current_row) + [""] * max(0, len(headers) - len(current_row))
+    row_values = row_values[:len(headers)]
+
+    if any(payload.get(key) for key in ("endereco", "endereco_numero", "endereco_complemento", "cep", "bairro", "municipio", "uf")):
+        _apply_address_fields(row_values, headers, payload)
+
+    commercial_payload = {
+        key: payload.get(key)
+        for key in ("servico", "valor_proposta", "colaboradores")
+        if key in payload
+    }
+    if commercial_payload:
+        _apply_commercial_fields(row_values, headers, commercial_payload)
+
+    changed_cells: list[gspread.Cell] = []
+    for column_index, new_value in enumerate(row_values, start=1):
+        old_value = current_row[column_index - 1] if column_index - 1 < len(current_row) else ""
+        if normalize_text(old_value) != normalize_text(new_value):
+            changed_cells.append(gspread.Cell(int(sheet_row), column_index, normalize_text(new_value)))
+
+    if changed_cells:
+        worksheet.update_cells(changed_cells, value_input_option="USER_ENTERED")
+        invalidate_sheet_cache()
+
+
 class DuplicateRegistrationError(RuntimeError):
     """Impede o cadastro quando telefone, CPF ou CNPJ já existe na planilha."""
 
@@ -1439,7 +1546,7 @@ def append_company_to_sheet(payload: dict) -> int:
     client = get_gsheet_client()
     spreadsheet = client.open_by_key(settings.sheet_id)
     worksheet = _open_worksheet(spreadsheet, settings.worksheet_name)
-    headers = worksheet.row_values(1)
+    headers = ensure_registration_sheet_columns(worksheet)
 
     validate_unique_company_registration(payload, worksheet)
 
@@ -1480,24 +1587,7 @@ def append_company_to_sheet(payload: dict) -> int:
     _set_sheet_value_by_header(row_values, headers, ["Data do chamado", "Data chamado"], payload.get("data_chamado"))
     _set_sheet_value_by_header(row_values, headers, ["Última atualização", "Ultima atualização", "Ultima atualizacao"], payload.get("ultima_atualizacao"))
     _set_sheet_value_by_header(row_values, headers, ["Observações", "Observacoes", "Observação", "Observacao"], payload.get("observacoes"))
-    _set_sheet_value_by_header(
-        row_values,
-        headers,
-        ["Serviço", "Servico", "Serviço escolhido", "Solução", "Solucao", "Produto Oppi"],
-        payload.get("servico"),
-    )
-    _set_sheet_value_by_header(
-        row_values,
-        headers,
-        ["Valor da proposta", "Valor proposta", "Valor Proposta"],
-        payload.get("valor_proposta"),
-    )
-    _set_sheet_value_by_header(
-        row_values,
-        headers,
-        ["Colaboradores", "Qtd colaboradores", "Quantidade de colaboradores", "Qtd. colaboradores"],
-        payload.get("colaboradores"),
-    )
+    _apply_commercial_fields(row_values, headers, payload)
 
     worksheet.append_row(
         row_values,
@@ -1514,7 +1604,7 @@ def update_company_in_sheet(sheet_row: int, payload: dict) -> None:
     client = get_gsheet_client()
     spreadsheet = client.open_by_key(settings.sheet_id)
     worksheet = _open_worksheet(spreadsheet, settings.worksheet_name)
-    headers = worksheet.row_values(1)
+    headers = ensure_registration_sheet_columns(worksheet)
 
     if not headers:
         raise RuntimeError("A primeira linha da planilha precisa conter os cabeçalhos.")
@@ -1561,24 +1651,7 @@ def update_company_in_sheet(sheet_row: int, payload: dict) -> None:
     _set_sheet_value_by_header(row_values, headers, ["Data do chamado", "Data chamado"], payload.get("data_chamado"))
     _set_sheet_value_by_header(row_values, headers, ["Última atualização", "Ultima atualização", "Ultima atualizacao"], payload.get("ultima_atualizacao"))
     _set_sheet_value_by_header(row_values, headers, ["Observações", "Observacoes", "Observação", "Observacao"], payload.get("observacoes"))
-    _set_sheet_value_by_header(
-        row_values,
-        headers,
-        ["Serviço", "Servico", "Serviço escolhido", "Solução", "Solucao", "Produto Oppi"],
-        payload.get("servico"),
-    )
-    _set_sheet_value_by_header(
-        row_values,
-        headers,
-        ["Valor da proposta", "Valor proposta", "Valor Proposta"],
-        payload.get("valor_proposta"),
-    )
-    _set_sheet_value_by_header(
-        row_values,
-        headers,
-        ["Colaboradores", "Qtd colaboradores", "Quantidade de colaboradores", "Qtd. colaboradores"],
-        payload.get("colaboradores"),
-    )
+    _apply_commercial_fields(row_values, headers, payload)
 
     changed_cells = []
 
@@ -1660,8 +1733,14 @@ def identify_columns(df: pd.DataFrame) -> dict:
         "data_chamado": first_existing_column(df, ["Data do chamado", "Data chamado"]),
         "ultima_atualizacao": first_existing_column(df, ["Última atualização", "Ultima atualização", "Ultima atualizacao"]),
         "observacoes": first_existing_column(df, ["Observações", "Observacoes", "Observação", "Observacao"]),
-        "servico": first_existing_column(df, ["Serviço", "Servico", "Serviço escolhido", "Solução", "Solucao", "Produto Oppi"]),
-        "valor_proposta": first_existing_column(df, ["Valor da proposta", "Valor proposta", "Valor Proposta"]),
+        "servico": first_existing_column(
+            df,
+            SHEET_SERVICO_ALIASES,
+        ),
+        "valor_proposta": first_existing_column(
+            df,
+            SHEET_VALOR_SERVICO_ALIASES,
+        ),
         "colaboradores": first_existing_column(
             df,
             ["Colaboradores", "Qtd colaboradores", "Quantidade de colaboradores", "Qtd. colaboradores"],
@@ -2399,7 +2478,7 @@ def update_company_commercial_fields(sheet_row: int, payload: dict) -> None:
     client = get_gsheet_client()
     spreadsheet = client.open_by_key(settings.sheet_id)
     worksheet = _open_worksheet(spreadsheet, settings.worksheet_name)
-    headers = worksheet.row_values(1)
+    headers = ensure_registration_sheet_columns(worksheet)
 
     if not headers:
         raise RuntimeError("A primeira linha da planilha precisa conter os cabeçalhos.")
@@ -2408,24 +2487,7 @@ def update_company_commercial_fields(sheet_row: int, payload: dict) -> None:
     row_values = list(current_row) + [""] * max(0, len(headers) - len(current_row))
     row_values = row_values[:len(headers)]
 
-    _set_sheet_value_by_header(
-        row_values,
-        headers,
-        ["Serviço", "Servico", "Serviço escolhido", "Solução", "Solucao", "Produto Oppi"],
-        payload.get("servico"),
-    )
-    _set_sheet_value_by_header(
-        row_values,
-        headers,
-        ["Valor da proposta", "Valor proposta", "Valor Proposta"],
-        payload.get("valor_proposta"),
-    )
-    _set_sheet_value_by_header(
-        row_values,
-        headers,
-        ["Colaboradores", "Qtd colaboradores", "Quantidade de colaboradores", "Qtd. colaboradores"],
-        payload.get("colaboradores"),
-    )
+    _apply_commercial_fields(row_values, headers, payload)
 
     changed_cells = []
     for column_index, new_value in enumerate(row_values, start=1):
