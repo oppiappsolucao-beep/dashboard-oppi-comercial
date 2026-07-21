@@ -4,7 +4,8 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from app.config import settings
 from app.dependencies import get_prepared_data, is_admin, require_auth
 from app.services.app_settings import set_proposal_template
-from app.services.legacy_core import invalidate_sheet_cache, parse_money
+from app.services.legacy_core import invalidate_sheet_cache, normalize_text, parse_money
+from app.services.sheet_registration_sync import sync_registration_rows
 from app.services.monthly_goals import TEAM_SELLER_LABEL, set_monthly_goal
 from app.services.settings_page import (
     ROLE_OPTIONS,
@@ -90,6 +91,8 @@ def _settings_context(request: Request, settings_params: dict):
         "service_error": request.session.pop("settings_service_error", ""),
         "user_success": request.session.pop("settings_user_success", ""),
         "user_error": request.session.pop("settings_user_error", ""),
+        "sheet_sync_success": request.session.pop("settings_sheet_sync_success", ""),
+        "sheet_sync_error": request.session.pop("settings_sheet_sync_error", ""),
     }
 
 
@@ -410,3 +413,35 @@ async def settings_refresh(request: Request):
         return redirect
     invalidate_sheet_cache()
     return RedirectResponse(url="/configuracoes", status_code=303)
+
+
+@router.post("/configuracoes/planilha/sincronizar")
+async def settings_sync_sheet(request: Request, apply: str = Form("0"), limit: str = Form("")):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+
+    if not is_admin(request):
+        request.session["settings_sheet_sync_error"] = "Somente administradores podem sincronizar a planilha."
+        return RedirectResponse(url="/configuracoes?tab=integracoes", status_code=303)
+
+    apply_changes = normalize_text(apply) in {"1", "on", "true", "yes", "sim"}
+    row_limit: int | None = None
+    if normalize_text(limit):
+        try:
+            row_limit = max(1, int(limit))
+        except ValueError:
+            request.session["settings_sheet_sync_error"] = "Limite inválido. Use apenas números."
+            return RedirectResponse(url="/configuracoes?tab=integracoes", status_code=303)
+
+    try:
+        stats = sync_registration_rows(apply_changes=apply_changes, limit=row_limit)
+        mode = "aplicada" if apply_changes else "simulada"
+        request.session["settings_sheet_sync_success"] = (
+            f"Sincronização {mode}: {stats['rows_updated']} de {stats['rows_seen']} linhas "
+            f"{'corrigidas' if apply_changes else 'precisariam de correção'}."
+        )
+    except Exception as error:
+        request.session["settings_sheet_sync_error"] = f"Não consegui sincronizar a planilha: {error}"
+
+    return RedirectResponse(url="/configuracoes?tab=integracoes", status_code=303)

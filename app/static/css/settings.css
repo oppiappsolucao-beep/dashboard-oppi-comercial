@@ -246,6 +246,20 @@
   margin: 0;
 }
 
+.settings-sheet-sync-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.settings-sheet-sync-hint {
+  margin: 14px 0 0;
+  font-size: 0.84rem;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
 .settings-link-btn.danger {
   color: #B91C1C;
 }

@@ -512,19 +512,58 @@
   </div>
 
   {% elif settings_params.tab == 'integracoes' %}
-  <div class="panel settings-single-card">
-    <div class="section-heading">Integrações</div>
-    <div class="settings-integrations-grid settings-integrations-grid-full">
-      {% for item in integrations %}
-      <div class="settings-integration-item {% if item.connected %}connected{% endif %}">
-        <div class="settings-integration-icon">{{ item.name[:1] }}</div>
-        <div>
-          <div class="settings-integration-name">{{ item.name }}</div>
-          <div class="settings-integration-status {{ item.status_class }}">{{ item.status_label }}</div>
+  <div class="settings-goals-layout">
+    <div class="panel settings-single-card">
+      <div class="section-heading">Integrações</div>
+      <div class="settings-integrations-grid settings-integrations-grid-full">
+        {% for item in integrations %}
+        <div class="settings-integration-item {% if item.connected %}connected{% endif %}">
+          <div class="settings-integration-icon">{{ item.name[:1] }}</div>
+          <div>
+            <div class="settings-integration-name">{{ item.name }}</div>
+            <div class="settings-integration-status {{ item.status_class }}">{{ item.status_label }}</div>
+          </div>
         </div>
+        {% endfor %}
       </div>
-      {% endfor %}
     </div>
+
+    {% if is_admin %}
+    <div class="panel settings-single-card">
+      <div class="section-heading">Organizar planilha de cadastros</div>
+      <div class="section-subtitle">
+        Corrige endereços separados por coluna, cria <strong>Serviços fechados</strong> e
+        <strong>Valor do serviço</strong>, e alinha os dados já salvos no CRM.
+      </div>
+
+      {% if sheet_sync_success %}
+      <div class="settings-alert success">{{ sheet_sync_success }}</div>
+      {% endif %}
+      {% if sheet_sync_error %}
+      <div class="settings-alert error">{{ sheet_sync_error }}</div>
+      {% endif %}
+
+      <div class="settings-sheet-sync-actions">
+        <form method="post" action="/configuracoes/planilha/sincronizar" class="settings-inline-form">
+          <input type="hidden" name="tab" value="integracoes">
+          <input type="hidden" name="apply" value="0">
+          <button type="submit" class="btn btn-secondary">Simular sincronização</button>
+        </form>
+
+        <form method="post" action="/configuracoes/planilha/sincronizar" class="settings-inline-form"
+          onsubmit="return confirm('Aplicar correções na planilha Google Sheets? Esta ação grava os dados.');">
+          <input type="hidden" name="tab" value="integracoes">
+          <input type="hidden" name="apply" value="1">
+          <button type="submit" class="btn">Aplicar na planilha</button>
+        </form>
+      </div>
+
+      <p class="settings-sheet-sync-hint">
+        Use <em>Simular</em> primeiro para ver quantas linhas serão corrigidas. Depois clique em
+        <em>Aplicar na planilha</em>.
+      </p>
+    </div>
+    {% endif %}
   </div>
 
   {% elif settings_params.tab == 'faturamento' %}
