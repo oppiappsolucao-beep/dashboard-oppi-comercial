@@ -1,0 +1,184 @@
+/* Design system — tipografia, cores e campos unificados em todo o CRM */
+
+:root {
+  --text-xs: 0.76rem;
+  --text-sm: 0.84rem;
+  --text-base: 0.9rem;
+  --text-md: 0.95rem;
+  --text-lg: 1.05rem;
+  --text-xl: 1.75rem;
+  --font-normal: 400;
+  --font-medium: 500;
+  --font-semibold: 600;
+  --font-bold: 700;
+  --font-extrabold: 800;
+  --input-h: 42px;
+  --input-radius: 12px;
+  --panel-radius: var(--radius);
+  --kicker-color: var(--purple);
+}
+
+html,
+body,
+button,
+input,
+select,
+textarea {
+  font-family: Inter, "Segoe UI", Arial, sans-serif;
+}
+
+.page-back-bar {
+  margin-bottom: 14px;
+}
+
+.page-back-btn {
+  font-size: var(--text-sm);
+  font-weight: var(--font-bold);
+}
+
+.page-title,
+.registration-title,
+.section-heading {
+  font-family: inherit;
+  font-size: var(--text-xl);
+  font-weight: var(--font-extrabold);
+  letter-spacing: -0.03em;
+  color: var(--text);
+  line-height: 1.15;
+}
+
+.client-edit-title {
+  font-family: inherit;
+  font-size: var(--text-lg);
+  font-weight: var(--font-extrabold);
+  color: var(--text);
+  line-height: 1.2;
+}
+
+.page-subtitle,
+.client-edit-meta,
+.registration-subtitle,
+.section-subtitle {
+  font-family: inherit;
+  font-size: var(--text-md);
+  font-weight: var(--font-normal);
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.registration-kicker,
+.section-title,
+.client-edit-summary-label,
+.client-commercial-label {
+  font-family: inherit;
+  font-size: var(--text-xs);
+  font-weight: var(--font-extrabold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--kicker-color);
+}
+
+.form-group label,
+.filter-field label,
+.settings-company-label,
+.settings-goals-field label,
+.client-edit-section-head p,
+.registration-tipo-hint {
+  font-family: inherit;
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--muted);
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea,
+.filter-field input,
+.filter-field select,
+.settings-goals-field input,
+.settings-goals-field select,
+.settings-service-form input,
+.client-closed-services-grid input,
+.client-closed-services-grid select {
+  font-family: inherit;
+  font-size: var(--text-base);
+  font-weight: var(--font-medium);
+  color: var(--text);
+  background: var(--soft);
+  border: 1px solid var(--border);
+  border-radius: var(--input-radius);
+}
+
+.form-group input,
+.form-group select,
+.filter-field input,
+.filter-field select {
+  min-height: var(--input-h);
+}
+
+.form-group textarea {
+  min-height: 96px;
+  padding: 10px 12px;
+  line-height: 1.45;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus,
+.filter-field input:focus,
+.filter-field select:focus {
+  outline: none;
+  border-color: #C4B5FD;
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.12);
+}
+
+.panel,
+.form-card,
+.registration-header-card,
+.client-edit-section.panel,
+.client-edit-header.panel,
+.client-edit-tabs.panel,
+.client-edit-footer.panel,
+.client-edit-summary-card,
+.settings-single-card,
+.toolbar-card,
+.metric-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--panel-radius);
+  box-shadow: var(--shadow);
+}
+
+.registration-header-card,
+.form-card {
+  padding: 24px;
+}
+
+.partner-block,
+.client-commercial-stat,
+.client-edit-summary-card {
+  border-radius: var(--input-radius);
+  border: 1px solid var(--border);
+  background: var(--soft);
+}
+
+.client-edit-section-head h2,
+.registration-activities-head h2,
+.client-edit-proposal-panel h2 {
+  font-size: var(--text-lg);
+  font-weight: var(--font-extrabold);
+  color: var(--text);
+  margin: 0;
+}
+
+.client-edit-section-head p {
+  margin: 4px 0 0;
+}
+
+.btn,
+button.btn {
+  font-family: inherit;
+  font-size: var(--text-base);
+  font-weight: var(--font-bold);
+  border-radius: var(--input-radius);
+}

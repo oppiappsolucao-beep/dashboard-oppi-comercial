@@ -1,0 +1,9 @@
+{% if not hide_page_back %}
+<nav class="page-back-bar" aria-label="Voltar">
+  {% if back_href %}
+  <a href="{{ back_href }}" class="btn btn-secondary btn-small page-back-btn">← Voltar{% if back_label %} para {{ back_label }}{% endif %}</a>
+  {% else %}
+  <button type="button" class="btn btn-secondary btn-small page-back-btn" data-back-fallback="{{ back_fallback | default('/visao-geral') }}">← Voltar</button>
+  {% endif %}
+</nav>
+{% endif %}

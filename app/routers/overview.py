@@ -168,6 +168,8 @@ async def overview_complete_action_form(request: Request, sheet_row: int):
             "channel_keys": CHANNEL_LABEL_TO_KEY,
             "lost_reason_options": LOST_REASON_OPTIONS,
             "current_stage": current_stage,
+            "back_href": "/visao-geral",
+            "back_label": "Visão Geral",
         },
     )
 

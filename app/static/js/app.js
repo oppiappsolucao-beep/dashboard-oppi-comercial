@@ -43,6 +43,7 @@ document.addEventListener("DOMContentLoaded", () => {
   renderOverviewCharts();
   renderGoalsCharts();
   initMobileNavigation();
+  initPageBackButtons();
 });
 
 document.body.addEventListener("htmx:afterSwap", (event) => {
@@ -91,5 +92,18 @@ function initMobileNavigation() {
     if (window.innerWidth > 900) {
       setOpen(false);
     }
+  });
+}
+
+function initPageBackButtons() {
+  document.querySelectorAll(".page-back-btn[data-back-fallback]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const fallback = button.getAttribute("data-back-fallback") || "/visao-geral";
+      if (window.history.length > 1) {
+        history.back();
+        return;
+      }
+      window.location.href = fallback;
+    });
   });
 }

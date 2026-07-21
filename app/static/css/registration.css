@@ -1,10 +1,10 @@
 .registration-header-card,
 .form-card {
-  background: #fff;
-  border: 1px solid #E6EAF2;
-  border-radius: 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
   padding: 24px;
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
+  box-shadow: var(--shadow);
 }
 
 .registration-header-card {
@@ -12,22 +12,23 @@
 }
 
 .registration-kicker {
-  color: #A855F7;
-  font-size: 0.78rem;
-  font-weight: 800;
+  color: var(--purple);
+  font-size: var(--text-xs);
+  font-weight: var(--font-extrabold);
   letter-spacing: 0.08em;
 }
 
 .registration-title {
-  font-size: 1.8rem;
-  font-weight: 900;
+  font-size: var(--text-xl);
+  font-weight: var(--font-extrabold);
   margin-top: 8px;
-  color: #0F172A;
+  color: var(--text);
 }
 
 .registration-subtitle {
-  color: #64748B;
+  color: var(--muted);
   margin-top: 8px;
+  font-size: var(--text-md);
 }
 
 .form-grid {
@@ -51,18 +52,18 @@
 
 .form-group label {
   display: block;
-  font-size: 0.86rem;
-  color: #64748B;
+  font-size: var(--text-sm);
+  color: var(--muted);
   margin-bottom: 6px;
-  font-weight: 600;
+  font-weight: var(--font-semibold);
 }
 
 .section-title {
   margin: 22px 0 10px;
-  font-size: 0.82rem;
-  font-weight: 800;
+  font-size: var(--text-xs);
+  font-weight: var(--font-extrabold);
   letter-spacing: 0.08em;
-  color: #A855F7;
+  color: var(--purple);
 }
 
 .partners-form {
