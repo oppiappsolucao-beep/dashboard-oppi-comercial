@@ -7,7 +7,7 @@ import plotly.graph_objects as go
 
 from app.services.filters import DashboardFilters, apply_dashboard_filters
 from app.services.legacy_core import apply_period_filter, count_dashboard_status, status_group
-from app.services.monthly_goals import TEAM_SELLER_LABEL, get_monthly_goal
+from app.services.monthly_goals import TEAM_SELLER_LABEL, get_monthly_goal, get_monthly_goal_commission_rate
 
 MONTHS_PT = [
     "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
@@ -23,7 +23,6 @@ from config.crm_options import (
 
 CONVERSION_STAGES = [(stage, PIPELINE_STAGE_SHEET_STATUSES.get(stage, [])) for stage in PIPELINE_STAGE_OPTIONS]
 
-COMMISSION_RATE = 0.08
 FORECAST_PROPOSAL_FACTOR = 0.35
 FORECAST_MEETING_FACTOR = 0.15
 GOAL_GROWTH_FACTOR = 1.15
@@ -155,6 +154,10 @@ def _trend_vs_previous(current: float, previous: float, is_points: bool = False)
     }
 
 
+def _commission_rate(year: int, month: int, seller: str) -> float:
+    return get_monthly_goal_commission_rate(year, month, seller) / 100
+
+
 def _seller_rows(base_df: pd.DataFrame, month: int, year: int) -> list[dict]:
     prev_month, prev_year = _previous_month(month, year)
     sellers = sorted(
@@ -176,7 +179,7 @@ def _seller_rows(base_df: pd.DataFrame, month: int, year: int) -> list[dict]:
         closed = count_dashboard_status(month_df, "Fechado")
         total_leads = len(month_df)
         conversion = round((closed / total_leads) * 100, 1) if total_leads else 0.0
-        commission = realized * COMMISSION_RATE
+        commission = realized * _commission_rate(year, month, seller)
         achievement = round((realized / goal) * 100, 1) if goal else 0.0
         status_label, status_class = _achievement_status(achievement)
 
@@ -225,8 +228,8 @@ def build_goals_kpi_cards(base_df: pd.DataFrame, month: int, year: int, seller: 
     prev_forecast += _sum_capital_by_status(prev_df, {"Proposta"}) * FORECAST_PROPOSAL_FACTOR
     prev_forecast += _sum_capital_by_status(prev_df, {"Reunião"}) * FORECAST_MEETING_FACTOR
 
-    commission = realized * COMMISSION_RATE
-    commission_prev = realized_prev * COMMISSION_RATE
+    commission = realized * _commission_rate(year, month, seller if seller != "Todos os vendedores" else TEAM_SELLER_LABEL)
+    commission_prev = realized_prev * _commission_rate(prev_year, prev_month, seller if seller != "Todos os vendedores" else TEAM_SELLER_LABEL)
 
     closed = count_dashboard_status(month_df, "Fechado")
     closed_prev = count_dashboard_status(prev_df, "Fechado")
@@ -266,7 +269,9 @@ def build_financial_summary(base_df: pd.DataFrame, month: int, year: int, seller
     implementation = _sum_capital_by_status(month_df, {"Reunião", "Proposta"}) * 0.45
     services = _sum_capital_by_status(month_df, {"Conversando", "Proposta"}) * 0.55
     discounts = _sum_capital_by_status(month_df, {"Proposta"}) * 0.05
-    commission_forecast = (_realized_value(month_df) + _sum_capital_by_status(month_df, {"Proposta"}) * 0.2) * COMMISSION_RATE
+    commission_forecast = (
+        _realized_value(month_df) + _sum_capital_by_status(month_df, {"Proposta"}) * 0.2
+    ) * _commission_rate(year, month, seller if seller != "Todos os vendedores" else TEAM_SELLER_LABEL)
     revenue_base = recurring + implementation + services
     margin = round(((revenue_base - discounts) / revenue_base) * 100) if revenue_base else 0
 

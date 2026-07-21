@@ -6,7 +6,7 @@ from app.dependencies import get_prepared_data, is_admin, require_auth
 from app.services.app_settings import set_proposal_template
 from app.services.legacy_core import invalidate_sheet_cache, normalize_text, parse_money
 from app.services.sheet_registration_sync import sync_registration_rows
-from app.services.monthly_goals import TEAM_SELLER_LABEL, delete_monthly_goal, set_monthly_goal
+from app.services.monthly_goals import TEAM_SELLER_LABEL, delete_monthly_goal, parse_commission_rate, set_monthly_goal
 from app.services.settings_page import (
     ROLE_OPTIONS,
     SETTINGS_TABS,
@@ -179,6 +179,7 @@ async def settings_save_goal(
     month: int = Form(...),
     year: int = Form(...),
     amount: str = Form(...),
+    commission: str = Form("8"),
     seller: str = Form(TEAM_SELLER_LABEL),
     tab: str = Form("metas"),
 ):
@@ -194,7 +195,8 @@ async def settings_save_goal(
         goal_value = parse_money(amount)
         if goal_value <= 0:
             raise ValueError("Informe um valor maior que zero para a meta.")
-        set_monthly_goal(year, month, goal_value, seller)
+        commission_rate = parse_commission_rate(commission)
+        set_monthly_goal(year, month, goal_value, seller, commission_rate=commission_rate)
         request.session["settings_goal_success"] = "Meta do mês salva com sucesso."
     except ValueError as error:
         request.session["settings_goal_error"] = str(error) if str(error) else "Informe um valor válido para a meta."

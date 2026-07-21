@@ -8,7 +8,7 @@ from app.services.legacy_core import get_gsheet_client, normalize_text
 
 CRM_STORAGE_TABS = {
     "Usuarios": ["Id", "Nome", "Email", "Usuario", "SenhaHash", "Perfil", "Ativo", "UltimoAcesso", "CriadoEm", "AtualizadoEm"],
-    "Metas": ["Ano", "Mes", "Vendedor", "Meta"],
+    "Metas": ["Ano", "Mes", "Vendedor", "Meta", "Comissao"],
     "Configuracoes": ["Chave", "Valor"],
     "Atividades": [
         "Id",

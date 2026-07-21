@@ -1,5 +1,8 @@
 """Metas mensais configuráveis pelo administrador."""
+from __future__ import annotations
+
 import json
+import logging
 import threading
 from pathlib import Path
 
@@ -9,12 +12,15 @@ from app.config import settings
 from app.services.legacy_core import get_gsheet_client, normalize_text
 from app.services.storage_paths import get_storage_dir
 
+logger = logging.getLogger(__name__)
+
 TEAM_SELLER_LABEL = "Todos os vendedores"
 GOALS_WORKSHEET = "Metas"
-GOALS_HEADERS = ["Ano", "Mes", "Vendedor", "Meta"]
+GOALS_HEADERS = ["Ano", "Mes", "Vendedor", "Meta", "Comissao"]
+DEFAULT_COMMISSION_RATE = 8.0
 
 _lock = threading.Lock()
-_file_cache: dict | None = None
+_file_cache: dict[str, dict] | None = None
 
 
 def _goals_file_path() -> Path:
@@ -60,11 +66,47 @@ def _parse_amount(value) -> float | None:
     return amount if amount >= 0 else None
 
 
-def _empty_store() -> dict[str, float]:
+def parse_commission_rate(value) -> float:
+    text = normalize_text(value).replace("%", "").replace(",", ".")
+    if not text:
+        return DEFAULT_COMMISSION_RATE
+    try:
+        rate = float(text)
+    except ValueError:
+        raise ValueError("Informe uma comissão válida (ex.: 8 ou 8,5).")
+    if rate < 0 or rate > 100:
+        raise ValueError("A comissão deve estar entre 0% e 100%.")
+    return rate
+
+
+def _parse_commission_rate(value) -> float | None:
+    try:
+        return parse_commission_rate(value)
+    except ValueError:
+        return None
+
+
+def _normalize_goal_record(value) -> dict | None:
+    if isinstance(value, dict):
+        amount = _parse_amount(value.get("amount"))
+        if amount is None:
+            return None
+        rate = _parse_commission_rate(value.get("commission_rate"))
+        if rate is None:
+            rate = DEFAULT_COMMISSION_RATE
+        return {"amount": amount, "commission_rate": rate}
+
+    amount = _parse_amount(value)
+    if amount is None:
+        return None
+    return {"amount": amount, "commission_rate": DEFAULT_COMMISSION_RATE}
+
+
+def _empty_store() -> dict[str, dict]:
     return {}
 
 
-def _load_from_file() -> dict[str, float]:
+def _load_from_file() -> dict[str, dict]:
     path = _goals_file_path()
     if not path.exists():
         return _empty_store()
@@ -74,21 +116,22 @@ def _load_from_file() -> dict[str, float]:
         return _empty_store()
     if not isinstance(data, dict):
         return _empty_store()
-    result = {}
+
+    result: dict[str, dict] = {}
     for key, value in data.items():
-        amount = _parse_amount(value)
-        if amount is not None:
-            result[str(key)] = amount
+        record = _normalize_goal_record(value)
+        if record is not None:
+            result[str(key)] = record
     return result
 
 
-def _save_to_file(store: dict[str, float]) -> None:
+def _save_to_file(store: dict[str, dict]) -> None:
     path = _goals_file_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(store, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def _load_from_sheet() -> dict[str, float] | None:
+def _load_from_sheet() -> dict[str, dict] | None:
     if not settings.sheets_configured:
         return None
 
@@ -114,6 +157,8 @@ def _load_from_sheet() -> dict[str, float] | None:
     except ValueError:
         return None
 
+    commission_idx = headers.index("comissao") if "comissao" in headers else None
+
     store = _empty_store()
     for row in rows[1:]:
         if len(row) <= max(year_idx, month_idx, seller_idx, goal_idx):
@@ -127,11 +172,21 @@ def _load_from_sheet() -> dict[str, float] | None:
         amount = _parse_amount(row[goal_idx])
         if amount is None:
             continue
-        store[_goal_key(year, month, seller)] = amount
+
+        commission_rate = DEFAULT_COMMISSION_RATE
+        if commission_idx is not None and len(row) > commission_idx:
+            parsed_rate = _parse_commission_rate(row[commission_idx])
+            if parsed_rate is not None:
+                commission_rate = parsed_rate
+
+        store[_goal_key(year, month, seller)] = {
+            "amount": amount,
+            "commission_rate": commission_rate,
+        }
     return store
 
 
-def _save_to_sheet(store: dict[str, float]) -> bool:
+def _save_to_sheet(store: dict[str, dict]) -> bool:
     if not settings.sheets_configured:
         return False
 
@@ -141,27 +196,49 @@ def _save_to_sheet(store: dict[str, float]) -> bool:
         try:
             worksheet = spreadsheet.worksheet(GOALS_WORKSHEET)
         except WorksheetNotFound:
-            worksheet = spreadsheet.add_worksheet(GOALS_WORKSHEET, rows=200, cols=4)
+            worksheet = spreadsheet.add_worksheet(GOALS_WORKSHEET, rows=200, cols=len(GOALS_HEADERS))
 
         rows = [GOALS_HEADERS]
         for key in sorted(store.keys()):
             year, month, seller = _parse_goal_key(key)
-            amount = store[key]
+            record = store[key]
+            amount = record["amount"]
             amount_text = str(int(amount)) if float(amount).is_integer() else str(amount)
-            rows.append([str(year), str(month), seller, amount_text])
+            commission_text = (
+                str(int(record["commission_rate"]))
+                if float(record["commission_rate"]).is_integer()
+                else str(record["commission_rate"]).replace(".", ",")
+            )
+            rows.append([str(year), str(month), seller, amount_text, commission_text])
 
-        worksheet.clear()
-        worksheet.update(rows, value_input_option="USER_ENTERED")
+        range_name = f"A1:E{len(rows)}"
+        worksheet.batch_update(
+            [{"range": range_name, "values": rows}],
+            value_input_option="USER_ENTERED",
+        )
+
+        existing_count = len(worksheet.get_all_values())
+        if existing_count > len(rows):
+            worksheet.batch_clear([f"A{len(rows) + 1}:E{existing_count}"])
         return True
-    except Exception:
+    except Exception as error:
+        logger.exception("Falha ao salvar aba Metas: %s", error)
         return False
 
 
-def load_monthly_goals(force_refresh: bool = False) -> dict[str, float]:
+def _get_goal_record(year: int, month: int, seller: str = TEAM_SELLER_LABEL) -> dict | None:
+    store = load_monthly_goals()
+    record = store.get(_goal_key(year, month, _normalize_seller(seller)))
+    if not record:
+        return None
+    return dict(record)
+
+
+def load_monthly_goals(force_refresh: bool = False) -> dict[str, dict]:
     global _file_cache
     with _lock:
         if not force_refresh and _file_cache is not None:
-            return dict(_file_cache)
+            return {key: dict(value) for key, value in _file_cache.items()}
 
         file_store = _load_from_file()
         sheet_store = _load_from_sheet()
@@ -176,7 +253,7 @@ def load_monthly_goals(force_refresh: bool = False) -> dict[str, float]:
             merged = file_store
 
         _file_cache = merged
-        return dict(merged)
+        return {key: dict(value) for key, value in merged}
 
 
 def invalidate_monthly_goals_cache() -> None:
@@ -186,29 +263,50 @@ def invalidate_monthly_goals_cache() -> None:
 
 
 def get_monthly_goal(year: int, month: int, seller: str = TEAM_SELLER_LABEL) -> float | None:
-    store = load_monthly_goals()
-    amount = store.get(_goal_key(year, month, _normalize_seller(seller)))
-    if amount is None:
+    record = _get_goal_record(year, month, seller)
+    if record is None:
         return None
-    return float(amount)
+    return float(record["amount"])
 
 
-def set_monthly_goal(year: int, month: int, amount: float, seller: str = TEAM_SELLER_LABEL) -> None:
+def get_monthly_goal_commission_rate(year: int, month: int, seller: str = TEAM_SELLER_LABEL) -> float:
+    record = _get_goal_record(year, month, seller)
+    if record is None:
+        return DEFAULT_COMMISSION_RATE
+    return float(record["commission_rate"])
+
+
+def set_monthly_goal(
+    year: int,
+    month: int,
+    amount: float,
+    seller: str = TEAM_SELLER_LABEL,
+    *,
+    commission_rate: float | None = None,
+) -> None:
     if month < 1 or month > 12:
         raise ValueError("Informe um mês válido.")
     if amount < 0:
         raise ValueError("A meta precisa ser zero ou maior.")
 
+    rate = DEFAULT_COMMISSION_RATE if commission_rate is None else float(commission_rate)
+    if rate < 0 or rate > 100:
+        raise ValueError("A comissão deve estar entre 0% e 100%.")
+
     seller_name = _normalize_seller(seller)
     store = load_monthly_goals()
-    store[_goal_key(year, month, seller_name)] = float(amount)
+    store[_goal_key(year, month, seller_name)] = {
+        "amount": float(amount),
+        "commission_rate": rate,
+    }
 
     _save_to_file(store)
-    _save_to_sheet(store)
+    if settings.sheets_configured and not _save_to_sheet(store):
+        raise RuntimeError("Não foi possível salvar a meta na aba Metas da planilha.")
 
     with _lock:
         global _file_cache
-        _file_cache = dict(store)
+        _file_cache = {key: dict(value) for key, value in store.items()}
 
 
 def delete_monthly_goal(year: int, month: int, seller: str = TEAM_SELLER_LABEL) -> None:
@@ -223,27 +321,37 @@ def delete_monthly_goal(year: int, month: int, seller: str = TEAM_SELLER_LABEL) 
 
     del store[key]
     _save_to_file(store)
-    _save_to_sheet(store)
+    if settings.sheets_configured and not _save_to_sheet(store):
+        raise RuntimeError("Não foi possível atualizar a aba Metas da planilha.")
 
     with _lock:
         global _file_cache
-        _file_cache = dict(store)
+        _file_cache = {key: dict(value) for key, value in store.items()}
 
 
 def list_monthly_goals(limit: int = 12) -> list[dict]:
     store = load_monthly_goals()
     rows = []
-    for key, amount in store.items():
+    for key, record in store.items():
         try:
             year, month, seller = _parse_goal_key(key)
         except ValueError:
             continue
+        amount = float(record["amount"])
+        commission_rate = float(record.get("commission_rate", DEFAULT_COMMISSION_RATE))
+        commission_label = (
+            f"{int(commission_rate)}%"
+            if float(commission_rate).is_integer()
+            else f"{commission_rate:.1f}".replace(".", ",") + "%"
+        )
         rows.append({
             "year": year,
             "month": month,
             "seller": seller,
             "amount": amount,
             "amount_label": f"R$ {amount:,.0f}".replace(",", "."),
+            "commission_rate": commission_rate,
+            "commission_label": commission_label,
             "sort_key": (year, month, seller.lower()),
         })
     rows.sort(key=lambda item: item["sort_key"], reverse=True)

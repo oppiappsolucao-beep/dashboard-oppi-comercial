@@ -10,7 +10,7 @@ from app.services.account_users import ROLE_CLASS, load_account_users
 from app.services.app_settings import get_proposal_template_doc_id, get_proposal_template_url
 from app.services.goals_reports import MONTHS_PT
 from app.services.legacy_core import as_python_datetime, normalize_text
-from app.services.monthly_goals import TEAM_SELLER_LABEL, list_monthly_goals
+from app.services.monthly_goals import DEFAULT_COMMISSION_RATE, TEAM_SELLER_LABEL, list_monthly_goals
 
 SETTINGS_TABS = [
     ("geral", "Geral"),
@@ -431,6 +431,7 @@ def build_goals_settings(df: pd.DataFrame) -> dict:
         "year_options": [today.year - 1, today.year, today.year + 1],
         "default_month": today.month,
         "default_year": today.year,
+        "default_commission": str(int(DEFAULT_COMMISSION_RATE)),
         "seller_options": [TEAM_SELLER_LABEL, *sellers],
         "configured_goals": configured,
     }
