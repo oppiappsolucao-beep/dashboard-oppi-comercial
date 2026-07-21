@@ -6,7 +6,7 @@ from app.dependencies import get_prepared_data, is_admin, require_auth
 from app.services.app_settings import set_proposal_template
 from app.services.legacy_core import invalidate_sheet_cache, normalize_text, parse_money
 from app.services.sheet_registration_sync import sync_registration_rows
-from app.services.monthly_goals import TEAM_SELLER_LABEL, set_monthly_goal
+from app.services.monthly_goals import TEAM_SELLER_LABEL, delete_monthly_goal, set_monthly_goal
 from app.services.settings_page import (
     ROLE_OPTIONS,
     SETTINGS_TABS,
@@ -194,6 +194,33 @@ async def settings_save_goal(
         request.session["settings_goal_error"] = str(error) if str(error) else "Informe um valor válido para a meta."
     except Exception as error:
         request.session["settings_goal_error"] = f"Não consegui salvar a meta: {error}"
+
+    return RedirectResponse(url="/configuracoes?tab=metas", status_code=303)
+
+
+@router.post("/configuracoes/metas/remover")
+async def settings_remove_goal(
+    request: Request,
+    month: int = Form(...),
+    year: int = Form(...),
+    seller: str = Form(TEAM_SELLER_LABEL),
+    tab: str = Form("metas"),
+):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+
+    if not is_admin(request):
+        request.session["settings_goal_error"] = "Apenas o administrador pode remover metas."
+        return RedirectResponse(url="/configuracoes?tab=metas", status_code=303)
+
+    try:
+        delete_monthly_goal(year, month, seller)
+        request.session["settings_goal_success"] = "Meta removida com sucesso."
+    except ValueError as error:
+        request.session["settings_goal_error"] = str(error) if str(error) else "Meta não encontrada."
+    except Exception as error:
+        request.session["settings_goal_error"] = f"Não consegui remover a meta: {error}"
 
     return RedirectResponse(url="/configuracoes?tab=metas", status_code=303)
 

@@ -488,6 +488,9 @@
               <th>Período</th>
               <th>Escopo</th>
               <th>Meta</th>
+              {% if is_admin %}
+              <th>Ações</th>
+              {% endif %}
             </tr>
           </thead>
           <tbody>
@@ -496,6 +499,18 @@
               <td>{{ row.month_label }}/{{ row.year }}</td>
               <td>{{ row.seller }}</td>
               <td><strong>{{ row.amount_label }}</strong></td>
+              {% if is_admin %}
+              <td class="table-actions">
+                <form method="post" action="/configuracoes/metas/remover" class="settings-inline-form"
+                  onsubmit="return confirm('Remover a meta de {{ row.month_label }}/{{ row.year }} ({{ row.seller }})?');">
+                  <input type="hidden" name="tab" value="metas">
+                  <input type="hidden" name="month" value="{{ row.month }}">
+                  <input type="hidden" name="year" value="{{ row.year }}">
+                  <input type="hidden" name="seller" value="{{ row.seller }}">
+                  <button type="submit" class="settings-action-btn danger">Excluir</button>
+                </form>
+              </td>
+              {% endif %}
             </tr>
             {% endfor %}
           </tbody>

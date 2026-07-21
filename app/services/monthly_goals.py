@@ -208,6 +208,25 @@ def set_monthly_goal(year: int, month: int, amount: float, seller: str = TEAM_SE
         _file_cache = dict(store)
 
 
+def delete_monthly_goal(year: int, month: int, seller: str = TEAM_SELLER_LABEL) -> None:
+    if month < 1 or month > 12:
+        raise ValueError("Informe um mês válido.")
+
+    seller_name = _normalize_seller(seller)
+    key = _goal_key(year, month, seller_name)
+    store = load_monthly_goals()
+    if key not in store:
+        raise ValueError("Meta não encontrada.")
+
+    del store[key]
+    _save_to_file(store)
+    _save_to_sheet(store)
+
+    with _lock:
+        global _file_cache
+        _file_cache = dict(store)
+
+
 def list_monthly_goals(limit: int = 12) -> list[dict]:
     store = load_monthly_goals()
     rows = []
