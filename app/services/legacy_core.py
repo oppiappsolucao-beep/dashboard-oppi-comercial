@@ -1302,13 +1302,130 @@ def compose_endereco(payload: dict) -> str:
     return line
 
 
+def parse_composed_endereco(text: str) -> dict[str, str]:
+    """Reverte endereço composto salvo em uma única célula para campos do formulário."""
+    raw = normalize_text(text)
+    if not raw:
+        return {}
+
+    result = {
+        "endereco": "",
+        "endereco_numero": "",
+        "endereco_complemento": "",
+        "cep": "",
+        "bairro": "",
+        "municipio": "",
+        "uf": "",
+    }
+
+    street_part = raw
+    location_part = ""
+    if " - " in raw:
+        street_part, location_part = raw.split(" - ", 1)
+        street_part = street_part.strip()
+        location_part = location_part.strip()
+
+    search_text = location_part or raw
+    cep_match = re.search(r"\bCEP\s*(\d{5}-?\d{3})\b", search_text, flags=re.IGNORECASE)
+    if not cep_match:
+        cep_match = re.search(r"\b(\d{5}-?\d{3})\b", search_text)
+    if cep_match:
+        result["cep"] = cep_match.group(1)
+        location_part = location_part.replace(cep_match.group(0), "").strip(" ,")
+
+    if location_part:
+        loc_segments = [segment.strip() for segment in location_part.split(",") if segment.strip()]
+        if not loc_segments:
+            loc_segments = [location_part]
+
+        if len(loc_segments) == 1:
+            segment = loc_segments[0]
+            if "/" in segment:
+                city, state = segment.split("/", 1)
+                result["municipio"] = normalize_text(city)
+                result["uf"] = normalize_text(state)
+            else:
+                result["municipio"] = segment
+        else:
+            for segment in loc_segments:
+                if "/" in segment:
+                    city, state = segment.split("/", 1)
+                    result["municipio"] = normalize_text(city)
+                    result["uf"] = normalize_text(state)
+                    continue
+                if not result["bairro"]:
+                    result["bairro"] = segment
+                elif not result["municipio"]:
+                    result["municipio"] = segment
+                elif not result["uf"] and len(segment) == 2:
+                    result["uf"] = segment.upper()
+
+    street_segments = [segment.strip() for segment in street_part.split(",") if segment.strip()]
+    if not street_segments:
+        return result
+
+    result["endereco"] = street_segments[0]
+    if len(street_segments) == 1:
+        return result
+
+    second = street_segments[1]
+    if re.match(r"^\d+\w?$", second):
+        result["endereco_numero"] = second
+        if len(street_segments) >= 3:
+            result["endereco_complemento"] = ", ".join(street_segments[2:])
+    else:
+        result["endereco_complemento"] = ", ".join(street_segments[1:])
+
+    return result
+
+
+def resolve_address_form_values(row, columns: dict) -> dict[str, str]:
+    """Lê endereço da planilha e devolve campos separados para o formulário."""
+    keys = ("endereco", "endereco_numero", "endereco_complemento", "cep", "bairro", "municipio", "uf")
+    values = {key: row_field_value(row, columns, key) for key in keys}
+    endereco = values["endereco"]
+    if not endereco:
+        return values
+
+    composed_from_parts = compose_endereco(values)
+    missing_street_parts = not any(values[key] for key in ("endereco_numero", "endereco_complemento"))
+    missing_location_parts = not any(values[key] for key in ("bairro", "municipio", "cep"))
+    looks_composed = " - " in endereco or endereco.count(",") >= 1
+
+    should_parse = looks_composed and (
+        missing_street_parts
+        or missing_location_parts
+        or endereco == composed_from_parts
+    )
+    if not should_parse:
+        return values
+
+    parsed = parse_composed_endereco(endereco)
+    for key in keys:
+        if parsed.get(key):
+            values[key] = parsed[key]
+    return values
+
+
+def format_endereco_for_display(row, columns: dict) -> str:
+    """Monta endereço completo para PDFs e telas de resumo."""
+    parts = resolve_address_form_values(row, columns)
+    composed = compose_endereco(parts)
+    return composed or normalize_text(parts.get("endereco")) or "Não informado"
+
+
 def _apply_address_fields(row_values: list, headers: list, payload: dict) -> None:
     composed = compose_endereco(payload)
     logradouro = normalize_text(payload.get("endereco"))
-    full_address = composed or logradouro
 
-    _set_sheet_value_by_header(row_values, headers, ["Endereço", "Endereco"], full_address)
+    _set_sheet_value_by_header(row_values, headers, ["Endereço", "Endereco"], logradouro)
     _set_sheet_value_by_header(row_values, headers, ["Logradouro", "Rua", "Endereço logradouro"], logradouro)
+    _set_sheet_value_by_header(
+        row_values,
+        headers,
+        ["Endereço completo", "Endereco completo", "Endereço Completo"],
+        composed,
+    )
     _set_sheet_value_by_header(row_values, headers, ["Número", "Numero", "Nº", "No"], payload.get("endereco_numero"))
     _set_sheet_value_by_header(row_values, headers, ["Complemento", "Compl"], payload.get("endereco_complemento"))
     _set_sheet_value_by_header(row_values, headers, ["CEP"], payload.get("cep"))

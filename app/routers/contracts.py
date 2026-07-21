@@ -21,6 +21,7 @@ from app.services.legacy_core import (
     invalidate_sheet_cache,
     normalize_search_text,
     normalize_text,
+    resolve_address_form_values,
     resolve_company_status,
     safe_series,
     status_badge_class,
@@ -204,6 +205,7 @@ async def contract_edit_page(request: Request, sheet_row: int):
                 "instagram", "linkedin", "observacoes",
                 "servico", "valor_proposta", "colaboradores",
             ]}
+    values.update(resolve_address_form_values(row, columns))
 
     cadastro_tipo = resolve_cadastro_tipo(DEFAULT_TENANT_ID, sheet_row, cnpj=values.get("cnpj", ""))
     from_page = _resolve_edit_from_page(request.query_params.get("from"))

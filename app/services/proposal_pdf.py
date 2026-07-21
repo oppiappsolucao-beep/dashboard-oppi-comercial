@@ -21,6 +21,7 @@ from app.services.legacy_core import (
     _load_google_credentials_info,
     build_client_commercial_summary,
     find_prepared_company_row,
+    format_endereco_for_display,
     format_proposal_value_display,
     identify_columns,
     load_sheet_data,
@@ -339,7 +340,7 @@ def build_proposal_placeholder_values(
         "{{TELEFONE}}": row_contact_phone(row, columns) or "Não informado",
         "{{EMAIL}}": row_contact_email(row, columns) or "Não informado",
         "{{COLABORADORES}}": colaboradores_value,
-        "{{ENDERECO}}": row_field_value(row, columns, "endereco") or "Não informado",
+        "{{ENDERECO}}": format_endereco_for_display(row, columns),
     }
     return _values_from_canonical(canonical)
 
