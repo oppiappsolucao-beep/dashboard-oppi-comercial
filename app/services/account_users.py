@@ -10,7 +10,10 @@ from pathlib import Path
 
 from passlib.context import CryptContext
 
+from app.config import settings
 from app.services.legacy_core import normalize_text
+from app.services.sheet_crm_storage import CRM_STORAGE_TABS, get_worksheet, header_indexes
+from app.services.storage_paths import get_storage_dir
 
 ROLE_CLASS = {
     "Administrador": "admin",
@@ -20,26 +23,28 @@ ROLE_CLASS = {
 }
 
 VALID_ROLES = set(ROLE_CLASS.keys())
+USERS_WORKSHEET = "Usuarios"
+USERS_HEADERS = CRM_STORAGE_TABS[USERS_WORKSHEET]
 _pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 _lock = threading.Lock()
 _cache: list[dict] | None = None
 
 
 def _users_file_path() -> Path:
-    return Path(__file__).resolve().parent.parent.parent / "storage" / "account_users.json"
-
-
-def _now_iso() -> str:
-    return datetime.now().replace(microsecond=0).isoformat()
+    return get_storage_dir() / "account_users.json"
 
 
 def _normalize_email(value: str) -> str:
     email = normalize_text(value).lower()
-    if not email or "@" not in email:
-        raise ValueError("Informe um e-mail válido.")
-    if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
+    if not email:
+        return ""
+    if "@" not in email or not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
         raise ValueError("Informe um e-mail válido.")
     return email
+
+
+def _now_iso() -> str:
+    return datetime.now().replace(microsecond=0).isoformat()
 
 
 def _normalize_username(value: str) -> str:
@@ -142,14 +147,104 @@ def _save_to_file(users: list[dict]) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def _user_row_from_sheet(row: list[str], indexes: dict[str, int]) -> dict | None:
+    if len(row) <= max(indexes.values()):
+        return None
+    try:
+        return _serialize_user({
+            "id": row[indexes["Id"]],
+            "name": row[indexes["Nome"]],
+            "email": row[indexes["Email"]],
+            "username": row[indexes["Usuario"]],
+            "password_hash": row[indexes["SenhaHash"]],
+            "role": row[indexes["Perfil"]],
+            "active": normalize_text(row[indexes["Ativo"]]).lower() in {"1", "true", "sim", "ativo", "yes"},
+            "last_access": row[indexes["UltimoAcesso"]],
+            "created_at": row[indexes["CriadoEm"]],
+            "updated_at": row[indexes["AtualizadoEm"]],
+        })
+    except ValueError:
+        return None
+
+
+def _load_from_sheet() -> list[dict] | None:
+    if not settings.sheets_configured:
+        return None
+    worksheet = get_worksheet(USERS_WORKSHEET)
+    if worksheet is None:
+        return None
+    try:
+        rows = worksheet.get_all_values()
+    except Exception:
+        return None
+    if len(rows) < 2:
+        return []
+
+    indexes = header_indexes(rows[0], USERS_HEADERS)
+    if indexes is None:
+        return None
+
+    users: list[dict] = []
+    for row in rows[1:]:
+        user = _user_row_from_sheet(row, indexes)
+        if user:
+            users.append(user)
+    return users
+
+
+def _save_to_sheet(users: list[dict]) -> bool:
+    if not settings.sheets_configured:
+        return False
+    worksheet = get_worksheet(USERS_WORKSHEET)
+    if worksheet is None:
+        return False
+    try:
+        rows = [USERS_HEADERS]
+        for user in sorted(users, key=lambda item: item.get("username", "").lower()):
+            rows.append([
+                user["id"],
+                user["name"],
+                user["email"],
+                user["username"],
+                user["password_hash"],
+                user["role"],
+                "1" if user["active"] else "0",
+                user.get("last_access", ""),
+                user.get("created_at", ""),
+                user.get("updated_at", ""),
+            ])
+        worksheet.clear()
+        worksheet.update(rows, value_input_option="USER_ENTERED")
+        return True
+    except Exception:
+        return False
+
+
+def _persist_users(users: list[dict]) -> None:
+    _save_to_file(users)
+    _save_to_sheet(users)
+
+
 def load_account_users(force_refresh: bool = False) -> list[dict]:
     global _cache
     with _lock:
         if not force_refresh and _cache is not None:
             return [dict(user) for user in _cache]
-        users = _load_from_file()
-        _cache = users
-        return [dict(user) for user in users]
+
+        file_users = _load_from_file()
+        sheet_users = _load_from_sheet()
+        merged_by_id: dict[str, dict] = {user["id"]: user for user in file_users}
+        if sheet_users is not None:
+            for user in sheet_users:
+                merged_by_id[user["id"]] = user
+            merged = list(merged_by_id.values())
+            if merged != file_users:
+                _save_to_file(merged)
+        else:
+            merged = file_users
+
+        _cache = merged
+        return [dict(user) for user in merged]
 
 
 def invalidate_account_users_cache() -> None:
@@ -197,7 +292,7 @@ def touch_account_user_last_access(user_id: str) -> None:
             updated = True
             break
     if updated:
-        _save_to_file(users)
+        _persist_users(users)
         with _lock:
             global _cache
             _cache = users
@@ -218,7 +313,7 @@ def create_account_user(
     clean_username = _normalize_username(username)
     clean_role = _normalize_role(role)
 
-    if any(user["email"] == clean_email for user in users):
+    if clean_email and any(user["email"] == clean_email for user in users):
         raise ValueError("Já existe um usuário com este e-mail.")
     if any(user["username"] == clean_username for user in users):
         raise ValueError("Já existe um usuário com este login.")
@@ -236,7 +331,7 @@ def create_account_user(
         "updated_at": _now_iso(),
     })
     users.append(user)
-    _save_to_file(users)
+    _persist_users(users)
     with _lock:
         global _cache
         _cache = users
@@ -263,7 +358,7 @@ def update_account_user(
     if index is None:
         raise ValueError("Usuário não encontrado.")
 
-    if any(user["email"] == clean_email and user["id"] != user_id for user in users):
+    if clean_email and any(user["email"] == clean_email and user["id"] != user_id for user in users):
         raise ValueError("Já existe um usuário com este e-mail.")
     if any(user["username"] == clean_username and user["id"] != user_id for user in users):
         raise ValueError("Já existe um usuário com este login.")
@@ -284,7 +379,7 @@ def update_account_user(
         current["password_hash"] = _hash_password(password)
 
     users[index] = current
-    _save_to_file(users)
+    _persist_users(users)
     with _lock:
         global _cache
         _cache = users
@@ -296,7 +391,7 @@ def delete_account_user(user_id: str) -> None:
     filtered = [user for user in users if user["id"] != user_id]
     if len(filtered) == len(users):
         raise ValueError("Usuário não encontrado.")
-    _save_to_file(filtered)
+    _persist_users(filtered)
     with _lock:
         global _cache
         _cache = filtered

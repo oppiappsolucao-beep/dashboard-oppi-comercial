@@ -1,25 +1,28 @@
-"""Configurações administrativas persistidas localmente."""
+"""Configurações administrativas persistidas localmente e na planilha."""
 import json
-import os
 import threading
 from pathlib import Path
 
 from app.config import settings
 from app.services.legacy_core import normalize_text
+from app.services.sheet_crm_storage import CRM_STORAGE_TABS, get_worksheet, header_indexes
+from app.services.storage_paths import get_storage_dir
+
+CONFIG_WORKSHEET = "Configuracoes"
+CONFIG_HEADERS = CRM_STORAGE_TABS[CONFIG_WORKSHEET]
+PERSISTED_CONFIG_KEYS = (
+    "proposal_template_doc_id",
+    "proposal_template_url",
+    "proposal_pdf_folder_id",
+    "commercial_services",
+)
 
 _lock = threading.Lock()
 _cache: dict | None = None
 
 
-def _storage_dir() -> Path:
-    configured = os.getenv("APP_STORAGE_DIR", "").strip()
-    if configured:
-        return Path(configured)
-    return Path(__file__).resolve().parent.parent.parent / "storage"
-
-
 def _settings_path() -> Path:
-    return _storage_dir() / "app_settings.json"
+    return get_storage_dir() / "app_settings.json"
 
 
 def invalidate_app_settings_cache() -> None:
@@ -37,7 +40,74 @@ def _default_settings() -> dict:
             if doc_id else ""
         ),
         "commercial_services": ["Oppi Vision", "Oppi Flow", "Oppi Track"],
+        "proposal_pdf_folder_id": "",
     }
+
+
+def _encode_config_value(key: str, value) -> str:
+    if key == "commercial_services":
+        return json.dumps(value if isinstance(value, list) else [], ensure_ascii=False)
+    return normalize_text(value)
+
+
+def _decode_config_value(key: str, value: str):
+    text = normalize_text(value)
+    if key == "commercial_services":
+        if not text:
+            return []
+        try:
+            parsed = json.loads(text)
+        except Exception:
+            return []
+        return parsed if isinstance(parsed, list) else []
+    return text
+
+
+def _load_from_sheet() -> dict | None:
+    if not settings.sheets_configured:
+        return None
+    worksheet = get_worksheet(CONFIG_WORKSHEET)
+    if worksheet is None:
+        return None
+    try:
+        rows = worksheet.get_all_values()
+    except Exception:
+        return None
+    if len(rows) < 2:
+        return {}
+
+    indexes = header_indexes(rows[0], CONFIG_HEADERS)
+    if indexes is None:
+        return None
+
+    result: dict = {}
+    for row in rows[1:]:
+        if len(row) <= max(indexes.values()):
+            continue
+        key = normalize_text(row[indexes["Chave"]])
+        if key not in PERSISTED_CONFIG_KEYS:
+            continue
+        result[key] = _decode_config_value(key, row[indexes["Valor"]])
+    return result
+
+
+def _save_to_sheet(values: dict) -> bool:
+    if not settings.sheets_configured:
+        return False
+    worksheet = get_worksheet(CONFIG_WORKSHEET)
+    if worksheet is None:
+        return False
+    try:
+        rows = [CONFIG_HEADERS]
+        for key in PERSISTED_CONFIG_KEYS:
+            if key not in values:
+                continue
+            rows.append([key, _encode_config_value(key, values[key])])
+        worksheet.clear()
+        worksheet.update(rows, value_input_option="USER_ENTERED")
+        return True
+    except Exception:
+        return False
 
 
 def load_app_settings(force_refresh: bool = False) -> dict:
@@ -48,16 +118,26 @@ def load_app_settings(force_refresh: bool = False) -> dict:
 
         defaults = _default_settings()
         path = _settings_path()
-        if not path.exists():
-            _cache = defaults
-            return dict(defaults)
+        stored: dict = {}
+        if path.exists():
+            try:
+                loaded = json.loads(path.read_text(encoding="utf-8"))
+                if isinstance(loaded, dict):
+                    stored = loaded
+            except Exception:
+                stored = {}
 
-        try:
-            stored = json.loads(path.read_text(encoding="utf-8"))
-        except Exception:
-            stored = {}
+        merged = {**defaults, **stored}
+        sheet_store = _load_from_sheet()
+        if sheet_store is not None:
+            merged.update(sheet_store)
+            if merged != {**defaults, **stored}:
+                try:
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_text(json.dumps(merged, ensure_ascii=False, indent=2), encoding="utf-8")
+                except OSError:
+                    pass
 
-        merged = {**defaults, **(stored if isinstance(stored, dict) else {})}
         _cache = merged
         return dict(merged)
 
@@ -76,6 +156,7 @@ def save_app_settings(values: dict) -> None:
             f"Não foi possível salvar as configurações em {path}. "
             "Verifique permissões de escrita ou configure APP_STORAGE_DIR."
         ) from error
+    _save_to_sheet(current)
     with _lock:
         _cache = dict(current)
 

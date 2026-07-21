@@ -56,17 +56,18 @@
     <div class="settings-goals-grid settings-user-form-grid">
       <div class="settings-goals-field">
         <label for="user-name">Nome</label>
-        <input id="user-name" name="name" type="text" maxlength="120"
+        <input id="user-name" name="name" type="text" maxlength="120" required
           value="{{ users_table.edit_user.name if users_table.edit_user else '' }}">
       </div>
       <div class="settings-goals-field">
-        <label for="user-email">E-mail</label>
+        <label for="user-email">E-mail <span class="settings-field-hint">(opcional)</span></label>
         <input id="user-email" name="email" type="email" maxlength="120"
-          value="{{ users_table.edit_user.email if users_table.edit_user else '' }}">
+          value="{{ users_table.edit_user.email if users_table.edit_user else '' }}"
+          placeholder="Ex.: nome@empresa.com.br">
       </div>
       <div class="settings-goals-field">
         <label for="user-username">Usuário de login</label>
-        <input id="user-username" name="username" type="text" maxlength="40"
+        <input id="user-username" name="username" type="text" maxlength="40" required
           value="{{ users_table.edit_user.username if users_table.edit_user else '' }}"
           placeholder="Ex.: raissa">
       </div>
@@ -91,6 +92,7 @@
           {% endif %}
         </label>
         <input id="user-password" name="password" type="password" minlength="6" maxlength="80"
+          {% if not users_table.edit_user %}required{% endif %}
           placeholder="Mínimo 6 caracteres">
       </div>
       <div class="settings-goals-field">
@@ -526,6 +528,10 @@
   <div class="settings-goals-layout">
     <div class="panel settings-single-card">
       <div class="section-heading">Integrações</div>
+      <div class="section-subtitle">
+        Usuários, metas e serviços comerciais ficam salvos nas abas
+        <strong>Usuarios</strong>, <strong>Metas</strong> e <strong>Configuracoes</strong> da planilha Google Sheets.
+      </div>
       <div class="settings-integrations-grid settings-integrations-grid-full">
         {% for item in integrations %}
         <div class="settings-integration-item {% if item.connected %}connected{% endif %}">

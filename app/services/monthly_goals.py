@@ -7,6 +7,7 @@ from gspread.exceptions import WorksheetNotFound
 
 from app.config import settings
 from app.services.legacy_core import get_gsheet_client, normalize_text
+from app.services.storage_paths import get_storage_dir
 
 TEAM_SELLER_LABEL = "Todos os vendedores"
 GOALS_WORKSHEET = "Metas"
@@ -17,7 +18,7 @@ _file_cache: dict | None = None
 
 
 def _goals_file_path() -> Path:
-    return Path(__file__).resolve().parent.parent.parent / "storage" / "monthly_goals.json"
+    return get_storage_dir() / "monthly_goals.json"
 
 
 def _normalize_seller(value: str) -> str:
