@@ -137,6 +137,8 @@ def load_app_settings(force_refresh: bool = False) -> dict:
                     path.write_text(json.dumps(merged, ensure_ascii=False, indent=2), encoding="utf-8")
                 except OSError:
                     pass
+            if not sheet_store and {**defaults, **stored} != defaults:
+                _save_to_sheet(merged)
 
         _cache = merged
         return dict(merged)

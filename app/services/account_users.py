@@ -240,6 +240,8 @@ def load_account_users(force_refresh: bool = False) -> list[dict]:
             merged = list(merged_by_id.values())
             if merged != file_users:
                 _save_to_file(merged)
+            if not sheet_users and merged:
+                _save_to_sheet(merged)
         else:
             merged = file_users
 

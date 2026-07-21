@@ -93,14 +93,20 @@ async def startup_maintenance() -> None:
             from app.services.account_users import invalidate_account_users_cache, load_account_users
             from app.services.app_settings import invalidate_app_settings_cache, load_app_settings
             from app.services.monthly_goals import invalidate_monthly_goals_cache, load_monthly_goals
+            from app.services.activities_storage import invalidate_activities_cache, reload_activities_store
+            from app.services.lead_actions_storage import invalidate_lead_actions_cache, reload_lead_actions_store
 
             ensure_crm_storage_tabs()
             invalidate_account_users_cache()
             invalidate_app_settings_cache()
             invalidate_monthly_goals_cache()
+            invalidate_activities_cache()
+            invalidate_lead_actions_cache()
             load_account_users(force_refresh=True)
             load_app_settings(force_refresh=True)
             load_monthly_goals(force_refresh=True)
+            reload_activities_store(force_refresh=True)
+            reload_lead_actions_store(force_refresh=True)
         except Exception:
             pass
 

@@ -10,6 +10,20 @@ CRM_STORAGE_TABS = {
     "Usuarios": ["Id", "Nome", "Email", "Usuario", "SenhaHash", "Perfil", "Ativo", "UltimoAcesso", "CriadoEm", "AtualizadoEm"],
     "Metas": ["Ano", "Mes", "Vendedor", "Meta"],
     "Configuracoes": ["Chave", "Valor"],
+    "Atividades": [
+        "Id",
+        "TenantId",
+        "SheetRow",
+        "Empresa",
+        "Status",
+        "Etapa",
+        "Acao",
+        "Responsavel",
+        "AgendadoEm",
+        "Excluido",
+        "Dados",
+    ],
+    "LeadAcoes": ["TenantId", "SheetRow", "AtualizadoEm", "Dados"],
 }
 
 
@@ -21,7 +35,7 @@ def _open_spreadsheet():
 
 
 def ensure_crm_storage_tabs() -> dict[str, bool]:
-    """Garante que Usuarios, Metas e Configuracoes existam na planilha."""
+    """Garante que as abas auxiliares do CRM existam na planilha."""
     result = {name: False for name in CRM_STORAGE_TABS}
     spreadsheet = _open_spreadsheet()
     if spreadsheet is None:

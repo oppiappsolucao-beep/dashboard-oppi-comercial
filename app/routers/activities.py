@@ -547,4 +547,13 @@ async def activities_refresh(request: Request):
     if redirect:
         return redirect
     invalidate_sheet_cache()
+    from app.services.sheet_crm_storage import ensure_crm_storage_tabs
+    from app.services.activities_storage import invalidate_activities_cache, reload_activities_store
+    from app.services.lead_actions_storage import invalidate_lead_actions_cache, reload_lead_actions_store
+
+    ensure_crm_storage_tabs()
+    invalidate_activities_cache()
+    invalidate_lead_actions_cache()
+    reload_activities_store(force_refresh=True)
+    reload_lead_actions_store(force_refresh=True)
     return RedirectResponse(url="/atividades", status_code=303)

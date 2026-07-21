@@ -170,6 +170,8 @@ def load_monthly_goals(force_refresh: bool = False) -> dict[str, float]:
             merged = {**file_store, **sheet_store}
             if merged != file_store:
                 _save_to_file(merged)
+            if not sheet_store and merged:
+                _save_to_sheet(merged)
         else:
             merged = file_store
 

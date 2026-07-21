@@ -1,40 +1,190 @@
-"""Persistência de próximas ações, atividades e histórico por lead (tenant + sheet_row)."""
+"""Persistência de próximas ações, atividades e histórico por lead — arquivo local + aba LeadAcoes."""
+from __future__ import annotations
+
 import json
+import threading
 from datetime import date, datetime
-from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from config.settings import settings
+
 from app.services.legacy_core import normalize_text
+from app.services.sheet_crm_storage import CRM_STORAGE_TABS, get_worksheet, header_indexes
+from app.services.storage_paths import get_storage_dir
 
 DEFAULT_TENANT_ID = "default"
-STORAGE_PATH = Path(__file__).resolve().parents[2] / "storage" / "lead_actions.json"
+LEAD_ACTIONS_WORKSHEET = "LeadAcoes"
+LEAD_ACTIONS_HEADERS = CRM_STORAGE_TABS[LEAD_ACTIONS_WORKSHEET]
+
+_lock = threading.Lock()
+_cache: dict | None = None
 
 
 def _now() -> datetime:
     return datetime.now(ZoneInfo(settings.timezone)).replace(tzinfo=None)
 
 
-def _load_all() -> dict:
-    if not STORAGE_PATH.exists():
-        return {}
+def _storage_path():
+    return get_storage_dir() / "lead_actions.json"
+
+
+def _empty_store() -> dict:
+    return {}
+
+
+def _load_from_file() -> dict:
+    path = _storage_path()
+    if not path.exists():
+        return _empty_store()
     try:
-        with STORAGE_PATH.open("r", encoding="utf-8") as handle:
-            data = json.load(handle)
-        return data if isinstance(data, dict) else {}
+        data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
-        return {}
+        return _empty_store()
+    return data if isinstance(data, dict) else _empty_store()
 
 
-def _save_all(data: dict) -> None:
-    STORAGE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with STORAGE_PATH.open("w", encoding="utf-8") as handle:
-        json.dump(data, handle, ensure_ascii=False, indent=2, default=str)
+def _save_to_file(data: dict) -> None:
+    path = _storage_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
+
+
+def _lead_action_row(tenant: str, sheet_row: int, record: dict) -> list[str]:
+    return [
+        tenant,
+        str(int(sheet_row)),
+        normalize_text(record.get("updated_at")) or _now().isoformat(timespec="seconds"),
+        json.dumps(record, ensure_ascii=False, default=str),
+    ]
+
+
+def _parse_lead_action_row(row: list[str], indexes: dict[str, int]) -> tuple[str, str, dict] | None:
+    if len(row) <= max(indexes.values()):
+        return None
+    tenant = normalize_text(row[indexes["TenantId"]]) or DEFAULT_TENANT_ID
+    sheet_row = normalize_text(row[indexes["SheetRow"]])
+    if not sheet_row:
+        return None
+    payload_text = row[indexes["Dados"]]
+    if not payload_text:
+        return None
+    try:
+        record = json.loads(payload_text)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(record, dict):
+        return None
+    record.setdefault("updated_at", normalize_text(row[indexes["AtualizadoEm"]]))
+    return tenant, sheet_row, record
+
+
+def _load_from_sheet() -> dict | None:
+    if not settings.sheets_configured:
+        return None
+    worksheet = get_worksheet(LEAD_ACTIONS_WORKSHEET)
+    if worksheet is None:
+        return None
+    try:
+        rows = worksheet.get_all_values()
+    except Exception:
+        return None
+    if len(rows) < 2:
+        return _empty_store()
+
+    indexes = header_indexes(rows[0], LEAD_ACTIONS_HEADERS)
+    if indexes is None:
+        return None
+
+    store = _empty_store()
+    for row in rows[1:]:
+        parsed = _parse_lead_action_row(row, indexes)
+        if not parsed:
+            continue
+        tenant, sheet_row, record = parsed
+        bucket = store.setdefault(tenant, {})
+        bucket[str(sheet_row)] = record
+    return store
+
+
+def _save_to_sheet(data: dict) -> bool:
+    if not settings.sheets_configured:
+        return False
+    worksheet = get_worksheet(LEAD_ACTIONS_WORKSHEET)
+    if worksheet is None:
+        return False
+    try:
+        rows = [LEAD_ACTIONS_HEADERS]
+        for tenant in sorted(data.keys(), key=str):
+            bucket = data.get(tenant)
+            if not isinstance(bucket, dict):
+                continue
+            for sheet_row in sorted(bucket.keys(), key=lambda value: int(value) if str(value).isdigit() else 0):
+                record = bucket.get(sheet_row)
+                if isinstance(record, dict):
+                    rows.append(_lead_action_row(tenant, int(sheet_row), record))
+        worksheet.clear()
+        worksheet.update(rows, value_input_option="USER_ENTERED")
+        return True
+    except Exception:
+        return False
+
+
+def _merge_stores(file_store: dict, sheet_store: dict | None) -> dict:
+    if sheet_store is None:
+        return file_store
+
+    merged = _empty_store()
+    tenants = set(file_store.keys()) | set(sheet_store.keys())
+    for tenant in tenants:
+        file_bucket = file_store.get(tenant, {})
+        sheet_bucket = sheet_store.get(tenant, {})
+        if not isinstance(file_bucket, dict):
+            file_bucket = {}
+        if not isinstance(sheet_bucket, dict):
+            sheet_bucket = {}
+        merged[tenant] = {**file_bucket, **sheet_bucket}
+    return merged
+
+
+def _persist_store(data: dict) -> None:
+    _save_to_file(data)
+    _save_to_sheet(data)
+
+
+def _load_store(force_refresh: bool = False) -> dict:
+    global _cache
+    with _lock:
+        if not force_refresh and _cache is not None:
+            return json.loads(json.dumps(_cache, default=str))
+
+        file_store = _load_from_file()
+        sheet_store = _load_from_sheet()
+        merged = _merge_stores(file_store, sheet_store)
+
+        if merged != file_store:
+            _save_to_file(merged)
+        if sheet_store is not None and (sheet_store == _empty_store() or not sheet_store) and merged:
+            _save_to_sheet(merged)
+        elif sheet_store is not None and merged != sheet_store:
+            _save_to_sheet(merged)
+
+        _cache = merged
+        return json.loads(json.dumps(merged, default=str))
+
+
+def invalidate_lead_actions_cache() -> None:
+    global _cache
+    with _lock:
+        _cache = None
+
+
+def reload_lead_actions_store(force_refresh: bool = True) -> None:
+    _load_store(force_refresh=force_refresh)
 
 
 def _tenant_bucket(tenant_id: str | None = None) -> dict:
     tenant = normalize_text(tenant_id) or DEFAULT_TENANT_ID
-    data = _load_all()
+    data = _load_store()
     bucket = data.setdefault(tenant, {})
     return bucket if isinstance(bucket, dict) else {}
 
@@ -51,7 +201,7 @@ def save_lead_action(tenant_id: str | None, sheet_row: int, payload: dict) -> di
     if not sheet_row:
         raise ValueError("sheet_row é obrigatório")
 
-    data = _load_all()
+    data = _load_store(force_refresh=True)
     tenant = normalize_text(tenant_id) or DEFAULT_TENANT_ID
     bucket = data.setdefault(tenant, {})
     current = bucket.get(str(sheet_row), {})
@@ -62,7 +212,10 @@ def save_lead_action(tenant_id: str | None, sheet_row: int, payload: dict) -> di
     current["updated_at"] = _now().isoformat(timespec="seconds")
     bucket[str(sheet_row)] = current
     data[tenant] = bucket
-    _save_all(data)
+    _persist_store(data)
+    with _lock:
+        global _cache
+        _cache = data
     return current
 
 
@@ -178,7 +331,7 @@ def delete_lead_action(tenant_id: str | None, sheet_row: int) -> None:
     if not sheet_row:
         return
 
-    data = _load_all()
+    data = _load_store(force_refresh=True)
     tenant = normalize_text(tenant_id) or DEFAULT_TENANT_ID
     bucket = data.get(tenant)
     if not isinstance(bucket, dict):
@@ -186,7 +339,10 @@ def delete_lead_action(tenant_id: str | None, sheet_row: int) -> None:
 
     bucket.pop(str(sheet_row), None)
     data[tenant] = bucket
-    _save_all(data)
+    _persist_store(data)
+    with _lock:
+        global _cache
+        _cache = data
 
 
 def mark_next_action_completed(tenant_id: str | None, sheet_row: int, user: str) -> dict | None:
