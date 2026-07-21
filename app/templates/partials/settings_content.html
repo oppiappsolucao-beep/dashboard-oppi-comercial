@@ -603,6 +603,34 @@
         <button type="submit" class="btn">Cadastrar empresa FAKE</button>
       </form>
     </div>
+
+    <div class="panel settings-single-card">
+      <div class="section-heading">Usuário FAKE de teste</div>
+      <div class="section-subtitle">
+        Cadastra <strong>Usuário FAKE Teste</strong> na aba <strong>Usuarios</strong> da planilha.
+        Também roda automaticamente ao iniciar o sistema.
+      </div>
+
+      {% if seed_fake_user_success %}
+      <div class="settings-alert success">{{ seed_fake_user_success }}</div>
+      {% endif %}
+      {% if seed_fake_user_error %}
+      <div class="settings-alert error">{{ seed_fake_user_error }}</div>
+      {% endif %}
+
+      <div class="settings-company-grid settings-company-grid-wide">
+        <div><span class="settings-company-label">Login</span><strong>usuario.fake</strong></div>
+        <div><span class="settings-company-label">Senha</span><strong>fake2026</strong></div>
+        <div><span class="settings-company-label">Perfil</span><strong>Vendedor</strong></div>
+        <div><span class="settings-company-label">E-mail</span><strong>usuario.fake@oppitech.test</strong></div>
+      </div>
+
+      <form method="post" action="/configuracoes/seed/usuario-fake" class="settings-inline-form"
+        onsubmit="return confirm('Cadastrar usuário FAKE de teste na planilha?');">
+        <input type="hidden" name="tab" value="integracoes">
+        <button type="submit" class="btn">Cadastrar usuário FAKE</button>
+      </form>
+    </div>
   </div>
 
   {% elif settings_params.tab == 'faturamento' %}

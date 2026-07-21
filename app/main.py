@@ -70,6 +70,7 @@ from app.routers.settings import (  # noqa: E402
     settings_refresh,
     settings_remove_service,
     settings_seed_fake_company,
+    settings_seed_fake_user,
 )
 
 app.add_api_route("/configuracoes", settings_page, methods=["GET"], tags=["settings"])
@@ -79,6 +80,7 @@ app.add_api_route("/configuracoes/atualizar", settings_refresh, methods=["POST"]
 app.add_api_route("/configuracoes/servicos/adicionar", settings_add_service, methods=["POST"], tags=["settings"])
 app.add_api_route("/configuracoes/servicos/remover", settings_remove_service, methods=["POST"], tags=["settings"])
 app.add_api_route("/configuracoes/seed/empresa-fake", settings_seed_fake_company, methods=["POST"], tags=["settings"])
+app.add_api_route("/configuracoes/seed/usuario-fake", settings_seed_fake_user, methods=["POST"], tags=["settings"])
 
 
 @app.on_event("startup")
@@ -110,8 +112,10 @@ async def startup_maintenance() -> None:
             reload_activities_store(force_refresh=True)
             reload_lead_actions_store(force_refresh=True)
             from app.services.seed_fake_company import ensure_fake_test_company_on_startup
+            from app.services.seed_fake_user import ensure_fake_test_user_on_startup
 
             ensure_fake_test_company_on_startup()
+            ensure_fake_test_user_on_startup()
         except Exception:
             pass
 

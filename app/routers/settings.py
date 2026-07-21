@@ -95,6 +95,8 @@ def _settings_context(request: Request, settings_params: dict):
         "sheet_sync_error": request.session.pop("settings_sheet_sync_error", ""),
         "seed_fake_success": request.session.pop("settings_seed_fake_success", ""),
         "seed_fake_error": request.session.pop("settings_seed_fake_error", ""),
+        "seed_fake_user_success": request.session.pop("settings_seed_fake_user_success", ""),
+        "seed_fake_user_error": request.session.pop("settings_seed_fake_user_error", ""),
     }
 
 
@@ -478,6 +480,23 @@ async def settings_seed_fake_company(request: Request):
         request.session["settings_seed_fake_success"] = result["message"]
     except Exception as error:
         request.session["settings_seed_fake_error"] = f"Não consegui cadastrar a empresa FAKE: {error}"
+
+    return RedirectResponse(url="/configuracoes?tab=integracoes", status_code=303)
+
+
+@router.post("/configuracoes/seed/usuario-fake")
+async def settings_seed_fake_user(request: Request):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+
+    try:
+        from app.services.seed_fake_user import seed_fake_test_user
+
+        result = seed_fake_test_user()
+        request.session["settings_seed_fake_user_success"] = result["message"]
+    except Exception as error:
+        request.session["settings_seed_fake_user_error"] = f"Não consegui cadastrar o usuário FAKE: {error}"
 
     return RedirectResponse(url="/configuracoes?tab=integracoes", status_code=303)
 
