@@ -163,32 +163,127 @@
   padding-left: 18px;
 }
 
+.leads-table th:nth-child(1),
+.leads-table td:nth-child(1) { width: 17%; max-width: 0; }
+.leads-table th:nth-child(2),
+.leads-table td:nth-child(2) { width: 18%; max-width: 0; }
+.leads-table th:nth-child(3),
+.leads-table td:nth-child(3) { width: 11%; }
+.leads-table th:nth-child(4),
+.leads-table td:nth-child(4) { width: 10%; max-width: 0; }
+.leads-table th:nth-child(5),
+.leads-table td:nth-child(5) { width: 12%; max-width: 0; }
+.leads-table th:nth-child(6),
+.leads-table td:nth-child(6) { width: 14%; max-width: 0; }
+.leads-table th:nth-child(7),
+.leads-table td:nth-child(7) { width: 12%; max-width: 0; }
+
+.leads-table td {
+  overflow: hidden;
+  vertical-align: middle;
+}
+
+.leads-table td:nth-child(3) {
+  white-space: nowrap;
+  position: relative;
+  z-index: 1;
+  background: var(--surface);
+}
+
+.table-company {
+  min-width: 0;
+}
+
+.table-company > div {
+  min-width: 0;
+  overflow: hidden;
+}
+
 .table-company-name {
   font-weight: 700;
   color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .table-company-meta {
   font-size: 0.76rem;
   color: var(--muted);
   margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .contact-cell {
   font-size: 0.84rem;
   line-height: 1.45;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .contact-line {
   display: flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.contact-line > span:last-child {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.leads-closed-services-cell,
+.leads-proposta-cell,
+.last-contact-cell {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.leads-closed-services-title,
+.leads-proposta-meta,
+.last-contact-date,
+.last-contact-relative {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.leads-table .stage-badge {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
 }
 
 .contact-icon {
   font-size: 0.82rem;
   opacity: 0.75;
   flex-shrink: 0;
+}
+
+.owner-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.84rem;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.owner-cell > span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .contact-email {
@@ -203,13 +298,6 @@
 .stage-badge.contato { background: #EDE9FE; color: #6D28D9; }
 .stage-badge.retorno { background: #FCE7F3; color: #DB2777; }
 .stage-badge.negociacao { background: #FEF3C7; color: #B45309; }
-
-.owner-cell {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 0.84rem;
-}
 
 .owner-avatar {
   width: 28px;
@@ -241,16 +329,6 @@
   font-size: 0.76rem;
   margin-top: 2px;
   padding-left: 22px;
-}
-
-.leads-closed-services-cell {
-  min-width: 140px;
-  max-width: 220px;
-}
-
-.leads-proposta-cell {
-  min-width: 140px;
-  max-width: 220px;
 }
 
 .leads-proposta-meta {

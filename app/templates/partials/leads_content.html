@@ -154,7 +154,7 @@
               {% if row.email != "—" %}
               <div class="contact-line contact-email">
                 <span class="contact-icon" aria-hidden="true">✉</span>
-                <span>{{ row.email }}</span>
+                <span title="{{ row.email }}">{{ row.email }}</span>
               </div>
               {% endif %}
               {% if row.telefone == "—" and row.email == "—" %}
