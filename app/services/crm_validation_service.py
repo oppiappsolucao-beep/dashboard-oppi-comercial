@@ -66,15 +66,26 @@ def normalize_legacy_next_action(value: str | None) -> str:
     text = _clean(value)
     if not text:
         return ""
+    stage = normalize_legacy_stage(text)
+    if stage in PIPELINE_STAGE_OPTIONS:
+        return stage
     if text in NEXT_ACTION_OPTIONS:
         return text
     mapped = LEGACY_NEXT_ACTION_MAP.get(text, "")
     if mapped in NEXT_ACTION_OPTIONS:
         return mapped
+    if mapped in PIPELINE_STAGE_OPTIONS:
+        return mapped
     process_mapped = normalize_legacy_action(text)
     if process_mapped in NEXT_ACTION_OPTIONS:
         return process_mapped
-    return LEGACY_NEXT_ACTION_MAP.get(process_mapped, "")
+    stage_mapped = normalize_legacy_stage(process_mapped)
+    if stage_mapped in PIPELINE_STAGE_OPTIONS:
+        return stage_mapped
+    legacy_mapped = LEGACY_NEXT_ACTION_MAP.get(process_mapped, "")
+    if legacy_mapped in PIPELINE_STAGE_OPTIONS:
+        return legacy_mapped
+    return legacy_mapped if legacy_mapped in NEXT_ACTION_OPTIONS else ""
 
 
 def normalize_legacy_channel(value: str | None) -> str:
@@ -147,13 +158,41 @@ def resolve_display_stage(raw_stage: str, stored: dict | None = None) -> tuple[s
 
 
 def stage_for_next_action(next_action: str) -> str:
+    stage = normalize_legacy_stage(next_action)
+    if stage in PIPELINE_STAGE_OPTIONS:
+        return stage
     normalized = normalize_legacy_next_action(next_action)
     if not normalized:
         return ""
-    for stage, action in NEXT_ACTION_BY_STAGE.items():
+    if normalized in PIPELINE_STAGE_OPTIONS:
+        return normalized
+    for pipeline_stage, action in NEXT_ACTION_BY_STAGE.items():
         if action == normalized:
-            return stage
+            return pipeline_stage
     return ""
+
+
+def next_action_display_stage(value: str | None, fallback_stage: str = "") -> str:
+    text = _clean(value)
+    stage = normalize_legacy_stage(text)
+    if stage in PIPELINE_STAGE_OPTIONS:
+        return stage
+
+    normalized = normalize_legacy_next_action(text)
+    fallback = normalize_legacy_stage(fallback_stage)
+    if fallback and NEXT_ACTION_BY_STAGE.get(fallback) == normalized:
+        return fallback
+
+    if normalized in PIPELINE_STAGE_OPTIONS:
+        return normalized
+
+    for pipeline_stage, action in NEXT_ACTION_BY_STAGE.items():
+        if action == normalized:
+            return pipeline_stage
+
+    if fallback in PIPELINE_STAGE_OPTIONS:
+        return fallback
+    return normalized or text
 
 
 def get_actions_for_stage(stage: str, include_current: str = "") -> list[str]:
@@ -165,14 +204,11 @@ def get_actions_for_stage(stage: str, include_current: str = "") -> list[str]:
     return actions
 
 
-def get_next_action_options(include_current: str = "") -> list[str]:
-    options = list(NEXT_ACTION_OPTIONS)
-    current = normalize_legacy_next_action(include_current)
+def get_next_action_options(include_current: str = "", fallback_stage: str = "") -> list[str]:
+    options = list(PIPELINE_STAGE_OPTIONS)
+    current = next_action_display_stage(include_current, fallback_stage)
     if current and current not in options:
         options.insert(0, current)
-    raw = _clean(include_current)
-    if raw and raw not in options and raw != current:
-        options.insert(0, raw)
     return options
 
 
@@ -238,7 +274,8 @@ def validate_channel(channel: str) -> bool:
 
 
 def validate_next_action(action: str) -> bool:
-    return normalize_legacy_next_action(action) in NEXT_ACTION_OPTIONS
+    normalized = normalize_legacy_next_action(action)
+    return normalized in PIPELINE_STAGE_OPTIONS or normalized in NEXT_ACTION_OPTIONS
 
 
 def validate_process_action(action: str, stage: str = "") -> bool:
@@ -288,7 +325,7 @@ def validate_activity_payload(payload: dict) -> str | None:
     current_stage = normalize_legacy_stage(_clean(payload.get("stage"))) or normalize_legacy_stage(move_stage)
     if next_action:
         normalized_next = normalize_legacy_next_action(next_action)
-        if normalized_next not in NEXT_ACTION_OPTIONS:
+        if normalized_next not in PIPELINE_STAGE_OPTIONS and normalized_next not in NEXT_ACTION_OPTIONS:
             return VALIDATION_ERROR_MESSAGE
 
     process_action = _clean(payload.get("process_action"))

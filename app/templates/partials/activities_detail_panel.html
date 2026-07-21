@@ -42,7 +42,7 @@
     </div>
 
     <section class="activity-drawer-section">
-      <div class="activity-drawer-section-label">Próxima ação</div>
+      <div class="activity-drawer-section-label">Próxima etapa</div>
       {% with save_url='/atividades/' ~ activity.id ~ '/proxima-acao', options_json=next_action_options_json, current_action=next_action_current, options=next_action_options %}
       {% include "partials/next_action_picker.html" %}
       {% endwith %}

@@ -23,7 +23,6 @@ from config.crm_options import (
     LOST_REASON_OPTIONS,
     NEW_ACTIVITY_STATUS_KEYS,
     NEXT_ACTION_BY_STAGE,
-    NEXT_ACTION_OPTIONS,
     NO_NEXT_ACTION_RESULTS,
     OVERVIEW_ACTION_TO_PROCESS,
     PIPELINE_STAGE_OPTIONS,
@@ -46,6 +45,7 @@ from app.services.crm_validation_service import (
     channel_label_to_key,
     get_actions_for_stage,
     get_next_action_options,
+    next_action_display_stage,
     normalize_legacy_action,
     normalize_legacy_channel,
     normalize_legacy_next_action,
@@ -463,13 +463,15 @@ def _serialize_activity(record: dict, tenant_id: str | None = None) -> dict:
     vendedor = normalize_text(record.get("assigned_user_id")) or "Sem vendedor"
     status_label = ACTIVITY_STATUS_LABELS.get(status, status.title())
     sla_key, sla_label, sla_class = calcular_sla_atividade(record, status, tenant_id=tenant_id, stage=stage)
-    allowed_next_actions = get_next_action_options(record.get("next_action", ""))
-    next_action_value = normalize_legacy_next_action(record.get("next_action")) or ""
+    allowed_next_actions = get_next_action_options(record.get("next_action", ""), stage)
+    display_stage = next_action_display_stage(record.get("next_action"), stage)
     next_action_raw = normalize_text(record.get("next_action"))
-    if next_action_raw and not next_action_value:
+    if next_action_raw and not display_stage:
         proxima_acao = f"{next_action_raw} (Valor legado)"
+        proxima_acao_value = next_action_raw
     else:
-        proxima_acao = next_action_value or normalize_legacy_next_action(process_action) or process_action
+        proxima_acao = display_stage or NEXT_ACTION_BY_STAGE.get(stage, process_action)
+        proxima_acao_value = display_stage or next_action_display_stage(process_action, stage)
 
     return {
         "id": record["id"],
@@ -500,7 +502,7 @@ def _serialize_activity(record: dict, tenant_id: str | None = None) -> dict:
         "result_value": result,
         "result_notes": record.get("result_notes") or "",
         "proxima_acao": proxima_acao,
-        "proxima_acao_value": next_action_value or next_action_raw,
+        "proxima_acao_value": proxima_acao_value,
         "allowed_next_actions": allowed_next_actions,
         "next_action_date": (record.get("next_action_date") or "")[:10],
         "next_action_time": record.get("next_action_time") or "09:00",
@@ -1406,8 +1408,14 @@ def build_activity_detail_panel(
             lead_created_at = lead.get("created_at")
 
     suggestion = suggest_from_result("Cliente respondeu", stage)
-    next_action_current = normalize_legacy_next_action(next_action_display) or next_action_display
-    next_action_options = get_next_action_options(activity.get("proxima_acao_value") or next_action_current)
+    next_action_current = next_action_display_stage(
+        activity.get("proxima_acao_value") or next_action_display,
+        stage,
+    )
+    next_action_options = get_next_action_options(
+        activity.get("proxima_acao_value") or next_action_display,
+        stage,
+    )
     timeline = _build_activity_timeline(tenant_id, record, activity, lead_created_at)
 
     return {
@@ -1542,7 +1550,7 @@ def build_activity_page_context(
         "channels": CHANNEL_OPTIONS,
         "status_options": SELECTABLE_ACTIVITY_STATUS_KEYS,
         "result_options": [opt for opt in ACTIVITY_RESULT_OPTIONS if opt != "Selecione"],
-        "next_action_options": NEXT_ACTION_OPTIONS,
+        "next_action_options": get_next_action_options(),
         "stage_options": stage_options,
         "pipeline_stage_options": PIPELINE_STAGE_OPTIONS,
         "type_options": ["Todos os tipos"] + PROCESS_ACTION_OPTIONS,
@@ -2052,7 +2060,7 @@ def build_new_activity_modal_context(
         "status_options": NEW_ACTIVITY_STATUS_KEYS,
         "priority_options": PRIORITY_OPTIONS,
         "result_options": [opt for opt in ACTIVITY_RESULT_OPTIONS if opt != "Selecione"],
-        "next_action_options": NEXT_ACTION_OPTIONS,
+        "next_action_options": get_next_action_options(),
         "lost_reason_options": LOST_REASON_OPTIONS,
         "responsible_options": responsibles,
         "default_responsible": default_responsible,
@@ -2063,7 +2071,7 @@ def build_new_activity_modal_context(
         "activity_type_stage_hints": ACTIVITY_TYPE_STAGE_HINT,
         "activity_type_defaults_json": json.dumps(ACTIVITY_TYPE_DEFAULT_ACTION, ensure_ascii=False),
         "activity_type_stage_hints_json": json.dumps(ACTIVITY_TYPE_STAGE_HINT, ensure_ascii=False),
-        "next_action_options_json": json.dumps(NEXT_ACTION_OPTIONS, ensure_ascii=False),
+        "next_action_options_json": json.dumps(get_next_action_options(), ensure_ascii=False),
         "modal_error": error,
     }
 
