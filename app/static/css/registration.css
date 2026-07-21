@@ -38,8 +38,27 @@
 }
 
 .form-grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
-.form-grid.cols-address-top { grid-template-columns: 2fr 0.75fr 1fr; margin-top: 14px; }
-.form-grid.cols-address-bottom { grid-template-columns: 0.9fr 1.2fr 1.2fr 0.55fr; margin-top: 14px; }
+.form-grid.cols-address-top {
+  grid-template-columns: minmax(108px, 132px) minmax(0, 1fr) minmax(72px, 96px);
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.form-grid.cols-address-bottom {
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr) minmax(0, 1.25fr) minmax(52px, 68px);
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.form-group.address-cep input {
+  max-width: 132px;
+}
+
+.form-group.address-uf input {
+  max-width: 68px;
+  text-align: center;
+  text-transform: uppercase;
+}
 .form-grid .full { grid-column: 1 / -1; }
 
 .registration-new-section .form-grid + .form-grid {
@@ -822,11 +841,18 @@
   .registration-funnel,
   .registration-new-page .form-grid,
   .registration-new-page .form-grid.cols-3,
+  .client-edit-page .form-grid.cols-address-top,
+  .client-edit-page .form-grid.cols-address-bottom,
   .registration-new-page .form-grid.cols-address-top,
   .registration-new-page .form-grid.cols-address-bottom,
   .form-card .form-grid.cols-address-top,
   .form-card .form-grid.cols-address-bottom {
     grid-template-columns: 1fr;
+  }
+
+  .form-group.address-cep input,
+  .form-group.address-uf input {
+    max-width: none;
   }
 
   .registration-new-header-actions {

@@ -42,15 +42,15 @@
       </div>
     </div>
     <div class="form-grid registration-address-line cols-address-top">
-      <div class="form-group"><label>CEP</label><input name="cep" placeholder="00000-000" value="{{ values.cep }}"></div>
-      <div class="form-group address-endereco"><label>Endereço</label><input name="endereco" value="{{ values.endereco }}"></div>
-      <div class="form-group address-numero"><label>Número</label><input name="endereco_numero" value="{{ values.endereco_numero }}"></div>
+      <div class="form-group address-cep"><label>CEP</label><input name="cep" placeholder="00000-000" value="{{ values.cep }}" maxlength="9" inputmode="numeric"></div>
+      <div class="form-group address-endereco"><label>Endereço</label><input name="endereco" value="{{ values.endereco }}" placeholder="Rua, avenida, logradouro"></div>
+      <div class="form-group address-numero"><label>Número</label><input name="endereco_numero" value="{{ values.endereco_numero }}" placeholder="Nº"></div>
     </div>
     <div class="form-grid registration-address-line cols-address-bottom">
-      <div class="form-group address-complemento"><label>Complemento</label><input name="endereco_complemento" value="{{ values.endereco_complemento }}"></div>
-      <div class="form-group"><label>Bairro</label><input name="bairro" value="{{ values.bairro }}"></div>
-      <div class="form-group"><label>Município</label><input name="municipio" value="{{ values.municipio }}"></div>
-      <div class="form-group"><label>UF</label><input name="uf" maxlength="2" placeholder="SP" value="{{ values.uf }}"></div>
+      <div class="form-group address-complemento"><label>Complemento</label><input name="endereco_complemento" value="{{ values.endereco_complemento }}" placeholder="Sala, bloco, etc."></div>
+      <div class="form-group address-bairro"><label>Bairro</label><input name="bairro" value="{{ values.bairro }}"></div>
+      <div class="form-group address-municipio"><label>Município</label><input name="municipio" value="{{ values.municipio }}"></div>
+      <div class="form-group address-uf"><label>UF</label><input name="uf" maxlength="2" placeholder="SP" value="{{ values.uf }}"></div>
     </div>
   </section>
 
