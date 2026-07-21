@@ -1020,6 +1020,11 @@
   gap: 16px;
 }
 
+.client-edit-backbar {
+  display: flex;
+  align-items: center;
+}
+
 .client-edit-header {
   padding: 18px 20px;
 }

@@ -7,6 +7,7 @@
       Digite <strong>excluir</strong> para confirmar que deseja realmente excluir.
     </p>
     <form method="post" action="/cadastro/todos/{{ sheet_row }}/excluir" class="client-delete-modal-form">
+      {% if from_page %}<input type="hidden" name="from" value="{{ from_page }}">{% endif %}
       <label for="client-delete-confirm-input">Confirmação</label>
       <input
         id="client-delete-confirm-input"

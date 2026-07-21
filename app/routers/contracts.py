@@ -68,6 +68,21 @@ def _get_row_by_sheet(df, sheet_row: int):
     return matches.iloc[0]
 
 
+def _resolve_edit_from_page(value: str) -> str:
+    normalized = normalize_text(value)
+    return normalized if normalized in {"leads", "activities"} else ""
+
+
+def _edit_page_url(sheet_row: int, *, tab: str = "", from_page: str = "") -> str:
+    params: list[str] = []
+    if tab:
+        params.append(f"tab={tab}")
+    if from_page:
+        params.append(f"from={from_page}")
+    query = f"?{'&'.join(params)}" if params else ""
+    return f"/cadastro/todos/{sheet_row}/editar{query}"
+
+
 @router.get("/cadastro/todos", response_class=HTMLResponse)
 async def contracts_list(request: Request, order: str = "recentes"):
     redirect = require_auth(request)
@@ -256,6 +271,7 @@ async def contract_edit_page(request: Request, sheet_row: int):
             ]}
 
     cadastro_tipo = resolve_cadastro_tipo(DEFAULT_TENANT_ID, sheet_row, cnpj=values.get("cnpj", ""))
+    from_page = _resolve_edit_from_page(request.query_params.get("from"))
     active_tab = normalize_text(request.query_params.get("tab")) or "dados"
     tab_aliases = {"cadastro": "dados", "dados": "dados", "atividades": "atividades", "proposta": "proposta"}
     active_tab = tab_aliases.get(active_tab, "dados")
@@ -284,11 +300,17 @@ async def contract_edit_page(request: Request, sheet_row: int):
         valor_proposta=values.get("valor_proposta", ""),
     )
 
+    back_href = "/leads-e-empresas" if from_page == "leads" else "/cadastro/todos"
+    active_sidebar = "leads" if from_page == "leads" else "contracts"
+
     return render(
         request,
         "contracts/edit.html",
         {
-            "active_page": "contracts",
+            "active_page": active_sidebar,
+            "from_page": from_page,
+            "back_href": back_href,
+            "back_label": "Leads e Empresas" if from_page == "leads" else "Todos os cadastros",
             "sheet_row": sheet_row,
             "seller_options": get_seller_options(df),
             "status_options": STATUS_OPTIONS,
@@ -318,8 +340,11 @@ async def contract_edit_submit(request: Request, sheet_row: int):
         return redirect
 
     form = await request.form()
+    from_page = _resolve_edit_from_page(form.get("from"))
     if form.get("action") == "cancel":
-        return RedirectResponse(url=f"/cadastro/todos/{sheet_row}", status_code=303)
+        if from_page == "leads":
+            return RedirectResponse(url="/leads-e-empresas", status_code=303)
+        return RedirectResponse(url=_edit_page_url(sheet_row, from_page=from_page), status_code=303)
 
     form_dict = dict(form)
     form_dict["email_empresa"] = form_dict.pop("email", form_dict.get("email_empresa", ""))
@@ -331,7 +356,7 @@ async def contract_edit_submit(request: Request, sheet_row: int):
         form_dict["valor_proposta"] = primary_closed.get("valor", "")
         save_company_edit(sheet_row, form_dict)
         save_cadastro_tipo(DEFAULT_TENANT_ID, sheet_row, form_dict.get("cadastro_tipo", "lead"))
-        return RedirectResponse(url=f"/cadastro/todos/{sheet_row}", status_code=303)
+        return RedirectResponse(url=_edit_page_url(sheet_row, from_page=from_page), status_code=303)
     except DuplicateRegistrationError as error:
         request.session["edit_error"] = str(error)
     except ValueError as error:
@@ -339,7 +364,7 @@ async def contract_edit_submit(request: Request, sheet_row: int):
     except Exception as error:
         request.session["edit_error"] = f"Não consegui salvar: {error}"
 
-    return RedirectResponse(url=f"/cadastro/todos/{sheet_row}/editar", status_code=303)
+    return RedirectResponse(url=_edit_page_url(sheet_row, from_page=from_page), status_code=303)
 
 
 @router.post("/cadastro/todos/{sheet_row}/excluir")
@@ -347,14 +372,18 @@ async def contract_delete(
     request: Request,
     sheet_row: int,
     confirm_text: str = Form(""),
+    from_: str = Form("", alias="from"),
 ):
     redirect = require_auth(request)
     if redirect:
         return redirect
 
+    from_page = _resolve_edit_from_page(from_)
+    edit_url = _edit_page_url(sheet_row, from_page=from_page)
+
     if normalize_text(confirm_text).lower() != "excluir":
         request.session["edit_error"] = "Digite excluir para confirmar que deseja realmente excluir."
-        return RedirectResponse(url=f"/cadastro/todos/{sheet_row}/editar", status_code=303)
+        return RedirectResponse(url=edit_url, status_code=303)
 
     df, _columns = get_prepared_data()
     row = _get_row_by_sheet(df, sheet_row)
@@ -366,12 +395,12 @@ async def contract_delete(
         delete_company_registration(DEFAULT_TENANT_ID, sheet_row)
     except ValueError as error:
         request.session["edit_error"] = str(error)
-        return RedirectResponse(url=f"/cadastro/todos/{sheet_row}/editar", status_code=303)
+        return RedirectResponse(url=edit_url, status_code=303)
     except Exception as error:
         request.session["edit_error"] = f"Não consegui excluir o cadastro: {error}"
-        return RedirectResponse(url=f"/cadastro/todos/{sheet_row}/editar", status_code=303)
+        return RedirectResponse(url=edit_url, status_code=303)
 
-    return RedirectResponse(url="/leads-e-empresas", status_code=303)
+    return RedirectResponse(url="/leads-e-empresas" if from_page == "leads" else "/cadastro/todos", status_code=303)
 
 
 @router.post("/cadastro/todos/{sheet_row}/tipo")

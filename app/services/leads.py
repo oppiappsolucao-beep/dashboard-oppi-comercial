@@ -302,7 +302,7 @@ def _build_row(row, columns: dict, tab: str, tenant_id: str | None) -> dict:
         "valor_num": deal_value_from_row(row),
         "whatsapp_href": _whatsapp_href(telefone if telefone != "—" else ""),
         "sheet_row": sheet_row,
-        "href": f"/cadastro/todos/{sheet_row}/editar" if sheet_row else "/cadastro/todos",
+        "href": f"/cadastro/todos/{sheet_row}/editar?from=leads" if sheet_row else "/cadastro/todos",
     }
 
 
