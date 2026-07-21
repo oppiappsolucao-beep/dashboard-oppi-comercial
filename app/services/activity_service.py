@@ -63,7 +63,15 @@ from app.services.crm_validation_service import (
 from app.services.filters import DashboardFilters, apply_dashboard_filters
 from app.services.followup_service import _lead_record, buscar_leads_para_acao, _minutes_since
 from app.services.lead_actions_storage import append_interaction, get_lead_action, save_lead_action
-from app.services.legacy_core import STATUS_OPTIONS, as_python_datetime, normalize_digits, normalize_text, safe_series
+from app.services.legacy_core import (
+    STATUS_OPTIONS,
+    as_python_datetime,
+    normalize_digits,
+    normalize_search_text,
+    normalize_text,
+    safe_series,
+    status_group,
+)
 
 STATUS_CLASS = {
     "pendente": "pendente",
@@ -1594,6 +1602,41 @@ def _lead_is_accessible(row, current_user: str, is_admin_user: bool) -> bool:
     return not username or not vendedor or vendedor == username
 
 
+def _lead_result_item(row, columns: dict, lead: dict, tenant_id: str | None) -> dict:
+    stage = lead.get("stage", "Novo Lead")
+    actions = get_actions_for_stage(stage)
+    return {
+        "sheet_row": lead["sheet_row"],
+        "empresa": lead["empresa"],
+        "contato": _contact_name(row, columns),
+        "stage": stage,
+        "vendedor": lead["vendedor"],
+        "phone": lead.get("phone", "") or "—",
+        "email": lead.get("email", "") or "—",
+        "suggested_action": actions[0] if actions else ACTIVITY_TYPE_DEFAULT_ACTION.get("Contato", "Fazer primeiro contato"),
+    }
+
+
+def _lead_row_is_active(row, lead: dict) -> bool:
+    if lead.get("opportunity_status") in {"Fechada ganha", "Fechada perdida", "Encerrada"}:
+        grouped = status_group(row.get("_status_grupo") or row.get("_status_original", ""))
+        if grouped in {"Fechado", "Sem interesse"}:
+            return False
+    return True
+
+
+def scope_df_for_lead_search(df: pd.DataFrame, seller: str = "Todos os vendedores") -> pd.DataFrame:
+    """Empresas cadastradas na planilha, sem filtro de período ou status do dashboard."""
+    if df.empty:
+        return df
+    scoped = df.copy()
+    if seller != "Todos os vendedores":
+        scoped = scoped[scoped["_vendedor"] == seller].copy()
+    if "_empresa" in scoped.columns:
+        scoped = scoped[scoped["_empresa"].apply(lambda value: normalize_text(value) != "")].copy()
+    return scoped
+
+
 def buscar_leads_para_atividade(
     filtered_df: pd.DataFrame,
     columns: dict,
@@ -1602,38 +1645,55 @@ def buscar_leads_para_atividade(
     current_user: str = "",
     is_admin_user: bool = False,
     limit: int = 12,
+    sheet_row: int | None = None,
 ) -> list[dict]:
-    term = normalize_text(query).lower()
-    if not term or filtered_df.empty:
+    if filtered_df.empty:
         return []
 
-    results: list[dict] = []
+    if sheet_row:
+        row_match = filtered_df[filtered_df["_sheet_row"] == int(sheet_row)]
+        if row_match.empty:
+            return []
+        row = row_match.iloc[0]
+        if not _lead_is_accessible(row, current_user, is_admin_user):
+            return []
+        lead = _lead_record(row, columns, tenant_id)
+        if not normalize_text(lead.get("empresa")):
+            return []
+        if not _lead_row_is_active(row, lead):
+            return []
+        return [_lead_result_item(row, columns, lead, tenant_id)]
+
+    term = normalize_text(query).lower()
+    candidates: list[tuple] = []
     for _, row in filtered_df.iterrows():
         if not _lead_is_accessible(row, current_user, is_admin_user):
             continue
         lead = _lead_record(row, columns, tenant_id)
-        if lead.get("opportunity_status") in {"Fechada ganha", "Fechada perdida", "Encerrada"}:
-            grouped = status_group(row.get("_status_grupo") or row.get("_status_original", ""))
-            if grouped in {"Fechado", "Sem interesse"}:
-                continue
-        blob = _lead_search_blob(row, columns, lead)
-        digits = normalize_digits(term)
-        if term not in blob and (not digits or digits not in blob.replace(" ", "")):
+        if not normalize_text(lead.get("empresa")):
             continue
-        stage = lead.get("stage", "Novo Lead")
-        actions = get_actions_for_stage(stage)
-        results.append({
-            "sheet_row": lead["sheet_row"],
-            "empresa": lead["empresa"],
-            "contato": _contact_name(row, columns),
-            "stage": stage,
-            "vendedor": lead["vendedor"],
-            "phone": lead.get("phone", "") or "—",
-            "email": lead.get("email", "") or "—",
-            "suggested_action": actions[0] if actions else ACTIVITY_TYPE_DEFAULT_ACTION.get("Contato", "Fazer primeiro contato"),
-        })
-        if len(results) >= limit:
-            break
+        if not _lead_row_is_active(row, lead):
+            continue
+        if term:
+            blob = _lead_search_blob(row, columns, lead)
+            digits = normalize_digits(term)
+            if term not in blob and (not digits or digits not in blob.replace(" ", "")):
+                continue
+        candidates.append((row, lead))
+
+    if not term:
+        candidates.sort(key=lambda item: normalize_search_text(item[1].get("empresa", "")))
+    else:
+        candidates.sort(
+            key=lambda item: (
+                normalize_search_text(item[1].get("empresa", "")).find(term) if term else 0,
+                normalize_search_text(item[1].get("empresa", "")),
+            )
+        )
+
+    results: list[dict] = []
+    for row, lead in candidates[:limit]:
+        results.append(_lead_result_item(row, columns, lead, tenant_id))
     return results
 
 
@@ -2048,6 +2108,8 @@ def build_new_activity_modal_context(
     is_admin_user: bool,
     today_iso: str,
     error: str = "",
+    prefill_sheet_row: int = 0,
+    prefill_empresa: str = "",
 ) -> dict:
     import json
 
@@ -2072,6 +2134,8 @@ def build_new_activity_modal_context(
         "activity_type_defaults_json": json.dumps(ACTIVITY_TYPE_DEFAULT_ACTION, ensure_ascii=False),
         "activity_type_stage_hints_json": json.dumps(ACTIVITY_TYPE_STAGE_HINT, ensure_ascii=False),
         "next_action_options_json": json.dumps(get_next_action_options(), ensure_ascii=False),
+        "prefill_sheet_row": int(prefill_sheet_row or 0),
+        "prefill_empresa": normalize_text(prefill_empresa),
         "modal_error": error,
     }
 

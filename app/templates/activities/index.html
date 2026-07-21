@@ -14,7 +14,7 @@
     <button type="button"
       class="btn"
       id="open-new-activity-btn"
-      hx-get="/atividades/nova/modal"
+      hx-get="/atividades/nova/modal{% if request.query_params.get('sheet_row') %}?sheet_row={{ request.query_params.get('sheet_row') }}&empresa={{ request.query_params.get('empresa', '') | urlencode }}{% endif %}"
       hx-target="#activity-modal-root"
       hx-swap="innerHTML">＋ Nova atividade</button>
   </div>

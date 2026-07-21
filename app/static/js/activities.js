@@ -202,48 +202,94 @@
     });
 
     if (searchInput && resultsBox) {
+      function selectLead(item) {
+        document.getElementById("new-activity-sheet-row").value = item.sheet_row;
+        document.getElementById("new-activity-empresa").value = item.empresa;
+        document.getElementById("new-activity-contato").value = item.contato;
+        if (stageSelect) stageSelect.value = item.stage;
+        if (document.getElementById("new-activity-responsible")) {
+          document.getElementById("new-activity-responsible").value = item.vendedor;
+        }
+        selectedBox.textContent = item.empresa + " · " + item.contato + " · " + item.stage;
+        searchInput.value = item.empresa;
+        resultsBox.classList.remove("is-open");
+        refreshActions().then(function () {
+          if (actionSelect && item.suggested_action) {
+            actionSelect.value = item.suggested_action;
+          }
+        });
+      }
+
+      function renderLeadResults(items) {
+        resultsBox.innerHTML = "";
+        (items || []).forEach(function (item) {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "activity-lead-result-item";
+          button.innerHTML =
+            "<strong>" + item.empresa + "</strong>" +
+            "<span>" + item.contato + " · " + item.phone + "</span>" +
+            "<span class='muted'>" + item.stage + " · " + item.vendedor + "</span>";
+          button.addEventListener("click", function () {
+            selectLead(item);
+          });
+          resultsBox.appendChild(button);
+        });
+        resultsBox.classList.toggle("is-open", (items || []).length > 0);
+      }
+
+      async function searchLeads(query, sheetRow) {
+        const params = new URLSearchParams();
+        if (sheetRow) {
+          params.set("sheet_row", String(sheetRow));
+        } else {
+          params.set("q", query || "");
+        }
+        const response = await fetch("/atividades/api/leads?" + params.toString());
+        const data = await response.json();
+        return data.items || [];
+      }
+
       searchInput.addEventListener("input", function () {
         clearTimeout(searchTimer);
         const query = searchInput.value.trim();
-        if (query.length < 2) {
-          resultsBox.innerHTML = "";
-          resultsBox.classList.remove("is-open");
-          return;
-        }
         searchTimer = setTimeout(async function () {
-          const response = await fetch("/atividades/api/leads?q=" + encodeURIComponent(query));
-          const data = await response.json();
-          resultsBox.innerHTML = "";
-          (data.items || []).forEach(function (item) {
-            const button = document.createElement("button");
-            button.type = "button";
-            button.className = "activity-lead-result-item";
-            button.innerHTML =
-              "<strong>" + item.empresa + "</strong>" +
-              "<span>" + item.contato + " · " + item.phone + "</span>" +
-              "<span class='muted'>" + item.stage + " · " + item.vendedor + "</span>";
-            button.addEventListener("click", function () {
-              document.getElementById("new-activity-sheet-row").value = item.sheet_row;
-              document.getElementById("new-activity-empresa").value = item.empresa;
-              document.getElementById("new-activity-contato").value = item.contato;
-              if (stageSelect) stageSelect.value = item.stage;
-              if (document.getElementById("new-activity-responsible")) {
-                document.getElementById("new-activity-responsible").value = item.vendedor;
-              }
-              selectedBox.textContent = item.empresa + " · " + item.contato + " · " + item.stage;
-              searchInput.value = item.empresa;
-              resultsBox.classList.remove("is-open");
-              refreshActions().then(function () {
-                if (actionSelect && item.suggested_action) {
-                  actionSelect.value = item.suggested_action;
-                }
-              });
-            });
-            resultsBox.appendChild(button);
-          });
-          resultsBox.classList.toggle("is-open", (data.items || []).length > 0);
+          renderLeadResults(await searchLeads(query));
         }, 250);
       });
+
+      searchInput.addEventListener("focus", function () {
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(async function () {
+          const query = searchInput.value.trim();
+          renderLeadResults(await searchLeads(query));
+        }, 100);
+      });
+
+      const prefill = window.ACTIVITY_MODAL_PREFILL || {};
+      const urlParams = new URLSearchParams(window.location.search);
+      const prefillRow = parseInt(prefill.sheet_row || urlParams.get("sheet_row") || "0", 10);
+      const prefillEmpresa = prefill.empresa || urlParams.get("empresa") || "";
+      if (prefillRow) {
+        searchLeads("", prefillRow).then(function (items) {
+          if (items.length) {
+            selectLead(items[0]);
+            return;
+          }
+          if (prefillEmpresa) {
+            searchInput.value = prefillEmpresa;
+            searchLeads(prefillEmpresa).then(renderLeadResults);
+          }
+        });
+      } else if (prefillEmpresa) {
+        searchInput.value = prefillEmpresa;
+        searchLeads(prefillEmpresa).then(function (items) {
+          renderLeadResults(items);
+          if (items.length === 1) {
+            selectLead(items[0]);
+          }
+        });
+      }
     }
 
     if (resultSelect) {

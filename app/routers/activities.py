@@ -17,6 +17,7 @@ from app.services.activity_service import (
     cancelar_atividade,
     criar_atividade,
     mover_atividade_kanban,
+    scope_df_for_lead_search,
     sugerir_fluxo_por_resultado,
     atualizar_proxima_acao_atividade,
     _serialize_activity,
@@ -93,12 +94,19 @@ def _modal_context(request: Request, error: str = ""):
     filters = apply_default_period_filters(parse_dashboard_filters(request), df)
     filters = apply_seller_scope(request, filters, options["seller_options"], is_admin(request))
     current_user = normalize_text(request.session.get("username", "")) or "Usuário"
+    try:
+        prefill_sheet_row = int(request.query_params.get("sheet_row") or 0)
+    except (TypeError, ValueError):
+        prefill_sheet_row = 0
+    prefill_empresa = normalize_text(request.query_params.get("empresa", ""))
     return build_new_activity_modal_context(
         seller_options=options["seller_options"],
         current_user=current_user,
         is_admin_user=is_admin(request),
         today_iso=date.today().isoformat(),
         error=error,
+        prefill_sheet_row=prefill_sheet_row,
+        prefill_empresa=prefill_empresa,
     )
 
 
@@ -219,7 +227,7 @@ async def activities_move_stage(
 
 
 @router.get("/atividades/api/leads")
-async def activities_search_leads(request: Request, q: str = ""):
+async def activities_search_leads(request: Request, q: str = "", sheet_row: int = 0):
     redirect = require_auth(request)
     if redirect:
         return redirect
@@ -227,15 +235,22 @@ async def activities_search_leads(request: Request, q: str = ""):
     options = get_filter_options(df)
     filters = apply_default_period_filters(parse_dashboard_filters(request), df)
     filters = apply_seller_scope(request, filters, options["seller_options"], is_admin(request))
-    scoped_df = apply_dashboard_filters(df, columns, filters)
+    scoped_df = scope_df_for_lead_search(df, filters.seller)
     current_user = normalize_text(request.session.get("username", ""))
+    query = normalize_text(q)
+    try:
+        row_id = int(sheet_row or 0)
+    except (TypeError, ValueError):
+        row_id = 0
     leads = buscar_leads_para_atividade(
         scoped_df,
         columns,
         DEFAULT_TENANT_ID,
-        q,
+        query,
         current_user=current_user,
         is_admin_user=is_admin(request),
+        limit=20 if not query else 12,
+        sheet_row=row_id or None,
     )
     return JSONResponse({"items": leads})
 

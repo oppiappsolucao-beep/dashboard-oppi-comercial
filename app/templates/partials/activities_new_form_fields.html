@@ -201,6 +201,7 @@
 window.ACTIVITY_MODAL_DEFAULTS = {{ activity_type_defaults_json | safe }};
 window.ACTIVITY_MODAL_STAGE_HINTS = {{ activity_type_stage_hints_json | safe }};
 window.ACTIVITY_MODAL_NEXT_ACTIONS = {{ next_action_options_json | safe }};
+window.ACTIVITY_MODAL_PREFILL = {{ {"sheet_row": prefill_sheet_row, "empresa": prefill_empresa}|tojson }};
 window.ACTIVITY_MODAL_TODAY = "{{ today_iso }}";
 </script>
 {% if modal_error %}
