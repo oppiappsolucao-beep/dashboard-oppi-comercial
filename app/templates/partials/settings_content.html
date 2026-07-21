@@ -170,11 +170,7 @@
 </div>
 {% endif %}
 
-<div id="settings-filters"
-  hx-post="/configuracoes/filtros"
-  hx-target="#settings-root"
-  hx-swap="innerHTML"
->
+<div id="settings-filters">
   <input type="hidden" name="tab" value="{{ settings_params.tab }}" id="settings-tab-input">
   <input type="hidden" name="page" value="{{ users_table.page }}" id="settings-page-input">
 
