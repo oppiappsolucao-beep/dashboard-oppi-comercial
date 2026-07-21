@@ -6,7 +6,9 @@ import threading
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
-from config.settings import settings
+from config.settings import settings as runtime_settings
+
+from app.config import settings
 
 from app.services.legacy_core import normalize_text
 from app.services.sheet_crm_storage import CRM_STORAGE_TABS, get_worksheet, header_indexes
@@ -21,7 +23,7 @@ _cache: dict | None = None
 
 
 def _now() -> datetime:
-    return datetime.now(ZoneInfo(settings.timezone)).replace(tzinfo=None)
+    return datetime.now(ZoneInfo(runtime_settings.timezone)).replace(tzinfo=None)
 
 
 def _storage_path():
