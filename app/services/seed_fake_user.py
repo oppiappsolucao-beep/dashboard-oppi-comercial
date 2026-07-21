@@ -6,7 +6,6 @@ import logging
 from app.config import settings
 from app.services.account_users import (
     create_account_user,
-    get_account_user_by_username,
     invalidate_account_users_cache,
     load_account_users,
 )
@@ -16,12 +15,16 @@ logger = logging.getLogger(__name__)
 FAKE_USER_NAME = "Usuário FAKE Teste"
 FAKE_USER_USERNAME = "usuario.fake"
 FAKE_USER_PASSWORD = "fake2026"
-FAKE_USER_EMAIL = "usuario.fake@oppitech.test"
+FAKE_USER_EMAIL = "usuario.fake@oppitech.com.br"
 FAKE_USER_ROLE = "Vendedor"
 
 
 def find_fake_test_user() -> dict | None:
-    return get_account_user_by_username(FAKE_USER_USERNAME)
+    target = FAKE_USER_USERNAME.lower()
+    for user in load_account_users():
+        if user["username"].lower() == target:
+            return dict(user)
+    return None
 
 
 def seed_fake_test_user() -> dict:

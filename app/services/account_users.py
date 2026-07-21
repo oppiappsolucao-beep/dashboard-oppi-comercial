@@ -79,9 +79,26 @@ def _hash_password(password: str) -> str:
 
 def _verify_password(password: str, password_hash: str) -> bool:
     try:
-        return _pwd_context.verify(password, password_hash)
+        return _pwd_context.verify(password, _sheet_unescape_hash(password_hash))
     except Exception:
         return False
+
+
+def _sheet_escape_hash(password_hash: str) -> str:
+    """Evita que o Google Sheets corrompa hashes bcrypt que começam com $."""
+    clean = normalize_text(password_hash)
+    if clean.startswith("'"):
+        return clean
+    if clean.startswith("$"):
+        return f"'{clean}"
+    return clean
+
+
+def _sheet_unescape_hash(password_hash: str) -> str:
+    clean = normalize_text(password_hash)
+    if clean.startswith("'"):
+        return clean[1:]
+    return clean
 
 
 def _serialize_user(raw: dict) -> dict:
@@ -156,7 +173,7 @@ def _user_row_from_sheet(row: list[str], indexes: dict[str, int]) -> dict | None
             "name": row[indexes["Nome"]],
             "email": row[indexes["Email"]],
             "username": row[indexes["Usuario"]],
-            "password_hash": row[indexes["SenhaHash"]],
+            "password_hash": _sheet_unescape_hash(row[indexes["SenhaHash"]]),
             "role": row[indexes["Perfil"]],
             "active": normalize_text(row[indexes["Ativo"]]).lower() in {"1", "true", "sim", "ativo", "yes"},
             "last_access": row[indexes["UltimoAcesso"]],
@@ -206,7 +223,7 @@ def _save_to_sheet(users: list[dict]) -> bool:
                 user["name"],
                 user["email"],
                 user["username"],
-                user["password_hash"],
+                _sheet_escape_hash(user["password_hash"]),
                 user["role"],
                 "1" if user["active"] else "0",
                 user.get("last_access", ""),

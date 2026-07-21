@@ -45,7 +45,7 @@ def ensure_crm_storage_tabs() -> dict[str, bool]:
         try:
             worksheet = spreadsheet.worksheet(tab_name)
             existing = worksheet.row_values(1)
-            if not existing:
+            if not existing or header_indexes(existing, headers) is None:
                 worksheet.update([headers], "A1", value_input_option="USER_ENTERED")
             result[tab_name] = True
         except WorksheetNotFound:

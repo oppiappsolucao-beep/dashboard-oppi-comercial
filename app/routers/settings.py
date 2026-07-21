@@ -491,9 +491,12 @@ async def settings_seed_fake_user(request: Request):
         return redirect
 
     try:
+        from app.services.account_users import invalidate_account_users_cache, load_account_users
         from app.services.seed_fake_user import seed_fake_test_user
 
         result = seed_fake_test_user()
+        invalidate_account_users_cache()
+        load_account_users(force_refresh=True)
         request.session["settings_seed_fake_user_success"] = result["message"]
     except Exception as error:
         request.session["settings_seed_fake_user_error"] = f"Não consegui cadastrar o usuário FAKE: {error}"
