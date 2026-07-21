@@ -69,6 +69,7 @@ from app.routers.settings import (  # noqa: E402
     settings_permissions_toggle,
     settings_refresh,
     settings_remove_service,
+    settings_seed_fake_company,
 )
 
 app.add_api_route("/configuracoes", settings_page, methods=["GET"], tags=["settings"])
@@ -77,6 +78,7 @@ app.add_api_route("/configuracoes/permissoes", settings_permissions_toggle, meth
 app.add_api_route("/configuracoes/atualizar", settings_refresh, methods=["POST"], tags=["settings"])
 app.add_api_route("/configuracoes/servicos/adicionar", settings_add_service, methods=["POST"], tags=["settings"])
 app.add_api_route("/configuracoes/servicos/remover", settings_remove_service, methods=["POST"], tags=["settings"])
+app.add_api_route("/configuracoes/seed/empresa-fake", settings_seed_fake_company, methods=["POST"], tags=["settings"])
 
 
 @app.on_event("startup")

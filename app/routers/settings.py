@@ -93,6 +93,8 @@ def _settings_context(request: Request, settings_params: dict):
         "user_error": request.session.pop("settings_user_error", ""),
         "sheet_sync_success": request.session.pop("settings_sheet_sync_success", ""),
         "sheet_sync_error": request.session.pop("settings_sheet_sync_error", ""),
+        "seed_fake_success": request.session.pop("settings_seed_fake_success", ""),
+        "seed_fake_error": request.session.pop("settings_seed_fake_error", ""),
     }
 
 
@@ -458,6 +460,30 @@ async def settings_refresh(request: Request):
     reload_activities_store(force_refresh=True)
     reload_lead_actions_store(force_refresh=True)
     return RedirectResponse(url="/configuracoes", status_code=303)
+
+
+@router.post("/configuracoes/seed/empresa-fake")
+async def settings_seed_fake_company(request: Request):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+
+    if not is_admin(request):
+        request.session["settings_seed_fake_error"] = "Somente administradores podem cadastrar a empresa de teste."
+        return RedirectResponse(url="/configuracoes?tab=integracoes", status_code=303)
+
+    try:
+        from app.services.legacy_core import invalidate_sheet_cache
+        from app.services.seed_fake_company import seed_fake_test_company
+
+        user = normalize_text(request.session.get("username", "")) or "admin"
+        result = seed_fake_test_company(user=user)
+        invalidate_sheet_cache()
+        request.session["settings_seed_fake_success"] = result["message"]
+    except Exception as error:
+        request.session["settings_seed_fake_error"] = f"Não consegui cadastrar a empresa FAKE: {error}"
+
+    return RedirectResponse(url="/configuracoes?tab=integracoes", status_code=303)
 
 
 @router.post("/configuracoes/planilha/sincronizar")

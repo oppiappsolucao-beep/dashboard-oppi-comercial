@@ -580,6 +580,27 @@
         <em>Aplicar na planilha</em>.
       </p>
     </div>
+
+    <div class="panel settings-single-card">
+      <div class="section-heading">Empresa FAKE de teste</div>
+      <div class="section-subtitle">
+        Cadastra <strong>EMPRESA FAKE TESTE OPPI LTDA</strong> com todos os campos do formulário preenchidos
+        (dados, sócios, endereço, serviço fechado e primeira atividade) para validar a planilha.
+      </div>
+
+      {% if seed_fake_success %}
+      <div class="settings-alert success">{{ seed_fake_success }}</div>
+      {% endif %}
+      {% if seed_fake_error %}
+      <div class="settings-alert error">{{ seed_fake_error }}</div>
+      {% endif %}
+
+      <form method="post" action="/configuracoes/seed/empresa-fake" class="settings-inline-form"
+        onsubmit="return confirm('Cadastrar empresa FAKE de teste na planilha?');">
+        <input type="hidden" name="tab" value="integracoes">
+        <button type="submit" class="btn">Cadastrar empresa FAKE</button>
+      </form>
+    </div>
     {% endif %}
   </div>
 
