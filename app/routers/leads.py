@@ -167,9 +167,8 @@ async def leads_export(request: Request):
         "Etapa",
         "Responsável",
         "Último contato",
-        "Serviços fechados e Proposta",
-        "Detalhes serviços / proposta",
-        "Valor estimado",
+        "Serviços fechados",
+        "Proposta",
     ])
     for row in rows:
         writer.writerow([
@@ -183,7 +182,6 @@ async def leads_export(request: Request):
             row["ultimo_contato"],
             row["closed_services_title"],
             row["closed_services_meta"],
-            row["valor"],
         ])
 
     buffer.seek(0)

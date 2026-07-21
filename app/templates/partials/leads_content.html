@@ -126,8 +126,8 @@
           <th>Etapa atual</th>
           <th>Responsável</th>
           <th>Último contato</th>
-          <th>Serviços fechados e Proposta</th>
-          <th>Valor estimado</th>
+          <th>Serviços fechados</th>
+          <th>Proposta</th>
           <th>Ação</th>
         </tr>
       </thead>
@@ -185,12 +185,17 @@
           <td>
             <div class="leads-closed-services-cell">
               <div class="leads-closed-services-title">{{ row.closed_services_title }}</div>
+            </div>
+          </td>
+          <td>
+            <div class="leads-proposta-cell">
               {% if row.closed_services_meta %}
-              <div class="leads-closed-services-meta">{{ row.closed_services_meta }}</div>
+              <div class="leads-proposta-meta">{{ row.closed_services_meta }}</div>
+              {% else %}
+              <span class="contact-empty">—</span>
               {% endif %}
             </div>
           </td>
-          <td class="value-cell">{{ row.valor }}</td>
           <td class="table-actions">
             {% if row.whatsapp_href %}
             <a href="{{ row.whatsapp_href }}" class="btn btn-small leads-wa-btn" target="_blank" rel="noopener" aria-label="WhatsApp">💬</a>
