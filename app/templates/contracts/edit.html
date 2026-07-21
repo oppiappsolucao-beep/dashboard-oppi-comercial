@@ -68,17 +68,28 @@
     {% if active_tab == 'dados' %}
     {% include "partials/registration_edit_dados_tab.html" %}
     <footer class="client-edit-footer panel">
-      <button type="submit" name="action" value="save" class="btn">Salvar alterações</button>
-      <button type="submit" name="action" value="cancel" class="btn btn-secondary">Cancelar</button>
+      <div class="client-edit-footer-actions">
+        <button type="submit" name="action" value="save" class="btn">Salvar alterações</button>
+        <button type="submit" name="action" value="cancel" class="btn btn-secondary">Cancelar</button>
+      </div>
+      <button type="button" class="btn btn-danger client-edit-delete-btn" id="open-delete-modal">Excluir</button>
     </footer>
     {% elif active_tab == 'atividades' %}
     {% include "partials/registration_activities_tab.html" %}
+    <footer class="client-edit-footer panel client-edit-footer-compact">
+      <button type="button" class="btn btn-danger client-edit-delete-btn" id="open-delete-modal">Excluir</button>
+    </footer>
     {% else %}
     {% include "partials/registration_proposta_tab.html" %}
+    <footer class="client-edit-footer panel client-edit-footer-compact">
+      <button type="button" class="btn btn-danger client-edit-delete-btn" id="open-delete-modal">Excluir</button>
+    </footer>
     {% endif %}
   </form>
 </div>
 
+{% include "partials/registration_delete_modal.html" %}
+
 <script src="/static/js/partners-form.js?v=1" defer></script>
-<script src="/static/js/registration-edit.js?v=3" defer></script>
+<script src="/static/js/registration-edit.js?v=4" defer></script>
 {% endblock %}

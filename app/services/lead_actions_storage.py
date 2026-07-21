@@ -174,6 +174,21 @@ def complete_activity(
     return save_lead_action(tenant_id, sheet_row, record)
 
 
+def delete_lead_action(tenant_id: str | None, sheet_row: int) -> None:
+    if not sheet_row:
+        return
+
+    data = _load_all()
+    tenant = normalize_text(tenant_id) or DEFAULT_TENANT_ID
+    bucket = data.get(tenant)
+    if not isinstance(bucket, dict):
+        return
+
+    bucket.pop(str(sheet_row), None)
+    data[tenant] = bucket
+    _save_all(data)
+
+
 def mark_next_action_completed(tenant_id: str | None, sheet_row: int, user: str) -> dict | None:
     record = get_lead_action(tenant_id, sheet_row)
     if not record:

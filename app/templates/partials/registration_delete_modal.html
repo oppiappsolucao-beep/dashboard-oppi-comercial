@@ -1,0 +1,25 @@
+<div class="client-delete-modal" id="client-delete-modal" hidden aria-hidden="true">
+  <div class="client-delete-modal-backdrop" data-close-delete-modal></div>
+  <div class="client-delete-modal-dialog panel" role="dialog" aria-modal="true" aria-labelledby="client-delete-modal-title">
+    <h2 id="client-delete-modal-title">Excluir cadastro</h2>
+    <p class="client-delete-modal-text">
+      Esta ação remove <strong>{{ values.empresa }}</strong> da planilha comercial.
+      Digite <strong>excluir</strong> para confirmar que deseja realmente excluir.
+    </p>
+    <form method="post" action="/cadastro/todos/{{ sheet_row }}/excluir" class="client-delete-modal-form">
+      <label for="client-delete-confirm-input">Confirmação</label>
+      <input
+        id="client-delete-confirm-input"
+        name="confirm_text"
+        type="text"
+        autocomplete="off"
+        spellcheck="false"
+        placeholder="excluir"
+        required>
+      <div class="client-delete-modal-actions">
+        <button type="button" class="btn btn-secondary" data-close-delete-modal>Cancelar</button>
+        <button type="submit" class="btn btn-danger" id="client-delete-submit" disabled>Excluir cadastro</button>
+      </div>
+    </form>
+  </div>
+</div>

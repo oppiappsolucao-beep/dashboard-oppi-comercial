@@ -89,8 +89,55 @@
     updateView();
   }
 
+  function initDeleteModal() {
+    var modal = document.getElementById("client-delete-modal");
+    if (!modal) return;
+
+    var input = document.getElementById("client-delete-confirm-input");
+    var submit = document.getElementById("client-delete-submit");
+    var openButtons = document.querySelectorAll("#open-delete-modal, .client-edit-delete-btn");
+
+    function closeModal() {
+      modal.hidden = true;
+      modal.setAttribute("aria-hidden", "true");
+      if (input) input.value = "";
+      if (submit) submit.disabled = true;
+    }
+
+    function openModal() {
+      modal.hidden = false;
+      modal.setAttribute("aria-hidden", "false");
+      if (input) {
+        input.value = "";
+        input.focus();
+      }
+      if (submit) submit.disabled = true;
+    }
+
+    openButtons.forEach(function (button) {
+      button.addEventListener("click", openModal);
+    });
+
+    modal.querySelectorAll("[data-close-delete-modal]").forEach(function (element) {
+      element.addEventListener("click", closeModal);
+    });
+
+    if (input && submit) {
+      input.addEventListener("input", function () {
+        submit.disabled = input.value.trim().toLowerCase() !== "excluir";
+      });
+    }
+
+    document.addEventListener("keydown", function (event) {
+      if (event.key === "Escape" && !modal.hidden) {
+        closeModal();
+      }
+    });
+  }
+
   document.addEventListener("DOMContentLoaded", function () {
     document.querySelectorAll(".registration-tipo-switch").forEach(initTipoSwitch);
     initClosedServices();
+    initDeleteModal();
   });
 })();

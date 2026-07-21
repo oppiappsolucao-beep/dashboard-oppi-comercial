@@ -1477,6 +1477,23 @@ def update_company_in_sheet(sheet_row: int, payload: dict) -> None:
     invalidate_sheet_cache()
 
 
+def delete_company_from_sheet(sheet_row: int) -> None:
+    """Remove a linha do cadastro comercial na planilha."""
+    row_number = int(sheet_row)
+    if row_number < 2:
+        raise ValueError("Linha inválida para exclusão.")
+
+    client = get_gsheet_client()
+    spreadsheet = client.open_by_key(settings.sheet_id)
+    worksheet = _open_worksheet(spreadsheet, settings.worksheet_name)
+
+    if row_number > worksheet.row_count:
+        raise ValueError("Cadastro não encontrado na planilha.")
+
+    worksheet.delete_rows(row_number)
+    invalidate_sheet_cache()
+
+
 # =========================================================
 # IDENTIFICAÇÃO DAS COLUNAS
 # =========================================================

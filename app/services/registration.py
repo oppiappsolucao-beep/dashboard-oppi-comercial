@@ -147,6 +147,14 @@ def save_company_edit(sheet_row: int, form: dict) -> None:
     update_company_in_sheet(sheet_row, payload)
 
 
+def delete_company_registration(tenant_id: str | None, sheet_row: int) -> None:
+    from app.services.legacy_core import delete_company_from_sheet
+    from app.services.lead_actions_storage import delete_lead_action
+
+    delete_company_from_sheet(sheet_row)
+    delete_lead_action(tenant_id, sheet_row)
+
+
 def get_seller_options(df) -> list[str]:
     sellers = sorted({
         normalize_text(v) for v in df["_vendedor"].tolist()

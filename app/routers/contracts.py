@@ -39,6 +39,7 @@ from app.services.registration import (
     resolve_cadastro_tipo,
     save_cadastro_tipo,
     save_company_edit,
+    delete_company_registration,
 )
 
 router = APIRouter()
@@ -339,6 +340,38 @@ async def contract_edit_submit(request: Request, sheet_row: int):
         request.session["edit_error"] = f"Não consegui salvar: {error}"
 
     return RedirectResponse(url=f"/cadastro/todos/{sheet_row}/editar", status_code=303)
+
+
+@router.post("/cadastro/todos/{sheet_row}/excluir")
+async def contract_delete(
+    request: Request,
+    sheet_row: int,
+    confirm_text: str = Form(""),
+):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+
+    if normalize_text(confirm_text).lower() != "excluir":
+        request.session["edit_error"] = "Digite excluir para confirmar que deseja realmente excluir."
+        return RedirectResponse(url=f"/cadastro/todos/{sheet_row}/editar", status_code=303)
+
+    df, _columns = get_prepared_data()
+    row = _get_row_by_sheet(df, sheet_row)
+    if row is None:
+        request.session["edit_error"] = "Cadastro não encontrado."
+        return RedirectResponse(url="/cadastro/todos", status_code=303)
+
+    try:
+        delete_company_registration(DEFAULT_TENANT_ID, sheet_row)
+    except ValueError as error:
+        request.session["edit_error"] = str(error)
+        return RedirectResponse(url=f"/cadastro/todos/{sheet_row}/editar", status_code=303)
+    except Exception as error:
+        request.session["edit_error"] = f"Não consegui excluir o cadastro: {error}"
+        return RedirectResponse(url=f"/cadastro/todos/{sheet_row}/editar", status_code=303)
+
+    return RedirectResponse(url="/leads-e-empresas", status_code=303)
 
 
 @router.post("/cadastro/todos/{sheet_row}/tipo")

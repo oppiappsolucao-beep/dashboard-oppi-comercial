@@ -1288,8 +1288,99 @@
 
 .client-edit-footer {
   display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 10px;
   padding: 16px 18px;
+}
+
+.client-edit-footer-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.client-edit-footer-compact {
+  justify-content: flex-end;
+}
+
+.btn-danger {
+  background: #DC2626;
+  color: #fff;
+  border: 1px solid #DC2626;
+}
+
+.btn-danger:hover {
+  background: #B91C1C;
+  border-color: #B91C1C;
+}
+
+.btn-danger:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.client-delete-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+}
+
+.client-delete-modal[hidden] {
+  display: none;
+}
+
+.client-delete-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.client-delete-modal-dialog {
+  position: relative;
+  width: min(460px, 100%);
+  padding: 22px;
+  z-index: 1;
+}
+
+.client-delete-modal-dialog h2 {
+  margin: 0 0 10px;
+  font-size: 1.1rem;
+}
+
+.client-delete-modal-text {
+  margin: 0 0 16px;
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.client-delete-modal-form label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.client-delete-modal-form input {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 12px;
+  font: inherit;
+  margin-bottom: 16px;
+}
+
+.client-delete-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
 }
 
 .client-edit-proposal-panel {
