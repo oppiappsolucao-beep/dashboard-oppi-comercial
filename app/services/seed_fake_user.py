@@ -2,12 +2,17 @@
 from __future__ import annotations
 
 import logging
+import uuid
 
 from app.config import settings
 from app.services.account_users import (
-    create_account_user,
+    _hash_password,
+    _now_iso,
+    _serialize_user,
+    append_account_user_to_sheet,
     invalidate_account_users_cache,
     load_account_users,
+    user_exists_in_sheet,
 )
 
 logger = logging.getLogger(__name__)
@@ -44,14 +49,35 @@ def seed_fake_test_user() -> dict:
             ),
         }
 
-    user = create_account_user(
-        name=FAKE_USER_NAME,
-        email=FAKE_USER_EMAIL,
-        username=FAKE_USER_USERNAME,
-        password=FAKE_USER_PASSWORD,
-        role=FAKE_USER_ROLE,
-        active=True,
-    )
+    if user_exists_in_sheet(FAKE_USER_USERNAME):
+        invalidate_account_users_cache()
+        existing = find_fake_test_user()
+        if existing:
+            return {
+                "created": False,
+                "user_id": existing["id"],
+                "username": existing["username"],
+                "name": existing["name"],
+                "message": (
+                    f"Usuário FAKE já cadastrado. Login: {FAKE_USER_USERNAME} · "
+                    f"Senha: {FAKE_USER_PASSWORD}"
+                ),
+            }
+
+    user = _serialize_user({
+        "id": str(uuid.uuid4()),
+        "name": FAKE_USER_NAME,
+        "email": FAKE_USER_EMAIL,
+        "username": FAKE_USER_USERNAME,
+        "password_hash": _hash_password(FAKE_USER_PASSWORD),
+        "role": FAKE_USER_ROLE,
+        "active": True,
+        "last_access": "",
+        "created_at": _now_iso(),
+        "updated_at": _now_iso(),
+    })
+
+    append_account_user_to_sheet(user)
     invalidate_account_users_cache()
     load_account_users(force_refresh=True)
 

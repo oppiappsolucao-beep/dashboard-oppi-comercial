@@ -90,17 +90,23 @@ async def startup_maintenance() -> None:
     def _run_critical() -> None:
         import logging
 
-        from app.services.sheet_crm_storage import ensure_crm_storage_tabs
-        from app.services.account_users import invalidate_account_users_cache, load_account_users
-        from app.services.seed_fake_user import ensure_fake_test_user_on_startup
-
-        ensure_crm_storage_tabs()
-        invalidate_account_users_cache()
-        load_account_users(force_refresh=True)
+        log = logging.getLogger(__name__)
         try:
+            from app.services.sheet_crm_storage import ensure_crm_storage_tabs
+            from app.services.account_users import invalidate_account_users_cache, load_account_users
+
+            ensure_crm_storage_tabs()
+            invalidate_account_users_cache()
+            load_account_users(force_refresh=True)
+        except Exception as error:
+            log.error("Startup crítico (planilha/usuários): %s", error)
+
+        try:
+            from app.services.seed_fake_user import ensure_fake_test_user_on_startup
+
             ensure_fake_test_user_on_startup()
         except Exception as error:
-            logging.getLogger(__name__).error("Seed usuário FAKE falhou: %s", error)
+            log.error("Seed usuário FAKE falhou: %s", error)
 
     def _run_background() -> None:
         try:

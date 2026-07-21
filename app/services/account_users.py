@@ -9,7 +9,7 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 
-from passlib.context import CryptContext
+import bcrypt
 
 from app.config import settings
 from app.services.legacy_core import normalize_text
@@ -28,7 +28,6 @@ ROLE_CLASS = {
 VALID_ROLES = set(ROLE_CLASS.keys())
 USERS_WORKSHEET = "Usuarios"
 USERS_HEADERS = CRM_STORAGE_TABS[USERS_WORKSHEET]
-_pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 _lock = threading.Lock()
 _cache: list[dict] | None = None
 
@@ -77,12 +76,18 @@ def _hash_password(password: str) -> str:
     clean = password.strip()
     if len(clean) < 6:
         raise ValueError("A senha deve ter pelo menos 6 caracteres.")
-    return _pwd_context.hash(clean)
+    try:
+        return bcrypt.hashpw(clean.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    except Exception as error:
+        raise ValueError(f"Não foi possível gerar hash da senha: {error}") from error
 
 
 def _verify_password(password: str, password_hash: str) -> bool:
     try:
-        return _pwd_context.verify(password, _sheet_unescape_hash(password_hash))
+        clean_hash = _sheet_unescape_hash(password_hash)
+        if not clean_hash:
+            return False
+        return bcrypt.checkpw(password.encode("utf-8"), clean_hash.encode("utf-8"))
     except Exception:
         return False
 
@@ -243,21 +248,70 @@ def _save_to_sheet(users: list[dict]) -> bool:
         for user in sorted(users, key=lambda item: item.get("username", "").lower()):
             rows.append(_user_sheet_row(user))
 
-        range_name = _users_sheet_range(len(rows))
-        worksheet.update(
-            values=rows,
-            range_name=range_name,
+        end_col = chr(ord("A") + len(USERS_HEADERS) - 1)
+        range_name = f"A1:{end_col}{len(rows)}"
+        worksheet.batch_update(
+            [{"range": range_name, "values": rows}],
             value_input_option="USER_ENTERED",
         )
 
         existing_count = len(worksheet.get_all_values())
         if existing_count > len(rows):
-            end_col = chr(ord("A") + len(USERS_HEADERS) - 1)
             worksheet.batch_clear([f"A{len(rows) + 1}:{end_col}{existing_count}"])
         return True
     except Exception as error:
         logger.exception("Falha ao salvar aba Usuarios: %s", error)
         return False
+
+
+def append_account_user_to_sheet(user: dict) -> None:
+    """Grava um usuário na aba Usuarios usando append_row (mesmo padrão da Folha1)."""
+    if not settings.sheets_configured:
+        raise RuntimeError("Planilha não configurada.")
+
+    from app.services.legacy_core import get_gsheet_client
+    from app.services.sheet_crm_storage import ensure_crm_storage_tabs
+
+    ensure_crm_storage_tabs()
+    client = get_gsheet_client()
+    worksheet = client.open_by_key(settings.sheet_id).worksheet(USERS_WORKSHEET)
+
+    existing = worksheet.get_all_values()
+    if not existing:
+        worksheet.update(
+            values=[USERS_HEADERS],
+            range_name=_users_sheet_range(1),
+            value_input_option="USER_ENTERED",
+        )
+
+    worksheet.append_row(
+        _user_sheet_row(user),
+        value_input_option="USER_ENTERED",
+        insert_data_option="INSERT_ROWS",
+    )
+
+
+def user_exists_in_sheet(username: str) -> bool:
+    target = normalize_text(username).lower()
+    if not target or not settings.sheets_configured:
+        return False
+    worksheet = get_worksheet(USERS_WORKSHEET)
+    if worksheet is None:
+        return False
+    try:
+        rows = worksheet.get_all_values()
+    except Exception:
+        return False
+    if len(rows) < 2:
+        return False
+    indexes = header_indexes(rows[0], USERS_HEADERS)
+    if indexes is None:
+        return False
+    user_col = indexes["Usuario"]
+    for row in rows[1:]:
+        if len(row) > user_col and normalize_text(row[user_col]).lower() == target:
+            return True
+    return False
 
 
 def _persist_users(users: list[dict]) -> None:
@@ -374,7 +428,13 @@ def create_account_user(
         "updated_at": _now_iso(),
     })
     users.append(user)
-    _persist_users(users)
+    _save_to_file(users)
+    if settings.sheets_configured:
+        try:
+            append_account_user_to_sheet(user)
+        except Exception as error:
+            if not _save_to_sheet(users):
+                raise RuntimeError(f"Não foi possível salvar o usuário na planilha: {error}") from error
     with _lock:
         global _cache
         _cache = users
