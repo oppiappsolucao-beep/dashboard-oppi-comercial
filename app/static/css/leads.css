@@ -130,15 +130,32 @@
 .leads-table-card {
   padding: 0;
   overflow: hidden;
+  border-radius: var(--radius);
 }
 
 .leads-table {
   margin: 0;
+  width: 100%;
+  table-layout: fixed;
+}
+
+.leads-table th,
+.leads-table td {
+  border-bottom: none;
+}
+
+.leads-table thead tr {
+  border-bottom: 1px solid var(--border);
+}
+
+.leads-table tbody tr:not(:last-child) {
+  box-shadow: inset 0 -1px 0 var(--border);
 }
 
 .leads-table th:last-child,
 .leads-table td:last-child {
-  width: 120px;
+  width: 108px;
+  padding-right: 18px;
 }
 
 .leads-table th:first-child,
