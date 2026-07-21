@@ -50,6 +50,10 @@ def _has_data(item: dict) -> bool:
     return any(normalize_text(item.get(key)) for key in ("servico", "valor", "vencimento"))
 
 
+def closed_services_has_data(items: list[dict]) -> bool:
+    return any(_has_data(item) for item in items if isinstance(item, dict))
+
+
 def load_closed_services(
     tenant_id: str | None,
     sheet_row: int,

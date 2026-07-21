@@ -222,7 +222,7 @@ def _lead_record(row, columns: dict, tenant_id: str | None = None) -> dict:
         "has_next_action": has_next_action,
         "next_action_completed": next_action_completed,
         "stored": stored,
-        "href": f"/cadastro/todos/{sheet_row}" if sheet_row else "/cadastro/todos",
+        "href": f"/cadastro/todos/{sheet_row}/editar" if sheet_row else "/cadastro/todos",
     }
 
 

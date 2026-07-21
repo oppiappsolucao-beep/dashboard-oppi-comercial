@@ -37,6 +37,7 @@
     </div>
   </header>
 
+  {% if success %}<div class="alert-success">{{ success }}</div>{% endif %}
   {% if error %}<div class="alert-error">{{ error }}</div>{% endif %}
 
   <div class="client-edit-summary-grid">

@@ -10,7 +10,7 @@
     </div>
   </td>
   <td>
-    <a href="/cadastro/todos/{{ row.sheet_row }}" class="activity-lead-link">
+    <a href="/cadastro/todos/{{ row.sheet_row }}/editar?from=activities" class="activity-lead-link">
       <div class="activity-lead-company">{{ row.empresa }}</div>
       <div class="activity-lead-contact">{{ row.contato }}</div>
     </a>
@@ -76,8 +76,8 @@
       <details class="activity-menu">
         <summary class="table-menu-btn" title="Mais ações">⋯</summary>
         <div class="activity-menu-panel">
-          <a href="/cadastro/todos/{{ row.sheet_row }}">Abrir lead</a>
-          <a href="/cadastro/todos/{{ row.sheet_row }}#timeline">Ver linha do tempo</a>
+          <a href="/cadastro/todos/{{ row.sheet_row }}/editar?from=activities">Abrir lead</a>
+          <a href="/cadastro/todos/{{ row.sheet_row }}/editar?from=activities&tab=atividades">Ver linha do tempo</a>
           <button type="button" onclick="activityToggleExtra('{{ row.id }}')">Adicionar observação</button>
           <button type="button"
             hx-post="/atividades/{{ row.id }}/cancelar"

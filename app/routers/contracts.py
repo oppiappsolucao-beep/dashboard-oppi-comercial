@@ -9,6 +9,7 @@ from app.services.filters import get_filter_options as get_dashboard_filter_opti
 from app.services.commercial_services import get_commercial_service_options
 from app.services.closed_services import (
     PAYMENT_METHOD_OPTIONS,
+    closed_services_has_data,
     load_closed_services,
     parse_closed_services_from_form,
     save_closed_services,
@@ -16,8 +17,6 @@ from app.services.closed_services import (
 from app.services.legacy_core import (
     DuplicateRegistrationError,
     STATUS_OPTIONS,
-    _diagnostic_get_answers,
-    build_client_commercial_summary,
     get_colaborador_options,
     invalidate_sheet_cache,
     normalize_search_text,
@@ -28,8 +27,7 @@ from app.services.legacy_core import (
     status_group,
     update_company_status_in_sheet,
 )
-from app.services.lead_actions_storage import DEFAULT_TENANT_ID, get_lead_action
-from app.services.overview import build_client_action
+from app.services.lead_actions_storage import DEFAULT_TENANT_ID
 from app.services.activity_service import build_cadastro_activities_context
 from app.services.registration import (
     CADASTRO_TIPO_OPTIONS,
@@ -43,15 +41,6 @@ from app.services.registration import (
 )
 
 router = APIRouter()
-
-
-def _contract_value(row, columns, key):
-    column_name = columns.get(key)
-    if column_name and column_name in row.index:
-        value = normalize_text(row.get(column_name, ""))
-        if value:
-            return value
-    return "Não informado"
 
 
 def _contract_edit_value(row, columns, key):
@@ -176,65 +165,11 @@ async def contract_detail(request: Request, sheet_row: int):
     if redirect:
         return redirect
 
-    get_pricing_store(request)
-    df, columns = get_prepared_data()
-    row = _get_row_by_sheet(df, sheet_row)
-    if row is None:
-        return RedirectResponse(url="/cadastro/todos", status_code=303)
-
-    company_name = normalize_text(row.get("_empresa", ""))
-    pricing_answers = _diagnostic_get_answers().get(company_name)
-    commercial = build_client_commercial_summary(row, columns, pricing_answers)
-
-    fields = {
-        "empresa": _contract_value(row, columns, "empresa"),
-        "data_abertura": _contract_value(row, columns, "data_abertura"),
-        "capital": _contract_value(row, columns, "capital"),
-        "cnpj": _contract_value(row, columns, "cnpj"),
-        "endereco": _contract_value(row, columns, "endereco"),
-        "email": _contract_value(row, columns, "email"),
-        "site": _contract_value(row, columns, "site"),
-        "telefone_b2b": _contract_value(row, columns, "telefone_b2b"),
-        "telefone_fixo": _contract_value(row, columns, "telefone_fixo"),
-        "telefone_alternativo": _contract_value(row, columns, "telefone_alternativo"),
-        "socio_1": _contract_value(row, columns, "socio_1"),
-        "cpf_socio_1": _contract_value(row, columns, "cpf_socio_1"),
-        "email_socio_1": _contract_value(row, columns, "email_socio_1"),
-        "telefone_socio_1": _contract_value(row, columns, "telefone_socio_1"),
-        "socio_2": _contract_value(row, columns, "socio_2"),
-        "telefone_socio_2": _contract_value(row, columns, "telefone_socio_2"),
-        "cpf_socio_2": _contract_value(row, columns, "cpf_socio_2"),
-        "socio_3": _contract_value(row, columns, "socio_3"),
-        "telefone_socio_3": _contract_value(row, columns, "telefone_socio_3"),
-        "cpf_socio_3": _contract_value(row, columns, "cpf_socio_3"),
-        "instagram": _contract_value(row, columns, "instagram"),
-        "linkedin": _contract_value(row, columns, "linkedin"),
-        "vendedor": normalize_text(row.get("_vendedor", "")) or "Sem vendedor",
-        "status": status_group(row.get("_status_original", row.get("_status_grupo", "Novo Lead"))),
-        "data_chamado": _contract_value(row, columns, "data_chamado"),
-        "observacoes": _contract_value(row, columns, "observacoes"),
-        "nicho": normalize_text(row.get("_nicho", "")),
-        "estado": normalize_text(row.get("_estado", "")),
-        "pontuacao": int(row.get("_pontuacao", 0)),
-        "classificacao": normalize_text(row.get("_classificacao", "")),
-    }
-
-    lead_action = get_lead_action(DEFAULT_TENANT_ID, sheet_row) or {}
-    interactions = lead_action.get("interactions") if isinstance(lead_action.get("interactions"), list) else []
-    interactions = list(reversed(interactions))
-
-    return render(
-        request,
-        "contracts/detail.html",
-        {
-            "active_page": "contracts",
-            "sheet_row": sheet_row,
-            "fields": fields,
-            "commercial": commercial,
-            "client_action": build_client_action(row, columns),
-            "lead_action": lead_action,
-            "interactions": interactions,
-        },
+    from_page = _resolve_edit_from_page(request.query_params.get("from"))
+    tab = normalize_text(request.query_params.get("tab"))
+    return RedirectResponse(
+        url=_edit_page_url(sheet_row, tab=tab, from_page=from_page),
+        status_code=303,
     )
 
 
@@ -333,6 +268,7 @@ async def contract_edit_page(request: Request, sheet_row: int):
             "colaborador_options": get_colaborador_options(),
             "vendedor": normalize_text(row.get("_vendedor", "")) or "Sem vendedor",
             "error": request.session.pop("edit_error", ""),
+            "success": request.session.pop("edit_success", ""),
             "cadastro_tipo": cadastro_tipo,
             "cadastro_tipo_options": CADASTRO_TIPO_OPTIONS,
             "active_tab": active_tab,
@@ -362,11 +298,14 @@ async def contract_edit_submit(request: Request, sheet_row: int):
 
     try:
         closed_items = parse_closed_services_from_form(form)
-        primary_closed = save_closed_services(DEFAULT_TENANT_ID, sheet_row, closed_items)
-        form_dict["servico"] = primary_closed.get("servico", "")
-        form_dict["valor_proposta"] = primary_closed.get("valor", "")
+        if closed_services_has_data(closed_items):
+            primary_closed = save_closed_services(DEFAULT_TENANT_ID, sheet_row, closed_items)
+            form_dict["servico"] = primary_closed.get("servico", "")
+            form_dict["valor_proposta"] = primary_closed.get("valor", "")
         save_company_edit(sheet_row, form_dict)
         save_cadastro_tipo(DEFAULT_TENANT_ID, sheet_row, form_dict.get("cadastro_tipo", "lead"))
+        invalidate_sheet_cache()
+        request.session["edit_success"] = "Cadastro salvo com sucesso."
         return RedirectResponse(url=_edit_page_url(sheet_row, from_page=from_page), status_code=303)
     except DuplicateRegistrationError as error:
         request.session["edit_error"] = str(error)

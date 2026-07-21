@@ -347,7 +347,7 @@ def build_row_daily_action(row, columns: dict) -> dict | None:
             "status": grouped,
             "telefone": telefone,
             "email": email,
-            "href": f"/cadastro/todos/{sheet_row}" if sheet_row else "/cadastro/todos",
+            "href": f"/cadastro/todos/{sheet_row}/editar" if sheet_row else "/cadastro/todos",
             "edit_href": f"/cadastro/todos/{sheet_row}/editar" if sheet_row else "/cadastro/todos",
         }
         if telefone:
@@ -420,7 +420,7 @@ def build_hot_opportunities(filtered_df: pd.DataFrame) -> list[dict]:
             "urgencia": urgency,
             "urgencia_class": urgency_class,
             "sheet_row": int(row.get("_sheet_row", 0) or 0),
-            "href": f"/cadastro/todos/{int(row.get('_sheet_row', 0) or 0)}",
+            "href": f"/cadastro/todos/{int(row.get('_sheet_row', 0) or 0)}/editar",
         })
 
     rows.sort(key=lambda item: (item["urgencia_class"] != "high", -item["valor_num"]))
@@ -454,7 +454,7 @@ def build_overdue_activities(filtered_df: pd.DataFrame, columns: dict) -> list[d
                     "days_label": f"{days} dia{'s' if days != 1 else ''}",
                     "days": days,
                     "sheet_row": int(row.get("_sheet_row", 0) or 0),
-                    "href": f"/cadastro/todos/{int(row.get('_sheet_row', 0) or 0)}",
+                    "href": f"/cadastro/todos/{int(row.get('_sheet_row', 0) or 0)}/editar",
                 })
                 break
 

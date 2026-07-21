@@ -56,7 +56,7 @@ REGISTRATION_FIELDS = [
     "servico", "valor_proposta", "colaboradores",
 ]
 
-EDIT_FIELDS_PRESERVE_WHEN_ABSENT = ("status", "data_chamado")
+EDIT_FIELDS_PRESERVE_WHEN_ABSENT = ("status", "data_chamado", "servico", "valor_proposta")
 
 
 def infer_partners_count(values: dict) -> int:
@@ -132,6 +132,8 @@ def _existing_edit_field_values(sheet_row: int) -> dict[str, str]:
     return {
         "status": status_group(row.get("_status_original", row.get("_status_grupo", "Novo Lead"))),
         "data_chamado": cell("data_chamado"),
+        "servico": cell("servico"),
+        "valor_proposta": cell("valor_proposta"),
     }
 
 

@@ -6,7 +6,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from app.dependencies import get_prepared_data, is_admin, require_auth
 from app.services.activities_storage import DEFAULT_TENANT_ID
 from app.services.activity_service import criar_atividade
-from app.services.closed_services import PAYMENT_METHOD_OPTIONS, load_closed_services, parse_closed_services_from_form, save_closed_services
+from app.services.closed_services import PAYMENT_METHOD_OPTIONS, closed_services_has_data, load_closed_services, parse_closed_services_from_form, save_closed_services
 from app.services.commercial_services import get_commercial_service_options
 from app.services.crm_validation_service import get_actions_for_stage, normalize_legacy_stage
 from app.services.legacy_core import DuplicateRegistrationError, STATUS_OPTIONS, get_colaborador_options, normalize_text
@@ -131,7 +131,7 @@ async def new_registration_submit(request: Request):
         closed_items = parse_closed_services_from_form(form)
         sheet_row = save_new_company(form_dict)
         save_cadastro_tipo(DEFAULT_TENANT_ID, sheet_row, form_dict.get("cadastro_tipo", "lead"))
-        if closed_items:
+        if closed_services_has_data(closed_items):
             save_closed_services(DEFAULT_TENANT_ID, sheet_row, closed_items)
 
         empresa = normalize_text(form_dict.get("empresa"))
