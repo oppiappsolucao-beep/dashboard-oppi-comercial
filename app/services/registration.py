@@ -225,6 +225,9 @@ def get_seller_options(df) -> list[str]:
                 continue
             names.add(clean)
 
+    allowed = _allowed_seller_names()
+    names = {name for name in names if name.lower() in allowed}
+
     return sorted(names, key=str.lower) or ["Sem vendedor"]
 
 

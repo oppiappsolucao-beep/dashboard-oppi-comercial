@@ -69,9 +69,6 @@ from app.routers.settings import (  # noqa: E402
     settings_permissions_toggle,
     settings_refresh,
     settings_remove_service,
-    settings_seed_fake_company,
-    settings_seed_fake_user,
-    settings_seed_fake_service,
 )
 
 app.add_api_route("/configuracoes", settings_page, methods=["GET"], tags=["settings"])
@@ -80,9 +77,6 @@ app.add_api_route("/configuracoes/permissoes", settings_permissions_toggle, meth
 app.add_api_route("/configuracoes/atualizar", settings_refresh, methods=["POST"], tags=["settings"])
 app.add_api_route("/configuracoes/servicos/adicionar", settings_add_service, methods=["POST"], tags=["settings"])
 app.add_api_route("/configuracoes/servicos/remover", settings_remove_service, methods=["POST"], tags=["settings"])
-app.add_api_route("/configuracoes/seed/empresa-fake", settings_seed_fake_company, methods=["POST"], tags=["settings"])
-app.add_api_route("/configuracoes/seed/usuario-fake", settings_seed_fake_user, methods=["POST"], tags=["settings"])
-app.add_api_route("/configuracoes/seed/servico-fake", settings_seed_fake_service, methods=["POST"], tags=["settings"])
 
 
 @app.on_event("startup")
@@ -106,20 +100,6 @@ async def startup_maintenance() -> None:
         except Exception as error:
             log.error("Startup crítico (planilha): %s", error)
 
-        try:
-            from app.services.seed_fake_user import ensure_fake_test_user_on_startup
-
-            ensure_fake_test_user_on_startup()
-        except Exception as error:
-            log.error("Seed usuário FAKE falhou: %s", error)
-
-        try:
-            from app.services.seed_fake_service import ensure_fake_test_service_on_startup
-
-            ensure_fake_test_service_on_startup()
-        except Exception as error:
-            log.error("Seed serviço FAKE falhou: %s", error)
-
     def _run_background() -> None:
         try:
             from app.services.proposal_pdf import cleanup_service_account_proposal_files
@@ -127,14 +107,6 @@ async def startup_maintenance() -> None:
             cleanup_service_account_proposal_files()
         except Exception:
             pass
-
-        try:
-            from app.services.seed_fake_company import ensure_fake_test_company_on_startup
-
-            ensure_fake_test_company_on_startup()
-        except Exception as error:
-            import logging
-            logging.getLogger(__name__).warning("Seed empresa FAKE: %s", error)
 
     await asyncio.to_thread(_run_critical)
     threading.Thread(target=_run_background, daemon=True).start()
