@@ -78,7 +78,7 @@ function initMobileNavigation() {
   closeBtn?.addEventListener("click", () => setOpen(false));
   overlay?.addEventListener("click", () => setOpen(false));
 
-  sidebar.querySelectorAll(".sidebar-link").forEach((link) => {
+  sidebar.querySelectorAll(".sidebar-link, .sidebar-link-logout").forEach((link) => {
     link.addEventListener("click", () => setOpen(false));
   });
 
