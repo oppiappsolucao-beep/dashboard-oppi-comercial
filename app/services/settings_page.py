@@ -11,6 +11,7 @@ from app.services.app_settings import get_proposal_template_doc_id, get_proposal
 from app.services.goals_reports import MONTHS_PT
 from app.services.legacy_core import as_python_datetime, normalize_text
 from app.services.monthly_goals import DEFAULT_COMMISSION_RATE, TEAM_SELLER_LABEL, list_monthly_goals
+from app.services.registration import get_seller_options
 
 SETTINGS_TABS = [
     ("geral", "Geral"),
@@ -416,11 +417,8 @@ def build_users_table(
 
 def build_goals_settings(df: pd.DataFrame) -> dict:
     today = date.today()
-    sellers = sorted(
-        normalize_name(seller)
-        for seller in df["_vendedor"].dropna().astype(str).unique().tolist()
-        if normalize_name(seller) and normalize_name(seller) != "Sem vendedor"
-    ) if not df.empty else []
+    sellers = get_seller_options(df)
+    sellers = [seller for seller in sellers if seller != "Sem vendedor"]
 
     configured = list_monthly_goals(12)
     for item in configured:

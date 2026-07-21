@@ -1574,11 +1574,26 @@ def buscar_responsaveis_permitidos(seller_options: list[str], current_user: str,
     sellers = [normalize_text(item) for item in seller_options if normalize_text(item)]
     if is_admin_user:
         return sellers
+
     username = normalize_text(current_user)
     if not username:
         return sellers
-    allowed = [seller for seller in sellers if seller.lower() == username.lower()]
-    return allowed or ([username] if username else sellers)
+
+    display_names = {username.lower()}
+    try:
+        from app.services.account_users import get_account_user_by_username
+
+        account = get_account_user_by_username(username)
+        if account:
+            display_names.add(normalize_text(account.get("name", "")).lower())
+    except Exception:
+        pass
+
+    allowed = [seller for seller in sellers if seller.lower() in display_names]
+    if allowed:
+        return allowed
+    fallback = next((name for name in display_names if name), "")
+    return [fallback] if fallback else sellers
 
 
 def _lead_search_blob(row, columns: dict, lead: dict) -> str:

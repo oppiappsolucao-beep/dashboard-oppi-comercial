@@ -157,12 +157,38 @@ def delete_company_registration(tenant_id: str | None, sheet_row: int) -> None:
     delete_lead_action(tenant_id, sheet_row)
 
 
+COMMERCIAL_TEAM_ROLES = {"Vendedor", "Gerente", "Administrador", "Analista"}
+
+
 def get_seller_options(df) -> list[str]:
-    sellers = sorted({
-        normalize_text(v) for v in df["_vendedor"].tolist()
-        if normalize_text(v) and normalize_text(v) != "Sem vendedor"
-    })
-    return sellers or ["Sem vendedor"]
+    names: set[str] = set()
+
+    if df is not None and not getattr(df, "empty", True) and "_vendedor" in df.columns:
+        for value in df["_vendedor"].tolist():
+            clean = normalize_text(value)
+            if clean and clean != "Sem vendedor":
+                names.add(clean)
+
+    try:
+        from app.config import settings
+        from app.services.account_users import load_account_users
+
+        admin_name = normalize_text(settings.app_username)
+        if admin_name:
+            names.add(admin_name)
+
+        for user in load_account_users():
+            if not user.get("active", True):
+                continue
+            if user.get("role") not in COMMERCIAL_TEAM_ROLES:
+                continue
+            name = normalize_text(user.get("name", ""))
+            if name and name != "Sem vendedor":
+                names.add(name)
+    except Exception:
+        pass
+
+    return sorted(names, key=str.lower) or ["Sem vendedor"]
 
 
 def resolve_cadastro_tipo(

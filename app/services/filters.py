@@ -14,6 +14,7 @@ from app.services.legacy_core import (
     normalize_search_text,
     row_matches_status_filter,
 )
+from app.services.registration import get_seller_options
 
 
 @dataclass
@@ -42,10 +43,7 @@ def get_filter_options(df: pd.DataFrame) -> dict:
         date_min = None
         date_max = None
 
-    seller_options = sorted(
-        s for s in df["_vendedor"].dropna().astype(str).unique().tolist()
-        if normalize_text(s) and normalize_text(s) != "Sem vendedor"
-    )
+    seller_options = get_seller_options(df)
     niche_options = sorted(
         {n for n in df["_nicho"].dropna().astype(str).unique().tolist() if normalize_text(n)},
         key=normalize_search_text,
