@@ -249,7 +249,7 @@ async def activities_search_leads(request: Request, q: str = "", sheet_row: int 
         query,
         current_user=current_user,
         is_admin_user=is_admin(request),
-        limit=20 if not query else 12,
+        limit=100 if not query else 20,
         sheet_row=row_id or None,
     )
     return JSONResponse({"items": leads})

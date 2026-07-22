@@ -89,12 +89,6 @@
     }
   }
 
-  async function fetchStageActions(stage) {
-    const response = await fetch("/atividades/api/acoes?stage=" + encodeURIComponent(stage || "Novo Lead"));
-    const data = await response.json();
-    return data.items || [];
-  }
-
   async function fetchResultSuggestion(result, stage) {
     const response = await fetch(
       "/atividades/api/sugerir-resultado?result=" + encodeURIComponent(result || "") +
@@ -114,11 +108,10 @@
 
     const form = document.getElementById("activity-new-form");
     const searchInput = document.getElementById("new-activity-lead-search");
+    const searchWrap = document.getElementById("new-activity-lead-search-wrap");
     const resultsBox = document.getElementById("new-activity-lead-results");
     const selectedBox = document.getElementById("new-activity-lead-selected");
     const stageSelect = document.getElementById("new-activity-stage");
-    const typeSelect = document.getElementById("new-activity-type");
-    const actionSelect = document.getElementById("new-activity-action");
     const nextActionSelect = document.getElementById("new-activity-next-action");
     const channelSelect = document.getElementById("new-activity-channel");
     const channelOther = document.getElementById("new-activity-channel-other");
@@ -138,37 +131,11 @@
 
     let searchTimer = null;
 
-    async function refreshActions() {
-      const stage = stageSelect ? stageSelect.value : "Novo Lead";
-      const actions = await fetchStageActions(stage);
-      fillSelect(actionSelect, actions, "Selecione a atividade");
-    }
-
     fillSelect(
       nextActionSelect,
       window.ACTIVITY_MODAL_NEXT_ACTIONS || [],
       "Selecione a próxima ação"
     );
-
-    if (stageSelect) {
-      stageSelect.addEventListener("change", refreshActions);
-      refreshActions();
-    }
-
-    if (typeSelect) {
-      typeSelect.addEventListener("change", function () {
-        const type = typeSelect.value;
-        const defaults = window.ACTIVITY_MODAL_DEFAULTS || {};
-        const hints = window.ACTIVITY_MODAL_STAGE_HINTS || {};
-        if (hints[type] && stageSelect) {
-          stageSelect.value = hints[type];
-          refreshActions();
-        }
-        if (defaults[type] && actionSelect) {
-          actionSelect.value = defaults[type];
-        }
-      });
-    }
 
     if (channelSelect) {
       channelSelect.addEventListener("change", function () {
@@ -213,21 +180,27 @@
         selectedBox.textContent = item.empresa + " · " + item.contato + " · " + item.stage;
         searchInput.value = item.empresa;
         resultsBox.classList.remove("is-open");
-        refreshActions().then(function () {
-          if (actionSelect && item.suggested_action) {
-            actionSelect.value = item.suggested_action;
-          }
-        });
       }
 
       function renderLeadResults(items) {
         resultsBox.innerHTML = "";
+        if (!items || !items.length) {
+          const empty = document.createElement("div");
+          empty.className = "activity-lead-result-empty";
+          empty.textContent = "Nenhum lead ou empresa encontrado.";
+          resultsBox.appendChild(empty);
+          resultsBox.classList.add("is-open");
+          return;
+        }
         (items || []).forEach(function (item) {
           const button = document.createElement("button");
           button.type = "button";
           button.className = "activity-lead-result-item";
           button.innerHTML =
+            "<span class='activity-lead-result-head'>" +
             "<strong>" + item.empresa + "</strong>" +
+            "<span class='activity-lead-result-type'>" + (item.tipo_label || "Lead") + "</span>" +
+            "</span>" +
             "<span>" + item.contato + " · " + item.phone + "</span>" +
             "<span class='muted'>" + item.stage + " · " + item.vendedor + "</span>";
           button.addEventListener("click", function () {
@@ -235,7 +208,7 @@
           });
           resultsBox.appendChild(button);
         });
-        resultsBox.classList.toggle("is-open", (items || []).length > 0);
+        resultsBox.classList.add("is-open");
       }
 
       async function searchLeads(query, sheetRow) {
@@ -250,20 +223,40 @@
         return data.items || [];
       }
 
+      async function loadLeadList() {
+        renderLeadResults(await searchLeads(searchInput.value.trim()));
+      }
+
       searchInput.addEventListener("input", function () {
         clearTimeout(searchTimer);
         const query = searchInput.value.trim();
-        searchTimer = setTimeout(async function () {
-          renderLeadResults(await searchLeads(query));
-        }, 250);
+        searchTimer = setTimeout(loadLeadList, 250);
       });
 
       searchInput.addEventListener("focus", function () {
         clearTimeout(searchTimer);
-        searchTimer = setTimeout(async function () {
-          const query = searchInput.value.trim();
-          renderLeadResults(await searchLeads(query));
-        }, 100);
+        searchTimer = setTimeout(loadLeadList, 100);
+      });
+
+      searchInput.addEventListener("click", function () {
+        clearTimeout(searchTimer);
+        loadLeadList();
+      });
+
+      if (searchWrap) {
+        searchWrap.addEventListener("click", function (event) {
+          if (event.target === searchWrap || event.target.classList.contains("search-icon")) {
+            searchInput.focus();
+            loadLeadList();
+          }
+        });
+      }
+
+      document.addEventListener("click", function (event) {
+        if (!searchWrap || searchWrap.contains(event.target)) {
+          return;
+        }
+        resultsBox.classList.remove("is-open");
       });
 
       const prefill = window.ACTIVITY_MODAL_PREFILL || {};

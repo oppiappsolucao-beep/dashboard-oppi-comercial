@@ -1,9 +1,9 @@
 <div class="activity-modal-grid">
   <div class="activity-modal-field activity-modal-field-wide">
     <label>Lead / Empresa <span class="req">*</span></label>
-    <div class="activity-lead-search-wrap">
+    <div class="activity-lead-search-wrap" id="new-activity-lead-search-wrap">
       <span class="search-icon">⌕</span>
-      <input type="text" id="new-activity-lead-search" placeholder="Buscar lead ou empresa..." autocomplete="off">
+      <input type="text" id="new-activity-lead-search" placeholder="Clique para ver leads e empresas ou busque pelo nome..." autocomplete="off">
       <div class="activity-lead-results" id="new-activity-lead-results"></div>
     </div>
     <div class="activity-lead-selected" id="new-activity-lead-selected">Nenhum lead selecionado.</div>
@@ -16,23 +16,6 @@
       {% for option in pipeline_stage_options %}
       <option value="{{ option }}">{{ option }}</option>
       {% endfor %}
-    </select>
-  </div>
-
-  <div class="activity-modal-field">
-    <label for="new-activity-type">Tipo da atividade <span class="req">*</span></label>
-    <select name="activity_type" id="new-activity-type" required>
-      <option value="">Selecione o tipo</option>
-      {% for option in activity_type_options %}
-      <option value="{{ option }}">{{ option }}</option>
-      {% endfor %}
-    </select>
-  </div>
-
-  <div class="activity-modal-field">
-    <label for="new-activity-action">Atividade / Próxima ação <span class="req">*</span></label>
-    <select name="process_action" id="new-activity-action" required>
-      <option value="">Selecione a atividade</option>
     </select>
   </div>
 
@@ -198,8 +181,6 @@
 </details>
 
 <script>
-window.ACTIVITY_MODAL_DEFAULTS = {{ activity_type_defaults_json | safe }};
-window.ACTIVITY_MODAL_STAGE_HINTS = {{ activity_type_stage_hints_json | safe }};
 window.ACTIVITY_MODAL_NEXT_ACTIONS = {{ next_action_options_json | safe }};
 window.ACTIVITY_MODAL_PREFILL = {{ {"sheet_row": prefill_sheet_row, "empresa": prefill_empresa}|tojson }};
 window.ACTIVITY_MODAL_TODAY = "{{ today_iso }}";

@@ -15,9 +15,7 @@ from config.crm_options import (
     ACTION_DESCRIPTIONS,
     ACTIVITY_RESULT_OPTIONS,
     ACTIVITY_STATUS_LABELS,
-    ACTIVITY_TYPE_DEFAULT_ACTION,
     ACTIVITY_TYPE_OPTIONS,
-    ACTIVITY_TYPE_STAGE_HINT,
     CHANNEL_CLASS,
     CHANNEL_OPTIONS,
     LOST_REASON_OPTIONS,
@@ -1617,9 +1615,37 @@ def _lead_is_accessible(row, current_user: str, is_admin_user: bool) -> bool:
     return not username or not vendedor or vendedor == username
 
 
+_STAGE_DEFAULT_ACTIVITY_TYPE = {
+    "Novo Lead": "Contato",
+    "Contato": "Contato",
+    "Qualificação": "Qualificação",
+    "Reunião": "Reunião",
+    "Proposta": "Proposta",
+    "Retorno": "Retorno",
+    "Negociação": "Negociação",
+    "Fechado": "Pagamento",
+}
+
+
+def _default_new_activity_fields(stage: str) -> tuple[str, str]:
+    normalized_stage = normalize_legacy_stage(stage) or "Novo Lead"
+    process_action = NEXT_ACTION_BY_STAGE.get(normalized_stage)
+    if not process_action:
+        actions = get_actions_for_stage(normalized_stage)
+        process_action = actions[0] if actions else "Definir próximo passo"
+    activity_type = _STAGE_DEFAULT_ACTIVITY_TYPE.get(normalized_stage, "Contato")
+    return activity_type, normalize_legacy_action(process_action)
+
+
 def _lead_result_item(row, columns: dict, lead: dict, tenant_id: str | None) -> dict:
+    from app.services.registration import resolve_cadastro_tipo
+
     stage = lead.get("stage", "Novo Lead")
-    actions = get_actions_for_stage(stage)
+    cadastro_tipo = resolve_cadastro_tipo(
+        tenant_id,
+        int(lead.get("sheet_row") or 0),
+        cnpj=normalize_text(row.get("_cnpj", "")),
+    )
     return {
         "sheet_row": lead["sheet_row"],
         "empresa": lead["empresa"],
@@ -1628,7 +1654,7 @@ def _lead_result_item(row, columns: dict, lead: dict, tenant_id: str | None) -> 
         "vendedor": lead["vendedor"],
         "phone": lead.get("phone", "") or "—",
         "email": lead.get("email", "") or "—",
-        "suggested_action": actions[0] if actions else ACTIVITY_TYPE_DEFAULT_ACTION.get("Contato", "Fazer primeiro contato"),
+        "tipo_label": "Empresa" if cadastro_tipo == "empresa" else "Lead",
     }
 
 
@@ -1745,8 +1771,9 @@ def validar_nova_atividade(payload: dict, *, is_admin_user: bool = False, allow_
         return "Selecione um lead ou empresa."
 
     stage = normalize_legacy_stage(payload.get("stage"))
-    activity_type = normalize_text(payload.get("activity_type"))
-    process_action = normalize_legacy_action(payload.get("process_action"))
+    default_activity_type, default_process_action = _default_new_activity_fields(stage or "Novo Lead")
+    activity_type = normalize_text(payload.get("activity_type")) or default_activity_type
+    process_action = normalize_legacy_action(payload.get("process_action")) or default_process_action
     channel = normalize_legacy_channel(payload.get("channel"))
     assigned_user = normalize_text(payload.get("assigned_user_id"))
     scheduled_date = normalize_text(payload.get("scheduled_date"))
@@ -1759,8 +1786,6 @@ def validar_nova_atividade(payload: dict, *, is_admin_user: bool = False, allow_
         return "A opção selecionada não pertence ao processo comercial atual. Atualize o campo antes de salvar."
     if not stage:
         return "Selecione a etapa do funil."
-    if not process_action:
-        return "Selecione uma atividade compatível com a etapa."
     if not assigned_user:
         return "Selecione o responsável."
     if not scheduled_date:
@@ -1953,8 +1978,9 @@ def criar_atividade(
 
     sheet_row = int(payload["sheet_row"])
     stage = normalize_legacy_stage(payload.get("stage")) or "Novo Lead"
-    activity_type = normalize_text(payload.get("activity_type")) or "Contato"
-    process_action = normalize_legacy_action(payload.get("process_action"))
+    default_activity_type, default_process_action = _default_new_activity_fields(stage)
+    activity_type = normalize_text(payload.get("activity_type")) or default_activity_type
+    process_action = normalize_legacy_action(payload.get("process_action")) or default_process_action
     channel = normalize_legacy_channel(payload.get("channel"))
     channel_other = normalize_text(payload.get("channel_other"))
     assigned_user = normalize_text(payload.get("assigned_user_id"))
@@ -2132,7 +2158,6 @@ def build_new_activity_modal_context(
     default_responsible = responsibles[0] if responsibles else current_user
     return {
         "pipeline_stage_options": PIPELINE_STAGE_OPTIONS,
-        "activity_type_options": ACTIVITY_TYPE_OPTIONS,
         "channel_options": CHANNEL_OPTIONS,
         "status_options": NEW_ACTIVITY_STATUS_KEYS,
         "priority_options": PRIORITY_OPTIONS,
@@ -2144,10 +2169,6 @@ def build_new_activity_modal_context(
         "today_iso": today_iso,
         "current_user": current_user,
         "is_admin": is_admin_user,
-        "activity_type_defaults": ACTIVITY_TYPE_DEFAULT_ACTION,
-        "activity_type_stage_hints": ACTIVITY_TYPE_STAGE_HINT,
-        "activity_type_defaults_json": json.dumps(ACTIVITY_TYPE_DEFAULT_ACTION, ensure_ascii=False),
-        "activity_type_stage_hints_json": json.dumps(ACTIVITY_TYPE_STAGE_HINT, ensure_ascii=False),
         "next_action_options_json": json.dumps(get_next_action_options(), ensure_ascii=False),
         "prefill_sheet_row": int(prefill_sheet_row or 0),
         "prefill_empresa": normalize_text(prefill_empresa),
