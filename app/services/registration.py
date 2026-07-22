@@ -98,6 +98,16 @@ def build_registration_payload(form: dict) -> dict:
 
     if hasattr(data_chamado, "strftime"):
         data_chamado = data_chamado.strftime("%d/%m/%Y")
+    else:
+        raw = normalize_text(data_chamado)
+        # Converte ISO (input date) para o padrão da planilha.
+        if len(raw) >= 10 and raw[4] == "-" and raw[7] == "-":
+            try:
+                data_chamado = datetime.strptime(raw[:10], "%Y-%m-%d").strftime("%d/%m/%Y")
+            except ValueError:
+                data_chamado = raw
+        else:
+            data_chamado = raw
 
     payload = {field: normalize_text(form.get(field, "")) for field in REGISTRATION_FIELDS}
     payload["data_chamado"] = normalize_text(data_chamado)

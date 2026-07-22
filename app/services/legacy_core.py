@@ -471,7 +471,7 @@ def normalize_period_filter(value):
 def apply_period_filter(df: pd.DataFrame, date_column: str, period_value) -> pd.DataFrame:
     """
     Aplica o filtro por período respeitando a coluna de referência.
-    Linhas sem data permanecem visíveis para não ocultar cadastros incompletos.
+    Linhas sem data e cadastros locais pendentes permanecem visíveis.
     """
     start_date, end_date = normalize_period_filter(period_value)
 
@@ -486,14 +486,18 @@ def apply_period_filter(df: pd.DataFrame, date_column: str, period_value) -> pd.
         & (dates.dt.date <= end_date)
     ].copy()
     undated_rows = df[~valid_dates].copy()
+    pending_rows = pd.DataFrame()
+    if "_pending_local" in df.columns:
+        pending_mask = df["_pending_local"].fillna(False).astype(bool)
+        pending_rows = df[pending_mask].copy()
 
-    if undated_rows.empty:
-        return dated_rows
-
-    if dated_rows.empty:
-        return undated_rows
-
-    return pd.concat([dated_rows, undated_rows], ignore_index=True)
+    parts = [part for part in (dated_rows, undated_rows, pending_rows) if not part.empty]
+    if not parts:
+        return df.iloc[0:0].copy()
+    combined = pd.concat(parts, ignore_index=True)
+    if "_sheet_row" in combined.columns:
+        combined = combined.drop_duplicates(subset=["_sheet_row"], keep="first")
+    return combined.reset_index(drop=True)
 
 
 def make_unique_headers(headers: list[str]) -> list[str]:
@@ -1760,6 +1764,7 @@ def append_company_to_sheet(payload: dict) -> int:
         queue_company_registration,
         remember_sheet_headers,
         resolve_registration_headers,
+        sync_pending_companies_to_sheet,
     )
 
     cached_values = get_last_good_sheet_values()
@@ -1840,6 +1845,42 @@ def append_company_to_sheet(payload: dict) -> int:
                 client = get_gsheet_client()
                 spreadsheet = client.open_by_key(settings.sheet_id)
                 worksheet = _open_worksheet(spreadsheet, settings.worksheet_name)
+            try:
+                live_headers = worksheet.row_values(1)
+                if live_headers and any(normalize_text(h) for h in live_headers):
+                    headers = live_headers
+                    remember_sheet_headers(headers)
+                    row_values = [""] * len(headers)
+                    _set_sheet_value_by_header(row_values, headers, ["Nome Empresas", "Nome da empresa", "Empresa", "Nome Empresa", "Nome empresas", "Nome Empresa(s)"], payload.get("empresa"))
+                    _set_sheet_value_by_header(row_values, headers, ["Data de abertura", "Data abertura"], payload.get("data_abertura"))
+                    _set_sheet_value_by_header(row_values, headers, ["Capital", "Capital social"], payload.get("capital"))
+                    _set_sheet_value_by_header(row_values, headers, ["CNPJ"], payload.get("cnpj"))
+                    _apply_address_fields(row_values, headers, payload)
+                    _set_sheet_value_by_header(row_values, headers, ["Email", "E-mail"], payload.get("email_empresa"))
+                    _set_sheet_value_by_header(row_values, headers, ["Site empresa", "Site", "Website"], payload.get("site"))
+                    _set_sheet_value_by_header(row_values, headers, ["Celular WhatsApp", "Telefone (b2b)", "Telefone b2b"], payload.get("telefone_b2b"))
+                    _set_sheet_value_by_header(row_values, headers, ["Telefone fixo", "Fixo"], payload.get("telefone_fixo"))
+                    _set_sheet_value_by_header(row_values, headers, ["Telefone lemitt", "Telefone alternativo", "Outro telefone"], payload.get("telefone_alternativo"))
+                    _set_sheet_value_by_header(row_values, headers, ["Sócio 1", "Socio 1", "Sócio1", "Socio1"], payload.get("socio_1"))
+                    _set_sheet_value_by_header(row_values, headers, ["CPF"], payload.get("cpf_socio_1"), occurrence=1)
+                    _set_sheet_value_by_header(row_values, headers, ["E-mail Sócio 1", "Email Sócio 1", "E-mail Socio 1", "Email Socio 1"], payload.get("email_socio_1"))
+                    _set_sheet_value_by_header(row_values, headers, ["Telefone"], payload.get("telefone_socio_1"), occurrence=1)
+                    _set_sheet_value_by_header(row_values, headers, ["Sócio 2", "Socio 2", "Sócio2", "Socio2"], payload.get("socio_2"))
+                    _set_sheet_value_by_header(row_values, headers, ["Telefone sócio 2", "Telefone socio 2", "Telefone do sócio 2", "Telefone do socio 2", "Telefone"], payload.get("telefone_socio_2"), occurrence=2)
+                    _set_sheet_value_by_header(row_values, headers, ["CPF"], payload.get("cpf_socio_2"), occurrence=2)
+                    _set_sheet_value_by_header(row_values, headers, ["Sócio 3", "Socio 3", "Sócio3", "Socio3"], payload.get("socio_3"))
+                    _set_sheet_value_by_header(row_values, headers, ["Telefone sócio 3", "Telefone socio 3", "Telefone do sócio 3", "Telefone do socio 3", "Telefone"], payload.get("telefone_socio_3"), occurrence=3)
+                    _set_sheet_value_by_header(row_values, headers, ["CPF"], payload.get("cpf_socio_3"), occurrence=3)
+                    _set_sheet_value_by_header(row_values, headers, ["Instagram"], payload.get("instagram"))
+                    _set_sheet_value_by_header(row_values, headers, ["Linkedin", "LinkedIn"], payload.get("linkedin"))
+                    _set_sheet_value_by_header(row_values, headers, ["Vendedor", "Responsável", "Responsavel"], payload.get("vendedor"))
+                    _set_sheet_value_by_header(row_values, headers, ["Status WhatsApp", "Status", "Etapa"], payload.get("status"))
+                    _set_sheet_value_by_header(row_values, headers, ["Data do chamado", "Data chamado"], payload.get("data_chamado"))
+                    _set_sheet_value_by_header(row_values, headers, ["Última atualização", "Ultima atualização", "Ultima atualizacao"], payload.get("ultima_atualizacao"))
+                    _set_sheet_value_by_header(row_values, headers, ["Observações", "Observacoes", "Observação", "Observacao"], payload.get("observacoes"))
+                    _apply_commercial_fields(row_values, headers, payload)
+            except Exception:
+                pass
             next_row = _folha1_next_row(worksheet, None)
             if next_row < 2:
                 next_row = _folha1_next_row(worksheet, cached_values or _sheet_last_good_values)
@@ -1879,12 +1920,17 @@ def append_company_to_sheet(payload: dict) -> int:
             break
 
     # Não perde o cadastro: fica local e aparece no site enquanto sincroniza.
-    return queue_company_registration(
+    pending_row = queue_company_registration(
         payload=payload,
         headers=headers,
         row_values=row_values,
         last_error=last_error or "Falha ao gravar na planilha",
     )
+    try:
+        sync_pending_companies_to_sheet(max_items=5)
+    except Exception:
+        pass
+    return pending_row
 
 
 def update_company_in_sheet(sheet_row: int, payload: dict) -> None:

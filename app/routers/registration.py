@@ -187,7 +187,8 @@ async def new_registration_submit(request: Request):
                 f'"{empresa}" foi salvo e já aparece no sistema. '
                 f"A sincronização com a planilha acontece automaticamente.{activity_warning}"
             )
-            return RedirectResponse(url="/leads-e-empresas", status_code=303)
+            tab = "empresas" if normalize_text(form_dict.get("cadastro_tipo")).lower() == "empresa" else "leads"
+            return RedirectResponse(url=f"/leads-e-empresas?tab={tab}", status_code=303)
 
         request.session["company_registration_success"] = (
             f'"{empresa}" cadastrado com sucesso com o status "{status}".{activity_warning}'

@@ -67,18 +67,30 @@ def get_filter_options(df: pd.DataFrame) -> dict:
 
 
 def apply_default_period_filters(filters: DashboardFilters, df: pd.DataFrame) -> DashboardFilters:
-    """Preenche o período padrão com base nas datas reais da planilha."""
-    if filters.period_start and filters.period_end:
-        return filters
+    """Preenche o período padrão com base nas datas reais da planilha (sempre inclui hoje)."""
+    from datetime import date as date_cls
 
+    today = date_cls.today()
     options = get_filter_options(df)
+
+    if filters.period_start and filters.period_end:
+        # Se o usuário aplicou um período antigo, ainda amplia o fim até hoje
+        # para não esconder cadastros feitos no dia.
+        period_end = filters.period_end if filters.period_end >= today else today
+        return replace(filters, period_end=period_end)
+
     if not options["has_reference_dates"]:
         return replace(filters, period_start=None, period_end=None)
 
+    date_min = options["date_min"] or today
+    date_max = options["date_max"] or today
+    if date_max < today:
+        date_max = today
+
     return replace(
         filters,
-        period_start=filters.period_start or options["date_min"],
-        period_end=filters.period_end or options["date_max"],
+        period_start=filters.period_start or date_min,
+        period_end=filters.period_end or date_max,
     )
 
 
