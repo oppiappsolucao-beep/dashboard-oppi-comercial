@@ -26,6 +26,11 @@ function renderOverviewCharts() {
   renderPlotlyChart("overview-conversion-donut");
 }
 
+function renderFunnelCharts() {
+  renderPlotlyChart("funnel-process-chart");
+  renderPlotlyChart("funnel-value-chart");
+}
+
 function renderPlotlyChart(elementId) {
   const el = document.getElementById(elementId);
   if (!el || !el.dataset.chart) return;
@@ -42,6 +47,7 @@ document.addEventListener("DOMContentLoaded", () => {
   renderPlotlyChart("weekly-chart");
   renderOverviewCharts();
   renderGoalsCharts();
+  renderFunnelCharts();
   initMobileNavigation();
   initPageBackButtons();
 });
@@ -52,6 +58,9 @@ document.body.addEventListener("htmx:afterSwap", (event) => {
   }
   if (event.detail.target?.id === "overview-root") {
     renderOverviewCharts();
+  }
+  if (event.detail.target?.id === "funnel-root") {
+    renderFunnelCharts();
   }
 });
 

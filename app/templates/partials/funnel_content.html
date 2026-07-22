@@ -3,11 +3,13 @@
   hx-target="#funnel-root"
   hx-swap="innerHTML"
 >
+  <input type="hidden" name="page" value="{{ leads_table.page }}" id="funnel-page-input">
+
   <div class="toolbar-card">
     <div class="filters-row filters-row-main">
       <div class="filter-field filter-field-sm">
         <label>Vendedor</label>
-        <select name="seller" onchange="document.getElementById('funnel-filters').requestSubmit()">
+        <select name="seller" onchange="document.getElementById('funnel-page-input').value='1'; document.getElementById('funnel-filters').requestSubmit()">
           <option value="Todos os vendedores">Todos os vendedores</option>
           {% for seller in options.seller_options %}
           <option value="{{ seller }}" {% if filters.seller == seller %}selected{% endif %}>{{ seller }}</option>
@@ -16,7 +18,7 @@
       </div>
       <div class="filter-field filter-field-sm">
         <label>Status</label>
-        <select name="status" onchange="document.getElementById('funnel-filters').requestSubmit()">
+        <select name="status" onchange="document.getElementById('funnel-page-input').value='1'; document.getElementById('funnel-filters').requestSubmit()">
           <option value="Todos os status">Todos os status</option>
           {% for status in options.status_options %}
           <option value="{{ status }}" {% if filters.status == status %}selected{% endif %}>{{ status }}</option>
@@ -24,16 +26,24 @@
         </select>
       </div>
       <div class="filter-field filter-field-sm">
+        <label>Etapa</label>
+        <select name="stage" onchange="document.getElementById('funnel-page-input').value='1'; document.getElementById('funnel-filters').requestSubmit()">
+          {% for stage in stage_options %}
+          <option value="{{ stage }}" {% if funnel_params.stage == stage %}selected{% endif %}>{{ stage }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="filter-field filter-field-sm">
         <label>Período início</label>
-        <input type="date" name="period_start" value="{{ filters.period_start }}" onchange="document.getElementById('funnel-filters').requestSubmit()">
+        <input type="date" name="period_start" value="{{ filters.period_start }}" onchange="document.getElementById('funnel-page-input').value='1'; document.getElementById('funnel-filters').requestSubmit()">
       </div>
       <div class="filter-field filter-field-sm">
         <label>Período fim</label>
-        <input type="date" name="period_end" value="{{ filters.period_end }}" onchange="document.getElementById('funnel-filters').requestSubmit()">
+        <input type="date" name="period_end" value="{{ filters.period_end }}" onchange="document.getElementById('funnel-page-input').value='1'; document.getElementById('funnel-filters').requestSubmit()">
       </div>
       <div class="filter-field filter-field-sm">
         <label>Nichos</label>
-        <select name="niche" onchange="document.getElementById('funnel-filters').requestSubmit()">
+        <select name="niche" onchange="document.getElementById('funnel-page-input').value='1'; document.getElementById('funnel-filters').requestSubmit()">
           <option value="Todos os nichos">Todos os nichos</option>
           {% for niche in options.niche_options %}
           <option value="{{ niche }}" {% if filters.niche == niche %}selected{% endif %}>{{ niche }}</option>
@@ -42,7 +52,7 @@
       </div>
       <div class="filter-field filter-field-sm">
         <label>Estados</label>
-        <select name="state" onchange="document.getElementById('funnel-filters').requestSubmit()">
+        <select name="state" onchange="document.getElementById('funnel-page-input').value='1'; document.getElementById('funnel-filters').requestSubmit()">
           <option value="Todos os estados">Todos os estados</option>
           {% for state in options.state_options %}
           <option value="{{ state }}" {% if filters.state == state %}selected{% endif %}>{{ state }}</option>
@@ -55,8 +65,12 @@
         <label>Buscar</label>
         <div class="search-wrap">
           <span class="search-icon">⌕</span>
-          <input type="text" name="search" value="{{ filters.search }}" placeholder="Buscar empresas, leads ou negócios..."
-            hx-trigger="keyup changed delay:400ms" hx-post="/funil-de-vendas/filtros" hx-target="#funnel-root" hx-swap="innerHTML">
+          <input type="text" name="search" value="{{ filters.search }}" placeholder="Buscar leads, empresas ou negócios..."
+            hx-trigger="keyup changed delay:400ms"
+            hx-post="/funil-de-vendas/filtros"
+            hx-target="#funnel-root"
+            hx-swap="innerHTML"
+            hx-include="#funnel-filters">
         </div>
       </div>
     </div>
@@ -78,10 +92,24 @@
     {% endfor %}
   </div>
 
+  <div class="overview-grid funnel-charts-grid">
+    <div class="funnel-card panel funnel-page-chart">
+      <div class="section-heading">Processo de vendas</div>
+      <div class="section-subtitle">Distribuição dos cadastros por etapa do funil.</div>
+      <div id="funnel-process-chart" class="funnel-plotly-chart" data-chart='{{ process_chart_json | safe }}'></div>
+    </div>
+
+    <div class="funnel-card panel funnel-page-chart">
+      <div class="section-heading">Valor por etapa</div>
+      <div class="section-subtitle">Soma das propostas em cada fase do processo.</div>
+      <div id="funnel-value-chart" class="funnel-plotly-chart" data-chart='{{ value_chart_json | safe }}'></div>
+    </div>
+  </div>
+
   <div class="overview-grid">
     <div class="funnel-card panel funnel-page-chart">
-      <div class="section-heading">Funil de Vendas</div>
-      <div class="section-subtitle">Etapas do pipeline comercial.</div>
+      <div class="section-heading">Funil por etapa</div>
+      <div class="section-subtitle">Contagem e conversão entre etapas.</div>
       <div class="funnel-horizontal">
         {% for step in funnel_steps %}
         <div class="funnel-horizontal-row">
@@ -100,7 +128,7 @@
     </div>
 
     <div class="actions-card panel">
-      <div class="section-heading">Ações Prioritárias</div>
+      <div class="section-heading">Ações prioritárias</div>
       <div class="section-subtitle">Próximos passos sugeridos.</div>
       <div class="action-list">
         {% for item in action_items %}
@@ -123,49 +151,201 @@
     </div>
   </div>
 
-  <div class="panel-card panel">
-    <div class="section-heading">Oportunidades quentes</div>
-    <div class="section-subtitle">Empresas com maior potencial de fechamento.</div>
+  <div class="panel-card panel funnel-leads-panel" id="funnel-leads-panel">
+    <div class="funnel-leads-header">
+      <div>
+        <div class="section-heading">Cadastros do funil</div>
+        <div class="section-subtitle">Selecione leads para acompanhar o processo comercial.</div>
+      </div>
+      <div class="funnel-leads-toolbar">
+        <div class="funnel-tabs" role="tablist" aria-label="Tipo de cadastro">
+          <button type="button" class="funnel-tab {% if funnel_params.tab == 'leads' %}active{% endif %}"
+            onclick="document.getElementById('funnel-tab-input').value='leads'; document.getElementById('funnel-page-input').value='1'; document.getElementById('funnel-filters').requestSubmit();">
+            Leads
+          </button>
+          <button type="button" class="funnel-tab {% if funnel_params.tab == 'todos' %}active{% endif %}"
+            onclick="document.getElementById('funnel-tab-input').value='todos'; document.getElementById('funnel-page-input').value='1'; document.getElementById('funnel-filters').requestSubmit();">
+            Todos
+          </button>
+          <button type="button" class="funnel-tab {% if funnel_params.tab == 'empresas' %}active{% endif %}"
+            onclick="document.getElementById('funnel-tab-input').value='empresas'; document.getElementById('funnel-page-input').value='1'; document.getElementById('funnel-filters').requestSubmit();">
+            Empresas
+          </button>
+        </div>
+        <input type="hidden" name="tab" id="funnel-tab-input" value="{{ funnel_params.tab }}">
+        <select name="sort" aria-label="Ordenação"
+          onchange="document.getElementById('funnel-filters').requestSubmit();">
+          <option value="recent" {% if funnel_params.sort == 'recent' %}selected{% endif %}>Mais recente</option>
+          <option value="name" {% if funnel_params.sort == 'name' %}selected{% endif %}>Nome</option>
+          <option value="value" {% if funnel_params.sort == 'value' %}selected{% endif %}>Maior valor</option>
+        </select>
+      </div>
+    </div>
 
-    {% if calls_table %}
-    <table class="data-table">
-      <thead>
-        <tr>
-          <th>Empresa</th>
-          <th>Etapa</th>
-          <th>Responsável</th>
-          <th>Contato</th>
-          <th>Próxima ação</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for row in calls_table %}
-        <tr>
-          <td>
-            <div class="table-company">
-              <span class="table-company-icon">{{ row.empresa[:2] | upper }}</span>
-              <span>{{ row.empresa }}</span>
-            </div>
-          </td>
-          <td>
-            <span class="stage-badge {% if row.etapa == 'Proposta' %}proposta{% elif row.etapa == 'Fechado' %}fechado{% elif row.etapa == 'Reunião' %}reuniao{% elif row.etapa == 'Qualificação' %}qualificacao{% elif row.etapa == 'Novo Lead' %}novo-lead{% endif %}">
-              {{ row.etapa }}
-            </span>
-          </td>
-          <td>{{ row.vendedor }}</td>
-          <td>{{ row.telefone }}</td>
-          <td>{{ row.data_chamado }}</td>
-          <td class="table-actions">
-            <a href="/cadastro/todos/{{ row.sheet_row }}/editar" class="btn btn-small btn-secondary">Ver</a>
-          </td>
-        </tr>
+    <div class="funnel-selection-bar" id="funnel-selection-bar" hidden>
+      <span id="funnel-selection-count">0 selecionados</span>
+      <div class="funnel-selection-actions">
+        <button type="button" class="btn btn-small btn-secondary" id="funnel-open-selected">Abrir selecionados</button>
+        <button type="button" class="btn btn-small btn-secondary" id="funnel-clear-selection">Limpar</button>
+      </div>
+    </div>
+
+    {% if leads_table.rows %}
+    <div class="table-wrap">
+      <table class="data-table funnel-leads-table">
+        <thead>
+          <tr>
+            <th class="funnel-select-col">
+              <input type="checkbox" id="funnel-select-all" aria-label="Selecionar todos da página">
+            </th>
+            <th>Lead / Empresa</th>
+            <th>Etapa</th>
+            <th>Valor</th>
+            <th>Responsável</th>
+            <th>Último contato</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in leads_table.rows %}
+          <tr data-sheet-row="{{ row.sheet_row }}">
+            <td class="funnel-select-col">
+              {% if row.sheet_row %}
+              <input type="checkbox" class="funnel-row-select" value="{{ row.sheet_row }}" aria-label="Selecionar {{ row.nome }}">
+              {% endif %}
+            </td>
+            <td>
+              <div class="table-company">
+                <span class="table-company-icon">{{ row.empresa_initials }}</span>
+                <div>
+                  {% if row.sheet_row %}
+                  <a class="table-company-name table-company-link" href="/cadastro/todos/{{ row.sheet_row }}/editar?from=funnel">{{ row.nome }}</a>
+                  {% else %}
+                  <div class="table-company-name">{{ row.nome }}</div>
+                  {% endif %}
+                  <div class="table-company-meta">{{ row.tipo_label }} · {{ row.empresa }}</div>
+                </div>
+              </div>
+            </td>
+            <td>
+              <span class="stage-badge {{ row.etapa_class }}">{{ row.etapa }}</span>
+            </td>
+            <td>{{ row.valor }}</td>
+            <td>{{ row.vendedor }}</td>
+            <td>{{ row.ultimo_contato }}</td>
+            <td class="table-actions">
+              {% if row.whatsapp_href %}
+              <a href="{{ row.whatsapp_href }}" class="btn btn-small" target="_blank" rel="noopener" aria-label="WhatsApp">💬</a>
+              {% endif %}
+              {% if row.sheet_row %}
+              <a href="/cadastro/todos/{{ row.sheet_row }}/editar?from=funnel" class="btn btn-small btn-secondary">Ver</a>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="leads-pagination funnel-pagination">
+      <div class="leads-pagination-info">
+        Mostrando {{ leads_table.from_record }} a {{ leads_table.to_record }} de {{ leads_table.total }} registros
+      </div>
+      <div class="leads-pagination-pages">
+        {% if leads_table.page > 1 %}
+        <button type="button" class="page-btn"
+          onclick="document.getElementById('funnel-page-input').value='{{ leads_table.page - 1 }}'; document.getElementById('funnel-filters').requestSubmit();">‹</button>
+        {% endif %}
+        {% for page_num in leads_table.page_numbers %}
+        <button type="button"
+          class="page-btn page-num {% if page_num == leads_table.page %}active{% endif %}"
+          onclick="document.getElementById('funnel-page-input').value='{{ page_num }}'; document.getElementById('funnel-filters').requestSubmit();">
+          {{ page_num }}
+        </button>
         {% endfor %}
-      </tbody>
-    </table>
-    <a href="/cadastro/todos" class="panel-footer-link">Ver todas as oportunidades →</a>
+        {% if leads_table.page < leads_table.total_pages %}
+        <button type="button" class="page-btn"
+          onclick="document.getElementById('funnel-page-input').value='{{ leads_table.page + 1 }}'; document.getElementById('funnel-filters').requestSubmit();">›</button>
+        {% endif %}
+      </div>
+      <div class="leads-per-page">
+        <label>Por página:</label>
+        <select name="per_page" onchange="document.getElementById('funnel-page-input').value='1'; document.getElementById('funnel-filters').requestSubmit();">
+          <option value="10" {% if leads_table.per_page == 10 %}selected{% endif %}>10</option>
+          <option value="25" {% if leads_table.per_page == 25 %}selected{% endif %}>25</option>
+          <option value="50" {% if leads_table.per_page == 50 %}selected{% endif %}>50</option>
+        </select>
+      </div>
+    </div>
     {% else %}
-    <p class="empty-note">Nenhuma oportunidade encontrada com os filtros atuais.</p>
+    <p class="empty-note">Nenhum cadastro encontrado com os filtros atuais.</p>
     {% endif %}
   </div>
 </form>
+
+<script>
+(function () {
+  function initFunnelSelection() {
+    var panel = document.getElementById("funnel-leads-panel");
+    if (!panel) return;
+    var bar = document.getElementById("funnel-selection-bar");
+    var countEl = document.getElementById("funnel-selection-count");
+    var selectAll = document.getElementById("funnel-select-all");
+    var openBtn = document.getElementById("funnel-open-selected");
+    var clearBtn = document.getElementById("funnel-clear-selection");
+    var boxes = Array.prototype.slice.call(panel.querySelectorAll(".funnel-row-select"));
+
+    function selectedValues() {
+      return boxes.filter(function (box) { return box.checked; }).map(function (box) { return box.value; });
+    }
+
+    function refresh() {
+      var selected = selectedValues();
+      if (countEl) {
+        countEl.textContent = selected.length === 1
+          ? "1 selecionado"
+          : selected.length + " selecionados";
+      }
+      if (bar) bar.hidden = selected.length === 0;
+      if (selectAll) {
+        selectAll.checked = boxes.length > 0 && selected.length === boxes.length;
+        selectAll.indeterminate = selected.length > 0 && selected.length < boxes.length;
+      }
+    }
+
+    boxes.forEach(function (box) {
+      box.addEventListener("change", refresh);
+    });
+    if (selectAll) {
+      selectAll.addEventListener("change", function () {
+        boxes.forEach(function (box) { box.checked = selectAll.checked; });
+        refresh();
+      });
+    }
+    if (clearBtn) {
+      clearBtn.addEventListener("click", function () {
+        boxes.forEach(function (box) { box.checked = false; });
+        refresh();
+      });
+    }
+    if (openBtn) {
+      openBtn.addEventListener("click", function () {
+        selectedValues().forEach(function (sheetRow, index) {
+          var url = "/cadastro/todos/" + sheetRow + "/editar?from=funnel";
+          if (index === 0) {
+            window.location.href = url;
+          } else {
+            window.open(url, "_blank", "noopener");
+          }
+        });
+      });
+    }
+    refresh();
+  }
+
+  initFunnelSelection();
+  if (typeof renderFunnelCharts === "function") {
+    renderFunnelCharts();
+  }
+})();
+</script>

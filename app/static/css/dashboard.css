@@ -655,6 +655,138 @@ a { color: inherit; text-decoration: none; }
   min-height: 360px;
 }
 
+.funnel-plotly-chart {
+  width: 100%;
+  min-height: 340px;
+}
+
+.funnel-charts-grid {
+  margin-bottom: 18px;
+}
+
+.funnel-leads-panel {
+  margin-top: 18px;
+}
+
+.funnel-leads-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.funnel-leads-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.funnel-tabs {
+  display: inline-flex;
+  padding: 4px;
+  border-radius: 12px;
+  background: #F3F4F6;
+  gap: 4px;
+}
+
+.funnel-tab {
+  border: 0;
+  background: transparent;
+  color: #6B7280;
+  font-weight: 600;
+  font-size: 0.86rem;
+  padding: 8px 14px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.funnel-tab.active {
+  background: #fff;
+  color: #111827;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+}
+
+.funnel-selection-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: #EEF2FF;
+  color: #3730A3;
+  font-weight: 600;
+  font-size: 0.88rem;
+}
+
+.funnel-selection-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.funnel-select-col {
+  width: 42px;
+  text-align: center;
+}
+
+.funnel-leads-table .table-company-name {
+  font-weight: 700;
+  color: var(--text);
+}
+
+.funnel-leads-table a.table-company-link {
+  text-decoration: none;
+  color: inherit;
+}
+
+.funnel-leads-table a.table-company-link:hover {
+  color: var(--primary, #5b4dff);
+  text-decoration: underline;
+}
+
+.funnel-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+
+.funnel-pagination .leads-pagination-pages {
+  display: flex;
+  gap: 6px;
+}
+
+.funnel-pagination .page-btn {
+  min-width: 34px;
+  height: 34px;
+  border: 1px solid #E5E7EB;
+  background: #fff;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.funnel-pagination .page-btn.active {
+  background: #4F46E5;
+  border-color: #4F46E5;
+  color: #fff;
+}
+
+.funnel-pagination .leads-per-page {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
 .funnel-conversions {
   display: flex;
   flex-direction: column;

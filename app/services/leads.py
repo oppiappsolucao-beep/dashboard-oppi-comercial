@@ -238,7 +238,10 @@ def apply_leads_view(
     if stage and stage != "Todas as etapas":
         result = result[
             result.apply(
-                lambda row: map_etapa(row.get("_status_grupo") or row.get("_status_original", "")) == stage,
+                lambda row: map_etapa(
+                    row.get("_status_grupo") or row.get("_status_original", ""),
+                    get_lead_action(tenant_id, int(row.get("_sheet_row", 0) or 0)) or {},
+                ) == stage,
                 axis=1,
             )
         ]

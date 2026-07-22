@@ -8,9 +8,15 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 
-from config.crm_options import OVERVIEW_FUNNEL_STAGES as CRM_FUNNEL_STAGES, PIPELINE_STAGE_OPTIONS, PIPELINE_STAGE_SHEET_STATUSES
+from config.crm_options import (
+    OVERVIEW_FUNNEL_STAGES as CRM_FUNNEL_STAGES,
+    PIPELINE_STAGE_COLORS,
+    PIPELINE_STAGE_OPTIONS,
+    PIPELINE_STAGE_SHEET_STATUSES,
+)
 from app.services.filters import DashboardFilters, apply_dashboard_filters
-from app.services.leads import ETAPA_BADGE, map_etapa
+from app.services.lead_actions_storage import DEFAULT_TENANT_ID, get_lead_action
+from app.services.leads import ETAPA_BADGE, apply_leads_view, map_etapa
 from app.services.legacy_core import (
     DASHBOARD_STATUS_OPTIONS,
     STATUS_COLORS,
@@ -522,39 +528,168 @@ def _week_over_week_trend(current: int, previous: int) -> dict:
     }
 
 
+def _pipeline_stage_metrics(
+    filtered_df: pd.DataFrame,
+    *,
+    tenant_id: str | None = DEFAULT_TENANT_ID,
+) -> tuple[dict[str, int], dict[str, float]]:
+    counts = {stage: 0 for stage in PIPELINE_STAGE_OPTIONS}
+    values = {stage: 0.0 for stage in PIPELINE_STAGE_OPTIONS}
+    if filtered_df.empty:
+        return counts, values
+
+    for _, row in filtered_df.iterrows():
+        sheet_row = int(row.get("_sheet_row", 0) or 0)
+        stored = get_lead_action(tenant_id, sheet_row) or {}
+        status_raw = row.get("_status_grupo") or row.get("_status_original") or ""
+        etapa = map_etapa(status_raw, stored)
+        if etapa not in counts:
+            etapa = "Novo Lead"
+        counts[etapa] += 1
+        values[etapa] += deal_value_from_row(row)
+    return counts, values
+
+
 def build_funnel_page_kpi_cards(
     df: pd.DataFrame,
     columns: dict,
     filters: DashboardFilters,
+    *,
+    tenant_id: str | None = DEFAULT_TENANT_ID,
 ) -> list[dict]:
     filtered_current = apply_dashboard_filters(df, columns, filters)
     filtered_prev = apply_dashboard_filters(df, columns, _previous_period_filters(filters))
 
-    card_defs = [
-        ("Novos Leads", ["Novo Lead"], "purple", "👥"),
-        ("Contato", ["Chamado Whats", "Ligação - Conversando Whats", "Ligação"], "pink", "☎"),
-        ("Reuniões", ["Reunião"], "blue", "📅"),
-        ("Propostas", ["Proposta"], "rose", "📄"),
-        ("Fechados", ["Fechado"], "green", "✓"),
+    leads_current = len(apply_leads_view(filtered_current, "leads", "Todas as etapas", "recent", tenant_id=tenant_id, columns=columns))
+    leads_prev = len(apply_leads_view(filtered_prev, "leads", "Todas as etapas", "recent", tenant_id=tenant_id, columns=columns))
+    qty_current = len(filtered_current)
+    qty_prev = len(filtered_prev)
+    opportunities_current = _count_opportunities(filtered_current)
+    opportunities_prev = _count_opportunities(filtered_prev)
+    value_current = _negotiation_value(filtered_current)
+    value_prev = _negotiation_value(filtered_prev)
+    closed_current = count_dashboard_status(filtered_current, "Fechado")
+    closed_prev = count_dashboard_status(filtered_prev, "Fechado")
+
+    return [
+        {
+            "label": "Quantidade",
+            "value": qty_current,
+            "icon": "📊",
+            "tone": "purple",
+            **_week_over_week_trend(qty_current, qty_prev),
+        },
+        {
+            "label": "Valor em Negociação",
+            "value": _format_money(value_current),
+            "icon": "💰",
+            "tone": "blue",
+            **_week_over_week_trend(int(value_current), int(value_prev)),
+        },
+        {
+            "label": "Leads",
+            "value": leads_current,
+            "icon": "👥",
+            "tone": "pink",
+            **_week_over_week_trend(leads_current, leads_prev),
+        },
+        {
+            "label": "Oportunidades",
+            "value": opportunities_current,
+            "icon": "🔥",
+            "tone": "rose",
+            **_week_over_week_trend(opportunities_current, opportunities_prev),
+        },
+        {
+            "label": "Fechados",
+            "value": closed_current,
+            "icon": "✓",
+            "tone": "green",
+            **_week_over_week_trend(closed_current, closed_prev),
+        },
     ]
 
-    cards = []
-    for label, statuses, tone, icon in card_defs:
-        current = _count_statuses(filtered_current, statuses)
-        previous = _count_statuses(filtered_prev, statuses)
-        trend = _week_over_week_trend(current, previous)
-        cards.append({
-            "label": label,
-            "value": current,
-            "icon": icon,
-            "tone": tone,
-            **trend,
+
+def build_funnel_page_steps(
+    filtered_df: pd.DataFrame,
+    *,
+    tenant_id: str | None = DEFAULT_TENANT_ID,
+) -> list[dict]:
+    counts, _ = _pipeline_stage_metrics(filtered_df, tenant_id=tenant_id)
+    max_count = max(counts.values()) or 1
+    steps = []
+    stage_list = list(PIPELINE_STAGE_OPTIONS)
+    for index, name in enumerate(stage_list):
+        count = counts.get(name, 0)
+        width = max(28, round((count / max_count) * 100))
+        conversion = None
+        if index < len(stage_list) - 1 and count > 0:
+            next_count = counts.get(stage_list[index + 1], 0)
+            conversion = round((next_count / count) * 100)
+        steps.append({
+            "name": name,
+            "count": count,
+            "width": width,
+            "conversion": conversion,
+            "level": index % 6,
+            "color": PIPELINE_STAGE_COLORS.get(name, "#7C3AED"),
         })
-    return cards
+    return steps
 
 
-def build_funnel_page_steps(filtered_df: pd.DataFrame) -> list[dict]:
-    return _build_steps_from_stages(filtered_df, FUNNEL_PAGE_STAGES)
+def build_funnel_process_chart_json(funnel_steps: list[dict]) -> str:
+    names = [step["name"] for step in funnel_steps]
+    counts = [step["count"] for step in funnel_steps]
+    colors = [step.get("color") or "#7C3AED" for step in funnel_steps]
+    figure = go.Figure(
+        go.Funnel(
+            y=names,
+            x=counts,
+            textposition="inside",
+            textinfo="value+percent initial",
+            marker={"color": colors},
+            connector={"line": {"color": "#E5E7EB", "width": 1}},
+            hovertemplate="%{y}<br>Quantidade: %{x}<extra></extra>",
+        )
+    )
+    figure.update_layout(
+        height=360,
+        margin=dict(l=12, r=12, t=12, b=12),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#475569", size=12),
+    )
+    return figure.to_json()
+
+
+def build_funnel_value_chart_json(
+    filtered_df: pd.DataFrame,
+    *,
+    tenant_id: str | None = DEFAULT_TENANT_ID,
+) -> str:
+    _, values = _pipeline_stage_metrics(filtered_df, tenant_id=tenant_id)
+    names = list(PIPELINE_STAGE_OPTIONS)
+    amounts = [round(values.get(name, 0.0), 2) for name in names]
+    colors = [PIPELINE_STAGE_COLORS.get(name, "#7C3AED") for name in names]
+    figure = go.Figure(
+        go.Bar(
+            x=names,
+            y=amounts,
+            marker={"color": colors},
+            hovertemplate="%{x}<br>Valor: R$ %{y:,.0f}<extra></extra>",
+        )
+    )
+    figure.update_layout(
+        height=360,
+        margin=dict(l=12, r=12, t=12, b=48),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#475569", size=12),
+        xaxis=dict(title="", tickangle=-25, showgrid=False),
+        yaxis=dict(title="", gridcolor="rgba(148,163,184,0.18)", tickprefix="R$ "),
+        showlegend=False,
+    )
+    return figure.to_json()
 
 
 def build_funnel_page_actions(filtered_df: pd.DataFrame) -> list[dict]:

@@ -68,8 +68,10 @@ def _get_row_by_sheet(df, sheet_row: int):
 
 
 def _resolve_edit_from_page(value: str) -> str:
-    normalized = normalize_text(value)
-    return normalized if normalized in {"leads", "activities"} else ""
+    normalized = normalize_text(value).lower()
+    if normalized in {"leads", "activities", "funnel", "contracts"}:
+        return normalized
+    return ""
 
 
 def _edit_page_url(sheet_row: int, *, tab: str = "", from_page: str = "") -> str:
@@ -264,10 +266,12 @@ async def contract_edit_page(request: Request, sheet_row: int):
     back_href = {
         "leads": "/leads-e-empresas",
         "activities": "/atividades",
+        "funnel": "/funil-de-vendas",
     }.get(from_page, "/cadastro/todos")
     active_sidebar = {
         "leads": "leads",
         "activities": "activities",
+        "funnel": "funnel",
     }.get(from_page, "contracts")
 
     return render(
@@ -280,6 +284,7 @@ async def contract_edit_page(request: Request, sheet_row: int):
             "back_label": {
                 "leads": "Empresas",
                 "activities": "Atividades",
+                "funnel": "Funil de Vendas",
             }.get(from_page, "Todos os cadastros"),
             "sheet_row": sheet_row,
             "seller_options": get_seller_options(df),
@@ -320,6 +325,8 @@ async def contract_edit_submit(request: Request, sheet_row: int):
             return RedirectResponse(url="/leads-e-empresas", status_code=303)
         if from_page == "activities":
             return RedirectResponse(url="/atividades", status_code=303)
+        if from_page == "funnel":
+            return RedirectResponse(url="/funil-de-vendas", status_code=303)
         return RedirectResponse(url=_edit_page_url(sheet_row, from_page=from_page), status_code=303)
 
     form_dict = dict(form)
@@ -395,6 +402,7 @@ async def contract_delete(
     return RedirectResponse(url={
         "leads": "/leads-e-empresas",
         "activities": "/atividades",
+        "funnel": "/funil-de-vendas",
     }.get(from_page, "/cadastro/todos"), status_code=303)
 
 
