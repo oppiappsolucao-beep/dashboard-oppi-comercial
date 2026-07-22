@@ -54,10 +54,185 @@ def init_crm_local_db() -> None:
                     updated_at TEXT NOT NULL,
                     PRIMARY KEY (tenant_id, sheet_row)
                 );
+
+                CREATE TABLE IF NOT EXISTS pending_companies (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    empresa TEXT NOT NULL,
+                    payload_json TEXT NOT NULL,
+                    headers_json TEXT NOT NULL,
+                    row_values_json TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'pending',
+                    created_at TEXT NOT NULL,
+                    synced_sheet_row INTEGER,
+                    last_error TEXT
+                );
+
+                CREATE TABLE IF NOT EXISTS sheet_meta (
+                    key TEXT PRIMARY KEY,
+                    value_json TEXT NOT NULL
+                );
                 """
             )
             conn.commit()
         _initialized = True
+
+
+def save_sheet_headers(headers: list[str]) -> None:
+    init_crm_local_db()
+    with _lock, _connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO sheet_meta (key, value_json) VALUES ('headers', ?)
+            ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json
+            """,
+            (json.dumps(headers, ensure_ascii=False),),
+        )
+        conn.commit()
+
+
+def load_sheet_headers() -> list[str] | None:
+    init_crm_local_db()
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT value_json FROM sheet_meta WHERE key = 'headers'"
+        ).fetchone()
+    if not row:
+        return None
+    try:
+        headers = json.loads(row["value_json"])
+    except json.JSONDecodeError:
+        return None
+    return headers if isinstance(headers, list) and headers else None
+
+
+def enqueue_pending_company(
+    *,
+    empresa: str,
+    payload: dict,
+    headers: list[str],
+    row_values: list[str],
+    last_error: str = "",
+) -> int:
+    init_crm_local_db()
+    from datetime import datetime
+
+    created_at = datetime.now().isoformat(timespec="seconds")
+    with _lock, _connect() as conn:
+        cur = conn.execute(
+            """
+            INSERT INTO pending_companies
+                (empresa, payload_json, headers_json, row_values_json, status, created_at, last_error)
+            VALUES (?, ?, ?, ?, 'pending', ?, ?)
+            """,
+            (
+                _normalize_text(empresa) or "Sem nome",
+                json.dumps(payload, ensure_ascii=False, default=str),
+                json.dumps(headers, ensure_ascii=False),
+                json.dumps(row_values, ensure_ascii=False, default=str),
+                created_at,
+                _normalize_text(last_error)[:500],
+            ),
+        )
+        conn.commit()
+        return int(cur.lastrowid)
+
+
+def list_pending_companies(status: str = "pending") -> list[dict]:
+    init_crm_local_db()
+    with _connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, empresa, payload_json, headers_json, row_values_json, status,
+                   created_at, synced_sheet_row, last_error
+            FROM pending_companies
+            WHERE status = ?
+            ORDER BY id
+            """,
+            (status,),
+        ).fetchall()
+    items = []
+    for row in rows:
+        try:
+            payload = json.loads(row["payload_json"])
+            headers = json.loads(row["headers_json"])
+            row_values = json.loads(row["row_values_json"])
+        except json.JSONDecodeError:
+            continue
+        items.append({
+            "id": int(row["id"]),
+            "empresa": row["empresa"],
+            "payload": payload if isinstance(payload, dict) else {},
+            "headers": headers if isinstance(headers, list) else [],
+            "row_values": row_values if isinstance(row_values, list) else [],
+            "status": row["status"],
+            "created_at": row["created_at"],
+            "synced_sheet_row": row["synced_sheet_row"],
+            "last_error": row["last_error"] or "",
+            "local_sheet_row": -int(row["id"]),
+        })
+    return items
+
+
+def mark_pending_company_synced(pending_id: int, sheet_row: int) -> None:
+    init_crm_local_db()
+    with _lock, _connect() as conn:
+        conn.execute(
+            """
+            UPDATE pending_companies
+            SET status = 'synced', synced_sheet_row = ?, last_error = ''
+            WHERE id = ?
+            """,
+            (int(sheet_row), int(pending_id)),
+        )
+        conn.commit()
+
+
+def mark_pending_company_error(pending_id: int, error: str) -> None:
+    init_crm_local_db()
+    with _lock, _connect() as conn:
+        conn.execute(
+            """
+            UPDATE pending_companies
+            SET last_error = ?
+            WHERE id = ?
+            """,
+            (_normalize_text(error)[:500], int(pending_id)),
+        )
+        conn.commit()
+
+
+def get_pending_company(pending_id: int) -> dict | None:
+    init_crm_local_db()
+    with _connect() as conn:
+        row = conn.execute(
+            """
+            SELECT id, empresa, payload_json, headers_json, row_values_json, status,
+                   created_at, synced_sheet_row, last_error
+            FROM pending_companies
+            WHERE id = ?
+            """,
+            (int(pending_id),),
+        ).fetchone()
+    if not row:
+        return None
+    try:
+        payload = json.loads(row["payload_json"])
+        headers = json.loads(row["headers_json"])
+        row_values = json.loads(row["row_values_json"])
+    except json.JSONDecodeError:
+        return None
+    return {
+        "id": int(row["id"]),
+        "empresa": row["empresa"],
+        "payload": payload if isinstance(payload, dict) else {},
+        "headers": headers if isinstance(headers, list) else [],
+        "row_values": row_values if isinstance(row_values, list) else [],
+        "status": row["status"],
+        "created_at": row["created_at"],
+        "synced_sheet_row": row["synced_sheet_row"],
+        "last_error": row["last_error"] or "",
+        "local_sheet_row": -int(row["id"]),
+    }
 
 
 def _record_timestamp(record: dict | None) -> str:

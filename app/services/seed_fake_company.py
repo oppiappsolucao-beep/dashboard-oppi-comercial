@@ -66,11 +66,16 @@ FAKE_CLOSED_SERVICES = [
 
 def find_fake_company_sheet_row() -> int | None:
     from app.dependencies import get_prepared_data
+    from app.services.crm_local_db import list_pending_companies
+
+    target = normalize_text(FAKE_COMPANY_NAME).lower()
+    for item in list_pending_companies("pending"):
+        if normalize_text(item.get("empresa")).lower() == target:
+            return int(item.get("local_sheet_row") or -item["id"])
 
     df, _columns = get_prepared_data()
     if df.empty or "_empresa" not in df.columns:
         return None
-    target = normalize_text(FAKE_COMPANY_NAME).lower()
     for _, row in df.iterrows():
         if normalize_text(row.get("_empresa", "")).lower() == target:
             return int(row.get("_sheet_row") or 0) or None
@@ -137,9 +142,12 @@ def ensure_fake_test_company_on_startup() -> None:
     import time
 
     log = logging.getLogger(__name__)
-    time.sleep(45)
-    try:
-        result = seed_fake_test_company(user="sistema")
-        log.info("Seed empresa FAKE: %s", result.get("message"))
-    except Exception as error:
-        log.warning("Seed empresa FAKE adiado: %s", error)
+    time.sleep(20)
+    for attempt in range(4):
+        try:
+            result = seed_fake_test_company(user="sistema")
+            log.info("Seed empresa FAKE: %s", result.get("message"))
+            return
+        except Exception as error:
+            log.warning("Seed empresa FAKE tentativa %s: %s", attempt + 1, error)
+            time.sleep(15 + attempt * 10)

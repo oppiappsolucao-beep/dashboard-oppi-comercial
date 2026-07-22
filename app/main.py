@@ -116,8 +116,20 @@ async def startup_maintenance() -> None:
                 load_sheet_data()
             except Exception:
                 pass
+            try:
+                from app.services.pending_companies import sync_pending_companies_to_sheet
+
+                sync_pending_companies_to_sheet()
+            except Exception as sync_error:
+                log.warning("Sync cadastros pendentes: %s", sync_error)
             cleanup_service_account_proposal_files()
             ensure_fake_test_company_on_startup()
+            try:
+                from app.services.pending_companies import sync_pending_companies_to_sheet
+
+                sync_pending_companies_to_sheet()
+            except Exception:
+                pass
         except Exception as error:
             log.error("Startup background (planilha): %s", error)
 

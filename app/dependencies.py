@@ -32,17 +32,34 @@ def get_prepared_data(refresh: bool = False):
     except Exception:
         return pd.DataFrame(), {}
 
-    if df is None or df.empty:
-        return pd.DataFrame(), {}
+    if df is None:
+        df = pd.DataFrame()
 
     try:
-        columns = identify_columns(df)
-        prepared = prepare_data(df, columns)
-        prepared = prepared[
-            prepared["_empresa"].apply(lambda value: normalize_text(value) != "")
-        ].copy()
-        return prepared, columns
+        columns = identify_columns(df) if not df.empty else {}
+        prepared = prepare_data(df, columns) if not df.empty else pd.DataFrame()
+        if not prepared.empty and "_empresa" in prepared.columns:
+            prepared = prepared[
+                prepared["_empresa"].apply(lambda value: normalize_text(value) != "")
+            ].copy()
+        try:
+            from app.services.pending_companies import merge_pending_companies_into_df
+
+            prepared = merge_pending_companies_into_df(prepared)
+        except Exception:
+            pass
+        if prepared.empty:
+            return pd.DataFrame(), columns
+        return prepared, columns or identify_columns(prepared)
     except Exception:
+        try:
+            from app.services.pending_companies import merge_pending_companies_into_df
+
+            pending_only = merge_pending_companies_into_df(pd.DataFrame())
+            if not pending_only.empty:
+                return pending_only, identify_columns(pending_only)
+        except Exception:
+            pass
         return pd.DataFrame(), {}
 
 

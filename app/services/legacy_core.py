@@ -1076,6 +1076,12 @@ def load_sheet_data() -> pd.DataFrame:
         _sheet_cache[cache_key] = result.copy()
         _sheet_last_good = result.copy()
         _sheet_last_good_values = [row[:] for row in values]
+        try:
+            from app.services.pending_companies import remember_sheet_headers
+
+            remember_sheet_headers(list(values[0]))
+        except Exception:
+            pass
         return result
     except Exception as error:
         message = str(error)
@@ -1617,32 +1623,45 @@ def _apply_address_fields(row_values: list, headers: list, payload: dict) -> Non
 
 
 def append_company_to_sheet(payload: dict) -> int:
-    """Adiciona uma nova empresa na aba principal respeitando a estrutura atual da planilha."""
+    """Adiciona empresa na planilha. Se a API falhar, salva local e sincroniza depois."""
     global _sheet_last_good_values
+    import time
 
-    client = get_gsheet_client()
-    spreadsheet = client.open_by_key(settings.sheet_id)
-    worksheet = _open_worksheet(spreadsheet, settings.worksheet_name)
+    from app.services.pending_companies import (
+        queue_company_registration,
+        remember_sheet_headers,
+        resolve_registration_headers,
+    )
 
     cached_values = get_last_good_sheet_values()
-    headers: list[str]
-    if cached_values and cached_values[0]:
-        headers = list(cached_values[0])
-        # Completa cabeçalhos localmente sem nova leitura.
-        for column_name, aliases in REGISTRATION_OPTIONAL_COLUMNS:
-            if _worksheet_has_header(headers, aliases):
-                continue
-            headers.append(column_name)
-    else:
+    headers = resolve_registration_headers(cached_values)
+
+    worksheet = None
+    if not headers:
         try:
+            client = get_gsheet_client()
+            spreadsheet = client.open_by_key(settings.sheet_id)
+            worksheet = _open_worksheet(spreadsheet, settings.worksheet_name)
             headers = ensure_registration_sheet_columns(worksheet)
+            remember_sheet_headers(headers)
         except Exception as error:
             message = str(error)
             if "429" in message or "Quota exceeded" in message.lower():
-                raise RuntimeError(
-                    "A planilha está temporariamente ocupada. Aguarde cerca de 30 segundos e salve novamente."
-                ) from error
-            raise
+                # Sem cabeçalhos e sem cota: usa um conjunto mínimo para não perder o cadastro.
+                headers = [
+                    "Nome Empresas", "CNPJ", "Data de abertura", "Capital",
+                    "Endereço", "Número", "Complemento", "CEP", "Bairro", "Município", "UF",
+                    "Email", "Site empresa",
+                    "Celular WhatsApp", "Telefone fixo", "Telefone lemitt",
+                    "Sócio 1", "CPF", "E-mail Sócio 1", "Telefone",
+                    "Sócio 2", "Telefone sócio 2", "CPF_2",
+                    "Sócio 3", "Telefone sócio 3", "CPF_3",
+                    "Instagram", "Linkedin", "Vendedor",
+                    "Status WhatsApp", "Data do chamado", "Última atualização", "Observações",
+                    "Serviços fechados", "Valor do serviço", "Colaboradores",
+                ]
+            else:
+                raise
 
     validate_unique_company_registration(payload, values=cached_values)
 
@@ -1679,37 +1698,50 @@ def append_company_to_sheet(payload: dict) -> int:
     _set_sheet_value_by_header(row_values, headers, ["Instagram"], payload.get("instagram"))
     _set_sheet_value_by_header(row_values, headers, ["Linkedin", "LinkedIn"], payload.get("linkedin"))
     _set_sheet_value_by_header(row_values, headers, ["Vendedor", "Responsável", "Responsavel"], payload.get("vendedor"))
-    _set_sheet_value_by_header(row_values, headers, ["Status", "Etapa"], payload.get("status"))
+    _set_sheet_value_by_header(row_values, headers, ["Status WhatsApp", "Status", "Etapa"], payload.get("status"))
     _set_sheet_value_by_header(row_values, headers, ["Data do chamado", "Data chamado"], payload.get("data_chamado"))
     _set_sheet_value_by_header(row_values, headers, ["Última atualização", "Ultima atualização", "Ultima atualizacao"], payload.get("ultima_atualizacao"))
     _set_sheet_value_by_header(row_values, headers, ["Observações", "Observacoes", "Observação", "Observacao"], payload.get("observacoes"))
     _apply_commercial_fields(row_values, headers, payload)
 
-    try:
-        worksheet.append_row(
-            row_values,
-            value_input_option="USER_ENTERED",
-            insert_data_option="INSERT_ROWS",
-        )
-    except Exception as error:
-        message = str(error)
-        if "429" in message or "Quota exceeded" in message.lower():
-            raise RuntimeError(
-                "A planilha está temporariamente ocupada. Aguarde cerca de 30 segundos e salve novamente."
-            ) from error
-        raise
+    last_error = ""
+    for attempt in range(5):
+        try:
+            if worksheet is None:
+                client = get_gsheet_client()
+                spreadsheet = client.open_by_key(settings.sheet_id)
+                worksheet = _open_worksheet(spreadsheet, settings.worksheet_name)
+            worksheet.append_row(
+                row_values,
+                value_input_option="USER_ENTERED",
+                insert_data_option="INSERT_ROWS",
+            )
+            if _sheet_last_good_values:
+                _sheet_last_good_values = [row[:] for row in _sheet_last_good_values]
+                if _sheet_last_good_values and list(_sheet_last_good_values[0]) != list(headers):
+                    _sheet_last_good_values[0] = list(headers)
+                _sheet_last_good_values.append(list(row_values))
+            else:
+                _sheet_last_good_values = [list(headers), list(row_values)]
+            remember_sheet_headers(headers)
+            invalidate_sheet_cache()
+            return int(worksheet.row_count or len(_sheet_last_good_values or []) or 2)
+        except Exception as error:
+            last_error = str(error)
+            message = last_error.lower()
+            if "429" in last_error or "quota exceeded" in message:
+                time.sleep(3 + attempt * 2)
+                worksheet = None
+                continue
+            break
 
-    # Atualiza cache local sem nova leitura.
-    if _sheet_last_good_values:
-        _sheet_last_good_values = [row[:] for row in _sheet_last_good_values]
-        if _sheet_last_good_values and _sheet_last_good_values[0] != headers:
-            _sheet_last_good_values[0] = list(headers)
-        _sheet_last_good_values.append(list(row_values))
-    else:
-        _sheet_last_good_values = [list(headers), list(row_values)]
-
-    invalidate_sheet_cache()
-    return len(_sheet_last_good_values) if _sheet_last_good_values else worksheet.row_count
+    # Não perde o cadastro: fica local e aparece no site enquanto sincroniza.
+    return queue_company_registration(
+        payload=payload,
+        headers=headers,
+        row_values=row_values,
+        last_error=last_error or "Falha ao gravar na planilha",
+    )
 
 
 def update_company_in_sheet(sheet_row: int, payload: dict) -> None:
