@@ -20,82 +20,76 @@
   </div>
 
   <div class="toolbar-card leads-toolbar-card">
-    <div class="leads-toolbar">
-      <div class="leads-tabs">
-        <button type="button" class="leads-tab active" disabled>
-          Empresas
-        </button>
+    <div class="filters-row filters-row-main">
+      <div class="filter-field filter-field-sm">
+        <label>Vendedor</label>
+        <select name="seller" onchange="document.getElementById('leads-page-input').value='1'; document.getElementById('leads-filters').requestSubmit();">
+          <option value="Todos os vendedores">Todos os vendedores</option>
+          {% for seller in options.seller_options %}
+          <option value="{{ seller }}" {% if filters.seller == seller %}selected{% endif %}>{{ seller }}</option>
+          {% endfor %}
+        </select>
       </div>
-      <div class="leads-toolbar-right">
-        <select name="stage" aria-label="Filtrar por etapa"
-          onchange="document.getElementById('leads-page-input').value='1'; document.getElementById('leads-filters').requestSubmit();">
+      <div class="filter-field filter-field-sm">
+        <label>Etapa</label>
+        <select name="stage" onchange="document.getElementById('leads-page-input').value='1'; document.getElementById('leads-filters').requestSubmit();">
           {% for stage in stage_options %}
           <option value="{{ stage }}" {% if leads_params.stage == stage %}selected{% endif %}>{{ stage }}</option>
           {% endfor %}
         </select>
-        <select name="sort" aria-label="Ordenação"
-          onchange="document.getElementById('leads-filters').requestSubmit();">
-          <option value="recent" {% if leads_params.sort == 'recent' %}selected{% endif %}>Ordenar: Mais recente</option>
-          <option value="name" {% if leads_params.sort == 'name' %}selected{% endif %}>Ordenar: Nome</option>
+      </div>
+      <div class="filter-field filter-field-sm">
+        <label>Período início</label>
+        <input type="date" name="period_start" value="{{ filters.period_start.isoformat() if filters.period_start else '' }}"
+          onchange="document.getElementById('leads-page-input').value='1'; document.getElementById('leads-filters').requestSubmit();">
+      </div>
+      <div class="filter-field filter-field-sm">
+        <label>Período fim</label>
+        <input type="date" name="period_end" value="{{ filters.period_end.isoformat() if filters.period_end else '' }}"
+          onchange="document.getElementById('leads-page-input').value='1'; document.getElementById('leads-filters').requestSubmit();">
+      </div>
+      <div class="filter-field filter-field-sm">
+        <label>Nichos</label>
+        <select name="niche" onchange="document.getElementById('leads-page-input').value='1'; document.getElementById('leads-filters').requestSubmit();">
+          <option value="Todos os nichos">Todos os nichos</option>
+          {% for niche in options.niche_options %}
+          <option value="{{ niche }}" {% if filters.niche == niche %}selected{% endif %}>{{ niche }}</option>
+          {% endfor %}
         </select>
-        <button type="button" class="leads-refresh-btn" aria-label="Atualizar dados"
-          onclick="document.getElementById('leads-refresh-form').requestSubmit();">↻</button>
+      </div>
+      <div class="filter-field filter-field-sm">
+        <label>Estados</label>
+        <select name="state" onchange="document.getElementById('leads-page-input').value='1'; document.getElementById('leads-filters').requestSubmit();">
+          <option value="Todos os estados">Todos os estados</option>
+          {% for state in options.state_options %}
+          <option value="{{ state }}" {% if filters.state == state %}selected{% endif %}>{{ state }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="filter-field filter-field-sm">
+        <label>Ordenar</label>
+        <select name="sort" onchange="document.getElementById('leads-filters').requestSubmit();">
+          <option value="recent" {% if leads_params.sort == 'recent' %}selected{% endif %}>Mais recente</option>
+          <option value="name" {% if leads_params.sort == 'name' %}selected{% endif %}>Nome</option>
+        </select>
       </div>
     </div>
-
-    <div class="leads-search-bar">
-      <div class="search-wrap leads-search-wrap">
-        <span class="search-icon">⌕</span>
-        <input type="text" name="search" value="{{ filters.search }}"
-          placeholder="Buscar por nome, empresa, telefone ou e-mail..."
-          hx-trigger="keyup changed delay:400ms"
-          hx-post="/leads-e-empresas/filtros"
-          hx-target="#leads-root"
-          hx-swap="innerHTML"
-          hx-include="#leads-filters">
-      </div>
-    </div>
-
-    <div class="leads-advanced-filters is-visible" id="leads-advanced-filters">
-      <div class="filters-row filters-row-main">
-        <div class="filter-field filter-field-sm">
-          <label>Vendedor</label>
-          <select name="seller" onchange="document.getElementById('leads-page-input').value='1'; document.getElementById('leads-filters').requestSubmit();">
-            <option value="Todos os vendedores">Todos os vendedores</option>
-            {% for seller in options.seller_options %}
-            <option value="{{ seller }}" {% if filters.seller == seller %}selected{% endif %}>{{ seller }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="filter-field filter-field-sm">
-          <label>Período início</label>
-          <input type="date" name="period_start" value="{{ filters.period_start.isoformat() if filters.period_start else '' }}"
-            onchange="document.getElementById('leads-page-input').value='1'; document.getElementById('leads-filters').requestSubmit();">
-        </div>
-        <div class="filter-field filter-field-sm">
-          <label>Período fim</label>
-          <input type="date" name="period_end" value="{{ filters.period_end.isoformat() if filters.period_end else '' }}"
-            onchange="document.getElementById('leads-page-input').value='1'; document.getElementById('leads-filters').requestSubmit();">
-        </div>
-        <div class="filter-field filter-field-sm">
-          <label>Nichos</label>
-          <select name="niche" onchange="document.getElementById('leads-page-input').value='1'; document.getElementById('leads-filters').requestSubmit();">
-            <option value="Todos os nichos">Todos os nichos</option>
-            {% for niche in options.niche_options %}
-            <option value="{{ niche }}" {% if filters.niche == niche %}selected{% endif %}>{{ niche }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="filter-field filter-field-sm">
-          <label>Estados</label>
-          <select name="state" onchange="document.getElementById('leads-page-input').value='1'; document.getElementById('leads-filters').requestSubmit();">
-            <option value="Todos os estados">Todos os estados</option>
-            {% for state in options.state_options %}
-            <option value="{{ state }}" {% if filters.state == state %}selected{% endif %}>{{ state }}</option>
-            {% endfor %}
-          </select>
+    <div class="filters-row filters-row-search">
+      <div class="filter-field filter-field-search">
+        <label>Buscar</label>
+        <div class="search-wrap leads-search-wrap">
+          <span class="search-icon">⌕</span>
+          <input type="text" name="search" value="{{ filters.search }}"
+            placeholder="Buscar por nome, empresa, telefone ou e-mail..."
+            hx-trigger="keyup changed delay:400ms"
+            hx-post="/leads-e-empresas/filtros"
+            hx-target="#leads-root"
+            hx-swap="innerHTML"
+            hx-include="#leads-filters">
         </div>
       </div>
+      <button type="button" class="btn btn-secondary leads-refresh-inline" aria-label="Atualizar dados"
+        onclick="document.getElementById('leads-refresh-form').requestSubmit();">↻ Atualizar</button>
     </div>
   </div>
 

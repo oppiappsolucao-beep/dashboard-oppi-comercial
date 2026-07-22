@@ -560,16 +560,21 @@ def build_funnel_page_kpi_cards(
     filtered_current = apply_dashboard_filters(df, columns, filters)
     filtered_prev = apply_dashboard_filters(df, columns, _previous_period_filters(filters))
 
-    leads_current = len(apply_leads_view(filtered_current, "leads", "Todas as etapas", "recent", tenant_id=tenant_id, columns=columns))
-    leads_prev = len(apply_leads_view(filtered_prev, "leads", "Todas as etapas", "recent", tenant_id=tenant_id, columns=columns))
-    qty_current = len(filtered_current)
-    qty_prev = len(filtered_prev)
-    opportunities_current = _count_opportunities(filtered_current)
-    opportunities_prev = _count_opportunities(filtered_prev)
-    value_current = _negotiation_value(filtered_current)
-    value_prev = _negotiation_value(filtered_prev)
-    closed_current = count_dashboard_status(filtered_current, "Fechado")
-    closed_prev = count_dashboard_status(filtered_prev, "Fechado")
+    leads_current_df = apply_leads_view(
+        filtered_current, "leads", "Todas as etapas", "recent", tenant_id=tenant_id, columns=columns,
+    )
+    leads_prev_df = apply_leads_view(
+        filtered_prev, "leads", "Todas as etapas", "recent", tenant_id=tenant_id, columns=columns,
+    )
+
+    qty_current = len(leads_current_df)
+    qty_prev = len(leads_prev_df)
+    opportunities_current = _count_opportunities(leads_current_df)
+    opportunities_prev = _count_opportunities(leads_prev_df)
+    value_current = _negotiation_value(leads_current_df)
+    value_prev = _negotiation_value(leads_prev_df)
+    closed_current = count_dashboard_status(leads_current_df, "Fechado")
+    closed_prev = count_dashboard_status(leads_prev_df, "Fechado")
 
     return [
         {
@@ -588,10 +593,10 @@ def build_funnel_page_kpi_cards(
         },
         {
             "label": "Leads",
-            "value": leads_current,
+            "value": qty_current,
             "icon": "👥",
             "tone": "pink",
-            **_week_over_week_trend(leads_current, leads_prev),
+            **_week_over_week_trend(qty_current, qty_prev),
         },
         {
             "label": "Oportunidades",

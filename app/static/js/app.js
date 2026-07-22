@@ -29,6 +29,8 @@ function renderOverviewCharts() {
 function renderFunnelCharts() {
   renderPlotlyChart("funnel-process-chart");
   renderPlotlyChart("funnel-value-chart");
+  bindFunnelChartClicks("funnel-process-chart");
+  bindFunnelChartClicks("funnel-value-chart");
 }
 
 function renderPlotlyChart(elementId) {
@@ -36,6 +38,20 @@ function renderPlotlyChart(elementId) {
   if (!el || !el.dataset.chart) return;
   const figure = JSON.parse(el.dataset.chart);
   Plotly.newPlot(el, figure.data, figure.layout, { responsive: true, displayModeBar: false });
+}
+
+function bindFunnelChartClicks(elementId) {
+  const el = document.getElementById(elementId);
+  if (!el || !el.dataset.funnelStageChart || typeof Plotly === "undefined") return;
+  el.on("plotly_click", (event) => {
+    const point = event?.points?.[0];
+    if (!point) return;
+    const stage = point.y || point.x;
+    if (!stage) return;
+    if (typeof window.filterFunnelStage === "function") {
+      window.filterFunnelStage(String(stage));
+    }
+  });
 }
 
 function renderGoalsCharts() {

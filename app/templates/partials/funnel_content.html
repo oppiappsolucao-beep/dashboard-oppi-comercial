@@ -35,11 +35,11 @@
       </div>
       <div class="filter-field filter-field-sm">
         <label>Período início</label>
-        <input type="date" name="period_start" value="{{ filters.period_start }}" onchange="document.getElementById('funnel-page-input').value='1'; document.getElementById('funnel-filters').requestSubmit()">
+        <input type="date" name="period_start" value="{{ filters.period_start.isoformat() if filters.period_start else '' }}" onchange="document.getElementById('funnel-page-input').value='1'; document.getElementById('funnel-filters').requestSubmit()">
       </div>
       <div class="filter-field filter-field-sm">
         <label>Período fim</label>
-        <input type="date" name="period_end" value="{{ filters.period_end }}" onchange="document.getElementById('funnel-page-input').value='1'; document.getElementById('funnel-filters').requestSubmit()">
+        <input type="date" name="period_end" value="{{ filters.period_end.isoformat() if filters.period_end else '' }}" onchange="document.getElementById('funnel-page-input').value='1'; document.getElementById('funnel-filters').requestSubmit()">
       </div>
       <div class="filter-field filter-field-sm">
         <label>Nichos</label>
@@ -65,7 +65,7 @@
         <label>Buscar</label>
         <div class="search-wrap">
           <span class="search-icon">⌕</span>
-          <input type="text" name="search" value="{{ filters.search }}" placeholder="Buscar leads, empresas ou negócios..."
+          <input type="text" name="search" value="{{ filters.search }}" placeholder="Buscar leads..."
             hx-trigger="keyup changed delay:400ms"
             hx-post="/funil-de-vendas/filtros"
             hx-target="#funnel-root"
@@ -95,28 +95,32 @@
   <div class="overview-grid funnel-charts-grid">
     <div class="funnel-card panel funnel-page-chart">
       <div class="section-heading">Processo de vendas</div>
-      <div class="section-subtitle">Distribuição dos cadastros por etapa do funil.</div>
-      <div id="funnel-process-chart" class="funnel-plotly-chart" data-chart='{{ process_chart_json | safe }}'></div>
+      <div class="section-subtitle">Clique em uma etapa para ver os leads dessa fase.</div>
+      <div id="funnel-process-chart" class="funnel-plotly-chart" data-chart='{{ process_chart_json | safe }}' data-funnel-stage-chart="1"></div>
     </div>
 
     <div class="funnel-card panel funnel-page-chart">
       <div class="section-heading">Valor por etapa</div>
-      <div class="section-subtitle">Soma das propostas em cada fase do processo.</div>
-      <div id="funnel-value-chart" class="funnel-plotly-chart" data-chart='{{ value_chart_json | safe }}'></div>
+      <div class="section-subtitle">Clique na barra para filtrar os leads da etapa.</div>
+      <div id="funnel-value-chart" class="funnel-plotly-chart" data-chart='{{ value_chart_json | safe }}' data-funnel-stage-chart="1"></div>
     </div>
   </div>
 
   <div class="overview-grid">
     <div class="funnel-card panel funnel-page-chart">
       <div class="section-heading">Funil por etapa</div>
-      <div class="section-subtitle">Contagem e conversão entre etapas.</div>
+      <div class="section-subtitle">Clique na quantidade para listar quem está na etapa.</div>
       <div class="funnel-horizontal">
         {% for step in funnel_steps %}
         <div class="funnel-horizontal-row">
-          <div class="funnel-horizontal-bar level-{{ step.level }}" style="width: {{ step.width }}%;">
+          <button type="button"
+            class="funnel-horizontal-bar level-{{ step.level }} {% if funnel_params.stage == step.name %}is-active{% endif %}"
+            style="width: {{ step.width }}%;"
+            data-funnel-stage="{{ step.name }}"
+            title="Ver leads em {{ step.name }}">
             <span>{{ step.name }}</span>
             <strong>{{ step.count }}</strong>
-          </div>
+          </button>
           {% if step.conversion is not none %}
           <div class="funnel-horizontal-rate">{{ step.conversion }}%</div>
           {% else %}
@@ -125,6 +129,12 @@
         </div>
         {% endfor %}
       </div>
+      {% if funnel_params.stage != 'Todas as etapas' %}
+      <div class="funnel-stage-filter-note">
+        Filtrando etapa <strong>{{ funnel_params.stage }}</strong>
+        <button type="button" class="btn btn-small btn-secondary" data-funnel-stage="Todas as etapas">Limpar etapa</button>
+      </div>
+      {% endif %}
     </div>
 
     <div class="actions-card panel">
@@ -154,25 +164,17 @@
   <div class="panel-card panel funnel-leads-panel" id="funnel-leads-panel">
     <div class="funnel-leads-header">
       <div>
-        <div class="section-heading">Cadastros do funil</div>
-        <div class="section-subtitle">Selecione leads para acompanhar o processo comercial.</div>
+        <div class="section-heading">Leads do funil</div>
+        <div class="section-subtitle">
+          {% if funnel_params.stage != 'Todas as etapas' %}
+          Leads na etapa <strong>{{ funnel_params.stage }}</strong>.
+          {% else %}
+          Apenas cadastros marcados como lead.
+          {% endif %}
+        </div>
       </div>
       <div class="funnel-leads-toolbar">
-        <div class="funnel-tabs" role="tablist" aria-label="Tipo de cadastro">
-          <button type="button" class="funnel-tab {% if funnel_params.tab == 'leads' %}active{% endif %}"
-            onclick="document.getElementById('funnel-tab-input').value='leads'; document.getElementById('funnel-page-input').value='1'; document.getElementById('funnel-filters').requestSubmit();">
-            Leads
-          </button>
-          <button type="button" class="funnel-tab {% if funnel_params.tab == 'todos' %}active{% endif %}"
-            onclick="document.getElementById('funnel-tab-input').value='todos'; document.getElementById('funnel-page-input').value='1'; document.getElementById('funnel-filters').requestSubmit();">
-            Todos
-          </button>
-          <button type="button" class="funnel-tab {% if funnel_params.tab == 'empresas' %}active{% endif %}"
-            onclick="document.getElementById('funnel-tab-input').value='empresas'; document.getElementById('funnel-page-input').value='1'; document.getElementById('funnel-filters').requestSubmit();">
-            Empresas
-          </button>
-        </div>
-        <input type="hidden" name="tab" id="funnel-tab-input" value="{{ funnel_params.tab }}">
+        <input type="hidden" name="tab" id="funnel-tab-input" value="leads">
         <select name="sort" aria-label="Ordenação"
           onchange="document.getElementById('funnel-filters').requestSubmit();">
           <option value="recent" {% if funnel_params.sort == 'recent' %}selected{% endif %}>Mais recente</option>
@@ -198,7 +200,7 @@
             <th class="funnel-select-col">
               <input type="checkbox" id="funnel-select-all" aria-label="Selecionar todos da página">
             </th>
-            <th>Lead / Empresa</th>
+            <th>Lead</th>
             <th>Etapa</th>
             <th>Valor</th>
             <th>Responsável</th>
@@ -278,13 +280,35 @@
       </div>
     </div>
     {% else %}
-    <p class="empty-note">Nenhum cadastro encontrado com os filtros atuais.</p>
+    <p class="empty-note">Nenhum lead encontrado com os filtros atuais.</p>
     {% endif %}
   </div>
 </form>
 
 <script>
 (function () {
+  function filterFunnelStage(stage) {
+    var form = document.getElementById("funnel-filters");
+    var stageSelect = form && form.querySelector('select[name="stage"]');
+    var pageInput = document.getElementById("funnel-page-input");
+    if (!form || !stageSelect) return;
+    stageSelect.value = stage || "Todas as etapas";
+    if (pageInput) pageInput.value = "1";
+    form.requestSubmit();
+    setTimeout(function () {
+      var panel = document.getElementById("funnel-leads-panel");
+      if (panel) panel.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 250);
+  }
+
+  function initFunnelStageClicks() {
+    document.querySelectorAll("[data-funnel-stage]").forEach(function (el) {
+      el.addEventListener("click", function () {
+        filterFunnelStage(el.getAttribute("data-funnel-stage") || "Todas as etapas");
+      });
+    });
+  }
+
   function initFunnelSelection() {
     var panel = document.getElementById("funnel-leads-panel");
     if (!panel) return;
@@ -343,6 +367,8 @@
     refresh();
   }
 
+  window.filterFunnelStage = filterFunnelStage;
+  initFunnelStageClicks();
   initFunnelSelection();
   if (typeof renderFunnelCharts === "function") {
     renderFunnelCharts();

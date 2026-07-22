@@ -9,20 +9,28 @@
 
 .leads-toolbar-card {
   margin-bottom: 14px;
-  padding: 14px 16px 16px;
+  padding: 16px;
 }
 
-.leads-toolbar-card .leads-toolbar {
-  margin-bottom: 0;
+.leads-toolbar-card .filters-row-search {
+  align-items: end;
+}
+
+.leads-refresh-inline {
+  height: 44px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .leads-search-wrap {
   flex: 1;
+  min-width: 0;
 }
 
 .leads-search-wrap input {
   width: 100%;
   height: 44px;
+  border-radius: 999px;
 }
 
 .leads-filter-toggle,

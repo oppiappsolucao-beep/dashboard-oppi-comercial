@@ -18,13 +18,10 @@ from app.templating import render
 
 router = APIRouter()
 
-FUNNEL_TAB_OPTIONS = ("leads", "todos", "empresas")
 FUNNEL_SORT_OPTIONS = ("recent", "name", "value")
 
 
 def _parse_funnel_view_params(source) -> dict:
-    raw_tab = normalize_text(source.get("tab") if hasattr(source, "get") else "")
-    tab = raw_tab if raw_tab in FUNNEL_TAB_OPTIONS else "leads"
     raw_stage = normalize_text(source.get("stage") if hasattr(source, "get") else "") or "Todas as etapas"
     stage = raw_stage if raw_stage == "Todas as etapas" or raw_stage in PIPELINE_STAGE_OPTIONS else "Todas as etapas"
     raw_sort = normalize_text(source.get("sort") if hasattr(source, "get") else "")
@@ -39,21 +36,31 @@ def _parse_funnel_view_params(source) -> dict:
         per_page = 10
     if per_page not in {10, 25, 50}:
         per_page = 10
-    return {"tab": tab, "stage": stage, "sort": sort, "page": page, "per_page": per_page}
+    return {"tab": "leads", "stage": stage, "sort": sort, "page": page, "per_page": per_page}
 
 
 def _funnel_context(request: Request, filters, view_params: dict | None = None):
+    from app.services.leads import apply_leads_view
+
     df, columns = get_prepared_data()
     options = get_filter_options(df)
     filters = apply_default_period_filters(filters, df)
     view_params = view_params or _parse_funnel_view_params(request.query_params)
 
     filtered_df = apply_dashboard_filters(df, columns, filters)
-    funnel_steps = build_funnel_page_steps(filtered_df, tenant_id=DEFAULT_TENANT_ID)
+    leads_df = apply_leads_view(
+        filtered_df,
+        "leads",
+        "Todas as etapas",
+        "recent",
+        tenant_id=DEFAULT_TENANT_ID,
+        columns=columns,
+    )
+    funnel_steps = build_funnel_page_steps(leads_df, tenant_id=DEFAULT_TENANT_ID)
     leads_table = build_leads_table(
         filtered_df,
         columns,
-        tab=view_params["tab"],
+        tab="leads",
         stage=view_params["stage"],
         sort=view_params["sort"],
         page=view_params["page"],
@@ -70,8 +77,8 @@ def _funnel_context(request: Request, filters, view_params: dict | None = None):
         "kpi_cards": build_funnel_page_kpi_cards(df, columns, filters, tenant_id=DEFAULT_TENANT_ID),
         "funnel_steps": funnel_steps,
         "process_chart_json": build_funnel_process_chart_json(funnel_steps),
-        "value_chart_json": build_funnel_value_chart_json(filtered_df, tenant_id=DEFAULT_TENANT_ID),
-        "action_items": build_funnel_page_actions(filtered_df),
+        "value_chart_json": build_funnel_value_chart_json(leads_df, tenant_id=DEFAULT_TENANT_ID),
+        "action_items": build_funnel_page_actions(leads_df),
         "leads_table": leads_table,
     }
 
@@ -116,7 +123,7 @@ async def funnel_filters(
         "search": search,
     })
     view_params = _parse_funnel_view_params({
-        "tab": tab,
+        "tab": "leads",
         "stage": stage,
         "sort": sort,
         "page": page,
