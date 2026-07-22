@@ -6,13 +6,16 @@ import sqlite3
 import threading
 from pathlib import Path
 
-from app.services.legacy_core import normalize_text
 from app.services.storage_paths import get_storage_dir
 
 DEFAULT_TENANT_ID = "default"
 
 _lock = threading.Lock()
 _initialized = False
+
+
+def _normalize_text(value) -> str:
+    return str(value or "").strip()
 
 
 def _db_path() -> Path:
@@ -60,7 +63,7 @@ def init_crm_local_db() -> None:
 def _record_timestamp(record: dict | None) -> str:
     if not isinstance(record, dict):
         return ""
-    return normalize_text(record.get("updated_at")) or normalize_text(record.get("created_at"))
+    return _normalize_text(record.get("updated_at")) or _normalize_text(record.get("created_at"))
 
 
 def _pick_newer_record(left: dict | None, right: dict | None) -> dict | None:
@@ -88,7 +91,7 @@ def load_activities_store() -> dict:
             "SELECT tenant_id, activity_id, payload_json FROM activities ORDER BY updated_at"
         ).fetchall()
     for row in rows:
-        tenant = normalize_text(row["tenant_id"]) or DEFAULT_TENANT_ID
+        tenant = _normalize_text(row["tenant_id"]) or DEFAULT_TENANT_ID
         try:
             record = json.loads(row["payload_json"])
         except json.JSONDecodeError:
@@ -122,7 +125,7 @@ def save_activities_store(data: dict) -> None:
                     """,
                     (
                         str(activity_id),
-                        normalize_text(tenant) or DEFAULT_TENANT_ID,
+                        _normalize_text(tenant) or DEFAULT_TENANT_ID,
                         json.dumps(record, ensure_ascii=False, default=str),
                         updated_at,
                     ),
@@ -132,7 +135,7 @@ def save_activities_store(data: dict) -> None:
 
 def upsert_activity(tenant_id: str | None, activity_id: str, record: dict) -> None:
     init_crm_local_db()
-    tenant = normalize_text(tenant_id) or DEFAULT_TENANT_ID
+    tenant = _normalize_text(tenant_id) or DEFAULT_TENANT_ID
     updated_at = _record_timestamp(record) or ""
     with _lock, _connect() as conn:
         conn.execute(
@@ -161,7 +164,7 @@ def load_lead_actions_store() -> dict:
             "SELECT tenant_id, sheet_row, payload_json FROM lead_actions ORDER BY updated_at"
         ).fetchall()
     for row in rows:
-        tenant = normalize_text(row["tenant_id"]) or DEFAULT_TENANT_ID
+        tenant = _normalize_text(row["tenant_id"]) or DEFAULT_TENANT_ID
         try:
             record = json.loads(row["payload_json"])
         except json.JSONDecodeError:
@@ -183,14 +186,14 @@ def save_lead_actions_store(data: dict) -> None:
             for sheet_row, record in bucket.items():
                 if not isinstance(record, dict):
                     continue
-                updated_at = _record_timestamp(record) or normalize_text(record.get("AtualizadoEm")) or ""
+                updated_at = _record_timestamp(record) or _normalize_text(record.get("AtualizadoEm")) or ""
                 conn.execute(
                     """
                     INSERT INTO lead_actions (tenant_id, sheet_row, payload_json, updated_at)
                     VALUES (?, ?, ?, ?)
                     """,
                     (
-                        normalize_text(tenant) or DEFAULT_TENANT_ID,
+                        _normalize_text(tenant) or DEFAULT_TENANT_ID,
                         str(sheet_row),
                         json.dumps(record, ensure_ascii=False, default=str),
                         updated_at,
@@ -201,7 +204,7 @@ def save_lead_actions_store(data: dict) -> None:
 
 def upsert_lead_action(tenant_id: str | None, sheet_row: int, record: dict) -> None:
     init_crm_local_db()
-    tenant = normalize_text(tenant_id) or DEFAULT_TENANT_ID
+    tenant = _normalize_text(tenant_id) or DEFAULT_TENANT_ID
     updated_at = _record_timestamp(record) or ""
     with _lock, _connect() as conn:
         conn.execute(

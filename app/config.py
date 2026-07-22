@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-APP_BUILD = os.getenv("APP_BUILD", "20260722-hotfix-deadlock-v1").strip() or "20260722-hotfix-deadlock-v1"
+APP_BUILD = os.getenv("APP_BUILD", "20260722-startup-fast-v1").strip() or "20260722-startup-fast-v1"
 
 
 class Settings:

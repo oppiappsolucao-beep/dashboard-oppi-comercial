@@ -81,51 +81,39 @@ app.add_api_route("/configuracoes/servicos/remover", settings_remove_service, me
 
 @app.on_event("startup")
 async def startup_maintenance() -> None:
-    import asyncio
+    import logging
 
-    def _run_critical() -> None:
-        import logging
+    log = logging.getLogger(__name__)
 
-        log = logging.getLogger(__name__)
+    # Só o SQLite local no startup — planilha/API ficam em background
+    # para o /health responder rápido e o Easypanel não derrubar o serviço.
+    try:
+        from app.services.crm_local_db import init_crm_local_db
+
+        init_crm_local_db()
+    except Exception as error:
+        log.error("Startup SQLite local: %s", error)
+
+    def _run_background() -> None:
         try:
-            from app.services.crm_local_db import init_crm_local_db
             from app.services.activities_storage import reload_activities_store
             from app.services.lead_actions_storage import reload_lead_actions_store
             from app.services.sheet_crm_storage import ensure_crm_storage_tabs
             from app.services.app_settings import load_app_settings
             from app.services.account_users import load_account_users
             from app.services.monthly_goals import load_monthly_goals
+            from app.services.proposal_pdf import cleanup_service_account_proposal_files
 
-            init_crm_local_db()
             reload_activities_store(force_refresh=False)
             reload_lead_actions_store(force_refresh=False)
-
             ensure_crm_storage_tabs()
             load_account_users()
             load_app_settings()
             load_monthly_goals()
-        except Exception as error:
-            log.error("Startup crítico (planilha): %s", error)
-            try:
-                from app.services.crm_local_db import init_crm_local_db
-                from app.services.activities_storage import reload_activities_store
-                from app.services.lead_actions_storage import reload_lead_actions_store
-
-                init_crm_local_db()
-                reload_activities_store(force_refresh=False)
-                reload_lead_actions_store(force_refresh=False)
-            except Exception as fallback_error:
-                log.error("Startup fallback (db local): %s", fallback_error)
-
-    def _run_background() -> None:
-        try:
-            from app.services.proposal_pdf import cleanup_service_account_proposal_files
-
             cleanup_service_account_proposal_files()
-        except Exception:
-            pass
+        except Exception as error:
+            log.error("Startup background (planilha): %s", error)
 
-    await asyncio.to_thread(_run_critical)
     threading.Thread(target=_run_background, daemon=True).start()
 
 
