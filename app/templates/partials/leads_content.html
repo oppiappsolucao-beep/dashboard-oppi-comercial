@@ -37,7 +37,6 @@
           onchange="document.getElementById('leads-filters').requestSubmit();">
           <option value="recent" {% if leads_params.sort == 'recent' %}selected{% endif %}>Ordenar: Mais recente</option>
           <option value="name" {% if leads_params.sort == 'name' %}selected{% endif %}>Ordenar: Nome</option>
-          <option value="value" {% if leads_params.sort == 'value' %}selected{% endif %}>Ordenar: Maior valor</option>
         </select>
         <button type="button" class="leads-refresh-btn" aria-label="Atualizar dados"
           onclick="document.getElementById('leads-refresh-form').requestSubmit();">↻</button>
@@ -65,15 +64,6 @@
             <option value="Todos os vendedores">Todos os vendedores</option>
             {% for seller in options.seller_options %}
             <option value="{{ seller }}" {% if filters.seller == seller %}selected{% endif %}>{{ seller }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="filter-field filter-field-sm">
-          <label>Status</label>
-          <select name="status" onchange="document.getElementById('leads-page-input').value='1'; document.getElementById('leads-filters').requestSubmit();">
-            <option value="Todos os status">Todos os status</option>
-            {% for status in options.status_options %}
-            <option value="{{ status }}" {% if filters.status == status %}selected{% endif %}>{{ status }}</option>
             {% endfor %}
           </select>
         </div>

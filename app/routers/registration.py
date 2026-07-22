@@ -12,11 +12,13 @@ from app.services.crm_validation_service import get_actions_for_stage, normalize
 from app.services.legacy_core import DuplicateRegistrationError, STATUS_OPTIONS, get_colaborador_options, normalize_text
 from app.services.registration import (
     CADASTRO_TIPO_OPTIONS,
+    NICHE_OPTIONS,
     build_cadastro_new_page_context,
     get_seller_options,
     infer_partners_count,
     save_cadastro_tipo,
     save_new_company,
+    save_nicho,
 )
 from app.templating import render
 from config.crm_options import CHANNEL_OPTIONS, PIPELINE_STAGE_OPTIONS, PRIORITY_OPTIONS
@@ -82,6 +84,7 @@ def _registration_page_context(request: Request, df, *, error: str = "", values:
         "back_href": back_href,
         "back_label": back_label,
         "seller_options": seller_options,
+        "niche_options": NICHE_OPTIONS,
         "status_options": STATUS_OPTIONS,
         "service_options": get_commercial_service_options(),
         "payment_method_options": PAYMENT_METHOD_OPTIONS,
@@ -145,6 +148,7 @@ async def new_registration_submit(request: Request):
         from app.services.registration import save_access_fields
         if int(sheet_row or 0) > 0:
             save_access_fields(DEFAULT_TENANT_ID, sheet_row, form_dict)
+            save_nicho(DEFAULT_TENANT_ID, sheet_row, form_dict.get("nicho", ""))
         if closed_services_has_data(closed_items):
             save_closed_services(DEFAULT_TENANT_ID, sheet_row, closed_items)
 

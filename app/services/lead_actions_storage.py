@@ -273,6 +273,15 @@ def _tenant_bucket(tenant_id: str | None = None) -> dict:
     return bucket if isinstance(bucket, dict) else {}
 
 
+def get_all_lead_actions(tenant_id: str | None) -> dict[str, dict]:
+    bucket = _tenant_bucket(tenant_id)
+    return {
+        key: value
+        for key, value in bucket.items()
+        if isinstance(value, dict)
+    }
+
+
 def get_lead_action(tenant_id: str | None, sheet_row: int) -> dict | None:
     if not sheet_row:
         return None

@@ -288,6 +288,47 @@ def save_cadastro_tipo(tenant_id: str | None, sheet_row: int, tipo: str) -> None
     save_lead_action(tenant_id, sheet_row, {"cadastro_tipo": normalized})
 
 
+NICHE_OPTIONS = [
+    "Marmoraria",
+    "Marcenaria",
+    "Academia",
+    "Clínica",
+    "Pet shop",
+    "Construção civil",
+    "Restaurante",
+    "Loja",
+    "Serviços",
+    "Outros",
+]
+
+
+def resolve_nicho(
+    tenant_id: str | None,
+    sheet_row: int,
+    *,
+    empresa: str = "",
+    fallback: str = "",
+) -> str:
+    if sheet_row:
+        stored = get_lead_action(tenant_id, sheet_row) or {}
+        nicho = normalize_text(stored.get("nicho"))
+        if nicho:
+            return nicho
+    fallback_nicho = normalize_text(fallback)
+    if fallback_nicho:
+        return fallback_nicho
+    from app.services.legacy_core import infer_niche_from_company_name
+
+    return infer_niche_from_company_name(empresa)
+
+
+def save_nicho(tenant_id: str | None, sheet_row: int, nicho: str) -> None:
+    if not sheet_row:
+        return
+    normalized = normalize_text(nicho)
+    save_lead_action(tenant_id, sheet_row, {"nicho": normalized})
+
+
 def _cadastro_initials(name: str) -> str:
     parts = [part for part in str(name or "").split() if part]
     if not parts:

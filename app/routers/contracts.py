@@ -39,14 +39,17 @@ from app.services.lead_actions_storage import DEFAULT_TENANT_ID
 from app.services.activity_service import build_cadastro_activities_context
 from app.services.registration import (
     CADASTRO_TIPO_OPTIONS,
+    NICHE_OPTIONS,
     build_cadastro_edit_page_context,
     get_seller_options,
     infer_partners_count,
     load_access_fields,
     resolve_cadastro_tipo,
+    resolve_nicho,
     save_access_fields,
     save_cadastro_tipo,
     save_company_edit,
+    save_nicho,
     delete_company_registration,
 )
 
@@ -218,6 +221,12 @@ async def contract_edit_page(request: Request, sheet_row: int):
             ]}
     values.update(resolve_address_form_values(row, columns))
     values.update(load_access_fields(DEFAULT_TENANT_ID, sheet_row))
+    values["nicho"] = resolve_nicho(
+        DEFAULT_TENANT_ID,
+        sheet_row,
+        empresa=values.get("empresa", ""),
+        fallback=normalize_text(row.get("_nicho", "")),
+    )
 
     cadastro_tipo = resolve_cadastro_tipo(DEFAULT_TENANT_ID, sheet_row, cnpj=values.get("cnpj", ""))
     from_page = _resolve_edit_from_page(request.query_params.get("from"))
@@ -288,6 +297,7 @@ async def contract_edit_page(request: Request, sheet_row: int):
             }.get(from_page, "Todos os cadastros"),
             "sheet_row": sheet_row,
             "seller_options": get_seller_options(df),
+            "niche_options": NICHE_OPTIONS,
             "status_options": STATUS_OPTIONS,
             "current_status": current_status,
             "data_chamado": parsed_date.isoformat(),
@@ -353,6 +363,7 @@ async def contract_edit_submit(request: Request, sheet_row: int):
         save_company_edit(sheet_row, form_dict)
         save_cadastro_tipo(DEFAULT_TENANT_ID, sheet_row, form_dict.get("cadastro_tipo", "lead"))
         save_access_fields(DEFAULT_TENANT_ID, sheet_row, form_dict)
+        save_nicho(DEFAULT_TENANT_ID, sheet_row, form_dict.get("nicho", ""))
         invalidate_sheet_cache()
         request.session["edit_success"] = "Cadastro salvo com sucesso."
         return RedirectResponse(url=_edit_page_url(sheet_row, from_page=from_page), status_code=303)

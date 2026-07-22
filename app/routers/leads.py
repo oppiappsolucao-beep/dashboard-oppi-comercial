@@ -1,6 +1,8 @@
 import csv
 import io
 
+from dataclasses import replace
+
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 
@@ -34,7 +36,7 @@ def _parse_leads_params(request: Request, form: dict | None = None) -> dict:
     return {
         "tab": "empresas",
         "stage": stage,
-        "sort": sort if sort in ("recent", "name", "value") else "recent",
+        "sort": sort if sort in ("recent", "name") else "recent",
         "page": max(1, page),
         "per_page": per_page if per_page in (10, 25, 50) else 10,
     }
@@ -44,6 +46,7 @@ def _leads_context(request: Request, filters, leads_params: dict):
     df, columns = get_prepared_data()
     options = get_filter_options(df)
     filters = apply_last_days_period_filters(filters, days=7)
+    filters = replace(filters, status="Todos os status")
 
     filtered_df = apply_dashboard_filters(df, columns, filters)
     table = build_leads_table(
@@ -100,7 +103,7 @@ async def leads_filters(
 
     filters = parse_dashboard_filters(request, {
         "seller": seller,
-        "status": status,
+        "status": "Todos os status",
         "period_start": period_start,
         "period_end": period_end,
         "niche": niche,

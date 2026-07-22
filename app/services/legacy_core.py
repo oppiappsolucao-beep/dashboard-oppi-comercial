@@ -2102,6 +2102,23 @@ def prepare_data(df: pd.DataFrame, columns: dict) -> pd.DataFrame:
     result["_vendedor"] = safe_series(result, columns.get("vendedor")).replace("", "Sem vendedor")
     result["_telefone"] = safe_series(result, columns.get("telefone_b2b"))
     result["_nicho"] = result["_empresa"].apply(infer_niche_from_company_name)
+    if "_sheet_row" in result.columns:
+        try:
+            from app.services.lead_actions_storage import DEFAULT_TENANT_ID, get_all_lead_actions
+
+            stored_actions = get_all_lead_actions(DEFAULT_TENANT_ID)
+
+            def _resolve_nicho(row):
+                sheet_row = int(row.get("_sheet_row", 0) or 0)
+                stored = stored_actions.get(str(sheet_row)) or {}
+                nicho = normalize_text(stored.get("nicho"))
+                if nicho:
+                    return nicho
+                return infer_niche_from_company_name(row.get("_empresa", ""))
+
+            result["_nicho"] = result.apply(_resolve_nicho, axis=1)
+        except Exception:
+            pass
     result["_estado"] = safe_series(result, columns.get("endereco")).apply(infer_state_from_address)
     result["_data_abertura"] = safe_series(result, columns.get("data_abertura")).apply(parse_date)
     result["_ultima_atualizacao"] = safe_series(result, columns.get("ultima_atualizacao")).apply(parse_date)
