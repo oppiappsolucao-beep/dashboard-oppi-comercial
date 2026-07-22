@@ -5,10 +5,14 @@
     <div class="client-edit-header-main">
       <div class="client-edit-identity">
         <span class="client-edit-avatar">{{ header_initials }}</span>
-        <div>
+        <div class="client-edit-identity-text">
           <h1 class="client-edit-title">{{ values.empresa }}</h1>
           <div class="client-edit-meta">
-            <span>{{ header_subtitle }}</span>
+            <span class="client-edit-registered">
+              <span class="client-edit-meta-icon" aria-hidden="true">📅</span>
+              {{ header_subtitle }}
+            </span>
+            <span class="client-edit-meta-sep" aria-hidden="true"></span>
             <span class="client-edit-id-badge">{{ header_id }}</span>
           </div>
         </div>
@@ -20,13 +24,16 @@
         {% endwith %}
       </div>
 
-      <div class="client-edit-pipeline" aria-label="Progresso comercial">
-        {% for step in pipeline_steps %}
-        <div class="client-edit-pipeline-step {% if step.is_active %}is-active{% elif step.is_done %}is-done{% endif %}">
-          <span class="client-edit-pipeline-dot"></span>
-          <span>{{ step.label }}</span>
+      <div class="client-edit-status-block" aria-label="Status do negócio">
+        <div class="client-edit-status-title">Status do negócio</div>
+        <div class="client-edit-pipeline">
+          {% for step in pipeline_steps %}
+          <div class="client-edit-pipeline-step {% if step.is_active %}is-active{% elif step.is_done %}is-done{% endif %}">
+            <span class="client-edit-pipeline-dot"></span>
+            <span class="client-edit-pipeline-label">{{ step.label }}</span>
+          </div>
+          {% endfor %}
         </div>
-        {% endfor %}
       </div>
     </div>
   </header>
@@ -41,7 +48,7 @@
     {% for card in summary_cards %}
     <article class="client-edit-summary-card panel">
       <span class="client-edit-summary-icon" aria-hidden="true">{{ card.icon }}</span>
-      <div>
+      <div class="client-edit-summary-body">
         <span class="client-edit-summary-label">{{ card.label }}</span>
         <strong class="client-edit-summary-value">{{ card.value }}</strong>
         <span class="client-edit-summary-hint">{{ card.hint }}</span>
@@ -53,27 +60,27 @@
   <nav class="client-edit-tabs panel" aria-label="Abas do cadastro">
     <a href="/cadastro/todos/{{ sheet_row }}/editar?tab=dados{% if from_page %}&from={{ from_page }}{% endif %}"
       class="client-edit-tab {% if active_tab == 'dados' %}is-active{% endif %}">
-      <span class="client-edit-tab-title">Dados gerais</span>
+      <span class="client-edit-tab-title"><span class="client-edit-tab-icon" aria-hidden="true">🏢</span> Dados gerais</span>
       <span class="client-edit-tab-sub">Informações da empresa</span>
     </a>
     <a href="/cadastro/todos/{{ sheet_row }}/editar?tab=atividades{% if from_page %}&from={{ from_page }}{% endif %}"
       class="client-edit-tab {% if active_tab == 'atividades' %}is-active{% endif %}">
-      <span class="client-edit-tab-title">Atividades</span>
-      <span class="client-edit-tab-sub">Histórico de interações{% if activities_count %}<span class="client-edit-tab-badge">{{ activities_count }}</span>{% endif %}</span>
+      <span class="client-edit-tab-title"><span class="client-edit-tab-icon" aria-hidden="true">📋</span> Atividades{% if activities_count %} ({{ activities_count }}){% endif %}</span>
+      <span class="client-edit-tab-sub">Histórico de interações</span>
     </a>
     <a href="/cadastro/todos/{{ sheet_row }}/editar?tab=proposta{% if from_page %}&from={{ from_page }}{% endif %}"
       class="client-edit-tab {% if active_tab == 'proposta' %}is-active{% endif %}">
-      <span class="client-edit-tab-title">Propostas</span>
+      <span class="client-edit-tab-title"><span class="client-edit-tab-icon" aria-hidden="true">📄</span> Propostas</span>
       <span class="client-edit-tab-sub">Propostas enviadas{% if proposals_count %}<span class="client-edit-tab-badge">{{ proposals_count }}</span>{% endif %}</span>
     </a>
     <a href="/cadastro/todos/{{ sheet_row }}/editar?tab=financeiro{% if from_page %}&from={{ from_page }}{% endif %}"
       class="client-edit-tab {% if active_tab == 'financeiro' %}is-active{% endif %}">
-      <span class="client-edit-tab-title">Financeiro</span>
+      <span class="client-edit-tab-title"><span class="client-edit-tab-icon" aria-hidden="true">💳</span> Financeiro</span>
       <span class="client-edit-tab-sub">Cobranças e pagamentos</span>
     </a>
     <a href="/cadastro/todos/{{ sheet_row }}/editar?tab=suporte{% if from_page %}&from={{ from_page }}{% endif %}"
       class="client-edit-tab {% if active_tab == 'suporte' %}is-active{% endif %}">
-      <span class="client-edit-tab-title">Suporte</span>
+      <span class="client-edit-tab-title"><span class="client-edit-tab-icon" aria-hidden="true">🎧</span> Suporte</span>
       <span class="client-edit-tab-sub">Atendimento e tickets</span>
     </a>
   </nav>

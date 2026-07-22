@@ -26,7 +26,7 @@ CADASTRO_TIPO_OPTIONS = [
 ]
 
 CADASTRO_PIPELINE_STEPS = [
-    {"key": "novo", "label": "Novo"},
+    {"key": "novo", "label": "Novo Lead"},
     {"key": "qualificado", "label": "Qualificado"},
     {"key": "proposta", "label": "Proposta"},
     {"key": "negociacao", "label": "Negociação"},
@@ -360,20 +360,17 @@ def _cadastro_initials(name: str) -> str:
 
 
 def _format_registered_at(data_chamado: str, *, cadastro_tipo: str) -> str:
-    label = "Lead" if cadastro_tipo == "lead" else "Empresa"
+    verb = "Cadastrado" if cadastro_tipo == "lead" else "Cadastrada"
     raw = normalize_text(data_chamado)
     if not raw:
-        return f"{label} cadastrado"
+        return f"{verb}"
     for fmt in ("%Y-%m-%d", "%d/%m/%Y"):
         try:
             parsed = datetime.strptime(raw[:10], fmt)
-            time_part = ""
-            if len(raw) > 10 and ":" in raw:
-                time_part = f" às {raw.split(' ', 1)[-1][:5]}"
-            return f"{label} cadastrado em {parsed.strftime('%d/%m/%Y')}{time_part}"
+            return f"{verb} em {parsed.strftime('%d/%m/%Y')}"
         except ValueError:
             continue
-    return f"{label} cadastrado em {raw}"
+    return f"{verb} em {raw}"
 
 
 def _resolve_pipeline_display_key(etapa: str, status: str) -> str:
@@ -473,6 +470,12 @@ def build_cadastro_edit_page_context(
     empresa = normalize_text(values.get("empresa")) or "—"
     proposals_href = f"/propostas?search={empresa}" if empresa != "—" else "/propostas"
 
+    valor_display = valor_proposta if valor_proposta not in {"", "—"} else "—"
+    if valor_display != "—" and not str(valor_display).upper().startswith("R$"):
+        valor_display = f"R$ {valor_display}"
+    elif valor_display == "—":
+        valor_display = "R$ —"
+
     return {
         "header_initials": _cadastro_initials(empresa),
         "header_subtitle": _format_registered_at(data_chamado, cadastro_tipo=cadastro_tipo),
@@ -481,32 +484,32 @@ def build_cadastro_edit_page_context(
         "summary_cards": [
             {
                 "icon": "🚩",
-                "label": "Etapa atual",
+                "label": "Etapa Atual",
                 "value": etapa,
                 "hint": STAGE_SUMMARY_HINTS.get(etapa, "Acompanhamento comercial"),
             },
             {
                 "icon": "👤",
-                "label": "Vendedor responsável",
+                "label": "Vendedor Responsável",
                 "value": vendedor or "Sem vendedor",
                 "hint": "Responsável comercial",
             },
             {
-                "icon": "📞",
-                "label": "Última atividade",
+                "icon": "📅",
+                "label": "Última Atividade",
                 "value": last_activity_when,
                 "hint": last_activity_label,
             },
             {
-                "icon": "📅",
-                "label": "Próxima ação",
+                "icon": "✅",
+                "label": "Próxima Ação",
                 "value": proxima_acao,
                 "hint": proxima_acao_when,
             },
             {
-                "icon": "💰",
-                "label": "Valor da proposta",
-                "value": valor_proposta if valor_proposta != "—" else "—",
+                "icon": "💲",
+                "label": "Valor da Proposta",
+                "value": valor_display,
                 "hint": servico or "Proposta em elaboração",
             },
         ],

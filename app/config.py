@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-APP_BUILD = os.getenv("APP_BUILD", "20260722-cadastro-ativo-v14").strip() or "20260722-cadastro-ativo-v14"
+APP_BUILD = os.getenv("APP_BUILD", "20260722-cadastro-header-v15").strip() or "20260722-cadastro-header-v15"
 
 
 class Settings:

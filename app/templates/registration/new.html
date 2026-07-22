@@ -5,10 +5,14 @@
     <div class="client-edit-header-main">
       <div class="client-edit-identity">
         <span class="client-edit-avatar">{{ header_initials }}</span>
-        <div>
+        <div class="client-edit-identity-text">
           <h1 class="client-edit-title" id="registration-client-title">{{ client_edit_title }}</h1>
           <div class="client-edit-meta">
-            <span>{{ header_subtitle }}</span>
+            <span class="client-edit-registered">
+              <span class="client-edit-meta-icon" aria-hidden="true">📅</span>
+              {{ header_subtitle }}
+            </span>
+            <span class="client-edit-meta-sep" aria-hidden="true"></span>
             <span class="client-edit-id-badge">{{ header_id }}</span>
           </div>
         </div>
@@ -20,13 +24,16 @@
         {% endwith %}
       </div>
 
-      <div class="client-edit-pipeline" aria-label="Progresso comercial">
-        {% for step in pipeline_steps %}
-        <div class="client-edit-pipeline-step {% if step.is_active %}is-active{% elif step.is_done %}is-done{% endif %}">
-          <span class="client-edit-pipeline-dot"></span>
-          <span>{{ step.label }}</span>
+      <div class="client-edit-status-block" aria-label="Status do negócio">
+        <div class="client-edit-status-title">Status do negócio</div>
+        <div class="client-edit-pipeline">
+          {% for step in pipeline_steps %}
+          <div class="client-edit-pipeline-step {% if step.is_active %}is-active{% elif step.is_done %}is-done{% endif %}">
+            <span class="client-edit-pipeline-dot"></span>
+            <span class="client-edit-pipeline-label">{{ step.label }}</span>
+          </div>
+          {% endfor %}
         </div>
-        {% endfor %}
       </div>
     </div>
   </header>
@@ -37,7 +44,7 @@
     {% for card in summary_cards %}
     <article class="client-edit-summary-card panel">
       <span class="client-edit-summary-icon" aria-hidden="true">{{ card.icon }}</span>
-      <div>
+      <div class="client-edit-summary-body">
         <span class="client-edit-summary-label">{{ card.label }}</span>
         <strong class="client-edit-summary-value">{{ card.value }}</strong>
         <span class="client-edit-summary-hint">{{ card.hint }}</span>
