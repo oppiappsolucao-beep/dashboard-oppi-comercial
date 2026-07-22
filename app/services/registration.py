@@ -288,6 +288,27 @@ def save_cadastro_tipo(tenant_id: str | None, sheet_row: int, tipo: str) -> None
     save_lead_action(tenant_id, sheet_row, {"cadastro_tipo": normalized})
 
 
+def is_cadastro_ativo(tenant_id: str | None, sheet_row: int) -> bool:
+    if not sheet_row:
+        return True
+    stored = get_lead_action(tenant_id, sheet_row) or {}
+    if "cadastro_ativo" not in stored:
+        return True
+    raw = stored.get("cadastro_ativo")
+    if isinstance(raw, bool):
+        return raw
+    text = normalize_text(raw).lower()
+    if text in {"0", "false", "nao", "não", "inativo", "desativado", "off", "no"}:
+        return False
+    return True
+
+
+def save_cadastro_ativo(tenant_id: str | None, sheet_row: int, ativo: bool) -> None:
+    if not sheet_row:
+        return
+    save_lead_action(tenant_id, sheet_row, {"cadastro_ativo": bool(ativo)})
+
+
 NICHE_OPTIONS = [
     "Marmoraria",
     "Marcenaria",

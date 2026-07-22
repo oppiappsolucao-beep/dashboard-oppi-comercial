@@ -33,6 +33,9 @@
 
   {% if success %}<div class="alert-success">{{ success }}</div>{% endif %}
   {% if error %}<div class="alert-error">{{ error }}</div>{% endif %}
+  {% if cadastro_ativo is defined and not cadastro_ativo %}
+  <div class="alert-warning client-edit-inactive-banner">Este cadastro está desativado. Ele não aparece nas listas até ser ativado novamente.</div>
+  {% endif %}
 
   <div class="client-edit-summary-grid">
     {% for card in summary_cards %}
@@ -84,17 +87,17 @@
         <button type="submit" name="action" value="save" class="btn">Salvar alterações</button>
         <button type="submit" name="action" value="cancel" class="btn btn-secondary">Cancelar</button>
       </div>
-      <button type="button" class="btn btn-danger client-edit-delete-btn" id="open-delete-modal">Excluir</button>
+      {% include "partials/registration_danger_actions.html" %}
     </footer>
     {% elif active_tab == 'atividades' %}
     {% include "partials/registration_activities_tab.html" %}
     <footer class="client-edit-footer panel client-edit-footer-compact">
-      <button type="button" class="btn btn-danger client-edit-delete-btn" id="open-delete-modal">Excluir</button>
+      {% include "partials/registration_danger_actions.html" %}
     </footer>
     {% elif active_tab == 'proposta' %}
     {% include "partials/registration_proposta_tab.html" %}
     <footer class="client-edit-footer panel client-edit-footer-compact">
-      <button type="button" class="btn btn-danger client-edit-delete-btn" id="open-delete-modal">Excluir</button>
+      {% include "partials/registration_danger_actions.html" %}
     </footer>
     {% elif active_tab == 'financeiro' %}
     {% include "partials/registration_financeiro_tab.html" %}
@@ -109,18 +112,24 @@
         <a href="/cadastro/todos/{{ sheet_row }}/editar?tab=dados{% if from_page %}&from={{ from_page }}{% endif %}" class="btn btn-secondary">Voltar</a>
         {% endif %}
       </div>
-      <button type="button" class="btn btn-danger client-edit-delete-btn" id="open-delete-modal">Excluir</button>
+      {% include "partials/registration_danger_actions.html" %}
     </footer>
     {% else %}
     {% include "partials/registration_suporte_tab.html" %}
     <footer class="client-edit-footer panel client-edit-footer-compact">
-      <button type="button" class="btn btn-danger client-edit-delete-btn" id="open-delete-modal">Excluir</button>
+      {% include "partials/registration_danger_actions.html" %}
     </footer>
     {% endif %}
   </form>
 </div>
 
 {% include "partials/registration_delete_modal.html" %}
+
+<form id="client-toggle-ativo-form" method="post" action="/cadastro/todos/{{ sheet_row }}/ativo" hidden>
+  {% if from_page %}<input type="hidden" name="from" value="{{ from_page }}">{% endif %}
+  <input type="hidden" name="tab" value="{{ active_tab }}">
+  <input type="hidden" name="ativo" value="{% if cadastro_ativo %}0{% else %}1{% endif %}">
+</form>
 
 <script src="/static/js/partners-form.js?v=1" defer></script>
 <script src="/static/js/registration-edit.js?v=4" defer></script>

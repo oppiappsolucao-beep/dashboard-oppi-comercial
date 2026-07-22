@@ -1336,7 +1336,7 @@
 
 .client-edit-footer {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 10px;
   padding: 16px 18px;
@@ -1350,6 +1350,30 @@
 
 .client-edit-footer-compact {
   justify-content: flex-end;
+}
+
+.client-edit-danger-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  min-width: 140px;
+}
+
+.client-edit-danger-actions .btn {
+  width: 100%;
+  justify-content: center;
+}
+
+.client-edit-inactive-banner,
+.alert-warning {
+  background: #FFF7ED;
+  border: 1px solid #FDBA74;
+  color: #9A3412;
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  font-weight: 600;
 }
 
 .btn-danger {

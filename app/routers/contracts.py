@@ -43,10 +43,12 @@ from app.services.registration import (
     build_cadastro_edit_page_context,
     get_seller_options,
     infer_partners_count,
+    is_cadastro_ativo,
     load_access_fields,
     resolve_cadastro_tipo,
     resolve_nicho,
     save_access_fields,
+    save_cadastro_ativo,
     save_cadastro_tipo,
     save_company_edit,
     save_nicho,
@@ -229,6 +231,7 @@ async def contract_edit_page(request: Request, sheet_row: int):
     )
 
     cadastro_tipo = resolve_cadastro_tipo(DEFAULT_TENANT_ID, sheet_row, cnpj=values.get("cnpj", ""))
+    cadastro_ativo = is_cadastro_ativo(DEFAULT_TENANT_ID, sheet_row)
     from_page = _resolve_edit_from_page(request.query_params.get("from"))
     active_tab = normalize_text(request.query_params.get("tab")) or "dados"
     tab_aliases = {
@@ -314,6 +317,7 @@ async def contract_edit_page(request: Request, sheet_row: int):
             "error": request.session.pop("edit_error", ""),
             "success": request.session.pop("edit_success", ""),
             "cadastro_tipo": cadastro_tipo,
+            "cadastro_ativo": cadastro_ativo,
             "cadastro_tipo_options": CADASTRO_TIPO_OPTIONS,
             "active_tab": active_tab,
             **activities_ctx,
@@ -415,6 +419,30 @@ async def contract_delete(
         "activities": "/atividades",
         "funnel": "/funil-de-vendas",
     }.get(from_page, "/cadastro/todos"), status_code=303)
+
+
+@router.post("/cadastro/todos/{sheet_row}/ativo")
+async def contract_toggle_ativo(
+    request: Request,
+    sheet_row: int,
+    ativo: str = Form("1"),
+    from_: str = Form("", alias="from"),
+    tab: str = Form("dados"),
+):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+
+    from_page = _resolve_edit_from_page(from_)
+    enabled = normalize_text(ativo).lower() in {"1", "true", "sim", "ativo", "on", "yes"}
+    save_cadastro_ativo(DEFAULT_TENANT_ID, sheet_row, enabled)
+    request.session["edit_success"] = (
+        "Cadastro ativado com sucesso." if enabled else "Cadastro desativado com sucesso."
+    )
+    return RedirectResponse(
+        url=_edit_page_url(sheet_row, tab=normalize_text(tab) or "dados", from_page=from_page),
+        status_code=303,
+    )
 
 
 @router.post("/cadastro/todos/{sheet_row}/tipo")

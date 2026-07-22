@@ -8,7 +8,7 @@ from app.services.closed_services import summarize_closed_services_for_display
 from app.services.crm_validation_service import get_next_action_options, normalize_legacy_next_action, resolve_pipeline_stage
 from app.services.followup_service import _email_for_row, _phone_for_row, _whatsapp_href
 from app.services.lead_actions_storage import append_interaction, get_lead_action, save_lead_action
-from app.services.registration import resolve_cadastro_tipo
+from app.services.registration import is_cadastro_ativo, resolve_cadastro_tipo
 from app.services.legacy_core import deal_value_from_row, normalize_text, row_field_value, safe_series, status_group
 
 ETAPA_STAGES = PIPELINE_STAGE_OPTIONS
@@ -206,6 +206,21 @@ def apply_leads_view(
         return result
 
     columns = columns or {}
+
+    if tenant_id and not result.empty:
+        active_rows = []
+        for _, row in result.iterrows():
+            if bool(row.get("_pending_local")):
+                active_rows.append(row)
+                continue
+            sheet_row = int(row.get("_sheet_row", 0) or 0)
+            if sheet_row and not is_cadastro_ativo(tenant_id, sheet_row):
+                continue
+            active_rows.append(row)
+        if active_rows:
+            result = pd.DataFrame(active_rows)
+        else:
+            return result.iloc[0:0]
 
     if tab in {"leads", "empresas"} and tenant_id:
         # Página Empresas lista todos os cadastros ativos da planilha.
