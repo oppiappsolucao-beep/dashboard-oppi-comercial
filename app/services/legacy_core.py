@@ -19,11 +19,13 @@ from gspread.exceptions import SpreadsheetNotFound, WorksheetNotFound
 from app.config import settings
 from cachetools import TTLCache
 
-_sheet_cache: TTLCache = TTLCache(maxsize=1, ttl=settings.cache_ttl_seconds)
+_sheet_cache: TTLCache = TTLCache(maxsize=1, ttl=max(60, settings.cache_ttl_seconds))
+_sheet_last_good = None
 _gsheet_client = None
 
 
 def invalidate_sheet_cache() -> None:
+    """Invalida o cache curto. Mantém a última cópia boa para fallback em 429."""
     global _gsheet_client
     _sheet_cache.clear()
     _gsheet_client = None
@@ -33,6 +35,14 @@ def invalidate_sheet_cache() -> None:
         invalidate_worksheet_cache()
     except Exception:
         pass
+
+
+def get_last_good_sheet_data():
+    """Última leitura bem-sucedida da planilha (pode estar desatualizada)."""
+    global _sheet_last_good
+    if _sheet_last_good is None:
+        return None
+    return _sheet_last_good.copy()
 
 
 
@@ -998,59 +1008,72 @@ def get_gsheet_client():
 
 
 def load_sheet_data() -> pd.DataFrame:
+    global _sheet_last_good
     cache_key = "sheet_data"
     if cache_key in _sheet_cache:
         return _sheet_cache[cache_key].copy()
-    client = get_gsheet_client()
+
     try:
-        spreadsheet = client.open_by_key(settings.sheet_id)
-    except SpreadsheetNotFound as error:
-        raise RuntimeError(
-            f"Planilha não encontrada (ID: {settings.sheet_id}). "
-            "Verifique se a conta de serviço tem acesso à planilha."
-        ) from error
+        client = get_gsheet_client()
+        try:
+            spreadsheet = client.open_by_key(settings.sheet_id)
+        except SpreadsheetNotFound as error:
+            raise RuntimeError(
+                f"Planilha não encontrada (ID: {settings.sheet_id}). "
+                "Verifique se a conta de serviço tem acesso à planilha."
+            ) from error
 
-    worksheet = _open_worksheet(spreadsheet, settings.worksheet_name)
-    values = worksheet.get_all_values()
+        worksheet = _open_worksheet(spreadsheet, settings.worksheet_name)
+        values = worksheet.get_all_values()
 
-    if not values:
-        return pd.DataFrame()
+        if not values:
+            empty = pd.DataFrame()
+            _sheet_cache[cache_key] = empty.copy()
+            return empty
 
-    headers = make_unique_headers(values[0])
-    rows = values[1:]
-    header_len = len(headers)
-    normalized_rows = []
-    for row in rows:
-        row_values = list(row[:header_len])
-        if len(row_values) < header_len:
-            row_values.extend([""] * (header_len - len(row_values)))
-        normalized_rows.append(row_values)
+        headers = make_unique_headers(values[0])
+        rows = values[1:]
+        header_len = len(headers)
+        normalized_rows = []
+        for row in rows:
+            row_values = list(row[:header_len])
+            if len(row_values) < header_len:
+                row_values.extend([""] * (header_len - len(row_values)))
+            normalized_rows.append(row_values)
 
-    df = pd.DataFrame(normalized_rows, columns=headers)
-    df["_sheet_row"] = list(range(2, len(normalized_rows) + 2))
+        df = pd.DataFrame(normalized_rows, columns=headers)
+        df["_sheet_row"] = list(range(2, len(normalized_rows) + 2))
 
-    for column in df.columns:
-        if column != "_sheet_row":
-            df[column] = df[column].fillna("").astype(str).str.strip()
+        for column in df.columns:
+            if column != "_sheet_row":
+                df[column] = df[column].fillna("").astype(str).str.strip()
 
-    data_columns = [column for column in df.columns if column != "_sheet_row"]
-    df = df[
-        df[data_columns].apply(
-            lambda row: any(normalize_text(value) for value in row),
-            axis=1,
+        data_columns = [column for column in df.columns if column != "_sheet_row"]
+        df = df[
+            df[data_columns].apply(
+                lambda row: any(normalize_text(value) for value in row),
+                axis=1,
+            )
+        ].copy()
+
+        empresa_column = first_existing_column(
+            df,
+            ["Nome Empresas", "Nome da empresa", "Empresa", "Nome Empresa", "Nome empresas", "Nome Empresa(s)"],
         )
-    ].copy()
+        if empresa_column:
+            df = df[df[empresa_column].apply(lambda value: normalize_text(value) != "")].copy()
 
-    empresa_column = first_existing_column(
-        df,
-        ["Nome Empresas", "Nome da empresa", "Empresa", "Nome Empresa", "Nome empresas", "Nome Empresa(s)"],
-    )
-    if empresa_column:
-        df = df[df[empresa_column].apply(lambda value: normalize_text(value) != "")].copy()
-
-    result = df.reset_index(drop=True)
-    _sheet_cache[cache_key] = result.copy()
-    return result
+        result = df.reset_index(drop=True)
+        _sheet_cache[cache_key] = result.copy()
+        _sheet_last_good = result.copy()
+        return result
+    except Exception as error:
+        message = str(error)
+        if _sheet_last_good is not None:
+            return _sheet_last_good.copy()
+        if "429" in message or "Quota exceeded" in message.lower():
+            return pd.DataFrame()
+        raise
 
 
 def _open_worksheet(spreadsheet, worksheet_name: str):

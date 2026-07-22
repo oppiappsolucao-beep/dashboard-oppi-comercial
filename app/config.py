@@ -6,13 +6,13 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-APP_BUILD = os.getenv("APP_BUILD", "20260722-fix-syntax-v1").strip() or "20260722-fix-syntax-v1"
+APP_BUILD = os.getenv("APP_BUILD", "20260722-no-quota-msg-v1").strip() or "20260722-no-quota-msg-v1"
 
 
 class Settings:
     sheet_id: str = "1GAbrca0NSiJfPXaSte1qGxXCsGkQPacoRsm0PVB51gE"
     worksheet_name: str = "Folha1"
-    cache_ttl_seconds: int = 120
+    cache_ttl_seconds: int = int(os.getenv("SHEET_CACHE_TTL_SECONDS", "300"))
     proposal_template_doc_id: str = "1iTBG1ZUMCVB-aS7QoYiC4Sym6Dgn9Z7gMN-LGLgyprI"
     proposal_pdf_folder_id: str = ""
     support_whatsapp_number: str = "5511942157917"

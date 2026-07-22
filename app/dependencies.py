@@ -1,5 +1,6 @@
-from fastapi import HTTPException, Request
+from fastapi import Request
 from fastapi.responses import RedirectResponse
+import pandas as pd
 
 from app.config import settings
 from app.services.legacy_core import (
@@ -22,25 +23,17 @@ def get_pricing_store(request: Request) -> PricingSessionStore:
 
 
 def get_prepared_data(refresh: bool = False):
+    """Carrega a planilha com cache. Nunca derruba a tela por limite 429."""
     if refresh:
         invalidate_sheet_cache()
 
     try:
         df = load_sheet_data()
-    except Exception as error:
-        message = str(error)
-        if "429" in message or "Quota exceeded" in message:
-            raise HTTPException(
-                status_code=503,
-                detail=(
-                    "Limite de leituras da planilha Google atingido. "
-                    "Aguarde cerca de 1 minuto e atualize a página."
-                ),
-            ) from error
-        raise HTTPException(status_code=503, detail=message) from error
+    except Exception:
+        return pd.DataFrame(), {}
 
-    if df.empty:
-        return df, {}
+    if df is None or df.empty:
+        return pd.DataFrame(), {}
 
     try:
         columns = identify_columns(df)
@@ -49,11 +42,8 @@ def get_prepared_data(refresh: bool = False):
             prepared["_empresa"].apply(lambda value: normalize_text(value) != "")
         ].copy()
         return prepared, columns
-    except Exception as error:
-        raise HTTPException(
-            status_code=503,
-            detail=f"Erro ao processar dados da planilha: {error}",
-        ) from error
+    except Exception:
+        return pd.DataFrame(), {}
 
 
 def require_auth(request: Request):

@@ -110,7 +110,14 @@ async def new_registration_page(request: Request):
     if redirect:
         return redirect
 
-    df, _columns = get_prepared_data()
+    # Abre o formulário sem forçar leitura fresca da planilha (evita 429).
+    # Vendedores vêm dos usuários da conta; planilha só entra se o cache já existir.
+    try:
+        df, _columns = get_prepared_data()
+    except Exception:
+        import pandas as pd
+
+        df = pd.DataFrame()
     values = {key: normalize_text(value) for key, value in request.query_params.items()}
     return render(request, "registration/new.html", _registration_page_context(request, df, values=values))
 
