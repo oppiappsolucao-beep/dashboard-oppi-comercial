@@ -223,6 +223,16 @@
   white-space: nowrap;
 }
 
+a.table-company-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+a.table-company-link:hover {
+  color: var(--primary, #5b4dff);
+  text-decoration: underline;
+}
+
 .table-company-meta {
   font-size: 0.76rem;
   color: var(--muted);

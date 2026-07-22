@@ -1,32 +1,139 @@
-<div class="client-edit-proposal-panel panel">
-  <div class="client-edit-section-head">
-    <span class="client-edit-section-icon">💰</span>
-    <div>
-      <h2>Financeiro</h2>
-      <p>Cobranças, pagamentos e status financeiro do cliente.</p>
+<div class="client-edit-sections">
+  <section class="client-edit-section panel">
+    <div class="client-edit-section-head">
+      <span class="client-edit-section-icon">💰</span>
+      <div>
+        <h2>Financeiro</h2>
+        <p>Serviços contratados e histórico de pagamentos do cliente.</p>
+      </div>
     </div>
-  </div>
 
-  <div class="client-edit-proposal-grid">
-    <div class="client-edit-proposal-stat">
-      <span class="client-edit-proposal-label">Status financeiro</span>
-      <strong>Em acompanhamento</strong>
+    <div class="client-edit-proposal-grid">
+      <div class="client-edit-proposal-stat">
+        <span class="client-edit-proposal-label">Serviços contratados</span>
+        <strong>{{ financial_summary.servicos_contratados }}</strong>
+      </div>
+      <div class="client-edit-proposal-stat highlight">
+        <span class="client-edit-proposal-label">Pagamentos lançados</span>
+        <strong>{{ financial_summary.total_lancamentos }}</strong>
+      </div>
+      <div class="client-edit-proposal-stat">
+        <span class="client-edit-proposal-label">Pagos</span>
+        <strong>{{ financial_summary.total_pagos }}</strong>
+      </div>
+      <div class="client-edit-proposal-stat">
+        <span class="client-edit-proposal-label">Pendentes</span>
+        <strong>{{ financial_summary.total_pendentes }}</strong>
+      </div>
     </div>
-    <div class="client-edit-proposal-stat highlight">
-      <span class="client-edit-proposal-label">Valor em aberto</span>
-      <strong>{{ commercial_summary.valor_proposta if commercial_summary.has_data else "—" }}</strong>
-    </div>
-    <div class="client-edit-proposal-stat">
-      <span class="client-edit-proposal-label">Forma de pagamento</span>
-      <strong>{{ commercial_summary.forma_pagamento if commercial_summary.has_data else "—" }}</strong>
-    </div>
-    <div class="client-edit-proposal-stat">
-      <span class="client-edit-proposal-label">Próximo vencimento</span>
-      <strong>{{ commercial_summary.vencimento if commercial_summary.has_data else "—" }}</strong>
-    </div>
-  </div>
+  </section>
 
-  <div class="registration-activities-empty" style="margin-top: 1rem;">
-    Lançamentos financeiros detalhados serão exibidos aqui. Por enquanto, use os dados comerciais da proposta e o e-mail de cobrança em Dados gerais.
-  </div>
+  {% include "partials/registration_closed_services.html" %}
+
+  <section class="client-edit-section panel" id="payment-history-section">
+    <div class="client-edit-section-head">
+      <span class="client-edit-section-icon">🧾</span>
+      <div>
+        <h2>Histórico de pagamento</h2>
+        <p>Registre cobranças, recebimentos e status de cada lançamento.</p>
+      </div>
+    </div>
+
+    <div class="payment-history-list" id="payment-history-list">
+      {% for item in payment_history %}
+      <article class="payment-history-row">
+        <div class="form-grid payment-history-grid">
+          <div class="form-group">
+            <label>Data</label>
+            <input type="date" name="pay_data" value="{{ item.data }}">
+          </div>
+          <div class="form-group">
+            <label>Descrição / serviço</label>
+            <input type="text" name="pay_descricao" value="{{ item.descricao }}" placeholder="Ex.: Mensalidade Oppi Track">
+          </div>
+          <div class="form-group">
+            <label>Valor (R$)</label>
+            <input type="text" name="pay_valor" value="{{ item.valor }}" placeholder="R$ 0,00">
+          </div>
+          <div class="form-group">
+            <label>Forma de pagamento</label>
+            <select name="pay_forma_pagamento">
+              {% for option in payment_method_options %}
+              <option value="{{ option }}" {% if item.forma_pagamento == option %}selected{% endif %}>{{ option }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Status</label>
+            <select name="pay_status">
+              {% for option in payment_status_options %}
+              <option value="{{ option }}" {% if item.status == option %}selected{% endif %}>{{ option }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Observação</label>
+            <input type="text" name="pay_observacao" value="{{ item.observacao }}" placeholder="Opcional">
+          </div>
+        </div>
+      </article>
+      {% endfor %}
+    </div>
+
+    <div class="client-closed-services-footer">
+      <button type="button" class="btn btn-secondary" id="payment-history-add">+ Adicionar pagamento</button>
+    </div>
+  </section>
 </div>
+
+<template id="payment-history-row-template">
+  <article class="payment-history-row">
+    <div class="form-grid payment-history-grid">
+      <div class="form-group">
+        <label>Data</label>
+        <input type="date" name="pay_data" value="">
+      </div>
+      <div class="form-group">
+        <label>Descrição / serviço</label>
+        <input type="text" name="pay_descricao" value="" placeholder="Ex.: Mensalidade Oppi Track">
+      </div>
+      <div class="form-group">
+        <label>Valor (R$)</label>
+        <input type="text" name="pay_valor" value="" placeholder="R$ 0,00">
+      </div>
+      <div class="form-group">
+        <label>Forma de pagamento</label>
+        <select name="pay_forma_pagamento">
+          {% for option in payment_method_options %}
+          <option value="{{ option }}" {% if option == 'PIX' %}selected{% endif %}>{{ option }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Status</label>
+        <select name="pay_status">
+          {% for option in payment_status_options %}
+          <option value="{{ option }}" {% if option == 'Pendente' %}selected{% endif %}>{{ option }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Observação</label>
+        <input type="text" name="pay_observacao" value="" placeholder="Opcional">
+      </div>
+    </div>
+  </article>
+</template>
+
+<script>
+(function () {
+  var list = document.getElementById("payment-history-list");
+  var addBtn = document.getElementById("payment-history-add");
+  var template = document.getElementById("payment-history-row-template");
+  if (!list || !addBtn || !template) return;
+  addBtn.addEventListener("click", function () {
+    var node = template.content.cloneNode(true);
+    list.appendChild(node);
+  });
+})();
+</script>

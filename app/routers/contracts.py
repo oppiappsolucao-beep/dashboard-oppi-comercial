@@ -9,10 +9,15 @@ from app.services.filters import get_filter_options as get_dashboard_filter_opti
 from app.services.commercial_services import get_commercial_service_options
 from app.services.closed_services import (
     PAYMENT_METHOD_OPTIONS,
+    PAYMENT_STATUS_OPTIONS,
     closed_services_has_data,
     load_closed_services,
+    load_payment_history,
     parse_closed_services_from_form,
+    parse_payment_history_from_form,
+    payment_history_summary,
     save_closed_services,
+    save_payment_history,
 )
 from app.services.legacy_core import (
     DuplicateRegistrationError,
@@ -249,6 +254,16 @@ async def contract_edit_page(request: Request, sheet_row: int):
     )
     if closed_services:
         page_ctx["proposals_count"] = len(closed_services)
+    payment_history = load_payment_history(DEFAULT_TENANT_ID, sheet_row)
+    payment_summary = payment_history_summary(payment_history)
+    active_services = [
+        item for item in closed_services
+        if any(str(item.get(key) or "").strip() for key in ("servico", "valor", "vencimento"))
+    ]
+    financial_summary = {
+        "servicos_contratados": len(active_services),
+        **payment_summary,
+    }
 
     back_href = {
         "leads": "/leads-e-empresas",
@@ -279,7 +294,10 @@ async def contract_edit_page(request: Request, sheet_row: int):
             "partners_count": infer_partners_count(values),
             "service_options": get_commercial_service_options(),
             "payment_method_options": PAYMENT_METHOD_OPTIONS,
+            "payment_status_options": PAYMENT_STATUS_OPTIONS,
             "closed_services": closed_services,
+            "payment_history": payment_history,
+            "financial_summary": financial_summary,
             "colaborador_options": get_colaborador_options(),
             "vendedor": normalize_text(row.get("_vendedor", "")) or "Sem vendedor",
             "error": request.session.pop("edit_error", ""),
@@ -291,6 +309,28 @@ async def contract_edit_page(request: Request, sheet_row: int):
             **page_ctx,
         },
     )
+
+
+@router.post("/cadastro/todos/{sheet_row}/financeiro")
+async def contract_financeiro_submit(request: Request, sheet_row: int):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+
+    form = await request.form()
+    from_page = _resolve_edit_from_page(form.get("from"))
+    edit_url = _edit_page_url(sheet_row, tab="financeiro", from_page=from_page)
+
+    try:
+        closed_items = parse_closed_services_from_form(form)
+        save_closed_services(DEFAULT_TENANT_ID, sheet_row, closed_items)
+        payment_items = parse_payment_history_from_form(form)
+        save_payment_history(DEFAULT_TENANT_ID, sheet_row, payment_items)
+        request.session["edit_success"] = "Financeiro salvo com sucesso."
+    except Exception as error:
+        request.session["edit_error"] = f"Não consegui salvar o financeiro: {error}"
+
+    return RedirectResponse(url=edit_url, status_code=303)
 
 
 @router.post("/cadastro/todos/{sheet_row}/editar")

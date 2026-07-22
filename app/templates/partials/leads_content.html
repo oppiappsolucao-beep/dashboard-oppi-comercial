@@ -129,7 +129,11 @@
             <div class="table-company">
               <span class="table-company-icon">{{ row.empresa_initials }}</span>
               <div>
+                {% if row.sheet_row %}
+                <a href="/cadastro/todos/{{ row.sheet_row }}/editar?from=leads" class="table-company-name table-company-link">{{ row.nome }}</a>
+                {% else %}
                 <div class="table-company-name">{{ row.nome }}</div>
+                {% endif %}
                 <div class="table-company-meta">{{ row.tipo_label }}</div>
               </div>
             </div>

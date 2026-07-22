@@ -171,8 +171,6 @@ def build_leads_kpi_cards(filtered_df: pd.DataFrame) -> list[dict]:
     companies = filtered_df["_empresa"].replace("", pd.NA).dropna().nunique() if not filtered_df.empty else 0
     active = 0
     opportunities = 0
-    negotiation_value = 0.0
-    total_pipeline_value = 0.0
 
     if not filtered_df.empty:
         for _, row in filtered_df.iterrows():
@@ -180,27 +178,17 @@ def build_leads_kpi_cards(filtered_df: pd.DataFrame) -> list[dict]:
                 active += 1
             if _is_opportunity_row(row):
                 opportunities += 1
-                negotiation_value += deal_value_from_row(row)
-            total_pipeline_value += deal_value_from_row(row)
 
     added_this_month = _count_this_month(filtered_df)
     month_note = f"+{added_this_month} este mês"
     active_pct = _pct(active, total)
     conversion_pct = _pct(opportunities, total)
-    value_pct = _pct(int(negotiation_value), int(total_pipeline_value)) if total_pipeline_value else 0
 
     return [
         {"label": "Total de Empresas", "value": total, "note": month_note, "icon": "🏢", "tone": "purple"},
         {"label": "Empresas únicas", "value": companies, "note": month_note, "icon": "📋", "tone": "blue"},
         {"label": "Empresas ativas", "value": active, "note": f"{active_pct}% do total", "icon": "🔥", "tone": "orange"},
         {"label": "Oportunidades", "value": opportunities, "note": f"{conversion_pct}% conversão", "icon": "🤝", "tone": "pink"},
-        {
-            "label": "Valor em Negociação",
-            "value": _format_money(negotiation_value),
-            "note": f"{value_pct}% do total",
-            "icon": "💰",
-            "tone": "green",
-        },
     ]
 
 

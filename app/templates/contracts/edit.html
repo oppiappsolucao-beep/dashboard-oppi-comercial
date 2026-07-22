@@ -66,7 +66,7 @@
     <a href="/cadastro/todos/{{ sheet_row }}/editar?tab=financeiro{% if from_page %}&from={{ from_page }}{% endif %}"
       class="client-edit-tab {% if active_tab == 'financeiro' %}is-active{% endif %}">
       <span class="client-edit-tab-title">Financeiro</span>
-      <span class="client-edit-tab-sub">Cobranças e pagamentos</span>
+      <span class="client-edit-tab-sub">Serviços e pagamentos</span>
     </a>
     <a href="/cadastro/todos/{{ sheet_row }}/editar?tab=suporte{% if from_page %}&from={{ from_page }}{% endif %}"
       class="client-edit-tab {% if active_tab == 'suporte' %}is-active{% endif %}">
@@ -75,6 +75,23 @@
     </a>
   </nav>
 
+  {% if active_tab == 'financeiro' %}
+  {# Mantém o form do tipo de cadastro (header) apontando para a rota de edição. #}
+  <form id="client-edit-form" method="post" action="/cadastro/todos/{{ sheet_row }}/editar" hidden>
+    {% if from_page %}<input type="hidden" name="from" value="{{ from_page }}">{% endif %}
+  </form>
+  <form method="post" action="/cadastro/todos/{{ sheet_row }}/financeiro" class="client-edit-form" id="client-financeiro-form">
+    {% if from_page %}<input type="hidden" name="from" value="{{ from_page }}">{% endif %}
+    {% include "partials/registration_financeiro_tab.html" %}
+    <footer class="client-edit-footer panel">
+      <div class="client-edit-footer-actions">
+        <button type="submit" class="btn">Salvar financeiro</button>
+        <a href="/cadastro/todos/{{ sheet_row }}/editar?tab=dados{% if from_page %}&from={{ from_page }}{% endif %}" class="btn btn-secondary">Cancelar</a>
+      </div>
+      <button type="button" class="btn btn-danger client-edit-delete-btn" id="open-delete-modal">Excluir</button>
+    </footer>
+  </form>
+  {% else %}
   <form method="post" action="/cadastro/todos/{{ sheet_row }}/editar" class="client-edit-form" id="client-edit-form">
     {% if from_page %}<input type="hidden" name="from" value="{{ from_page }}">{% endif %}
     {% if active_tab == 'dados' %}
@@ -96,11 +113,6 @@
     <footer class="client-edit-footer panel client-edit-footer-compact">
       <button type="button" class="btn btn-danger client-edit-delete-btn" id="open-delete-modal">Excluir</button>
     </footer>
-    {% elif active_tab == 'financeiro' %}
-    {% include "partials/registration_financeiro_tab.html" %}
-    <footer class="client-edit-footer panel client-edit-footer-compact">
-      <button type="button" class="btn btn-danger client-edit-delete-btn" id="open-delete-modal">Excluir</button>
-    </footer>
     {% else %}
     {% include "partials/registration_suporte_tab.html" %}
     <footer class="client-edit-footer panel client-edit-footer-compact">
@@ -108,6 +120,7 @@
     </footer>
     {% endif %}
   </form>
+  {% endif %}
 </div>
 
 {% include "partials/registration_delete_modal.html" %}
