@@ -163,23 +163,25 @@ def _pick_newer_record(left: dict | None, right: dict | None) -> dict | None:
     return left
 
 
-def _merge_stores(file_store: dict, sheet_store: dict | None) -> dict:
-    if sheet_store is None:
-        return file_store
+def _merge_stores(left: dict, right: dict | None) -> dict:
+    if not right:
+        return left
+    if not left:
+        return right
 
     merged = _empty_store()
-    tenants = set(file_store.keys()) | set(sheet_store.keys())
+    tenants = set(left.keys()) | set(right.keys())
     for tenant in tenants:
-        file_bucket = file_store.get(tenant, {})
-        sheet_bucket = sheet_store.get(tenant, {})
-        if not isinstance(file_bucket, dict):
-            file_bucket = {}
-        if not isinstance(sheet_bucket, dict):
-            sheet_bucket = {}
-        keys = set(file_bucket.keys()) | set(sheet_bucket.keys())
+        left_bucket = left.get(tenant, {})
+        right_bucket = right.get(tenant, {})
+        if not isinstance(left_bucket, dict):
+            left_bucket = {}
+        if not isinstance(right_bucket, dict):
+            right_bucket = {}
+        keys = set(left_bucket.keys()) | set(right_bucket.keys())
         merged_bucket = {}
         for key in keys:
-            picked = _pick_newer_record(file_bucket.get(key), sheet_bucket.get(key))
+            picked = _pick_newer_record(left_bucket.get(key), right_bucket.get(key))
             if isinstance(picked, dict):
                 merged_bucket[key] = picked
         merged[tenant] = merged_bucket
@@ -187,9 +189,14 @@ def _merge_stores(file_store: dict, sheet_store: dict | None) -> dict:
 
 
 def _persist_store(data: dict) -> None:
+    from app.services.crm_local_db import save_lead_actions_store
     from app.services.sheet_read_cache import invalidate_worksheet_cache
 
     _save_to_file(data)
+    try:
+        save_lead_actions_store(data)
+    except Exception:
+        pass
     if _save_to_sheet(data):
         invalidate_worksheet_cache(LEAD_ACTIONS_WORKSHEET)
 
@@ -200,15 +207,18 @@ def _load_store(force_refresh: bool = False) -> dict:
         if not force_refresh and _cache is not None:
             return json.loads(json.dumps(_cache, default=str))
 
+        from app.services.crm_local_db import load_lead_actions_store
+
         file_store = _load_from_file()
         sheet_store = _load_from_sheet(force_refresh=force_refresh)
+        db_store = load_lead_actions_store()
+
         merged = _merge_stores(file_store, sheet_store)
+        merged = _merge_stores(merged, db_store)
 
         if merged != file_store:
             _save_to_file(merged)
-        if sheet_store is not None and (sheet_store == _empty_store() or not sheet_store) and merged:
-            _save_to_sheet(merged)
-        elif sheet_store is not None and merged != sheet_store:
+        if sheet_store is not None and not sheet_store and merged:
             _save_to_sheet(merged)
 
         _cache = merged
@@ -247,7 +257,14 @@ def save_lead_action(tenant_id: str | None, sheet_row: int, payload: dict) -> di
     if not sheet_row:
         raise ValueError("sheet_row é obrigatório")
 
-    data = _load_store(force_refresh=True)
+    from app.services.crm_local_db import upsert_lead_action
+
+    with _lock:
+        if _cache is not None:
+            data = json.loads(json.dumps(_cache, default=str))
+        else:
+            data = _load_store(force_refresh=False)
+
     tenant = normalize_text(tenant_id) or DEFAULT_TENANT_ID
     bucket = data.setdefault(tenant, {})
     current = bucket.get(str(sheet_row), {})
@@ -259,6 +276,10 @@ def save_lead_action(tenant_id: str | None, sheet_row: int, payload: dict) -> di
     bucket[str(sheet_row)] = current
     data[tenant] = bucket
     _persist_store(data)
+    try:
+        upsert_lead_action(tenant, sheet_row, current)
+    except Exception:
+        pass
     stage_override = normalize_text(current.get("stage_override"))
     if stage_override:
         try:
@@ -385,7 +406,12 @@ def delete_lead_action(tenant_id: str | None, sheet_row: int) -> None:
     if not sheet_row:
         return
 
-    data = _load_store(force_refresh=True)
+    with _lock:
+        if _cache is not None:
+            data = json.loads(json.dumps(_cache, default=str))
+        else:
+            data = _load_store(force_refresh=False)
+
     tenant = normalize_text(tenant_id) or DEFAULT_TENANT_ID
     bucket = data.get(tenant)
     if not isinstance(bucket, dict):

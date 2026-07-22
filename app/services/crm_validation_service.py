@@ -359,7 +359,10 @@ def validate_completion(status: str, result: str, next_action: str, current_stag
 
 
 def calcular_status_atraso(record: dict, now: datetime | None = None) -> str:
-    now = now or datetime.now()
+    from config.settings import settings as runtime_settings
+    from zoneinfo import ZoneInfo
+
+    now = now or datetime.now(ZoneInfo(runtime_settings.timezone)).replace(tzinfo=None)
     status = normalize_legacy_status_key(record.get("status"))
     if status in {"concluida", "cancelada"}:
         return status

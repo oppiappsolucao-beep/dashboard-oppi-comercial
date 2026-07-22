@@ -150,7 +150,7 @@
   document.addEventListener("DOMContentLoaded", initKanbanBoard);
   document.body.addEventListener("htmx:afterSwap", function (event) {
     if (event.target && event.target.id === "activities-root") {
-      ensureCardsDraggable(event.target);
+      bindKanbanBoard(event.target);
     }
   });
 })();

@@ -183,25 +183,31 @@ def _pick_newer_record(left: dict | None, right: dict | None) -> dict | None:
     return left
 
 
-def _merge_stores(file_store: dict, sheet_store: dict | None) -> dict:
-    if sheet_store is None:
-        return file_store
+def _merge_stores(left: dict, right: dict | None) -> dict:
+    if not right:
+        return left
+    if not left:
+        return right
 
     merged = _empty_store()
-    tenants = set(file_store.keys()) | set(sheet_store.keys())
+    tenants = set(left.keys()) | set(right.keys())
     for tenant in tenants:
-        file_bucket = file_store.get(tenant, {})
-        sheet_bucket = sheet_store.get(tenant, {})
-        file_activities = file_bucket.get("activities", {}) if isinstance(file_bucket, dict) else {}
-        sheet_activities = sheet_bucket.get("activities", {}) if isinstance(sheet_bucket, dict) else {}
-        if not isinstance(file_activities, dict):
-            file_activities = {}
-        if not isinstance(sheet_activities, dict):
-            sheet_activities = {}
-        keys = set(file_activities.keys()) | set(sheet_activities.keys())
+        left_bucket = left.get(tenant, {})
+        right_bucket = right.get(tenant, {})
+        if not isinstance(left_bucket, dict):
+            left_bucket = {}
+        if not isinstance(right_bucket, dict):
+            right_bucket = {}
+        left_activities = left_bucket.get("activities", {}) if isinstance(left_bucket, dict) else {}
+        right_activities = right_bucket.get("activities", {}) if isinstance(right_bucket, dict) else {}
+        if not isinstance(left_activities, dict):
+            left_activities = {}
+        if not isinstance(right_activities, dict):
+            right_activities = {}
+        keys = set(left_activities.keys()) | set(right_activities.keys())
         combined = {}
         for key in keys:
-            picked = _pick_newer_record(file_activities.get(key), sheet_activities.get(key))
+            picked = _pick_newer_record(left_activities.get(key), right_activities.get(key))
             if isinstance(picked, dict):
                 combined[key] = picked
         merged[tenant] = {"activities": combined}
@@ -209,9 +215,14 @@ def _merge_stores(file_store: dict, sheet_store: dict | None) -> dict:
 
 
 def _persist_store(data: dict) -> None:
+    from app.services.crm_local_db import save_activities_store
     from app.services.sheet_read_cache import invalidate_worksheet_cache
 
     _save_to_file(data)
+    try:
+        save_activities_store(data)
+    except Exception:
+        pass
     if _save_to_sheet(data):
         invalidate_worksheet_cache(ACTIVITIES_WORKSHEET)
 
@@ -222,15 +233,18 @@ def _load_store(force_refresh: bool = False) -> dict:
         if not force_refresh and _cache is not None:
             return json.loads(json.dumps(_cache, default=str))
 
+        from app.services.crm_local_db import load_activities_store
+
         file_store = _load_from_file()
         sheet_store = _load_from_sheet(force_refresh=force_refresh)
+        db_store = load_activities_store()
+
         merged = _merge_stores(file_store, sheet_store)
+        merged = _merge_stores(merged, db_store)
 
         if merged != file_store:
             _save_to_file(merged)
-        if sheet_store is not None and (sheet_store == _empty_store() or not sheet_store) and merged:
-            _save_to_sheet(merged)
-        elif sheet_store is not None and merged != sheet_store:
+        if sheet_store is not None and not sheet_store and merged:
             _save_to_sheet(merged)
 
         _cache = merged
@@ -282,7 +296,14 @@ def get_activity(tenant_id: str | None, activity_id: str) -> dict | None:
 
 
 def save_activity(tenant_id: str | None, activity_id: str | None, payload: dict) -> dict:
-    data = _load_store(force_refresh=True)
+    from app.services.crm_local_db import upsert_activity
+
+    with _lock:
+        if _cache is not None:
+            data = json.loads(json.dumps(_cache, default=str))
+        else:
+            data = _load_store(force_refresh=False)
+
     tenant = normalize_text(tenant_id) or DEFAULT_TENANT_ID
     bucket = data.setdefault(tenant, {})
     activities = bucket.setdefault("activities", {})
@@ -298,9 +319,14 @@ def save_activity(tenant_id: str | None, activity_id: str | None, payload: dict)
     bucket["activities"] = activities
     data[tenant] = bucket
     _persist_store(data)
-    stage = normalize_text(current.get("stage") or current.get("move_stage"))
+    try:
+        upsert_activity(tenant, activity_id, current)
+    except Exception:
+        pass
+    stage_changed = any(key in payload for key in ("stage", "move_stage", "stage_entered_at"))
     sheet_row = int(current.get("sheet_row") or 0)
-    if sheet_row and stage:
+    stage = normalize_text(current.get("stage") or current.get("move_stage"))
+    if sheet_row and stage and stage_changed:
         try:
             from app.services.legacy_core import sync_pipeline_stage_to_sheet
 

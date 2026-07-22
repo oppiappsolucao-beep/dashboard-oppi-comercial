@@ -94,6 +94,13 @@ async def startup_maintenance() -> None:
             from app.services.monthly_goals import load_monthly_goals
 
             ensure_crm_storage_tabs()
+            from app.services.crm_local_db import init_crm_local_db
+            from app.services.activities_storage import reload_activities_store
+            from app.services.lead_actions_storage import reload_lead_actions_store
+
+            init_crm_local_db()
+            reload_activities_store(force_refresh=False)
+            reload_lead_actions_store(force_refresh=False)
             load_account_users()
             load_app_settings()
             load_monthly_goals()
