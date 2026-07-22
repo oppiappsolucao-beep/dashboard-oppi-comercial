@@ -299,10 +299,8 @@ def save_activity(tenant_id: str | None, activity_id: str | None, payload: dict)
     from app.services.crm_local_db import upsert_activity
 
     with _lock:
-        if _cache is not None:
-            data = json.loads(json.dumps(_cache, default=str))
-        else:
-            data = _load_store(force_refresh=False)
+        cached = json.loads(json.dumps(_cache, default=str)) if _cache is not None else None
+    data = cached if cached is not None else _load_store(force_refresh=False)
 
     tenant = normalize_text(tenant_id) or DEFAULT_TENANT_ID
     bucket = data.setdefault(tenant, {})

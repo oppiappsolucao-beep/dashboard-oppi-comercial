@@ -88,24 +88,34 @@ async def startup_maintenance() -> None:
 
         log = logging.getLogger(__name__)
         try:
+            from app.services.crm_local_db import init_crm_local_db
+            from app.services.activities_storage import reload_activities_store
+            from app.services.lead_actions_storage import reload_lead_actions_store
             from app.services.sheet_crm_storage import ensure_crm_storage_tabs
             from app.services.app_settings import load_app_settings
             from app.services.account_users import load_account_users
             from app.services.monthly_goals import load_monthly_goals
 
-            ensure_crm_storage_tabs()
-            from app.services.crm_local_db import init_crm_local_db
-            from app.services.activities_storage import reload_activities_store
-            from app.services.lead_actions_storage import reload_lead_actions_store
-
             init_crm_local_db()
             reload_activities_store(force_refresh=False)
             reload_lead_actions_store(force_refresh=False)
+
+            ensure_crm_storage_tabs()
             load_account_users()
             load_app_settings()
             load_monthly_goals()
         except Exception as error:
             log.error("Startup crítico (planilha): %s", error)
+            try:
+                from app.services.crm_local_db import init_crm_local_db
+                from app.services.activities_storage import reload_activities_store
+                from app.services.lead_actions_storage import reload_lead_actions_store
+
+                init_crm_local_db()
+                reload_activities_store(force_refresh=False)
+                reload_lead_actions_store(force_refresh=False)
+            except Exception as fallback_error:
+                log.error("Startup fallback (db local): %s", fallback_error)
 
     def _run_background() -> None:
         try:

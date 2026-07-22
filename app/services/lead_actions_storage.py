@@ -260,10 +260,8 @@ def save_lead_action(tenant_id: str | None, sheet_row: int, payload: dict) -> di
     from app.services.crm_local_db import upsert_lead_action
 
     with _lock:
-        if _cache is not None:
-            data = json.loads(json.dumps(_cache, default=str))
-        else:
-            data = _load_store(force_refresh=False)
+        cached = json.loads(json.dumps(_cache, default=str)) if _cache is not None else None
+    data = cached if cached is not None else _load_store(force_refresh=False)
 
     tenant = normalize_text(tenant_id) or DEFAULT_TENANT_ID
     bucket = data.setdefault(tenant, {})
@@ -407,10 +405,8 @@ def delete_lead_action(tenant_id: str | None, sheet_row: int) -> None:
         return
 
     with _lock:
-        if _cache is not None:
-            data = json.loads(json.dumps(_cache, default=str))
-        else:
-            data = _load_store(force_refresh=False)
+        cached = json.loads(json.dumps(_cache, default=str)) if _cache is not None else None
+    data = cached if cached is not None else _load_store(force_refresh=False)
 
     tenant = normalize_text(tenant_id) or DEFAULT_TENANT_ID
     bucket = data.get(tenant)
