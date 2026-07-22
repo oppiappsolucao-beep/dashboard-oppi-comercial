@@ -190,9 +190,9 @@ def build_leads_kpi_cards(filtered_df: pd.DataFrame) -> list[dict]:
     value_pct = _pct(int(negotiation_value), int(total_pipeline_value)) if total_pipeline_value else 0
 
     return [
-        {"label": "Total de Leads", "value": total, "note": month_note, "icon": "👥", "tone": "purple"},
-        {"label": "Empresas", "value": companies, "note": month_note, "icon": "🏢", "tone": "blue"},
-        {"label": "Leads Ativos", "value": active, "note": f"{active_pct}% do total", "icon": "🔥", "tone": "orange"},
+        {"label": "Total de Empresas", "value": total, "note": month_note, "icon": "🏢", "tone": "purple"},
+        {"label": "Empresas únicas", "value": companies, "note": month_note, "icon": "📋", "tone": "blue"},
+        {"label": "Empresas ativas", "value": active, "note": f"{active_pct}% do total", "icon": "🔥", "tone": "orange"},
         {"label": "Oportunidades", "value": opportunities, "note": f"{conversion_pct}% conversão", "icon": "🤝", "tone": "pink"},
         {
             "label": "Valor em Negociação",
@@ -220,29 +220,28 @@ def apply_leads_view(
     columns = columns or {}
 
     if tab in {"leads", "empresas"} and tenant_id:
-        filtered_rows = []
-        for _, row in result.iterrows():
-            # Cadastros locais pendentes aparecem nas duas abas até sincronizar.
-            if bool(row.get("_pending_local")):
-                tipo_payload = normalize_text(row.get("_cadastro_tipo")).lower()
-                if tab == "leads" and tipo_payload == "empresa":
+        # Página Empresas lista todos os cadastros ativos da planilha.
+        if tab == "empresas":
+            pass
+        else:
+            filtered_rows = []
+            for _, row in result.iterrows():
+                if bool(row.get("_pending_local")):
+                    tipo_payload = normalize_text(row.get("_cadastro_tipo")).lower()
+                    if tab == "leads" and tipo_payload == "empresa":
+                        continue
+                    filtered_rows.append(row)
                     continue
-                if tab == "empresas" and tipo_payload == "lead":
+                sheet_row = int(row.get("_sheet_row", 0) or 0)
+                cnpj = row_field_value(row, columns, "cnpj")
+                cadastro_tipo = resolve_cadastro_tipo(tenant_id, sheet_row, cnpj=cnpj)
+                if tab == "leads" and cadastro_tipo != "lead":
                     continue
                 filtered_rows.append(row)
-                continue
-            sheet_row = int(row.get("_sheet_row", 0) or 0)
-            cnpj = row_field_value(row, columns, "cnpj")
-            cadastro_tipo = resolve_cadastro_tipo(tenant_id, sheet_row, cnpj=cnpj)
-            if tab == "leads" and cadastro_tipo != "lead":
-                continue
-            if tab == "empresas" and cadastro_tipo != "empresa":
-                continue
-            filtered_rows.append(row)
-        if filtered_rows:
-            result = pd.DataFrame(filtered_rows)
-        else:
-            return result.iloc[0:0]
+            if filtered_rows:
+                result = pd.DataFrame(filtered_rows)
+            else:
+                return result.iloc[0:0]
 
     if tab == "empresas":
         result = result.sort_values(["_empresa", "_data_chamado"], ascending=[True, False])

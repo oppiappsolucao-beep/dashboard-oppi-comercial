@@ -1,17 +1,17 @@
 {% extends "base.html" %}
 {% block content %}
-<link rel="stylesheet" href="/static/css/leads.css?v=10">
+<link rel="stylesheet" href="/static/css/leads.css?v=11">
 <link rel="stylesheet" href="/static/css/next-action-picker.css?v=1">
 <div class="page-header">
   <div>
-    <div class="page-title">Leads e Empresas</div>
-    <div class="page-subtitle">Gerencie todos os seus leads e empresas em um só lugar.</div>
+    <div class="page-title">Empresas</div>
+    <div class="page-subtitle">Gerencie as empresas cadastradas em um só lugar.</div>
   </div>
   <div class="page-actions">
     <button type="button" class="btn btn-secondary leads-export-btn" id="leads-export-btn">
       <span class="leads-btn-icon" aria-hidden="true">↑</span> Exportar
     </button>
-    <a href="/cadastro/novo?from=leads" class="btn">＋ Novo Lead</a>
+    <a href="/cadastro/novo?from=leads&cadastro_tipo=empresa" class="btn">＋ Nova empresa</a>
   </div>
 </div>
 

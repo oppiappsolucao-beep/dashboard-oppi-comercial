@@ -19,7 +19,7 @@ def _parse_leads_params(request: Request, form: dict | None = None) -> dict:
     if not data and request.query_params:
         data = dict(request.query_params)
 
-    tab = data.get("tab", "leads")
+    tab = data.get("tab", "empresas")
     stage = data.get("stage", "Todas as etapas")
     sort = data.get("sort", "recent")
     try:
@@ -32,7 +32,7 @@ def _parse_leads_params(request: Request, form: dict | None = None) -> dict:
         per_page = 10
 
     return {
-        "tab": tab if tab in ("todos", "leads", "empresas") else "leads",
+        "tab": "empresas",
         "stage": stage,
         "sort": sort if sort in ("recent", "name", "value") else "recent",
         "page": max(1, page),

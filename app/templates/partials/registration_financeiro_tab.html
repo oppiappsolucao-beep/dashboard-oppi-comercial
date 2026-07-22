@@ -1,0 +1,32 @@
+<div class="client-edit-proposal-panel panel">
+  <div class="client-edit-section-head">
+    <span class="client-edit-section-icon">💰</span>
+    <div>
+      <h2>Financeiro</h2>
+      <p>Cobranças, pagamentos e status financeiro do cliente.</p>
+    </div>
+  </div>
+
+  <div class="client-edit-proposal-grid">
+    <div class="client-edit-proposal-stat">
+      <span class="client-edit-proposal-label">Status financeiro</span>
+      <strong>Em acompanhamento</strong>
+    </div>
+    <div class="client-edit-proposal-stat highlight">
+      <span class="client-edit-proposal-label">Valor em aberto</span>
+      <strong>{{ commercial_summary.valor_proposta if commercial_summary.has_data else "—" }}</strong>
+    </div>
+    <div class="client-edit-proposal-stat">
+      <span class="client-edit-proposal-label">Forma de pagamento</span>
+      <strong>{{ commercial_summary.forma_pagamento if commercial_summary.has_data else "—" }}</strong>
+    </div>
+    <div class="client-edit-proposal-stat">
+      <span class="client-edit-proposal-label">Próximo vencimento</span>
+      <strong>{{ commercial_summary.vencimento if commercial_summary.has_data else "—" }}</strong>
+    </div>
+  </div>
+
+  <div class="registration-activities-empty" style="margin-top: 1rem;">
+    Lançamentos financeiros detalhados serão exibidos aqui. Por enquanto, use os dados comerciais da proposta e o e-mail de cobrança em Dados gerais.
+  </div>
+</div>

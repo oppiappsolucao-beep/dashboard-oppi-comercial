@@ -35,7 +35,9 @@ from app.services.registration import (
     build_cadastro_edit_page_context,
     get_seller_options,
     infer_partners_count,
+    load_access_fields,
     resolve_cadastro_tipo,
+    save_access_fields,
     save_cadastro_tipo,
     save_company_edit,
     delete_company_registration,
@@ -206,11 +208,20 @@ async def contract_edit_page(request: Request, sheet_row: int):
                 "servico", "valor_proposta", "colaboradores",
             ]}
     values.update(resolve_address_form_values(row, columns))
+    values.update(load_access_fields(DEFAULT_TENANT_ID, sheet_row))
 
     cadastro_tipo = resolve_cadastro_tipo(DEFAULT_TENANT_ID, sheet_row, cnpj=values.get("cnpj", ""))
     from_page = _resolve_edit_from_page(request.query_params.get("from"))
     active_tab = normalize_text(request.query_params.get("tab")) or "dados"
-    tab_aliases = {"cadastro": "dados", "dados": "dados", "atividades": "atividades", "proposta": "proposta"}
+    tab_aliases = {
+        "cadastro": "dados",
+        "dados": "dados",
+        "atividades": "atividades",
+        "proposta": "proposta",
+        "propostas": "proposta",
+        "financeiro": "financeiro",
+        "suporte": "suporte",
+    }
     active_tab = tab_aliases.get(active_tab, "dados")
     activities_ctx = build_cadastro_activities_context(
         DEFAULT_TENANT_ID,
@@ -236,6 +247,8 @@ async def contract_edit_page(request: Request, sheet_row: int):
         servico=values.get("servico", ""),
         valor_proposta=values.get("valor_proposta", ""),
     )
+    if closed_services:
+        page_ctx["proposals_count"] = len(closed_services)
 
     back_href = {
         "leads": "/leads-e-empresas",
@@ -254,7 +267,7 @@ async def contract_edit_page(request: Request, sheet_row: int):
             "from_page": from_page,
             "back_href": back_href,
             "back_label": {
-                "leads": "Leads e Empresas",
+                "leads": "Empresas",
                 "activities": "Atividades",
             }.get(from_page, "Todos os cadastros"),
             "sheet_row": sheet_row,
@@ -306,6 +319,7 @@ async def contract_edit_submit(request: Request, sheet_row: int):
             form_dict["valor_proposta"] = primary_closed.get("valor", "")
         save_company_edit(sheet_row, form_dict)
         save_cadastro_tipo(DEFAULT_TENANT_ID, sheet_row, form_dict.get("cadastro_tipo", "lead"))
+        save_access_fields(DEFAULT_TENANT_ID, sheet_row, form_dict)
         invalidate_sheet_cache()
         request.session["edit_success"] = "Cadastro salvo com sucesso."
         return RedirectResponse(url=_edit_page_url(sheet_row, from_page=from_page), status_code=303)

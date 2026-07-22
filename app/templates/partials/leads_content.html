@@ -3,7 +3,7 @@
   hx-target="#leads-root"
   hx-swap="innerHTML"
 >
-  <input type="hidden" name="tab" value="{{ leads_params.tab }}" id="leads-tab-input">
+  <input type="hidden" name="tab" value="empresas" id="leads-tab-input">
   <input type="hidden" name="page" value="{{ table.page }}" id="leads-page-input">
 
   <div class="metric-grid metric-grid-leads">
@@ -22,13 +22,9 @@
   <div class="toolbar-card leads-toolbar-card">
     <div class="leads-toolbar">
       <div class="leads-tabs">
-        {% for tab_id, tab_label in [('leads', 'Leads'), ('empresas', 'Empresa'), ('todos', 'Todos')] %}
-        <button type="button"
-          class="leads-tab {% if leads_params.tab == tab_id %}active{% endif %}"
-          onclick="document.getElementById('leads-tab-input').value='{{ tab_id }}'; document.getElementById('leads-page-input').value='1'; document.getElementById('leads-filters').requestSubmit();">
-          {{ tab_label }}
+        <button type="button" class="leads-tab active" disabled>
+          Empresas
         </button>
-        {% endfor %}
       </div>
       <div class="leads-toolbar-right">
         <select name="stage" aria-label="Filtrar por etapa"
@@ -126,8 +122,6 @@
           <th>Etapa atual</th>
           <th>Responsável</th>
           <th>Último contato</th>
-          <th>Serviços fechados</th>
-          <th>Proposta</th>
           <th>Ação</th>
         </tr>
       </thead>
@@ -182,20 +176,6 @@
               {% endif %}
             </div>
           </td>
-          <td>
-            <div class="leads-closed-services-cell">
-              <div class="leads-closed-services-title">{{ row.closed_services_title }}</div>
-            </div>
-          </td>
-          <td>
-            <div class="leads-proposta-cell">
-              {% if row.closed_services_meta %}
-              <div class="leads-proposta-meta">{{ row.closed_services_meta }}</div>
-              {% else %}
-              <span class="contact-empty">—</span>
-              {% endif %}
-            </div>
-          </td>
           <td class="table-actions">
             {% if row.whatsapp_href %}
             <a href="{{ row.whatsapp_href }}" class="btn btn-small leads-wa-btn" target="_blank" rel="noopener" aria-label="WhatsApp">💬</a>
@@ -241,7 +221,7 @@
     </div>
     {% else %}
     <div class="empty-note leads-empty">
-      Nenhum lead ou empresa encontrado com os filtros atuais.
+      Nenhuma empresa encontrada com os filtros atuais.
     </div>
     {% endif %}
   </div>

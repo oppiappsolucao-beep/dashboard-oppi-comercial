@@ -1471,6 +1471,46 @@
   gap: 10px;
 }
 
+.client-edit-proposal-list {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.client-edit-proposal-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid #E5E7EB;
+  border-radius: 12px;
+  background: #FAFAFA;
+}
+
+.client-edit-proposal-card-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.client-edit-proposal-card-main strong {
+  font-size: 0.95rem;
+  color: #111827;
+}
+
+.client-edit-proposal-card-meta {
+  font-size: 0.8rem;
+  color: #6B7280;
+}
+
+.partners-access-block {
+  margin-top: 18px;
+  padding-top: 8px;
+  border-top: 1px solid #E5E7EB;
+}
+
 .registration-tipo-switch {
   display: inline-flex;
   padding: 4px;

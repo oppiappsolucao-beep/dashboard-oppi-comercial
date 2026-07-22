@@ -60,8 +60,18 @@
     </a>
     <a href="/cadastro/todos/{{ sheet_row }}/editar?tab=proposta{% if from_page %}&from={{ from_page }}{% endif %}"
       class="client-edit-tab {% if active_tab == 'proposta' %}is-active{% endif %}">
-      <span class="client-edit-tab-title">Proposta</span>
-      <span class="client-edit-tab-sub">Último PDF anexado{% if proposals_count %}<span class="client-edit-tab-badge">{{ proposals_count }}</span>{% endif %}</span>
+      <span class="client-edit-tab-title">Propostas</span>
+      <span class="client-edit-tab-sub">Propostas enviadas{% if proposals_count %}<span class="client-edit-tab-badge">{{ proposals_count }}</span>{% endif %}</span>
+    </a>
+    <a href="/cadastro/todos/{{ sheet_row }}/editar?tab=financeiro{% if from_page %}&from={{ from_page }}{% endif %}"
+      class="client-edit-tab {% if active_tab == 'financeiro' %}is-active{% endif %}">
+      <span class="client-edit-tab-title">Financeiro</span>
+      <span class="client-edit-tab-sub">Cobranças e pagamentos</span>
+    </a>
+    <a href="/cadastro/todos/{{ sheet_row }}/editar?tab=suporte{% if from_page %}&from={{ from_page }}{% endif %}"
+      class="client-edit-tab {% if active_tab == 'suporte' %}is-active{% endif %}">
+      <span class="client-edit-tab-title">Suporte</span>
+      <span class="client-edit-tab-sub">Atendimento e tickets</span>
     </a>
   </nav>
 
@@ -81,8 +91,18 @@
     <footer class="client-edit-footer panel client-edit-footer-compact">
       <button type="button" class="btn btn-danger client-edit-delete-btn" id="open-delete-modal">Excluir</button>
     </footer>
-    {% else %}
+    {% elif active_tab == 'proposta' %}
     {% include "partials/registration_proposta_tab.html" %}
+    <footer class="client-edit-footer panel client-edit-footer-compact">
+      <button type="button" class="btn btn-danger client-edit-delete-btn" id="open-delete-modal">Excluir</button>
+    </footer>
+    {% elif active_tab == 'financeiro' %}
+    {% include "partials/registration_financeiro_tab.html" %}
+    <footer class="client-edit-footer panel client-edit-footer-compact">
+      <button type="button" class="btn btn-danger client-edit-delete-btn" id="open-delete-modal">Excluir</button>
+    </footer>
+    {% else %}
+    {% include "partials/registration_suporte_tab.html" %}
     <footer class="client-edit-footer panel client-edit-footer-compact">
       <button type="button" class="btn btn-danger client-edit-delete-btn" id="open-delete-modal">Excluir</button>
     </footer>

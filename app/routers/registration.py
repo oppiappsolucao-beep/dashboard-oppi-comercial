@@ -66,7 +66,7 @@ def _registration_page_context(request: Request, df, *, error: str = "", values:
         "activities": "/atividades",
     }.get(from_page, "/cadastro/todos")
     back_label = {
-        "leads": "Leads e Empresas",
+        "leads": "Empresas",
         "activities": "Atividades",
     }.get(from_page, "Todos os cadastros")
 
@@ -142,6 +142,9 @@ async def new_registration_submit(request: Request):
             form_dict["valor_proposta"] = mirror.get("valor_proposta", "")
         sheet_row = save_new_company(form_dict)
         save_cadastro_tipo(DEFAULT_TENANT_ID, sheet_row, form_dict.get("cadastro_tipo", "lead"))
+        from app.services.registration import save_access_fields
+        if int(sheet_row or 0) > 0:
+            save_access_fields(DEFAULT_TENANT_ID, sheet_row, form_dict)
         if closed_services_has_data(closed_items):
             save_closed_services(DEFAULT_TENANT_ID, sheet_row, closed_items)
 

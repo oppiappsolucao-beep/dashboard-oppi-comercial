@@ -41,4 +41,26 @@
       </div>
     </div>
   </div>
+
+  <div class="partner-block partners-access-block">
+    <div class="partner-block-title">Acesso e contatos administrativos</div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>E-mail de login do gestor</label>
+        <input name="email_login_gestor" type="email" value="{{ partner_values.get('email_login_gestor', '') }}" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label>E-mail para confirmação do administrador</label>
+        <input name="email_confirmacao_admin" type="email" value="{{ partner_values.get('email_confirmacao_admin', '') }}" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label>E-mail para cobrança</label>
+        <input name="email_cobranca" type="email" value="{{ partner_values.get('email_cobranca', '') }}" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label>Senha</label>
+        <input name="senha_acesso" type="password" value="{{ partner_values.get('senha_acesso', '') }}" autocomplete="new-password">
+      </div>
+    </div>
+  </div>
 </div>

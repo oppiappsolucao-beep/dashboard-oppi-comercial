@@ -259,6 +259,28 @@ def resolve_cadastro_tipo(
     return "lead"
 
 
+ACCESS_FIELDS = (
+    "email_login_gestor",
+    "email_confirmacao_admin",
+    "email_cobranca",
+    "senha_acesso",
+)
+
+
+def load_access_fields(tenant_id: str | None, sheet_row: int) -> dict[str, str]:
+    if not sheet_row:
+        return {field: "" for field in ACCESS_FIELDS}
+    stored = get_lead_action(tenant_id, sheet_row) or {}
+    return {field: normalize_text(stored.get(field)) for field in ACCESS_FIELDS}
+
+
+def save_access_fields(tenant_id: str | None, sheet_row: int, form: dict) -> None:
+    if not sheet_row:
+        return
+    payload = {field: normalize_text(form.get(field)) for field in ACCESS_FIELDS}
+    save_lead_action(tenant_id, sheet_row, payload)
+
+
 def save_cadastro_tipo(tenant_id: str | None, sheet_row: int, tipo: str) -> None:
     if not sheet_row:
         return
