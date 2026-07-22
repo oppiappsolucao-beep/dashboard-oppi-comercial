@@ -24,6 +24,7 @@ CRM_STORAGE_TABS = {
         "Dados",
     ],
     "LeadAcoes": ["TenantId", "SheetRow", "AtualizadoEm", "Dados"],
+    "CadastrosPendentes": ["Id", "Empresa", "CriadoEm", "Status", "Payload", "Headers", "RowValues"],
 }
 
 

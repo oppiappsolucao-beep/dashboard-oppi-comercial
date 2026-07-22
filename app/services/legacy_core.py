@@ -1016,11 +1016,112 @@ def get_gsheet_client():
         ) from error
 
 
+def _folha1_snapshot_path():
+    from app.services.storage_paths import get_storage_dir
+
+    return get_storage_dir() / "folha1_snapshot.json"
+
+
+def _save_folha1_snapshot(values: list[list[str]]) -> None:
+    import json
+
+    try:
+        path = _folha1_snapshot_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            json.dumps({"values": values}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+    except Exception:
+        pass
+
+
+def _load_folha1_snapshot_values() -> list[list[str]] | None:
+    import json
+
+    path = _folha1_snapshot_path()
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    values = data.get("values") if isinstance(data, dict) else None
+    if not isinstance(values, list) or not values:
+        return None
+    return values
+
+
+def _dataframe_from_sheet_values(values: list[list[str]]) -> pd.DataFrame:
+    if not values:
+        return pd.DataFrame()
+
+    headers = make_unique_headers(values[0])
+    rows = values[1:]
+    header_len = len(headers)
+    normalized_rows = []
+    for row in rows:
+        row_values = list(row[:header_len])
+        if len(row_values) < header_len:
+            row_values.extend([""] * (header_len - len(row_values)))
+        normalized_rows.append(row_values)
+
+    df = pd.DataFrame(normalized_rows, columns=headers)
+    df["_sheet_row"] = list(range(2, len(normalized_rows) + 2))
+
+    for column in df.columns:
+        if column != "_sheet_row":
+            df[column] = df[column].fillna("").astype(str).str.strip()
+
+    data_columns = [column for column in df.columns if column != "_sheet_row"]
+    if data_columns:
+        df = df[
+            df[data_columns].apply(
+                lambda row: any(normalize_text(value) for value in row),
+                axis=1,
+            )
+        ].copy()
+
+    empresa_column = first_existing_column(
+        df,
+        ["Nome Empresas", "Nome da empresa", "Empresa", "Nome Empresa", "Nome empresas", "Nome Empresa(s)"],
+    )
+    if empresa_column:
+        df = df[df[empresa_column].apply(lambda value: normalize_text(value) != "")].copy()
+
+    return df.reset_index(drop=True)
+
+
+def hydrate_sheet_cache_from_disk() -> bool:
+    """Recarrega a última Folha1 salva em disco (sobrevive a rebuild)."""
+    global _sheet_last_good, _sheet_last_good_values
+    values = _load_folha1_snapshot_values()
+    if not values:
+        return False
+    result = _dataframe_from_sheet_values(values)
+    _sheet_last_good_values = [row[:] for row in values]
+    _sheet_last_good = result.copy()
+    _sheet_cache["sheet_data"] = result.copy()
+    try:
+        from app.services.pending_companies import remember_sheet_headers
+
+        remember_sheet_headers(list(values[0]))
+    except Exception:
+        pass
+    return not result.empty
+
+
 def load_sheet_data() -> pd.DataFrame:
     global _sheet_last_good, _sheet_last_good_values
     cache_key = "sheet_data"
     if cache_key in _sheet_cache:
         return _sheet_cache[cache_key].copy()
+
+    # Após rebuild, a memória vem vazia — recupera snapshot do disco antes da API.
+    if _sheet_last_good is None:
+        hydrate_sheet_cache_from_disk()
+        if cache_key in _sheet_cache:
+            return _sheet_cache[cache_key].copy()
 
     try:
         client = get_gsheet_client()
@@ -1036,46 +1137,17 @@ def load_sheet_data() -> pd.DataFrame:
         values = worksheet.get_all_values()
 
         if not values:
+            if _sheet_last_good is not None:
+                return _sheet_last_good.copy()
             empty = pd.DataFrame()
             _sheet_cache[cache_key] = empty.copy()
             return empty
 
-        headers = make_unique_headers(values[0])
-        rows = values[1:]
-        header_len = len(headers)
-        normalized_rows = []
-        for row in rows:
-            row_values = list(row[:header_len])
-            if len(row_values) < header_len:
-                row_values.extend([""] * (header_len - len(row_values)))
-            normalized_rows.append(row_values)
-
-        df = pd.DataFrame(normalized_rows, columns=headers)
-        df["_sheet_row"] = list(range(2, len(normalized_rows) + 2))
-
-        for column in df.columns:
-            if column != "_sheet_row":
-                df[column] = df[column].fillna("").astype(str).str.strip()
-
-        data_columns = [column for column in df.columns if column != "_sheet_row"]
-        df = df[
-            df[data_columns].apply(
-                lambda row: any(normalize_text(value) for value in row),
-                axis=1,
-            )
-        ].copy()
-
-        empresa_column = first_existing_column(
-            df,
-            ["Nome Empresas", "Nome da empresa", "Empresa", "Nome Empresa", "Nome empresas", "Nome Empresa(s)"],
-        )
-        if empresa_column:
-            df = df[df[empresa_column].apply(lambda value: normalize_text(value) != "")].copy()
-
-        result = df.reset_index(drop=True)
+        result = _dataframe_from_sheet_values(values)
         _sheet_cache[cache_key] = result.copy()
         _sheet_last_good = result.copy()
         _sheet_last_good_values = [row[:] for row in values]
+        _save_folha1_snapshot(values)
         try:
             from app.services.pending_companies import remember_sheet_headers
 
@@ -1086,6 +1158,8 @@ def load_sheet_data() -> pd.DataFrame:
     except Exception as error:
         message = str(error)
         if _sheet_last_good is not None:
+            return _sheet_last_good.copy()
+        if hydrate_sheet_cache_from_disk() and _sheet_last_good is not None:
             return _sheet_last_good.copy()
         if "429" in message or "Quota exceeded" in message.lower():
             return pd.DataFrame()
@@ -1624,7 +1698,7 @@ def _apply_address_fields(row_values: list, headers: list, payload: dict) -> Non
 
 def append_company_to_sheet(payload: dict) -> int:
     """Adiciona empresa na planilha. Se a API falhar, salva local e sincroniza depois."""
-    global _sheet_last_good_values
+    global _sheet_last_good, _sheet_last_good_values
     import time
 
     from app.services.pending_companies import (
@@ -1720,11 +1794,23 @@ def append_company_to_sheet(payload: dict) -> int:
                 _sheet_last_good_values = [row[:] for row in _sheet_last_good_values]
                 if _sheet_last_good_values and list(_sheet_last_good_values[0]) != list(headers):
                     _sheet_last_good_values[0] = list(headers)
-                _sheet_last_good_values.append(list(row_values))
+                if list(_sheet_last_good_values[-1]) != list(row_values):
+                    _sheet_last_good_values.append(list(row_values))
             else:
                 _sheet_last_good_values = [list(headers), list(row_values)]
             remember_sheet_headers(headers)
+            try:
+                _save_folha1_snapshot(_sheet_last_good_values)
+                _sheet_last_good = _dataframe_from_sheet_values(_sheet_last_good_values)
+                _sheet_cache["sheet_data"] = _sheet_last_good.copy()
+            except Exception:
+                pass
             invalidate_sheet_cache()
+            # Mantém a cópia boa após limpar o TTL (invalidate não apaga last_good).
+            try:
+                _sheet_cache["sheet_data"] = _sheet_last_good.copy()
+            except Exception:
+                pass
             return int(worksheet.row_count or len(_sheet_last_good_values or []) or 2)
         except Exception as error:
             last_error = str(error)

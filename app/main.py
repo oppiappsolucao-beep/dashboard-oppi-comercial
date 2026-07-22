@@ -89,10 +89,12 @@ async def startup_maintenance() -> None:
     # para o /health responder rápido e o Easypanel não derrubar o serviço.
     try:
         from app.services.crm_local_db import init_crm_local_db
+        from app.services.legacy_core import hydrate_sheet_cache_from_disk
 
         init_crm_local_db()
+        hydrate_sheet_cache_from_disk()
     except Exception as error:
-        log.error("Startup SQLite local: %s", error)
+        log.error("Startup SQLite/cache local: %s", error)
 
     def _run_background() -> None:
         try:
@@ -117,8 +119,12 @@ async def startup_maintenance() -> None:
             except Exception:
                 pass
             try:
-                from app.services.pending_companies import sync_pending_companies_to_sheet
+                from app.services.pending_companies import (
+                    recover_pending_from_sheet_tab,
+                    sync_pending_companies_to_sheet,
+                )
 
+                recover_pending_from_sheet_tab()
                 sync_pending_companies_to_sheet()
             except Exception as sync_error:
                 log.warning("Sync cadastros pendentes: %s", sync_error)

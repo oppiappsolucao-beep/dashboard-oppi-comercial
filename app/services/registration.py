@@ -102,6 +102,8 @@ def build_registration_payload(form: dict) -> dict:
     payload = {field: normalize_text(form.get(field, "")) for field in REGISTRATION_FIELDS}
     payload["data_chamado"] = normalize_text(data_chamado)
     payload["ultima_atualizacao"] = now_text
+    tipo = normalize_text(form.get("cadastro_tipo")).lower()
+    payload["cadastro_tipo"] = "empresa" if tipo == "empresa" else "lead"
     return payload
 
 

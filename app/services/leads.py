@@ -222,6 +222,15 @@ def apply_leads_view(
     if tab in {"leads", "empresas"} and tenant_id:
         filtered_rows = []
         for _, row in result.iterrows():
+            # Cadastros locais pendentes aparecem nas duas abas até sincronizar.
+            if bool(row.get("_pending_local")):
+                tipo_payload = normalize_text(row.get("_cadastro_tipo")).lower()
+                if tab == "leads" and tipo_payload == "empresa":
+                    continue
+                if tab == "empresas" and tipo_payload == "lead":
+                    continue
+                filtered_rows.append(row)
+                continue
             sheet_row = int(row.get("_sheet_row", 0) or 0)
             cnpj = row_field_value(row, columns, "cnpj")
             cadastro_tipo = resolve_cadastro_tipo(tenant_id, sheet_row, cnpj=cnpj)
