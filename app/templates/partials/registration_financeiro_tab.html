@@ -10,20 +10,20 @@
 
     <div class="client-edit-proposal-grid">
       <div class="client-edit-proposal-stat">
-        <span class="client-edit-proposal-label">Serviços contratados</span>
-        <strong>{{ financial_summary.servicos_contratados }}</strong>
+        <span class="client-edit-proposal-label">Status financeiro</span>
+        <strong>{{ financial_summary.status_label }}</strong>
       </div>
       <div class="client-edit-proposal-stat highlight">
-        <span class="client-edit-proposal-label">Pagamentos lançados</span>
-        <strong>{{ financial_summary.total_lancamentos }}</strong>
+        <span class="client-edit-proposal-label">Serviços contratados</span>
+        <strong>{{ financial_summary.services_count }}</strong>
       </div>
       <div class="client-edit-proposal-stat">
-        <span class="client-edit-proposal-label">Pagos</span>
-        <strong>{{ financial_summary.total_pagos }}</strong>
+        <span class="client-edit-proposal-label">Pagamentos</span>
+        <strong>{{ financial_summary.paid_count }} pagos · {{ financial_summary.pending_count }} abertos</strong>
       </div>
       <div class="client-edit-proposal-stat">
-        <span class="client-edit-proposal-label">Pendentes</span>
-        <strong>{{ financial_summary.total_pendentes }}</strong>
+        <span class="client-edit-proposal-label">Próximo vencimento</span>
+        <strong>{{ financial_summary.next_due }}</strong>
       </div>
     </div>
   </section>
@@ -35,105 +35,100 @@
       <span class="client-edit-section-icon">🧾</span>
       <div>
         <h2>Histórico de pagamento</h2>
-        <p>Registre cobranças, recebimentos e status de cada lançamento.</p>
+        <p>Registre os pagamentos recebidos e pendentes.</p>
       </div>
     </div>
 
     <div class="payment-history-list" id="payment-history-list">
+      {% if payment_history %}
       {% for item in payment_history %}
-      <article class="payment-history-row">
-        <div class="form-grid payment-history-grid">
-          <div class="form-group">
-            <label>Data</label>
-            <input type="date" name="pay_data" value="{{ item.data }}">
-          </div>
-          <div class="form-group">
-            <label>Descrição / serviço</label>
-            <input type="text" name="pay_descricao" value="{{ item.descricao }}" placeholder="Ex.: Mensalidade Oppi Track">
-          </div>
-          <div class="form-group">
-            <label>Valor (R$)</label>
-            <input type="text" name="pay_valor" value="{{ item.valor }}" placeholder="R$ 0,00">
-          </div>
-          <div class="form-group">
-            <label>Forma de pagamento</label>
-            <select name="pay_forma_pagamento">
-              {% for option in payment_method_options %}
-              <option value="{{ option }}" {% if item.forma_pagamento == option %}selected{% endif %}>{{ option }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div class="form-group">
-            <label>Status</label>
-            <select name="pay_status">
-              {% for option in payment_status_options %}
-              <option value="{{ option }}" {% if item.status == option %}selected{% endif %}>{{ option }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div class="form-group">
-            <label>Observação</label>
-            <input type="text" name="pay_observacao" value="{{ item.observacao }}" placeholder="Opcional">
-          </div>
+      <div class="payment-history-row form-grid cols-3">
+        <div class="form-group">
+          <label>Data</label>
+          <input type="date" name="pay_data" value="{{ item.data }}">
         </div>
-      </article>
+        <div class="form-group">
+          <label>Descrição</label>
+          <input type="text" name="pay_descricao" value="{{ item.descricao }}" placeholder="Ex.: Mensalidade Oppi CRM">
+        </div>
+        <div class="form-group">
+          <label>Valor</label>
+          <input type="text" name="pay_valor" value="{{ item.valor }}" placeholder="R$ 0,00">
+        </div>
+        <div class="form-group">
+          <label>Status</label>
+          <select name="pay_status">
+            {% for option in payment_status_options %}
+            <option value="{{ option }}" {% if item.status == option %}selected{% endif %}>{{ option }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Forma</label>
+          <select name="pay_forma_pagamento">
+            {% for option in payment_method_options %}
+            <option value="{{ option }}" {% if item.forma_pagamento == option %}selected{% endif %}>{{ option }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
       {% endfor %}
+      {% else %}
+      <div class="registration-activities-empty payment-history-empty">
+        Nenhum pagamento lançado ainda. Clique em “+ Adicionar pagamento”.
+      </div>
+      {% endif %}
     </div>
 
-    <div class="client-closed-services-footer">
+    <div class="client-closed-services-footer" style="margin-top: 12px;">
       <button type="button" class="btn btn-secondary" id="payment-history-add">+ Adicionar pagamento</button>
     </div>
+
+    <template id="payment-history-row-template">
+      <div class="payment-history-row form-grid cols-3">
+        <div class="form-group">
+          <label>Data</label>
+          <input type="date" name="pay_data" value="">
+        </div>
+        <div class="form-group">
+          <label>Descrição</label>
+          <input type="text" name="pay_descricao" value="" placeholder="Ex.: Mensalidade Oppi CRM">
+        </div>
+        <div class="form-group">
+          <label>Valor</label>
+          <input type="text" name="pay_valor" value="" placeholder="R$ 0,00">
+        </div>
+        <div class="form-group">
+          <label>Status</label>
+          <select name="pay_status">
+            {% for option in payment_status_options %}
+            <option value="{{ option }}" {% if option == 'Pendente' %}selected{% endif %}>{{ option }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Forma</label>
+          <select name="pay_forma_pagamento">
+            {% for option in payment_method_options %}
+            <option value="{{ option }}" {% if option == 'PIX' %}selected{% endif %}>{{ option }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+    </template>
   </section>
 </div>
 
-<template id="payment-history-row-template">
-  <article class="payment-history-row">
-    <div class="form-grid payment-history-grid">
-      <div class="form-group">
-        <label>Data</label>
-        <input type="date" name="pay_data" value="">
-      </div>
-      <div class="form-group">
-        <label>Descrição / serviço</label>
-        <input type="text" name="pay_descricao" value="" placeholder="Ex.: Mensalidade Oppi Track">
-      </div>
-      <div class="form-group">
-        <label>Valor (R$)</label>
-        <input type="text" name="pay_valor" value="" placeholder="R$ 0,00">
-      </div>
-      <div class="form-group">
-        <label>Forma de pagamento</label>
-        <select name="pay_forma_pagamento">
-          {% for option in payment_method_options %}
-          <option value="{{ option }}" {% if option == 'PIX' %}selected{% endif %}>{{ option }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="form-group">
-        <label>Status</label>
-        <select name="pay_status">
-          {% for option in payment_status_options %}
-          <option value="{{ option }}" {% if option == 'Pendente' %}selected{% endif %}>{{ option }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="form-group">
-        <label>Observação</label>
-        <input type="text" name="pay_observacao" value="" placeholder="Opcional">
-      </div>
-    </div>
-  </article>
-</template>
-
 <script>
 (function () {
-  var list = document.getElementById("payment-history-list");
   var addBtn = document.getElementById("payment-history-add");
+  var list = document.getElementById("payment-history-list");
   var template = document.getElementById("payment-history-row-template");
-  if (!list || !addBtn || !template) return;
+  if (!addBtn || !list || !template) return;
   addBtn.addEventListener("click", function () {
-    var node = template.content.cloneNode(true);
-    list.appendChild(node);
+    var empty = list.querySelector(".payment-history-empty");
+    if (empty) empty.remove();
+    list.appendChild(template.content.cloneNode(true));
   });
 })();
 </script>

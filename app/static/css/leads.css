@@ -224,12 +224,13 @@
 }
 
 a.table-company-link {
-  color: inherit;
+  display: block;
   text-decoration: none;
+  color: var(--text);
 }
 
 a.table-company-link:hover {
-  color: var(--primary, #5b4dff);
+  color: var(--violet, #7C3AED);
   text-decoration: underline;
 }
 
