@@ -55,12 +55,9 @@
           hx-swap="innerHTML"
           hx-include="#leads-filters">
       </div>
-      <button type="button" class="btn btn-secondary leads-filter-toggle" id="leads-filter-toggle" aria-expanded="false" aria-controls="leads-advanced-filters">
-        <span class="leads-btn-icon" aria-hidden="true">⛃</span> Filtros
-      </button>
     </div>
 
-    <div class="leads-advanced-filters" id="leads-advanced-filters" hidden>
+    <div class="leads-advanced-filters is-visible" id="leads-advanced-filters">
       <div class="filters-row filters-row-main">
         <div class="filter-field filter-field-sm">
           <label>Vendedor</label>
@@ -82,12 +79,12 @@
         </div>
         <div class="filter-field filter-field-sm">
           <label>Período início</label>
-          <input type="date" name="period_start" value="{{ filters.period_start }}"
+          <input type="date" name="period_start" value="{{ filters.period_start.isoformat() if filters.period_start else '' }}"
             onchange="document.getElementById('leads-page-input').value='1'; document.getElementById('leads-filters').requestSubmit();">
         </div>
         <div class="filter-field filter-field-sm">
           <label>Período fim</label>
-          <input type="date" name="period_end" value="{{ filters.period_end }}"
+          <input type="date" name="period_end" value="{{ filters.period_end.isoformat() if filters.period_end else '' }}"
             onchange="document.getElementById('leads-page-input').value='1'; document.getElementById('leads-filters').requestSubmit();">
         </div>
         <div class="filter-field filter-field-sm">
@@ -228,21 +225,3 @@
 </form>
 
 <form id="leads-refresh-form" method="post" action="/leads-e-empresas/atualizar" hidden></form>
-
-<script>
-(function () {
-  var toggle = document.getElementById('leads-filter-toggle');
-  var panel = document.getElementById('leads-advanced-filters');
-  if (!toggle || !panel) return;
-  toggle.addEventListener('click', function () {
-    var open = panel.hasAttribute('hidden');
-    if (open) {
-      panel.removeAttribute('hidden');
-      toggle.setAttribute('aria-expanded', 'true');
-    } else {
-      panel.setAttribute('hidden', 'hidden');
-      toggle.setAttribute('aria-expanded', 'false');
-    }
-  });
-})();
-</script>

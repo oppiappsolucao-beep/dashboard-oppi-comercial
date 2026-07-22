@@ -41,10 +41,22 @@
   margin-top: 14px;
   padding-top: 14px;
   border-top: 1px solid var(--border);
+  display: block;
 }
 
-.leads-advanced-filters[hidden] {
-  display: none;
+.leads-advanced-filters.is-visible {
+  display: block;
+}
+
+.leads-search-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.leads-search-wrap {
+  flex: 1;
+  min-width: 0;
 }
 
 .metric-grid-leads {

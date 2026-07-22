@@ -5,7 +5,7 @@ from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 
 from app.dependencies import get_prepared_data, require_auth
-from app.services.filters import apply_dashboard_filters, apply_default_period_filters, get_filter_options, parse_dashboard_filters
+from app.services.filters import apply_dashboard_filters, apply_last_days_period_filters, get_filter_options, parse_dashboard_filters
 from app.services.lead_actions_storage import DEFAULT_TENANT_ID
 from app.services.leads import ETAPA_STAGES, atualizar_proxima_acao_lead, build_leads_export_rows, build_leads_kpi_cards, build_leads_table
 from app.services.legacy_core import invalidate_sheet_cache, normalize_text
@@ -43,7 +43,7 @@ def _parse_leads_params(request: Request, form: dict | None = None) -> dict:
 def _leads_context(request: Request, filters, leads_params: dict):
     df, columns = get_prepared_data()
     options = get_filter_options(df)
-    filters = apply_default_period_filters(filters, df)
+    filters = apply_last_days_period_filters(filters, days=7)
 
     filtered_df = apply_dashboard_filters(df, columns, filters)
     table = build_leads_table(

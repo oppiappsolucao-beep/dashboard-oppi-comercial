@@ -94,6 +94,20 @@ def apply_default_period_filters(filters: DashboardFilters, df: pd.DataFrame) ->
     )
 
 
+def apply_last_days_period_filters(filters: DashboardFilters, *, days: int = 7) -> DashboardFilters:
+    """Define período padrão dos últimos N dias (fim = hoje), se o usuário não informou datas."""
+    from datetime import timedelta
+
+    today = date.today()
+    if filters.period_start and filters.period_end:
+        return filters
+    return replace(
+        filters,
+        period_start=filters.period_start or (today - timedelta(days=max(days, 1) - 1)),
+        period_end=filters.period_end or today,
+    )
+
+
 def apply_dashboard_filters(
     df: pd.DataFrame,
     columns: dict,
