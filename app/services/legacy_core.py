@@ -30,7 +30,7 @@ def invalidate_sheet_cache() -> None:
     try:
         from app.services.sheet_read_cache import invalidate_worksheet_cache
 
-        invalidate_worksheet_cache(settings.worksheet_name)
+        invalidate_worksheet_cache()
     except Exception:
         pass
 
@@ -646,6 +646,27 @@ def update_company_status_in_sheet(sheet_row: int, new_status: str, columns: dic
         status_column,
         columns.get("ultima_atualizacao"),
     )
+
+
+def sync_pipeline_stage_to_sheet(sheet_row: int, stage: str) -> None:
+    """Persiste a etapa do pipeline na coluna Status WhatsApp da planilha principal."""
+    from config.crm_options import PIPELINE_STAGE_SHEET_STATUSES
+    from app.services.crm_validation_service import normalize_legacy_stage
+
+    stage = normalize_legacy_stage(stage)
+    if not sheet_row or not stage:
+        return
+
+    statuses = PIPELINE_STAGE_SHEET_STATUSES.get(stage)
+    if not statuses:
+        return
+
+    df = load_sheet_data()
+    if df.empty:
+        return
+
+    columns = identify_columns(df)
+    update_company_status_in_sheet(sheet_row, statuses[0], columns)
 
 
 def dashboard_status_from_rows(status_whatsapp: str, status_ligacao: str) -> str:

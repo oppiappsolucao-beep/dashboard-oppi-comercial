@@ -140,6 +140,29 @@ def _save_to_sheet(data: dict) -> bool:
         return False
 
 
+def _record_timestamp(record: dict | None) -> str:
+    if not isinstance(record, dict):
+        return ""
+    return normalize_text(record.get("updated_at")) or normalize_text(record.get("AtualizadoEm"))
+
+
+def _pick_newer_record(left: dict | None, right: dict | None) -> dict | None:
+    if not isinstance(left, dict) or not left:
+        return right if isinstance(right, dict) else None
+    if not isinstance(right, dict) or not right:
+        return left
+
+    left_at = _record_timestamp(left)
+    right_at = _record_timestamp(right)
+    if left_at and right_at:
+        return left if left_at >= right_at else right
+    if left_at:
+        return left
+    if right_at:
+        return right
+    return left
+
+
 def _merge_stores(file_store: dict, sheet_store: dict | None) -> dict:
     if sheet_store is None:
         return file_store
@@ -153,13 +176,22 @@ def _merge_stores(file_store: dict, sheet_store: dict | None) -> dict:
             file_bucket = {}
         if not isinstance(sheet_bucket, dict):
             sheet_bucket = {}
-        merged[tenant] = {**file_bucket, **sheet_bucket}
+        keys = set(file_bucket.keys()) | set(sheet_bucket.keys())
+        merged_bucket = {}
+        for key in keys:
+            picked = _pick_newer_record(file_bucket.get(key), sheet_bucket.get(key))
+            if isinstance(picked, dict):
+                merged_bucket[key] = picked
+        merged[tenant] = merged_bucket
     return merged
 
 
 def _persist_store(data: dict) -> None:
+    from app.services.sheet_read_cache import invalidate_worksheet_cache
+
     _save_to_file(data)
-    _save_to_sheet(data)
+    if _save_to_sheet(data):
+        invalidate_worksheet_cache(LEAD_ACTIONS_WORKSHEET)
 
 
 def _load_store(force_refresh: bool = False) -> dict:
@@ -227,6 +259,14 @@ def save_lead_action(tenant_id: str | None, sheet_row: int, payload: dict) -> di
     bucket[str(sheet_row)] = current
     data[tenant] = bucket
     _persist_store(data)
+    stage_override = normalize_text(current.get("stage_override"))
+    if stage_override:
+        try:
+            from app.services.legacy_core import sync_pipeline_stage_to_sheet
+
+            sync_pipeline_stage_to_sheet(sheet_row, stage_override)
+        except Exception:
+            pass
     with _lock:
         global _cache
         _cache = data
