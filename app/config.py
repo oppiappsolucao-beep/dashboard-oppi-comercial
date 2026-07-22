@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-APP_BUILD = os.getenv("APP_BUILD", "20260722-cache-disco-v2").strip() or "20260722-cache-disco-v2"
+APP_BUILD = os.getenv("APP_BUILD", "20260722-folha1-write-v3").strip() or "20260722-folha1-write-v3"
 
 
 class Settings:

@@ -673,7 +673,7 @@ def sync_pipeline_stage_to_sheet(sheet_row: int, stage: str) -> None:
     from app.services.crm_validation_service import normalize_legacy_stage
 
     stage = normalize_legacy_stage(stage)
-    if not sheet_row or not stage:
+    if not sheet_row or int(sheet_row) < 2 or not stage:
         return
 
     statuses = PIPELINE_STAGE_SHEET_STATUSES.get(stage)
@@ -682,6 +682,14 @@ def sync_pipeline_stage_to_sheet(sheet_row: int, stage: str) -> None:
 
     df = load_sheet_data()
     if df.empty:
+        return
+
+    # Evita gravar etapa em linha fantasma (ex.: SheetRow=99 sem empresa na Folha1).
+    match = df[df["_sheet_row"] == int(sheet_row)] if "_sheet_row" in df.columns else df.iloc[0:0]
+    if match.empty:
+        return
+    empresa = normalize_text(match.iloc[0].get("_empresa", ""))
+    if not empresa:
         return
 
     columns = identify_columns(df)
@@ -1696,6 +1704,53 @@ def _apply_address_fields(row_values: list, headers: list, payload: dict) -> Non
     _set_sheet_value_by_header(row_values, headers, ["UF", "Estado"], payload.get("uf"))
 
 
+def _folha1_last_used_row(values: list[list[str]] | None) -> int:
+    """Última linha com algum conteúdo (1 = cabeçalho)."""
+    if not values:
+        return 1
+    last = 1
+    for index, row in enumerate(values, start=1):
+        if any(normalize_text(cell) for cell in (row or [])):
+            last = index
+    return last
+
+
+def _folha1_next_row(worksheet, cached_values: list[list[str]] | None = None) -> int:
+    """Próxima linha livre na Folha1 — não usa worksheet.row_count (tamanho da grade)."""
+    if cached_values:
+        return _folha1_last_used_row(cached_values) + 1
+    try:
+        col_a = worksheet.col_values(1)
+        while col_a and not normalize_text(col_a[-1]):
+            col_a.pop()
+        return max(len(col_a) + 1, 2)
+    except Exception:
+        return _folha1_last_used_row(get_last_good_sheet_values()) + 1
+
+
+def _write_folha1_row(worksheet, row_number: int, row_values: list[str]) -> int:
+    """Grava uma linha na Folha1 por update explícito (mais confiável que append_row + row_count)."""
+    row_number = max(int(row_number), 2)
+    if row_number > int(worksheet.row_count or 0):
+        try:
+            worksheet.add_rows(row_number - int(worksheet.row_count) + 20)
+        except Exception:
+            pass
+    # Garante largura mínima das colunas
+    needed_cols = len(row_values)
+    if needed_cols > int(worksheet.col_count or 0):
+        try:
+            worksheet.add_cols(needed_cols - int(worksheet.col_count) + 2)
+        except Exception:
+            pass
+    worksheet.update(
+        f"A{row_number}",
+        [list(row_values)],
+        value_input_option="USER_ENTERED",
+    )
+    return row_number
+
+
 def append_company_to_sheet(payload: dict) -> int:
     """Adiciona empresa na planilha. Se a API falhar, salva local e sincroniza depois."""
     global _sheet_last_good, _sheet_last_good_values
@@ -1785,19 +1840,20 @@ def append_company_to_sheet(payload: dict) -> int:
                 client = get_gsheet_client()
                 spreadsheet = client.open_by_key(settings.sheet_id)
                 worksheet = _open_worksheet(spreadsheet, settings.worksheet_name)
-            worksheet.append_row(
-                row_values,
-                value_input_option="USER_ENTERED",
-                insert_data_option="INSERT_ROWS",
-            )
+            next_row = _folha1_next_row(worksheet, None)
+            if next_row < 2:
+                next_row = _folha1_next_row(worksheet, cached_values or _sheet_last_good_values)
+            sheet_row = _write_folha1_row(worksheet, next_row, row_values)
             if _sheet_last_good_values:
                 _sheet_last_good_values = [row[:] for row in _sheet_last_good_values]
                 if _sheet_last_good_values and list(_sheet_last_good_values[0]) != list(headers):
                     _sheet_last_good_values[0] = list(headers)
-                if list(_sheet_last_good_values[-1]) != list(row_values):
-                    _sheet_last_good_values.append(list(row_values))
+                while len(_sheet_last_good_values) < sheet_row:
+                    _sheet_last_good_values.append([""] * len(headers))
+                _sheet_last_good_values[sheet_row - 1] = list(row_values)
             else:
-                _sheet_last_good_values = [list(headers), list(row_values)]
+                padding = [[""] * len(headers) for _ in range(max(sheet_row - 2, 0))]
+                _sheet_last_good_values = [list(headers), *padding, list(row_values)]
             remember_sheet_headers(headers)
             try:
                 _save_folha1_snapshot(_sheet_last_good_values)
@@ -1806,18 +1862,19 @@ def append_company_to_sheet(payload: dict) -> int:
             except Exception:
                 pass
             invalidate_sheet_cache()
-            # Mantém a cópia boa após limpar o TTL (invalidate não apaga last_good).
             try:
-                _sheet_cache["sheet_data"] = _sheet_last_good.copy()
+                if _sheet_last_good is not None:
+                    _sheet_cache["sheet_data"] = _sheet_last_good.copy()
             except Exception:
                 pass
-            return int(worksheet.row_count or len(_sheet_last_good_values or []) or 2)
+            return int(sheet_row)
         except Exception as error:
             last_error = str(error)
             message = last_error.lower()
             if "429" in last_error or "quota exceeded" in message:
                 time.sleep(3 + attempt * 2)
                 worksheet = None
+                cached_values = get_last_good_sheet_values()
                 continue
             break
 

@@ -243,12 +243,10 @@ def sync_pending_companies_to_sheet(*, max_items: int = 20) -> dict:
 
     for item in pending:
         try:
-            worksheet.append_row(
-                item["row_values"],
-                value_input_option="USER_ENTERED",
-                insert_data_option="INSERT_ROWS",
-            )
-            sheet_row = int(worksheet.row_count or 0)
+            from app.services.legacy_core import _folha1_next_row, _write_folha1_row, get_last_good_sheet_values
+
+            next_row = _folha1_next_row(worksheet, None)
+            sheet_row = _write_folha1_row(worksheet, next_row, item["row_values"])
             mark_pending_company_synced(item["id"], sheet_row or item["id"])
             synced += 1
             time.sleep(1.2)
