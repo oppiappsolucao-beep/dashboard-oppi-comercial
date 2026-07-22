@@ -20,6 +20,8 @@ LEAD_ACTIONS_HEADERS = CRM_STORAGE_TABS[LEAD_ACTIONS_WORKSHEET]
 
 _lock = threading.Lock()
 _cache: dict | None = None
+_sheet_sync_timer: threading.Timer | None = None
+_sheet_sync_lock = threading.Lock()
 
 
 def _now() -> datetime:
@@ -190,15 +192,41 @@ def _merge_stores(left: dict, right: dict | None) -> dict:
 
 def _persist_store(data: dict) -> None:
     from app.services.crm_local_db import save_lead_actions_store
-    from app.services.sheet_read_cache import invalidate_worksheet_cache
 
     _save_to_file(data)
     try:
         save_lead_actions_store(data)
     except Exception:
         pass
-    if _save_to_sheet(data):
-        invalidate_worksheet_cache(LEAD_ACTIONS_WORKSHEET)
+    _schedule_sheet_sync()
+
+
+def _schedule_sheet_sync(delay_seconds: float = 0.6) -> None:
+    """Grava LeadAcoes em background para não travar o kanban."""
+    global _sheet_sync_timer
+
+    def _run() -> None:
+        global _sheet_sync_timer
+        with _sheet_sync_lock:
+            _sheet_sync_timer = None
+        with _lock:
+            snapshot = json.loads(json.dumps(_cache, default=str)) if _cache is not None else None
+        if not snapshot:
+            return
+        try:
+            from app.services.sheet_read_cache import invalidate_worksheet_cache
+
+            if _save_to_sheet(snapshot):
+                invalidate_worksheet_cache(LEAD_ACTIONS_WORKSHEET)
+        except Exception:
+            pass
+
+    with _sheet_sync_lock:
+        if _sheet_sync_timer is not None:
+            _sheet_sync_timer.cancel()
+        _sheet_sync_timer = threading.Timer(delay_seconds, _run)
+        _sheet_sync_timer.daemon = True
+        _sheet_sync_timer.start()
 
 
 def _load_store(force_refresh: bool = False) -> dict:
@@ -253,7 +281,13 @@ def get_lead_action(tenant_id: str | None, sheet_row: int) -> dict | None:
     return record if isinstance(record, dict) else None
 
 
-def save_lead_action(tenant_id: str | None, sheet_row: int, payload: dict) -> dict:
+def save_lead_action(
+    tenant_id: str | None,
+    sheet_row: int,
+    payload: dict,
+    *,
+    sync_pipeline: bool = True,
+) -> dict:
     global _cache
     if not sheet_row:
         raise ValueError("sheet_row é obrigatório")
@@ -280,13 +314,16 @@ def save_lead_action(tenant_id: str | None, sheet_row: int, payload: dict) -> di
     except Exception:
         pass
     stage_override = normalize_text(current.get("stage_override"))
-    if stage_override:
-        try:
-            from app.services.legacy_core import sync_pipeline_stage_to_sheet
+    if sync_pipeline and stage_override:
+        def _sync_stage(row: int = int(sheet_row), stage_value: str = stage_override) -> None:
+            try:
+                from app.services.legacy_core import sync_pipeline_stage_to_sheet
 
-            sync_pipeline_stage_to_sheet(sheet_row, stage_override)
-        except Exception:
-            pass
+                sync_pipeline_stage_to_sheet(row, stage_value)
+            except Exception:
+                pass
+
+        threading.Thread(target=_sync_stage, daemon=True).start()
     with _lock:
         _cache = data
     return current

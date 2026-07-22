@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-APP_BUILD = os.getenv("APP_BUILD", "20260722-tabela-bordas-v7").strip() or "20260722-tabela-bordas-v7"
+APP_BUILD = os.getenv("APP_BUILD", "20260722-kanban-rapido-v8").strip() or "20260722-kanban-rapido-v8"
 
 
 class Settings:

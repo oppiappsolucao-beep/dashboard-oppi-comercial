@@ -635,22 +635,32 @@ def _consolidate_lead_pipeline_activity(
             continue
         activity_id = record.get("id")
         if activity_id == active_activity_id:
-            save_activity(tenant_id, activity_id, _stamp_stage_entered({
-                "stage": stage,
-                "move_stage": stage,
-                "updated_by": user,
-            }, stage, _resolve_effective_stage(record, tenant_id)))
+            save_activity(
+                tenant_id,
+                activity_id,
+                _stamp_stage_entered({
+                    "stage": stage,
+                    "move_stage": stage,
+                    "updated_by": user,
+                }, stage, _resolve_effective_stage(record, tenant_id)),
+                sync_pipeline=False,
+            )
             continue
         if record.get("status") not in open_statuses:
             continue
-        save_activity(tenant_id, activity_id, {
-            "status": "concluida",
-            "completed_at": _now().isoformat(timespec="seconds"),
-            "stage": stage,
-            "result": "Substituída",
-            "note": "Encerrada automaticamente ao mudar de etapa.",
-            "updated_by": user,
-        })
+        save_activity(
+            tenant_id,
+            activity_id,
+            {
+                "status": "concluida",
+                "completed_at": _now().isoformat(timespec="seconds"),
+                "stage": stage,
+                "result": "Substituída",
+                "note": "Encerrada automaticamente ao mudar de etapa.",
+                "updated_by": user,
+            },
+            sync_pipeline=False,
+        )
 
 
 def build_activities_kanban(
@@ -1836,15 +1846,21 @@ def movimentar_etapa_lead(
     from_stage: str,
     to_stage: str,
     user: str,
+    sync_pipeline: bool = True,
 ) -> None:
     to_stage = normalize_legacy_stage(to_stage)
     if not to_stage:
         return
-    save_lead_action(tenant_id, sheet_row, {
-        "stage_override": to_stage,
-        "stage_entered_at": _now().isoformat(timespec="seconds"),
-        "previous_stage": normalize_legacy_stage(from_stage),
-    })
+    save_lead_action(
+        tenant_id,
+        sheet_row,
+        {
+            "stage_override": to_stage,
+            "stage_entered_at": _now().isoformat(timespec="seconds"),
+            "previous_stage": normalize_legacy_stage(from_stage),
+        },
+        sync_pipeline=sync_pipeline,
+    )
     append_interaction(
         tenant_id,
         sheet_row,
@@ -1874,11 +1890,16 @@ def mover_atividade_kanban(
     if old_stage == new_stage:
         return _serialize_activity({"id": activity_id, **current}, tenant_id), None
 
-    saved = save_activity(tenant_id, activity_id, _stamp_stage_entered({
-        "stage": new_stage,
-        "move_stage": new_stage,
-        "updated_by": user,
-    }, new_stage, old_stage))
+    saved = save_activity(
+        tenant_id,
+        activity_id,
+        _stamp_stage_entered({
+            "stage": new_stage,
+            "move_stage": new_stage,
+            "updated_by": user,
+        }, new_stage, old_stage),
+        sync_pipeline=False,
+    )
 
     sheet_row = int(current.get("sheet_row") or 0)
     if sheet_row:
@@ -1888,6 +1909,7 @@ def mover_atividade_kanban(
             from_stage=old_stage,
             to_stage=new_stage,
             user=user,
+            sync_pipeline=False,
         )
         registrar_historico(
             tenant_id,
@@ -1914,6 +1936,19 @@ def mover_atividade_kanban(
         label=f"Atividade movida para {new_stage}",
         user=user,
     )
+
+    if sheet_row:
+        import threading
+
+        def _sync_folha1(row: int = sheet_row, stage_value: str = new_stage) -> None:
+            try:
+                from app.services.legacy_core import sync_pipeline_stage_to_sheet
+
+                sync_pipeline_stage_to_sheet(row, stage_value)
+            except Exception:
+                pass
+
+        threading.Thread(target=_sync_folha1, daemon=True).start()
 
     return _serialize_activity({"id": activity_id, **saved}, tenant_id), None
 

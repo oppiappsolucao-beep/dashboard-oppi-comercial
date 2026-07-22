@@ -99,7 +99,7 @@
           <span class="activities-kanban-column-sla">{{ column.sla_hint }}</span>
           {% endif %}
         </div>
-        <span class="activities-kanban-column-count">{{ column.count }}</span>
+        <span class="activities-kanban-column-count" data-kanban-count>{{ column.count }}</span>
       </header>
       <div class="activities-kanban-column-body" data-drop-stage="{{ column.stage }}">
         {% for card in column.cards %}
