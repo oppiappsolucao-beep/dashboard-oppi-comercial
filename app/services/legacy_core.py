@@ -21,6 +21,7 @@ from cachetools import TTLCache
 
 _sheet_cache: TTLCache = TTLCache(maxsize=1, ttl=max(60, settings.cache_ttl_seconds))
 _sheet_last_good = None
+_sheet_last_good_values: list[list[str]] | None = None
 _gsheet_client = None
 
 
@@ -43,6 +44,14 @@ def get_last_good_sheet_data():
     if _sheet_last_good is None:
         return None
     return _sheet_last_good.copy()
+
+
+def get_last_good_sheet_values() -> list[list[str]] | None:
+    """Valores brutos da última leitura bem-sucedida (cabeçalho + linhas)."""
+    global _sheet_last_good_values
+    if not _sheet_last_good_values:
+        return None
+    return [row[:] for row in _sheet_last_good_values]
 
 
 
@@ -1008,7 +1017,7 @@ def get_gsheet_client():
 
 
 def load_sheet_data() -> pd.DataFrame:
-    global _sheet_last_good
+    global _sheet_last_good, _sheet_last_good_values
     cache_key = "sheet_data"
     if cache_key in _sheet_cache:
         return _sheet_cache[cache_key].copy()
@@ -1066,6 +1075,7 @@ def load_sheet_data() -> pd.DataFrame:
         result = df.reset_index(drop=True)
         _sheet_cache[cache_key] = result.copy()
         _sheet_last_good = result.copy()
+        _sheet_last_good_values = [row[:] for row in values]
         return result
     except Exception as error:
         message = str(error)
@@ -1306,13 +1316,28 @@ def _header_matches_any(header: str, aliases: list[str]) -> bool:
     return any(alias in normalized_header for alias in aliases)
 
 
-def validate_unique_company_registration(payload: dict, worksheet, ignore_sheet_row: Optional[int] = None) -> None:
+def validate_unique_company_registration(
+    payload: dict,
+    worksheet=None,
+    ignore_sheet_row: Optional[int] = None,
+    values: Optional[list[list[str]]] = None,
+) -> None:
     """
     Bloqueia cadastro ou edição quando qualquer telefone, CPF ou CNPJ informado já existe
-    em outra linha da planilha. A leitura é feita diretamente da aba para evitar
-    duplicidade mesmo quando o cache ainda não atualizou.
+    em outra linha da planilha. Prefere o cache local para não estourar a cota de leituras.
     """
-    values = worksheet.get_all_values()
+    if values is None:
+        values = get_last_good_sheet_values()
+
+    if values is None and worksheet is not None:
+        try:
+            values = worksheet.get_all_values()
+        except Exception as error:
+            message = str(error)
+            # Sem cache e com cota estourada: não impede o salvamento.
+            if "429" in message or "Quota exceeded" in message.lower():
+                return
+            raise
 
     if not values:
         return
@@ -1593,12 +1618,33 @@ def _apply_address_fields(row_values: list, headers: list, payload: dict) -> Non
 
 def append_company_to_sheet(payload: dict) -> int:
     """Adiciona uma nova empresa na aba principal respeitando a estrutura atual da planilha."""
+    global _sheet_last_good_values
+
     client = get_gsheet_client()
     spreadsheet = client.open_by_key(settings.sheet_id)
     worksheet = _open_worksheet(spreadsheet, settings.worksheet_name)
-    headers = ensure_registration_sheet_columns(worksheet)
 
-    validate_unique_company_registration(payload, worksheet)
+    cached_values = get_last_good_sheet_values()
+    headers: list[str]
+    if cached_values and cached_values[0]:
+        headers = list(cached_values[0])
+        # Completa cabeçalhos localmente sem nova leitura.
+        for column_name, aliases in REGISTRATION_OPTIONAL_COLUMNS:
+            if _worksheet_has_header(headers, aliases):
+                continue
+            headers.append(column_name)
+    else:
+        try:
+            headers = ensure_registration_sheet_columns(worksheet)
+        except Exception as error:
+            message = str(error)
+            if "429" in message or "Quota exceeded" in message.lower():
+                raise RuntimeError(
+                    "A planilha está temporariamente ocupada. Aguarde cerca de 30 segundos e salve novamente."
+                ) from error
+            raise
+
+    validate_unique_company_registration(payload, values=cached_values)
 
     if not headers:
         raise RuntimeError("A primeira linha da planilha precisa conter os cabeçalhos.")
@@ -1639,14 +1685,31 @@ def append_company_to_sheet(payload: dict) -> int:
     _set_sheet_value_by_header(row_values, headers, ["Observações", "Observacoes", "Observação", "Observacao"], payload.get("observacoes"))
     _apply_commercial_fields(row_values, headers, payload)
 
-    worksheet.append_row(
-        row_values,
-        value_input_option="USER_ENTERED",
-        insert_data_option="INSERT_ROWS",
-    )
+    try:
+        worksheet.append_row(
+            row_values,
+            value_input_option="USER_ENTERED",
+            insert_data_option="INSERT_ROWS",
+        )
+    except Exception as error:
+        message = str(error)
+        if "429" in message or "Quota exceeded" in message.lower():
+            raise RuntimeError(
+                "A planilha está temporariamente ocupada. Aguarde cerca de 30 segundos e salve novamente."
+            ) from error
+        raise
+
+    # Atualiza cache local sem nova leitura.
+    if _sheet_last_good_values:
+        _sheet_last_good_values = [row[:] for row in _sheet_last_good_values]
+        if _sheet_last_good_values and _sheet_last_good_values[0] != headers:
+            _sheet_last_good_values[0] = list(headers)
+        _sheet_last_good_values.append(list(row_values))
+    else:
+        _sheet_last_good_values = [list(headers), list(row_values)]
 
     invalidate_sheet_cache()
-    return worksheet.row_count
+    return len(_sheet_last_good_values) if _sheet_last_good_values else worksheet.row_count
 
 
 def update_company_in_sheet(sheet_row: int, payload: dict) -> None:

@@ -191,7 +191,15 @@ async def new_registration_submit(request: Request):
     except ValueError as error:
         request.session["registration_error"] = str(error)
     except Exception as error:
-        request.session["registration_error"] = f"Não consegui cadastrar a empresa: {error}"
+        message = str(error)
+        if "429" in message or "Quota exceeded" in message:
+            request.session["registration_error"] = (
+                "A planilha está temporariamente ocupada. Aguarde cerca de 30 segundos e salve novamente."
+            )
+        else:
+            request.session["registration_error"] = (
+                "Não consegui cadastrar agora. Aguarde alguns segundos e tente salvar novamente."
+            )
 
     redirect_params = f"?from={from_page}" if from_page else ""
     return RedirectResponse(url=f"/cadastro/novo{redirect_params}", status_code=303)

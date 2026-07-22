@@ -103,6 +103,8 @@ async def startup_maintenance() -> None:
             from app.services.account_users import load_account_users
             from app.services.monthly_goals import load_monthly_goals
             from app.services.proposal_pdf import cleanup_service_account_proposal_files
+            from app.services.legacy_core import load_sheet_data
+            from app.services.seed_fake_company import ensure_fake_test_company_on_startup
 
             reload_activities_store(force_refresh=False)
             reload_lead_actions_store(force_refresh=False)
@@ -110,7 +112,12 @@ async def startup_maintenance() -> None:
             load_account_users()
             load_app_settings()
             load_monthly_goals()
+            try:
+                load_sheet_data()
+            except Exception:
+                pass
             cleanup_service_account_proposal_files()
+            ensure_fake_test_company_on_startup()
         except Exception as error:
             log.error("Startup background (planilha): %s", error)
 
