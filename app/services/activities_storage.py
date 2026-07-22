@@ -296,6 +296,7 @@ def get_activity(tenant_id: str | None, activity_id: str) -> dict | None:
 
 
 def save_activity(tenant_id: str | None, activity_id: str | None, payload: dict) -> dict:
+    global _cache
     from app.services.crm_local_db import upsert_activity
 
     with _lock:
@@ -332,7 +333,6 @@ def save_activity(tenant_id: str | None, activity_id: str | None, payload: dict)
         except Exception:
             pass
     with _lock:
-        global _cache
         _cache = data
     return {"id": activity_id, **current}
 

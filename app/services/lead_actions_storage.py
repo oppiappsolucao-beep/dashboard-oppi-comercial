@@ -254,6 +254,7 @@ def get_lead_action(tenant_id: str | None, sheet_row: int) -> dict | None:
 
 
 def save_lead_action(tenant_id: str | None, sheet_row: int, payload: dict) -> dict:
+    global _cache
     if not sheet_row:
         raise ValueError("sheet_row é obrigatório")
 
@@ -287,7 +288,6 @@ def save_lead_action(tenant_id: str | None, sheet_row: int, payload: dict) -> di
         except Exception:
             pass
     with _lock:
-        global _cache
         _cache = data
     return current
 
@@ -401,6 +401,7 @@ def complete_activity(
 
 
 def delete_lead_action(tenant_id: str | None, sheet_row: int) -> None:
+    global _cache
     if not sheet_row:
         return
 
@@ -417,7 +418,6 @@ def delete_lead_action(tenant_id: str | None, sheet_row: int) -> None:
     data[tenant] = bucket
     _persist_store(data)
     with _lock:
-        global _cache
         _cache = data
 
 
