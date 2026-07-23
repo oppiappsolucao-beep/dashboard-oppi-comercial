@@ -55,6 +55,8 @@ app.add_api_route(
     tags=["attendances"],
 )
 
+from app.routers.leads import leads_filters, leads_page, leads_refresh  # noqa: E402
+
 app.add_api_route("/leads-e-empresas", leads_page, methods=["GET"], tags=["leads"])
 app.add_api_route("/leads-e-empresas/filtros", leads_filters, methods=["POST"], tags=["leads"])
 app.add_api_route("/leads-e-empresas/atualizar", leads_refresh, methods=["POST"], tags=["leads"])
