@@ -249,9 +249,62 @@
     }
   });
 
+  function snapComposerText(form) {
+    if (!form) return "";
+    var ta = form.querySelector(".att-composer-input");
+    var snap = form.querySelector(".att-text-snap");
+    if (!ta || !snap) return "";
+    var value = ta.value || "";
+    snap.value = value;
+    return value;
+  }
+
+  // Captura o texto ANTES do blur/autocorrect do Windows (olá → óleo)
+  document.addEventListener(
+    "mousedown",
+    function (ev) {
+      var btn = ev.target && ev.target.closest ? ev.target.closest(".att-send-btn") : null;
+      if (!btn) return;
+      snapComposerText(btn.closest("form"));
+    },
+    true
+  );
+
+  document.addEventListener(
+    "keydown",
+    function (ev) {
+      var ta = ev.target;
+      if (!ta || !ta.classList || !ta.classList.contains("att-composer-input")) return;
+      if (ev.key !== "Enter" || ev.shiftKey) return;
+      ev.preventDefault();
+      var form = ta.closest("form");
+      var value = snapComposerText(form);
+      if (!value.trim()) return;
+      if (form && window.htmx) {
+        window.htmx.trigger(form, "submit");
+      } else if (form) {
+        form.requestSubmit();
+      }
+    },
+    true
+  );
+
+  document.body.addEventListener("htmx:configRequest", function (ev) {
+    var form = ev.target && ev.target.closest ? ev.target.closest(".att-composer") : null;
+    if (!form) return;
+    var path = (ev.detail && ev.detail.path) || "";
+    if (path.indexOf("/enviar") === -1) return;
+    var value = snapComposerText(form);
+    if (ev.detail && ev.detail.parameters) {
+      ev.detail.parameters.text = value;
+    }
+  });
+
   document.addEventListener("input", function (ev) {
     if (ev.target && ev.target.classList.contains("att-composer-input")) {
       autoGrow(ev.target);
+      // Mantém o snap atualizado a cada digitação
+      snapComposerText(ev.target.closest("form"));
     }
   });
 

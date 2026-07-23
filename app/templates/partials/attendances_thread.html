@@ -43,18 +43,23 @@
         hx-post="/atendimentos/conversa/{{ selected.id }}/enviar"
         hx-target="#att-chat-root"
         hx-swap="innerHTML"
-        hx-disabled-elt="button[type=submit]">
+        hx-disabled-elt="button[type=submit]"
+        autocomplete="off">
     <label class="att-attach-btn" title="Enviar mídia (URL pública)">
       ＋
       <input type="file" id="att-media-input" accept="image/*,audio/*,.pdf,.doc,.docx" hidden>
     </label>
-    <textarea name="text" rows="1" class="att-composer-input"
+    {# name="text" fica no hidden: o Windows corrige o textarea no blur ao clicar Enviar #}
+    <input type="hidden" name="text" class="att-text-snap" value="">
+    <textarea rows="1" class="att-composer-input"
               placeholder="Digite uma mensagem…"
-              required
               autocomplete="off"
               autocorrect="off"
               autocapitalize="off"
               spellcheck="false"
+              lang="zxx"
+              inputmode="text"
+              data-lpignore="true"
               data-form-type="other"
               {% if not evolution_configured %}disabled{% endif %}></textarea>
     <button type="submit" class="btn att-send-btn" {% if not evolution_configured %}disabled{% endif %}>Enviar</button>
