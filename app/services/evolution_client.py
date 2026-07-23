@@ -414,16 +414,28 @@ def assert_instance_ready() -> None:
         )
 
 
-def _text_payloads(number: str, body: str) -> list[dict[str, Any]]:
-    return [
-        {"number": number, "text": body},
-        {"number": number, "textMessage": {"text": body}},
-        {
-            "number": number,
-            "textMessage": {"text": body},
-            "options": {"delay": 0, "presence": "composing", "linkPreview": False},
-        },
-    ]
+def _text_payload(number: str, body: str) -> dict[str, Any]:
+    # Um único formato — múltiplos payloads geravam várias entregas no WhatsApp.
+    return {"number": number, "text": body}
+
+
+def _pick_send_target(phone: str, jid: str = "") -> str:
+    """Escolhe um único destino. Preferência: @lid > número puro > demais."""
+    targets = enrich_targets_from_chats(phone, jid)
+    if not targets:
+        return ""
+    for item in targets:
+        if "@lid" in item.lower():
+            return item
+    digits = normalize_digits(phone)
+    if digits:
+        if not digits.startswith("55") and len(digits) >= 10:
+            digits = f"55{digits}"
+        for item in targets:
+            if normalize_digits(item) == digits or item == digits:
+                return digits
+        return digits
+    return targets[0]
 
 
 def send_text(phone: str, text: str, *, jid: str = "") -> dict[str, Any]:
@@ -435,73 +447,46 @@ def send_text(phone: str, text: str, *, jid: str = "") -> dict[str, Any]:
 
     assert_instance_ready()
 
-    numbers = enrich_targets_from_chats(phone, jid)
-    if not numbers:
+    number = _pick_send_target(phone, jid)
+    if not number:
         raise EvolutionClientError("Telefone/JID da conversa inválido para envio.")
 
     urls = _instance_urls("/message/sendText")
     errors: list[str] = []
-    pending_ok: dict[str, Any] | None = None
-    tried: set[str] = set()
+    payload = _text_payload(number, body)
 
-    for number in numbers:
-        for url in urls:
-            for payload in _text_payloads(number, body):
-                attempt_key = f"{url}|{number}|{sorted(payload.keys())}"
-                if attempt_key in tried:
-                    continue
-                tried.add(attempt_key)
-                try:
-                    response = requests.post(url, json=payload, headers=_headers(), timeout=30)
-                except requests.RequestException as error:
-                    errors.append(f"{number}: {error}")
-                    continue
+    for url in urls:
+        try:
+            response = requests.post(url, json=payload, headers=_headers(), timeout=30)
+        except requests.RequestException as error:
+            errors.append(f"{number}: {error}")
+            continue
 
-                data = _parse_json(response)
-                err = _response_looks_like_error(data)
-                if response.status_code >= 400 or err:
-                    errors.append(
-                        f"{number} HTTP {response.status_code}: {err or response.text[:180]}"
-                    )
-                    continue
+        data = _parse_json(response)
+        err = _response_looks_like_error(data)
+        if response.status_code >= 400 or err:
+            errors.append(
+                f"{number} HTTP {response.status_code}: {err or response.text[:180]}"
+            )
+            continue
 
-                msg_id = extract_message_id(data)
-                if not msg_id:
-                    errors.append(
-                        f"{number}: Evolution respondeu sem ID de mensagem: {str(data)[:180]}"
-                    )
-                    continue
+        msg_id = extract_message_id(data)
+        if not msg_id:
+            errors.append(
+                f"{number}: Evolution respondeu sem ID de mensagem: {str(data)[:180]}"
+            )
+            continue
 
-                status = extract_message_status(data) or "UNKNOWN"
-                logger.info(
-                    "Evolution sendText instance=%s number=%s id=%s status=%s",
-                    resolved_instance_name(),
-                    number,
-                    msg_id,
-                    status,
-                )
-                # PENDING = Evolution aceitou, mas WhatsApp/Baileys não confirmou entrega.
-                # Continua tentando outros alvos (@lid etc.) antes de desistir.
-                if is_delivery_pending(data) and status != "UNKNOWN":
-                    if pending_ok is None:
-                        pending_ok = data
-                    # Se ainda há alvos @lid não tentados, segue
-                    has_lid_left = any(
-                        "@lid" in n.lower() and n != number for n in numbers
-                    )
-                    if has_lid_left or "@lid" not in number.lower():
-                        continue
-                    return data
-
-                return data
-
-    if pending_ok is not None:
-        logger.warning(
-            "Evolution sendText só obteve PENDING instance=%s targets=%s",
+        status = extract_message_status(data) or "UNKNOWN"
+        logger.info(
+            "Evolution sendText instance=%s number=%s id=%s status=%s",
             resolved_instance_name(),
-            numbers[:6],
+            number,
+            msg_id,
+            status,
         )
-        return pending_ok
+        # Aceitou = uma entrega. Nunca tentar outros alvos (causa duplicatas no WhatsApp).
+        return data
 
     detail = " | ".join(errors[-4:]) if errors else "sem detalhes"
     raise EvolutionClientError(
@@ -524,8 +509,8 @@ def send_media(
     if not is_configured():
         raise EvolutionClientError("Evolution API não configurada.")
     assert_instance_ready()
-    numbers = enrich_targets_from_chats(phone, jid)
-    if not numbers:
+    number = _pick_send_target(phone, jid)
+    if not number:
         raise EvolutionClientError("Telefone/JID da conversa inválido para envio.")
     mediatype = {
         "image": "image",
@@ -534,30 +519,29 @@ def send_media(
         "video": "video",
     }.get(media_type, "document")
     errors: list[str] = []
-    for number in numbers:
-        payload = {
-            "number": number,
-            "mediatype": mediatype,
-            "media": media_url,
-            "caption": str(caption or "").strip(),
-            "fileName": normalize_text(filename) or "arquivo",
-        }
-        if mimetype:
-            payload["mimetype"] = mimetype
-        for url in _instance_urls("/message/sendMedia"):
-            try:
-                response = requests.post(url, json=payload, headers=_headers(), timeout=60)
-            except requests.RequestException as error:
-                errors.append(str(error))
-                continue
-            data = _parse_json(response)
-            err = _response_looks_like_error(data)
-            if response.status_code >= 400 or err:
-                errors.append(err or response.text[:180])
-                continue
-            if extract_message_id(data):
-                return data
-            errors.append(f"sem ID: {str(data)[:160]}")
+    payload = {
+        "number": number,
+        "mediatype": mediatype,
+        "media": media_url,
+        "caption": str(caption or "").strip(),
+        "fileName": normalize_text(filename) or "arquivo",
+    }
+    if mimetype:
+        payload["mimetype"] = mimetype
+    for url in _instance_urls("/message/sendMedia"):
+        try:
+            response = requests.post(url, json=payload, headers=_headers(), timeout=60)
+        except requests.RequestException as error:
+            errors.append(str(error))
+            continue
+        data = _parse_json(response)
+        err = _response_looks_like_error(data)
+        if response.status_code >= 400 or err:
+            errors.append(err or response.text[:180])
+            continue
+        if extract_message_id(data):
+            return data
+        errors.append(f"sem ID: {str(data)[:160]}")
     raise EvolutionClientError(
         "Falha ao enviar mídia via Evolution. " + (" | ".join(errors[-3:]) if errors else "")
     )
