@@ -255,6 +255,8 @@ def attendances_test_send(request: Request, conversation_id: str):
             jid=conversation.get("remote_jid") or "",
         )
         msg_id = evolution_client.extract_message_id(data)
+        status = evolution_client.extract_message_status(data)
+        pending = evolution_client.is_delivery_pending(data)
         # grava no inbox também, para conferência
         store.add_message(
             conversation_id,
@@ -267,14 +269,21 @@ def attendances_test_send(request: Request, conversation_id: str):
         return JSONResponse(
             {
                 "ok": True,
+                "pending": pending,
+                "status": status or None,
                 "message_id": msg_id,
                 "phone": conversation.get("phone_e164"),
                 "remote_jid": conversation.get("remote_jid"),
+                "targets_hint": evolution_client.enrich_targets_from_chats(
+                    conversation.get("phone_e164") or "",
+                    conversation.get("remote_jid") or "",
+                )[:8],
                 "evolution_response": data,
                 "check": (
-                    "Confira no WhatsApp do NÚMERO CONECTADO na Evolution "
-                    f"a conversa com {conversation.get('phone_e164')} "
-                    "(não precisa ser o celular do cliente)."
+                    "Se status=PENDING e a msg não chega no WhatsApp, o problema é "
+                    "a Evolution/Baileys (não o CRM). Peça uma msg nova do cliente "
+                    "para gravar @lid, ou atualize Baileys no container Evolution "
+                    "(baileys@7.0.0-rc13). Confira no Manager Chat o mesmo sintoma."
                 ),
             }
         )
@@ -331,8 +340,16 @@ def attendances_evolution_diag(request: Request, conversation_id: str = ""):
             else None,
             "hint": (
                 "1) EVOLUTION_INSTANCE deve bater com instances_available. "
-                "2) Peça uma msg nova do cliente para gravar remote_jid. "
-                "3) Teste enviar pelo Chat do Manager Evolution; se lá também falhar, o problema é a instância."
+                "2) Peça uma msg nova do cliente para gravar remote_jid com @lid. "
+                "3) Teste enviar pelo Chat do Manager Evolution; se lá também ficar PENDING, "
+                "é bug Baileys (erro 463) — atualize baileys@7.0.0-rc13 no container Evolution."
+            ),
+            "evolution_fix": (
+                "No Easypanel (serviço Evolution), sobrescreva o entrypoint/command para: "
+                'sh -c "npm install baileys@7.0.0-rc13 && npm run db:deploy && '
+                'npm run db:generate && npm run start:prod" '
+                "(ou entrypoint com Docker/scripts/deploy_database.sh). "
+                "Depois reconecte o QR da instância oppi-comercial."
             ),
         }
     )

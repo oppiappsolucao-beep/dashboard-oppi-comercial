@@ -104,6 +104,18 @@ async def startup_maintenance() -> None:
 
     log = logging.getLogger(__name__)
 
+    # Banco DATABASE_URL (Postgres em produção) + migração de conversas do SQLite local
+    try:
+        from database.connection import Base, engine
+        from database import models  # noqa: F401 — registra tabelas (incl. attendance_*)
+        from app.services.attendance_db_migrate import migrate_attendance_from_sqlite_if_needed
+
+        Base.metadata.create_all(bind=engine)
+        migrate_info = migrate_attendance_from_sqlite_if_needed()
+        log.info("Attendance DB migrate: %s", migrate_info)
+    except Exception as error:
+        log.error("Startup DATABASE_URL / attendance migrate: %s", error)
+
     # Só o SQLite local no startup — planilha/API ficam em background
     # para o /health responder rápido e o Easypanel não derrubar o serviço.
     try:

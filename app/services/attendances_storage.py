@@ -1,14 +1,22 @@
-"""Persistência local de conversas e mensagens de Atendimentos."""
+"""Persistência de conversas/mensagens de Atendimentos em DATABASE_URL."""
 from __future__ import annotations
 
 import json
+import logging
 import threading
 import uuid
+from contextlib import contextmanager
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from app.services.crm_local_db import _connect, init_crm_local_db
+from sqlalchemy import func, or_
+from sqlalchemy.exc import IntegrityError
+
 from app.services.legacy_core import normalize_text
+from database.connection import SessionLocal
+from database.models import AttendanceConversation, AttendanceMessage
+
+logger = logging.getLogger(__name__)
 
 STATUS_NOVO_LEAD = "novo_lead"
 STATUS_EM_ATENDIMENTO = "em_atendimento"
@@ -41,6 +49,20 @@ def _new_id(prefix: str = "") -> str:
     return f"{prefix}{uuid.uuid4().hex}"
 
 
+@contextmanager
+def _session(*, commit: bool = True):
+    db = SessionLocal()
+    try:
+        yield db
+        if commit:
+            db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+
 def _notify(event: dict) -> None:
     global _event_seq
     with _lock:
@@ -69,58 +91,6 @@ def unsubscribe_events(q) -> None:
             _event_listeners.remove(q)
 
 
-def _row_to_conversation(row) -> dict:
-    if row is None:
-        return {}
-    tags_raw = row["tags_json"] if "tags_json" in row.keys() else "[]"
-    try:
-        tags = json.loads(tags_raw) if tags_raw else []
-    except json.JSONDecodeError:
-        tags = []
-    if not isinstance(tags, list):
-        tags = []
-    status = normalize_text(row["status"]) or STATUS_NOVO_LEAD
-    return {
-        "id": row["id"],
-        "phone_e164": row["phone_e164"],
-        "remote_jid": (row["remote_jid"] if "remote_jid" in row.keys() else "") or "",
-        "contact_name": row["contact_name"] or "",
-        "profile_pic_url": row["profile_pic_url"] or "",
-        "sheet_row": int(row["sheet_row"]) if row["sheet_row"] else None,
-        "status": status,
-        "status_label": STATUS_LABELS.get(status, status),
-        "assignee": row["assignee"] or "",
-        "ai_mode": row["ai_mode"] or AI_MODE_ON,
-        "tags": [normalize_text(t) for t in tags if normalize_text(t)],
-        "notes": row["notes"] or "",
-        "last_message_at": row["last_message_at"] or "",
-        "last_message_preview": row["last_message_preview"] or "",
-        "unread_count": int(row["unread_count"] or 0),
-        "typing": bool(row["typing"]),
-        "created_at": row["created_at"] or "",
-        "updated_at": row["updated_at"] or "",
-        "initials": _initials(row["contact_name"] or row["phone_e164"]),
-    }
-
-
-def _row_to_message(row) -> dict:
-    if row is None:
-        return {}
-    return {
-        "id": row["id"],
-        "conversation_id": row["conversation_id"],
-        "direction": row["direction"],
-        "type": row["msg_type"] or "text",
-        "body": row["body"] or "",
-        "media_url": row["media_url"] or "",
-        "media_mime": row["media_mime"] or "",
-        "media_filename": row["media_filename"] or "",
-        "evolution_id": row["evolution_id"] or "",
-        "sender": row["sender"] or "contact",
-        "created_at": row["created_at"] or "",
-    }
-
-
 def _initials(name: str) -> str:
     parts = [p for p in normalize_text(name).split() if p]
     if not parts:
@@ -130,27 +100,75 @@ def _initials(name: str) -> str:
     return (parts[0][0] + parts[-1][0]).upper()
 
 
+def _conversation_to_dict(row: AttendanceConversation | None) -> dict:
+    if row is None:
+        return {}
+    try:
+        tags = json.loads(row.tags_json or "[]")
+    except json.JSONDecodeError:
+        tags = []
+    if not isinstance(tags, list):
+        tags = []
+    status = normalize_text(row.status) or STATUS_NOVO_LEAD
+    return {
+        "id": row.id,
+        "phone_e164": row.phone_e164,
+        "remote_jid": row.remote_jid or "",
+        "contact_name": row.contact_name or "",
+        "profile_pic_url": row.profile_pic_url or "",
+        "sheet_row": int(row.sheet_row) if row.sheet_row else None,
+        "status": status,
+        "status_label": STATUS_LABELS.get(status, status),
+        "assignee": row.assignee or "",
+        "ai_mode": row.ai_mode or AI_MODE_ON,
+        "tags": [normalize_text(t) for t in tags if normalize_text(t)],
+        "notes": row.notes or "",
+        "last_message_at": row.last_message_at or "",
+        "last_message_preview": row.last_message_preview or "",
+        "unread_count": int(row.unread_count or 0),
+        "typing": bool(row.typing),
+        "created_at": row.created_at or "",
+        "updated_at": row.updated_at or "",
+        "initials": _initials(row.contact_name or row.phone_e164),
+    }
+
+
+def _message_to_dict(row: AttendanceMessage | None) -> dict:
+    if row is None:
+        return {}
+    return {
+        "id": row.id,
+        "conversation_id": row.conversation_id,
+        "direction": row.direction,
+        "type": row.msg_type or "text",
+        "body": row.body or "",
+        "media_url": row.media_url or "",
+        "media_mime": row.media_mime or "",
+        "media_filename": row.media_filename or "",
+        "evolution_id": row.evolution_id or "",
+        "sender": row.sender or "contact",
+        "created_at": row.created_at or "",
+    }
+
+
 def get_conversation(conversation_id: str) -> dict | None:
-    init_crm_local_db()
-    with _connect() as conn:
-        row = conn.execute(
-            "SELECT * FROM attendance_conversations WHERE id = ?",
-            (conversation_id,),
-        ).fetchone()
-    return _row_to_conversation(row) if row else None
+    with _session(commit=False) as db:
+        row = db.get(AttendanceConversation, conversation_id)
+        return _conversation_to_dict(row) if row else None
 
 
 def get_conversation_by_phone(phone_e164: str) -> dict | None:
-    init_crm_local_db()
     phone = normalize_text(phone_e164)
     if not phone:
         return None
-    with _connect() as conn:
-        row = conn.execute(
-            "SELECT * FROM attendance_conversations WHERE phone_e164 = ? ORDER BY updated_at DESC LIMIT 1",
-            (phone,),
-        ).fetchone()
-    return _row_to_conversation(row) if row else None
+    with _session(commit=False) as db:
+        row = (
+            db.query(AttendanceConversation)
+            .filter(AttendanceConversation.phone_e164 == phone)
+            .order_by(AttendanceConversation.updated_at.desc())
+            .first()
+        )
+        return _conversation_to_dict(row) if row else None
 
 
 def list_conversations(
@@ -159,38 +177,34 @@ def list_conversations(
     status: str = "",
     limit: int = 100,
 ) -> list[dict]:
-    init_crm_local_db()
-    clauses: list[str] = []
-    params: list = []
-    if status and status != "todos":
-        clauses.append("status = ?")
-        params.append(status)
-    search_norm = normalize_text(search).lower()
-    if search_norm:
-        clauses.append(
-            "(LOWER(contact_name) LIKE ? OR phone_e164 LIKE ? OR LOWER(last_message_preview) LIKE ?)"
+    with _session(commit=False) as db:
+        q = db.query(AttendanceConversation)
+        if status and status != "todos":
+            q = q.filter(AttendanceConversation.status == status)
+        search_norm = normalize_text(search).lower()
+        if search_norm:
+            like = f"%{search_norm}%"
+            q = q.filter(
+                or_(
+                    func.lower(AttendanceConversation.contact_name).like(like),
+                    AttendanceConversation.phone_e164.like(f"%{search_norm}%"),
+                    func.lower(AttendanceConversation.last_message_preview).like(like),
+                )
+            )
+        # Ordena por last_message_at quando preenchido; senão updated_at
+        rows = (
+            q.order_by(
+                func.coalesce(
+                    func.nullif(AttendanceConversation.last_message_at, ""),
+                    AttendanceConversation.updated_at,
+                ).desc(),
+                AttendanceConversation.unread_count.desc(),
+                AttendanceConversation.updated_at.desc(),
+            )
+            .limit(max(1, min(int(limit or 100), 500)))
+            .all()
         )
-        like = f"%{search_norm}%"
-        params.extend([like, f"%{search_norm}%", like])
-    where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
-    params.append(max(1, min(int(limit or 100), 500)))
-    with _connect() as conn:
-        rows = conn.execute(
-            f"""
-            SELECT * FROM attendance_conversations
-            {where}
-            ORDER BY
-              CASE
-                WHEN last_message_at IS NOT NULL AND last_message_at != '' THEN last_message_at
-                ELSE updated_at
-              END DESC,
-              unread_count DESC,
-              updated_at DESC
-            LIMIT ?
-            """,
-            params,
-        ).fetchall()
-    return [_row_to_conversation(row) for row in rows]
+        return [_conversation_to_dict(row) for row in rows]
 
 
 def upsert_conversation_by_phone(
@@ -202,84 +216,103 @@ def upsert_conversation_by_phone(
     status: str | None = None,
     remote_jid: str = "",
 ) -> dict:
-    init_crm_local_db()
     phone = normalize_text(phone_e164)
     if not phone:
         raise ValueError("Telefone obrigatório")
     now = _now_iso()
     remote_jid = normalize_text(remote_jid)
-    existing = get_conversation_by_phone(phone)
-    if existing:
-        updates: dict = {"updated_at": now}
-        if contact_name and not existing.get("contact_name"):
-            updates["contact_name"] = normalize_text(contact_name)
-        if profile_pic_url:
-            updates["profile_pic_url"] = normalize_text(profile_pic_url)
-        if sheet_row and not existing.get("sheet_row"):
-            updates["sheet_row"] = int(sheet_row)
-        if status:
-            updates["status"] = status
-        if remote_jid and remote_jid != existing.get("remote_jid"):
-            updates["remote_jid"] = remote_jid
-        if len(updates) > 1:
-            _update_conversation(existing["id"], updates)
-            return get_conversation(existing["id"]) or existing
-        return existing
 
-    conversation_id = _new_id("c_")
-    with _lock, _connect() as conn:
-        conn.execute(
-            """
-            INSERT INTO attendance_conversations (
-                id, phone_e164, contact_name, profile_pic_url, sheet_row, status,
-                assignee, ai_mode, tags_json, notes, last_message_at, last_message_preview,
-                unread_count, typing, created_at, updated_at, remote_jid
-            ) VALUES (?, ?, ?, ?, ?, ?, '', ?, '[]', '', '', '', 0, 0, ?, ?, ?)
-            """,
-            (
-                conversation_id,
-                phone,
-                normalize_text(contact_name),
-                normalize_text(profile_pic_url),
-                int(sheet_row) if sheet_row else None,
-                status or STATUS_NOVO_LEAD,
-                AI_MODE_ON,
-                now,
-                now,
-                remote_jid,
-            ),
+    with _lock, _session() as db:
+        existing = (
+            db.query(AttendanceConversation)
+            .filter(AttendanceConversation.phone_e164 == phone)
+            .order_by(AttendanceConversation.updated_at.desc())
+            .first()
         )
-        conn.commit()
-    conversation = get_conversation(conversation_id)
+        if existing:
+            changed = False
+            if contact_name and not (existing.contact_name or "").strip():
+                existing.contact_name = normalize_text(contact_name)
+                changed = True
+            if profile_pic_url:
+                existing.profile_pic_url = normalize_text(profile_pic_url)
+                changed = True
+            if sheet_row and not existing.sheet_row:
+                existing.sheet_row = int(sheet_row)
+                changed = True
+            if status:
+                existing.status = status
+                changed = True
+            if remote_jid and remote_jid != (existing.remote_jid or ""):
+                existing.remote_jid = remote_jid
+                changed = True
+            if changed:
+                existing.updated_at = now
+            conversation_id = existing.id
+            result = _conversation_to_dict(existing)
+            if changed:
+                _notify({"type": "conversation_upsert", "conversation_id": conversation_id})
+            return result
+
+        conversation_id = _new_id("c_")
+        row = AttendanceConversation(
+            id=conversation_id,
+            phone_e164=phone,
+            contact_name=normalize_text(contact_name),
+            profile_pic_url=normalize_text(profile_pic_url),
+            sheet_row=int(sheet_row) if sheet_row else None,
+            status=status or STATUS_NOVO_LEAD,
+            assignee="",
+            ai_mode=AI_MODE_ON,
+            tags_json="[]",
+            notes="",
+            last_message_at="",
+            last_message_preview="",
+            unread_count=0,
+            typing=False,
+            remote_jid=remote_jid,
+            created_at=now,
+            updated_at=now,
+        )
+        db.add(row)
+        db.flush()
+        result = _conversation_to_dict(row)
+
     _notify({"type": "conversation_upsert", "conversation_id": conversation_id})
-    return conversation or {}
+    return result or {}
 
 
 def _update_conversation(conversation_id: str, fields: dict) -> None:
     if not fields:
         return
     allowed = {
-        "contact_name", "profile_pic_url", "sheet_row", "status", "assignee", "ai_mode",
-        "tags_json", "notes", "last_message_at", "last_message_preview", "unread_count",
-        "typing", "updated_at", "remote_jid", "phone_e164",
+        "contact_name",
+        "profile_pic_url",
+        "sheet_row",
+        "status",
+        "assignee",
+        "ai_mode",
+        "tags_json",
+        "notes",
+        "last_message_at",
+        "last_message_preview",
+        "unread_count",
+        "typing",
+        "updated_at",
+        "remote_jid",
+        "phone_e164",
     }
-    cols = []
-    values = []
-    for key, value in fields.items():
-        if key not in allowed:
-            continue
-        cols.append(f"{key} = ?")
-        values.append(value)
-    if not cols:
-        return
-    values.append(conversation_id)
-    init_crm_local_db()
-    with _lock, _connect() as conn:
-        conn.execute(
-            f"UPDATE attendance_conversations SET {', '.join(cols)} WHERE id = ?",
-            values,
-        )
-        conn.commit()
+    with _lock, _session() as db:
+        row = db.get(AttendanceConversation, conversation_id)
+        if not row:
+            return
+        for key, value in fields.items():
+            if key not in allowed:
+                continue
+            if key == "typing":
+                setattr(row, key, bool(value))
+            else:
+                setattr(row, key, value)
 
 
 def update_conversation(conversation_id: str, **fields) -> dict | None:
@@ -299,7 +332,9 @@ def update_conversation(conversation_id: str, **fields) -> dict | None:
 
 
 def set_typing(conversation_id: str, typing: bool) -> None:
-    _update_conversation(conversation_id, {"typing": 1 if typing else 0, "updated_at": _now_iso()})
+    _update_conversation(
+        conversation_id, {"typing": bool(typing), "updated_at": _now_iso()}
+    )
     _notify({"type": "typing", "conversation_id": conversation_id, "typing": bool(typing)})
 
 
@@ -317,16 +352,16 @@ def add_message(
     created_at: str | None = None,
     bump_unread: bool = False,
 ) -> dict | None:
-    init_crm_local_db()
     evolution_id = normalize_text(evolution_id)
     if evolution_id:
-        with _connect() as conn:
-            existing = conn.execute(
-                "SELECT id FROM attendance_messages WHERE evolution_id = ?",
-                (evolution_id,),
-            ).fetchone()
-        if existing:
-            return get_message(existing["id"])
+        with _session(commit=False) as db:
+            existing = (
+                db.query(AttendanceMessage)
+                .filter(AttendanceMessage.evolution_id == evolution_id)
+                .first()
+            )
+            if existing:
+                return _message_to_dict(existing)
 
     message_id = _new_id("m_")
     created = created_at or _now_iso()
@@ -335,73 +370,84 @@ def add_message(
         preview = f"[{msg_type}]"
     preview = preview[:180]
 
-    with _lock, _connect() as conn:
-        conn.execute(
-            """
-            INSERT INTO attendance_messages (
-                id, conversation_id, direction, msg_type, body, media_url, media_mime,
-                media_filename, evolution_id, sender, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                message_id,
-                conversation_id,
-                direction,
-                msg_type or "text",
-                body or "",
-                media_url or "",
-                media_mime or "",
-                media_filename or "",
-                evolution_id,
-                sender,
-                created,
-            ),
-        )
-        unread_expr = "unread_count + 1" if bump_unread else "unread_count"
-        conn.execute(
-            f"""
-            UPDATE attendance_conversations
-            SET last_message_at = ?, last_message_preview = ?, updated_at = ?,
-                unread_count = {unread_expr}, typing = 0
-            WHERE id = ?
-            """,
-            (created, preview, created, conversation_id),
-        )
-        conn.commit()
+    with _lock, _session() as db:
+        if evolution_id:
+            dup = (
+                db.query(AttendanceMessage)
+                .filter(AttendanceMessage.evolution_id == evolution_id)
+                .first()
+            )
+            if dup:
+                return _message_to_dict(dup)
 
-    message = get_message(message_id)
-    _notify({
-        "type": "message",
-        "conversation_id": conversation_id,
-        "message_id": message_id,
-        "direction": direction,
-    })
-    return message
+        msg = AttendanceMessage(
+            id=message_id,
+            conversation_id=conversation_id,
+            direction=direction,
+            msg_type=msg_type or "text",
+            body=body or "",
+            media_url=media_url or "",
+            media_mime=media_mime or "",
+            media_filename=media_filename or "",
+            evolution_id=evolution_id,
+            sender=sender,
+            created_at=created,
+        )
+        db.add(msg)
+
+        conv = db.get(AttendanceConversation, conversation_id)
+        if conv:
+            conv.last_message_at = created
+            conv.last_message_preview = preview
+            conv.updated_at = created
+            conv.typing = False
+            if bump_unread:
+                conv.unread_count = int(conv.unread_count or 0) + 1
+
+        try:
+            db.flush()
+        except IntegrityError:
+            db.rollback()
+            # Corrida: outro worker inseriu o mesmo evolution_id
+            if evolution_id:
+                existing = (
+                    db.query(AttendanceMessage)
+                    .filter(AttendanceMessage.evolution_id == evolution_id)
+                    .first()
+                )
+                if existing:
+                    return _message_to_dict(existing)
+            raise
+
+        result = _message_to_dict(msg)
+
+    _notify(
+        {
+            "type": "message",
+            "conversation_id": conversation_id,
+            "message_id": message_id,
+            "direction": direction,
+        }
+    )
+    return result
 
 
 def get_message(message_id: str) -> dict | None:
-    init_crm_local_db()
-    with _connect() as conn:
-        row = conn.execute(
-            "SELECT * FROM attendance_messages WHERE id = ?",
-            (message_id,),
-        ).fetchone()
-    return _row_to_message(row) if row else None
+    with _session(commit=False) as db:
+        row = db.get(AttendanceMessage, message_id)
+        return _message_to_dict(row) if row else None
 
 
 def list_messages(conversation_id: str, *, limit: int = 200) -> list[dict]:
-    init_crm_local_db()
-    with _connect() as conn:
-        rows = conn.execute(
-            """
-            SELECT * FROM attendance_messages
-            WHERE conversation_id = ?
-            ORDER BY created_at ASC, rowid ASC
-            LIMIT ?
-            """,
-            (conversation_id, max(1, min(int(limit or 200), 1000))),
-        ).fetchall()
-    return [_row_to_message(row) for row in rows]
+    with _session(commit=False) as db:
+        rows = (
+            db.query(AttendanceMessage)
+            .filter(AttendanceMessage.conversation_id == conversation_id)
+            .order_by(AttendanceMessage.created_at.asc(), AttendanceMessage.id.asc())
+            .limit(max(1, min(int(limit or 200), 1000)))
+            .all()
+        )
+        return [_message_to_dict(row) for row in rows]
 
 
 def mark_conversation_read(conversation_id: str) -> None:
@@ -410,53 +456,42 @@ def mark_conversation_read(conversation_id: str) -> None:
 
 
 def count_unread() -> int:
-    init_crm_local_db()
-    with _connect() as conn:
-        row = conn.execute(
-            "SELECT COALESCE(SUM(unread_count), 0) AS total FROM attendance_conversations"
-        ).fetchone()
-    return int(row["total"] or 0) if row else 0
+    with _session(commit=False) as db:
+        total = db.query(func.coalesce(func.sum(AttendanceConversation.unread_count), 0)).scalar()
+        return int(total or 0)
 
 
 def get_sync_snapshot(conversation_id: str = "") -> dict:
-    """Snapshot do inbox no SQLite — usado pelo poll da UI (mais confiável que SSE atrás de proxy)."""
-    init_crm_local_db()
+    """Snapshot do inbox — usado pelo poll da UI."""
     conversation_id = normalize_text(conversation_id)
-    with _connect() as conn:
-        row = conn.execute(
-            """
-            SELECT
-              COALESCE((SELECT SUM(unread_count) FROM attendance_conversations), 0) AS unread,
-              COALESCE((SELECT MAX(last_message_at) FROM attendance_conversations), '') AS last_msg,
-              COALESCE((SELECT MAX(updated_at) FROM attendance_conversations), '') AS last_upd,
-              COALESCE((SELECT COUNT(*) FROM attendance_messages), 0) AS msg_count,
-              COALESCE((SELECT MAX(rowid) FROM attendance_messages), 0) AS msg_rowid
-            """
-        ).fetchone()
+    with _session(commit=False) as db:
+        unread = int(
+            db.query(func.coalesce(func.sum(AttendanceConversation.unread_count), 0)).scalar()
+            or 0
+        )
+        last_msg = (
+            db.query(func.max(AttendanceConversation.last_message_at)).scalar() or ""
+        )
+        last_upd = db.query(func.max(AttendanceConversation.updated_at)).scalar() or ""
+        msg_count = int(db.query(func.count(AttendanceMessage.id)).scalar() or 0)
+        msg_max_id = db.query(func.max(AttendanceMessage.id)).scalar() or ""
+
         conv_token = ""
         if conversation_id:
-            crow = conn.execute(
-                """
-                SELECT
-                  COALESCE(COUNT(*), 0) AS c,
-                  COALESCE(MAX(created_at), '') AS last_at,
-                  COALESCE(MAX(rowid), 0) AS last_row
-                FROM attendance_messages
-                WHERE conversation_id = ?
-                """,
-                (conversation_id,),
-            ).fetchone()
-            typing_row = conn.execute(
-                "SELECT COALESCE(typing, 0) AS typing FROM attendance_conversations WHERE id = ?",
-                (conversation_id,),
-            ).fetchone()
-            typing = int(typing_row["typing"] or 0) if typing_row else 0
-            conv_token = f"{crow['c']}|{crow['last_at']}|{crow['last_row']}|{typing}"
+            crow = (
+                db.query(
+                    func.count(AttendanceMessage.id),
+                    func.max(AttendanceMessage.created_at),
+                    func.max(AttendanceMessage.id),
+                )
+                .filter(AttendanceMessage.conversation_id == conversation_id)
+                .one()
+            )
+            typing_row = db.get(AttendanceConversation, conversation_id)
+            typing = 1 if typing_row and typing_row.typing else 0
+            conv_token = f"{crow[0]}|{crow[1] or ''}|{crow[2] or ''}|{typing}"
 
-    unread = int(row["unread"] or 0)
-    inbox_token = (
-        f"{unread}|{row['last_msg']}|{row['last_upd']}|{row['msg_count']}|{row['msg_rowid']}"
-    )
+    inbox_token = f"{unread}|{last_msg}|{last_upd}|{msg_count}|{msg_max_id}"
     return {
         "unread": unread,
         "inbox_token": inbox_token,

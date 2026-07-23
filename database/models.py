@@ -7,9 +7,11 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
+    text,
 )
 from sqlalchemy.orm import relationship
 
@@ -325,3 +327,74 @@ class Notification(Base):
     link = Column(String(500))
     read = Column(Boolean, default=False)
     created_at = Column(DateTime, default=utcnow)
+
+
+class AttendanceConversation(Base):
+    """Inbox WhatsApp — persistido em DATABASE_URL (Postgres em produção)."""
+
+    __tablename__ = "attendance_conversations"
+
+    id = Column(String(64), primary_key=True)
+    phone_e164 = Column(String(32), nullable=False, index=True)
+    contact_name = Column(String(255), nullable=False, default="")
+    profile_pic_url = Column(String(1000), nullable=False, default="")
+    sheet_row = Column(Integer, nullable=True)
+    status = Column(String(40), nullable=False, default="novo_lead")
+    assignee = Column(String(120), nullable=False, default="")
+    ai_mode = Column(String(20), nullable=False, default="on")
+    tags_json = Column(Text, nullable=False, default="[]")
+    notes = Column(Text, nullable=False, default="")
+    last_message_at = Column(String(40), nullable=False, default="", index=True)
+    last_message_preview = Column(String(255), nullable=False, default="")
+    unread_count = Column(Integer, nullable=False, default=0)
+    typing = Column(Boolean, nullable=False, default=False)
+    remote_jid = Column(String(255), nullable=False, default="")
+    created_at = Column(String(40), nullable=False, default="")
+    updated_at = Column(String(40), nullable=False, default="")
+
+    messages = relationship(
+        "AttendanceMessage",
+        back_populates="conversation",
+        cascade="all, delete-orphan",
+    )
+
+
+class AttendanceMessage(Base):
+    __tablename__ = "attendance_messages"
+    __table_args__ = (
+        Index(
+            "uq_attendance_messages_evolution_id",
+            "evolution_id",
+            unique=True,
+            sqlite_where=text("evolution_id != ''"),
+            postgresql_where=text("evolution_id != ''"),
+        ),
+    )
+
+    id = Column(String(64), primary_key=True)
+    conversation_id = Column(
+        String(64),
+        ForeignKey("attendance_conversations.id"),
+        nullable=False,
+        index=True,
+    )
+    direction = Column(String(10), nullable=False)
+    msg_type = Column(String(40), nullable=False, default="text")
+    body = Column(Text, nullable=False, default="")
+    media_url = Column(String(1000), nullable=False, default="")
+    media_mime = Column(String(120), nullable=False, default="")
+    media_filename = Column(String(255), nullable=False, default="")
+    evolution_id = Column(String(255), nullable=False, default="")
+    sender = Column(String(40), nullable=False, default="contact")
+    created_at = Column(String(40), nullable=False, default="")
+
+    conversation = relationship("AttendanceConversation", back_populates="messages")
+
+
+class AppMeta(Base):
+    """Flags leves de migração/config persistidas no mesmo DATABASE_URL."""
+
+    __tablename__ = "app_meta"
+
+    key = Column(String(100), primary_key=True)
+    value = Column(Text, nullable=False, default="")

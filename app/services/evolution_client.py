@@ -139,6 +139,27 @@ def _response_looks_like_error(data: dict[str, Any]) -> str:
     return ""
 
 
+def extract_message_status(response: dict | None) -> str:
+    data = response or {}
+    for candidate in (
+        data.get("status"),
+        (data.get("message") or {}).get("status") if isinstance(data.get("message"), dict) else None,
+        (data.get("data") or {}).get("status") if isinstance(data.get("data"), dict) else None,
+        (data.get("key") or {}).get("status") if isinstance(data.get("key"), dict) else None,
+    ):
+        if candidate is None:
+            continue
+        text = normalize_text(candidate).upper()
+        if text:
+            return text
+    return ""
+
+
+def is_delivery_pending(response: dict | None) -> bool:
+    status = extract_message_status(response)
+    return status in {"PENDING", "ERROR", "0"} or status == ""
+
+
 def extract_message_id(response: dict | None) -> str:
     data = response or {}
     stack = [data]
@@ -197,7 +218,7 @@ def resolve_contact_identity(key: dict | None, item: dict | None = None) -> tupl
     Retorna (phone_e164, remote_jid_para_envio).
 
     WhatsApp/Evolution às vezes manda @lid em remoteJid e o número real em remoteJidAlt.
-    Para responder, precisamos do JID original da conversa.
+    Para entrega 1:1, priorizamos o @lid (PN JID costuma ficar PENDING no Baileys atual).
     """
     key = key if isinstance(key, dict) else {}
     item = item if isinstance(item, dict) else {}
@@ -216,10 +237,14 @@ def resolve_contact_identity(key: dict | None, item: dict | None = None) -> tupl
         or ""
     )
 
-    phone = ""
-    send_jid = remote_jid
+    lid_jid = ""
+    for candidate in (remote_jid, remote_alt):
+        if candidate and "@lid" in candidate.lower():
+            lid_jid = candidate
+            break
 
-    # Preferir JID de telefone real
+    phone = ""
+    phone_jid = ""
     for candidate in (remote_alt, sender_pn, remote_jid):
         if not candidate:
             continue
@@ -232,33 +257,41 @@ def resolve_contact_identity(key: dict | None, item: dict | None = None) -> tupl
             digits = normalize_phone_from_jid(candidate)
             if digits and len(digits) >= 10:
                 phone = digits
-                send_jid = candidate if "@" in candidate else f"{digits}@s.whatsapp.net"
+                phone_jid = candidate if "@" in candidate else f"{digits}@s.whatsapp.net"
                 break
 
-    if not phone and remote_jid:
-        # fallback: conversa só com LID — ainda assim guardamos o jid para reply
+    if not phone and remote_jid and "@lid" not in remote_jid.lower():
         phone = normalize_phone_from_jid(remote_jid) or normalize_digits(remote_jid.split("@")[0])
-        send_jid = remote_jid
+        if phone and len(phone) >= 10:
+            phone_jid = remote_jid if "@" in remote_jid else f"{phone}@s.whatsapp.net"
 
+    # @lid primeiro — necessário para entrega em várias versões Baileys/WhatsApp
+    send_jid = lid_jid or phone_jid or remote_jid
     return phone, send_jid
+
+
+def _prioritize_lid(targets: list[str]) -> list[str]:
+    lids = [t for t in targets if "@lid" in t.lower()]
+    others = [t for t in targets if "@lid" not in t.lower()]
+    return list(dict.fromkeys(lids + others))
 
 
 def _number_candidates(phone: str, jid: str = "") -> list[str]:
     out: list[str] = []
     jid = normalize_text(jid)
     number = normalize_digits(phone)
+
+    # @lid sempre primeiro quando existir
+    if jid and "@lid" in jid.lower():
+        out.append(jid)
+
     if number:
         if not number.startswith("55") and len(number) >= 10:
             number = f"55{number}"
-        # Número puro primeiro — em várias versões o JID completo “aceita” sem entregar
         out.append(number)
 
-    if jid:
-        # Só usa JID completo se for @lid (obrigatório) ou se não houver número
-        if "@lid" in jid.lower() or not number:
-            out.insert(0, jid)
-        else:
-            out.append(jid)
+    if jid and "@lid" not in jid.lower():
+        out.append(jid)
         if "@" in jid:
             left = jid.split("@", 1)[0]
             if left and left not in out:
@@ -281,7 +314,7 @@ def _number_candidates(phone: str, jid: str = "") -> list[str]:
         value = normalize_text(item)
         if value and value not in unique:
             unique.append(value)
-    return unique
+    return _prioritize_lid(unique)
 
 
 def enrich_targets_from_chats(phone: str, jid: str = "") -> list[str]:
@@ -314,10 +347,24 @@ def enrich_targets_from_chats(phone: str, jid: str = "") -> list[str]:
                 digits = normalize_digits(cid.split("@", 1)[0])
                 if needle and (cid == needle or needle in cid or cid in needle):
                     matched.append(cid)
-                elif phone_digits and digits and phone_digits[-8:] == digits[-8:]:
+                elif phone_digits and (
+                    (digits and phone_digits[-8:] == digits[-8:])
+                    or phone_digits in cid
+                    or (needle and phone_digits[-8:] in cid)
+                ):
                     matched.append(cid)
+                # Chat com @lid: também casa se o telefone bate no lastMessage/alt
+                elif "@lid" in cid.lower() and phone_digits:
+                    alt = normalize_text(
+                        chat.get("remoteJidAlt")
+                        or chat.get("owner")
+                        or ""
+                    )
+                    alt_digits = normalize_digits(alt.split("@", 1)[0] if alt else "")
+                    if alt_digits and phone_digits[-8:] == alt_digits[-8:]:
+                        matched.append(cid)
             if matched:
-                return list(dict.fromkeys(matched + targets))
+                return _prioritize_lid(list(dict.fromkeys(matched + targets)))
             break
     except Exception as error:
         logger.warning("findChats falhou: %s", error)
@@ -394,10 +441,16 @@ def send_text(phone: str, text: str, *, jid: str = "") -> dict[str, Any]:
 
     urls = _instance_urls("/message/sendText")
     errors: list[str] = []
+    pending_ok: dict[str, Any] | None = None
+    tried: set[str] = set()
 
     for number in numbers:
         for url in urls:
             for payload in _text_payloads(number, body):
+                attempt_key = f"{url}|{number}|{sorted(payload.keys())}"
+                if attempt_key in tried:
+                    continue
+                tried.add(attempt_key)
                 try:
                     response = requests.post(url, json=payload, headers=_headers(), timeout=30)
                 except requests.RequestException as error:
@@ -419,13 +472,36 @@ def send_text(phone: str, text: str, *, jid: str = "") -> dict[str, Any]:
                     )
                     continue
 
+                status = extract_message_status(data) or "UNKNOWN"
                 logger.info(
-                    "Evolution sendText ok instance=%s number=%s id=%s",
+                    "Evolution sendText instance=%s number=%s id=%s status=%s",
                     resolved_instance_name(),
                     number,
                     msg_id,
+                    status,
                 )
+                # PENDING = Evolution aceitou, mas WhatsApp/Baileys não confirmou entrega.
+                # Continua tentando outros alvos (@lid etc.) antes de desistir.
+                if is_delivery_pending(data) and status != "UNKNOWN":
+                    if pending_ok is None:
+                        pending_ok = data
+                    # Se ainda há alvos @lid não tentados, segue
+                    has_lid_left = any(
+                        "@lid" in n.lower() and n != number for n in numbers
+                    )
+                    if has_lid_left or "@lid" not in number.lower():
+                        continue
+                    return data
+
                 return data
+
+    if pending_ok is not None:
+        logger.warning(
+            "Evolution sendText só obteve PENDING instance=%s targets=%s",
+            resolved_instance_name(),
+            numbers[:6],
+        )
+        return pending_ok
 
     detail = " | ".join(errors[-4:]) if errors else "sem detalhes"
     raise EvolutionClientError(
