@@ -1,11 +1,15 @@
 (function () {
   "use strict";
 
-  var POLL_MS = 20000;
+  // Poll no SQLite — SSE costuma falhar atrás do proxy do Easypanel.
+  var POLL_MS = 2000;
   var es = null;
   var pollTimer = null;
   var lastUnread = 0;
+  var lastInboxToken = "";
+  var lastConversationToken = "";
   var soundEnabled = true;
+  var syncInFlight = false;
 
   function $(sel, root) {
     return (root || document).querySelector(sel);
@@ -102,11 +106,10 @@
       },
     });
     if (opts.bumpId) {
-      // Reaplica bump após o swap do HTMX
       setTimeout(function () {
         bumpConversationToTop(opts.bumpId);
       }, 120);
-    } else {
+    } else if (list) {
       list.scrollTop = 0;
     }
   }
@@ -138,7 +141,6 @@
       return;
     }
     if (data.type === "message" || data.type === "conversation_upsert" || data.type === "conversation_read") {
-      // Sobe na hora (estilo WhatsApp) e depois reordena pelo servidor
       if (data.type === "message" || data.type === "conversation_upsert") {
         bumpConversationToTop(data.conversation_id);
       }
@@ -146,6 +148,9 @@
       if (data.conversation_id && data.conversation_id === selectedId()) {
         refreshThread();
       }
+      // força próximo poll a detectar o estado novo
+      lastInboxToken = "";
+      lastConversationToken = "";
       fetch("/atendimentos/unread", { credentials: "same-origin" })
         .then(function (r) { return r.json(); })
         .then(function (j) { updateUnreadBadge(j.unread); })
@@ -153,11 +158,57 @@
     }
   }
 
+  function pollSync() {
+    if (syncInFlight || document.hidden) return;
+    syncInFlight = true;
+    var id = selectedId();
+    var url = "/atendimentos/sync";
+    if (id) url += "?conversation_id=" + encodeURIComponent(id);
+
+    fetch(url, { credentials: "same-origin", cache: "no-store" })
+      .then(function (r) {
+        if (!r.ok) throw new Error("sync " + r.status);
+        return r.json();
+      })
+      .then(function (j) {
+        updateUnreadBadge(j.unread);
+
+        var inboxChanged = lastInboxToken && j.inbox_token && j.inbox_token !== lastInboxToken;
+        var convChanged =
+          id &&
+          lastConversationToken &&
+          j.conversation_token &&
+          j.conversation_token !== lastConversationToken;
+
+        if (inboxChanged) {
+          refreshList();
+        }
+        if (convChanged) {
+          refreshThread();
+        }
+
+        if (j.inbox_token) lastInboxToken = j.inbox_token;
+        if (id && j.conversation_token) {
+          lastConversationToken = j.conversation_token;
+        } else if (!id) {
+          lastConversationToken = "";
+        }
+      })
+      .catch(function () { /* ignore transient errors */ })
+      .finally(function () {
+        syncInFlight = false;
+      });
+  }
+
+  function startPoll() {
+    if (pollTimer) return;
+    // snapshot inicial sem disparar refresh
+    pollSync();
+    pollTimer = setInterval(pollSync, POLL_MS);
+  }
+
   function startSSE() {
-    if (!window.EventSource) {
-      startPoll();
-      return;
-    }
+    if (!window.EventSource) return;
     try {
       es = new EventSource("/atendimentos/stream");
       es.onmessage = function (ev) {
@@ -170,29 +221,9 @@
           es.close();
           es = null;
         }
-        startPoll();
-        setTimeout(startSSE, 8000);
+        setTimeout(startSSE, 15000);
       };
-    } catch (e) {
-      startPoll();
-    }
-  }
-
-  function startPoll() {
-    if (pollTimer) return;
-    pollTimer = setInterval(function () {
-      fetch("/atendimentos/unread", { credentials: "same-origin" })
-        .then(function (r) { return r.json(); })
-        .then(function (j) {
-          var prev = lastUnread;
-          updateUnreadBadge(j.unread);
-          if (j.unread !== prev) {
-            refreshList();
-            if (selectedId()) refreshThread();
-          }
-        })
-        .catch(function () {});
-    }, POLL_MS);
+    } catch (e) { /* ignore */ }
   }
 
   function autoGrow(el) {
@@ -201,7 +232,7 @@
     el.style.height = Math.min(el.scrollHeight, 120) + "px";
   }
 
-.  document.body.addEventListener("htmx:afterSwap", function (ev) {
+  document.body.addEventListener("htmx:afterSwap", function (ev) {
     if (!ev || !ev.target) return;
     if (ev.target.id === "att-conversation-list") {
       var first = ev.target.querySelector(".att-conv-item");
@@ -219,10 +250,11 @@
       if (shell && thread) {
         shell.setAttribute("data-selected", thread.getAttribute("data-conversation-id") || "");
       }
+      // reset token da conversa aberta para o próximo poll
+      lastConversationToken = "";
     }
   });
 
-  // Após enviar mensagem, sobe a conversa no topo (como WhatsApp)
   document.body.addEventListener("htmx:afterRequest", function (ev) {
     var path = (ev.detail && ev.detail.pathInfo && ev.detail.pathInfo.requestPath) || "";
     if (path.indexOf("/atendimentos/conversa/") === -1) return;
@@ -232,6 +264,8 @@
     if (id) {
       bumpConversationToTop(id);
       refreshList({ bumpId: id });
+      lastInboxToken = "";
+      lastConversationToken = "";
     }
   });
 
@@ -264,13 +298,14 @@
           if (window.htmx) window.htmx.process(root);
         }
         scrollMessages();
-        refreshList();
+        refreshList({ bumpId: id });
+        lastInboxToken = "";
+        lastConversationToken = "";
       })
       .catch(function () {});
     input.value = "";
   });
 
-  // Enable sound after first user gesture
   document.addEventListener(
     "click",
     function () {
@@ -286,11 +321,15 @@
     { once: true }
   );
 
+  document.addEventListener("visibilitychange", function () {
+    if (!document.hidden) pollSync();
+  });
+
   if ($("#att-shell")) {
     var pill = $("#att-unread-pill");
     lastUnread = pill ? Number(pill.getAttribute("data-count") || 0) : 0;
     scrollMessages();
-    startSSE();
     startPoll();
+    startSSE();
   }
 })();

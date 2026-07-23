@@ -410,3 +410,50 @@ def count_unread() -> int:
             "SELECT COALESCE(SUM(unread_count), 0) AS total FROM attendance_conversations"
         ).fetchone()
     return int(row["total"] or 0) if row else 0
+
+
+def get_sync_snapshot(conversation_id: str = "") -> dict:
+    """Snapshot do inbox no SQLite — usado pelo poll da UI (mais confiável que SSE atrás de proxy)."""
+    init_crm_local_db()
+    conversation_id = normalize_text(conversation_id)
+    with _connect() as conn:
+        row = conn.execute(
+            """
+            SELECT
+              COALESCE((SELECT SUM(unread_count) FROM attendance_conversations), 0) AS unread,
+              COALESCE((SELECT MAX(last_message_at) FROM attendance_conversations), '') AS last_msg,
+              COALESCE((SELECT MAX(updated_at) FROM attendance_conversations), '') AS last_upd,
+              COALESCE((SELECT COUNT(*) FROM attendance_messages), 0) AS msg_count,
+              COALESCE((SELECT MAX(rowid) FROM attendance_messages), 0) AS msg_rowid
+            """
+        ).fetchone()
+        conv_token = ""
+        if conversation_id:
+            crow = conn.execute(
+                """
+                SELECT
+                  COALESCE(COUNT(*), 0) AS c,
+                  COALESCE(MAX(created_at), '') AS last_at,
+                  COALESCE(MAX(rowid), 0) AS last_row
+                FROM attendance_messages
+                WHERE conversation_id = ?
+                """,
+                (conversation_id,),
+            ).fetchone()
+            typing_row = conn.execute(
+                "SELECT COALESCE(typing, 0) AS typing FROM attendance_conversations WHERE id = ?",
+                (conversation_id,),
+            ).fetchone()
+            typing = int(typing_row["typing"] or 0) if typing_row else 0
+            conv_token = f"{crow['c']}|{crow['last_at']}|{crow['last_row']}|{typing}"
+
+    unread = int(row["unread"] or 0)
+    inbox_token = (
+        f"{unread}|{row['last_msg']}|{row['last_upd']}|{row['msg_count']}|{row['msg_rowid']}"
+    )
+    return {
+        "unread": unread,
+        "inbox_token": inbox_token,
+        "conversation_id": conversation_id or None,
+        "conversation_token": conv_token or None,
+    }

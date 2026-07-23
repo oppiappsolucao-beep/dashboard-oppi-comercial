@@ -218,6 +218,13 @@ def attendances_unread(request: Request):
     return JSONResponse({"unread": store.count_unread()})
 
 
+@router.get("/atendimentos/sync")
+def attendances_sync(request: Request, conversation_id: str = ""):
+    """Poll leve baseado no SQLite — mensagens novas aparecem sem F5."""
+    require_auth(request)
+    return JSONResponse(store.get_sync_snapshot(conversation_id))
+
+
 @router.get("/atendimentos/stream")
 async def attendances_stream(request: Request):
     require_auth(request)
