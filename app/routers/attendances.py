@@ -236,8 +236,58 @@ def attendances_sync(request: Request, conversation_id: str = ""):
         )
 
 
-@router.get("/atendimentos/diagnostico-evolution")
-def attendances_evolution_diag(request: Request, conversation_id: str = ""):
+@router.post("/atendimentos/conversa/{conversation_id}/teste-envio")
+def attendances_test_send(request: Request, conversation_id: str):
+    """Envia um ping real via Evolution e devolve a resposta crua."""
+    require_auth(request)
+    from app.services import evolution_client
+    from app.services.evolution_client import EvolutionClientError
+
+    conversation = store.get_conversation(conversation_id)
+    if not conversation:
+        return JSONResponse({"ok": False, "error": "conversa_nao_encontrada"}, status_code=404)
+
+    body = "teste envio CRM Oppi"
+    try:
+        data = evolution_client.send_text(
+            conversation.get("phone_e164") or "",
+            body,
+            jid=conversation.get("remote_jid") or "",
+        )
+        msg_id = evolution_client.extract_message_id(data)
+        # grava no inbox também, para conferência
+        store.add_message(
+            conversation_id,
+            direction="out",
+            body=body,
+            msg_type="text",
+            evolution_id=msg_id,
+            sender="agent",
+        )
+        return JSONResponse(
+            {
+                "ok": True,
+                "message_id": msg_id,
+                "phone": conversation.get("phone_e164"),
+                "remote_jid": conversation.get("remote_jid"),
+                "evolution_response": data,
+                "check": (
+                    "Confira no WhatsApp do NÚMERO CONECTADO na Evolution "
+                    f"a conversa com {conversation.get('phone_e164')} "
+                    "(não precisa ser o celular do cliente)."
+                ),
+            }
+        )
+    except EvolutionClientError as error:
+        return JSONResponse(
+            {
+                "ok": False,
+                "error": str(error),
+                "phone": conversation.get("phone_e164"),
+                "remote_jid": conversation.get("remote_jid"),
+            },
+            status_code=400,
+        )
     """Diagnóstico rápido da integração Evolution (sem expor a API key)."""
     require_auth(request)
     from app.config import settings

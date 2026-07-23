@@ -246,16 +246,25 @@ def resolve_contact_identity(key: dict | None, item: dict | None = None) -> tupl
 def _number_candidates(phone: str, jid: str = "") -> list[str]:
     out: list[str] = []
     jid = normalize_text(jid)
-    if jid:
-        out.append(jid)
-        if "@" in jid:
-            out.append(jid.split("@", 1)[0])
-
     number = normalize_digits(phone)
     if number:
         if not number.startswith("55") and len(number) >= 10:
             number = f"55{number}"
+        # Número puro primeiro — em várias versões o JID completo “aceita” sem entregar
         out.append(number)
+
+    if jid:
+        # Só usa JID completo se for @lid (obrigatório) ou se não houver número
+        if "@lid" in jid.lower() or not number:
+            out.insert(0, jid)
+        else:
+            out.append(jid)
+        if "@" in jid:
+            left = jid.split("@", 1)[0]
+            if left and left not in out:
+                out.append(left)
+
+    if number:
         out.append(f"{number}@s.whatsapp.net")
         out.append(f"{number}@c.us")
         if number.startswith("55") and len(number) == 12:

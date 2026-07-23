@@ -17,6 +17,11 @@
     <a href="/atendimentos/diagnostico-evolution?conversation_id={{ selected.id }}" target="_blank" rel="noopener">
       Abrir diagnóstico Evolution
     </a>
+    ·
+    <a href="#"
+       onclick="fetch('/atendimentos/conversa/{{ selected.id }}/teste-envio',{method:'POST',credentials:'same-origin'}).then(r=>r.json()).then(j=>{alert(JSON.stringify(j,null,2)); location.reload();}).catch(e=>alert(e)); return false;">
+      Testar envio agora
+    </a>
   </p>
 
   <div class="att-crm-actions">
