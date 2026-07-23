@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 
 from app.config import settings
 from app.services import attendance_crm, attendances, attendances_storage as store
-from app.services.evolution_client import normalize_phone_from_jid
+from app.services.evolution_client import normalize_phone_from_jid, resolve_contact_identity
 from app.services.legacy_core import normalize_text
 
 logger = logging.getLogger(__name__)
@@ -132,21 +132,15 @@ def _handle_messages_upsert(payload: dict) -> int:
     count = 0
     for item in _iter_upsert_messages(payload):
         key = item.get("key") if isinstance(item.get("key"), dict) else {}
-        remote_jid = normalize_text(
-            key.get("remoteJid")
-            or key.get("remoteJidAlt")
-            or _dig(item, "remoteJid")
-            or ""
-        )
-        if not remote_jid or remote_jid.endswith("@g.us"):
+        phone, remote_jid = resolve_contact_identity(key, item)
+        if not remote_jid:
             continue
-        if remote_jid.endswith("@broadcast") or "status@broadcast" in remote_jid:
+        if remote_jid.endswith("@g.us") or remote_jid.endswith("@broadcast") or "status@broadcast" in remote_jid:
+            continue
+        if not phone:
             continue
 
         from_me = bool(key.get("fromMe") or item.get("fromMe"))
-        phone = normalize_phone_from_jid(remote_jid)
-        if not phone:
-            continue
 
         push_name = normalize_text(
             item.get("pushName")
@@ -163,6 +157,7 @@ def _handle_messages_upsert(payload: dict) -> int:
         conversation = store.upsert_conversation_by_phone(
             phone,
             contact_name=push_name,
+            remote_jid=remote_jid,
         )
         if not conversation:
             continue

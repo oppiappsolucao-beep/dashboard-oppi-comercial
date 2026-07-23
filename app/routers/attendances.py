@@ -236,6 +236,47 @@ def attendances_sync(request: Request, conversation_id: str = ""):
         )
 
 
+@router.get("/atendimentos/diagnostico-evolution")
+def attendances_evolution_diag(request: Request, conversation_id: str = ""):
+    """Diagnóstico rápido da integração Evolution (sem expor a API key)."""
+    require_auth(request)
+    from app.config import settings
+    from app.services import evolution_client
+
+    key = settings.evolution_api_key or ""
+    masked = (key[:4] + "…" + key[-4:]) if len(key) > 8 else ("*" * len(key))
+    state = ""
+    state_error = ""
+    try:
+        state = evolution_client.get_connection_state()
+    except Exception as error:
+        state_error = str(error)
+
+    conversation = store.get_conversation(conversation_id) if conversation_id else None
+    return JSONResponse(
+        {
+            "configured": settings.evolution_configured,
+            "api_url": settings.evolution_api_url,
+            "instance": settings.evolution_instance,
+            "api_key_masked": masked,
+            "connection_state": state or None,
+            "connection_error": state_error or None,
+            "conversation": {
+                "id": (conversation or {}).get("id"),
+                "phone_e164": (conversation or {}).get("phone_e164"),
+                "remote_jid": (conversation or {}).get("remote_jid"),
+                "contact_name": (conversation or {}).get("contact_name"),
+            }
+            if conversation
+            else None,
+            "hint": (
+                "Peça ao cliente para enviar uma mensagem nova depois do deploy; "
+                "isso grava o remote_jid correto. Depois responda de novo."
+            ),
+        }
+    )
+
+
 @router.get("/atendimentos/stream")
 async def attendances_stream(request: Request):
     require_auth(request)

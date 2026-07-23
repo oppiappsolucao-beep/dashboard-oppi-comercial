@@ -92,6 +92,7 @@ def init_crm_local_db() -> None:
                     last_message_preview TEXT NOT NULL DEFAULT '',
                     unread_count INTEGER NOT NULL DEFAULT 0,
                     typing INTEGER NOT NULL DEFAULT 0,
+                    remote_jid TEXT NOT NULL DEFAULT '',
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                 );
@@ -121,6 +122,15 @@ def init_crm_local_db() -> None:
                     WHERE evolution_id != '';
                 """
             )
+            # Migrações leves (idempotentes)
+            cols = {
+                row[1]
+                for row in conn.execute("PRAGMA table_info(attendance_conversations)").fetchall()
+            }
+            if "remote_jid" not in cols:
+                conn.execute(
+                    "ALTER TABLE attendance_conversations ADD COLUMN remote_jid TEXT NOT NULL DEFAULT ''"
+                )
             conn.commit()
         _initialized = True
 

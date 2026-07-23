@@ -83,6 +83,7 @@ def _row_to_conversation(row) -> dict:
     return {
         "id": row["id"],
         "phone_e164": row["phone_e164"],
+        "remote_jid": (row["remote_jid"] if "remote_jid" in row.keys() else "") or "",
         "contact_name": row["contact_name"] or "",
         "profile_pic_url": row["profile_pic_url"] or "",
         "sheet_row": int(row["sheet_row"]) if row["sheet_row"] else None,
@@ -199,12 +200,14 @@ def upsert_conversation_by_phone(
     profile_pic_url: str = "",
     sheet_row: int | None = None,
     status: str | None = None,
+    remote_jid: str = "",
 ) -> dict:
     init_crm_local_db()
     phone = normalize_text(phone_e164)
     if not phone:
         raise ValueError("Telefone obrigatório")
     now = _now_iso()
+    remote_jid = normalize_text(remote_jid)
     existing = get_conversation_by_phone(phone)
     if existing:
         updates: dict = {"updated_at": now}
@@ -216,6 +219,8 @@ def upsert_conversation_by_phone(
             updates["sheet_row"] = int(sheet_row)
         if status:
             updates["status"] = status
+        if remote_jid and remote_jid != existing.get("remote_jid"):
+            updates["remote_jid"] = remote_jid
         if len(updates) > 1:
             _update_conversation(existing["id"], updates)
             return get_conversation(existing["id"]) or existing
@@ -228,8 +233,8 @@ def upsert_conversation_by_phone(
             INSERT INTO attendance_conversations (
                 id, phone_e164, contact_name, profile_pic_url, sheet_row, status,
                 assignee, ai_mode, tags_json, notes, last_message_at, last_message_preview,
-                unread_count, typing, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, '', ?, '[]', '', '', '', 0, 0, ?, ?)
+                unread_count, typing, created_at, updated_at, remote_jid
+            ) VALUES (?, ?, ?, ?, ?, ?, '', ?, '[]', '', '', '', 0, 0, ?, ?, ?)
             """,
             (
                 conversation_id,
@@ -241,6 +246,7 @@ def upsert_conversation_by_phone(
                 AI_MODE_ON,
                 now,
                 now,
+                remote_jid,
             ),
         )
         conn.commit()
@@ -255,7 +261,7 @@ def _update_conversation(conversation_id: str, fields: dict) -> None:
     allowed = {
         "contact_name", "profile_pic_url", "sheet_row", "status", "assignee", "ai_mode",
         "tags_json", "notes", "last_message_at", "last_message_preview", "unread_count",
-        "typing", "updated_at",
+        "typing", "updated_at", "remote_jid", "phone_e164",
     }
     cols = []
     values = []

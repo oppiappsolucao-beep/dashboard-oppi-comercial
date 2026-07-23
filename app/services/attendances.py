@@ -82,7 +82,11 @@ def send_text_message(
         return None, "Evolution API não configurada. Defina as variáveis no Easypanel."
 
     try:
-        response = evolution_client.send_text(conversation["phone_e164"], body)
+        response = evolution_client.send_text(
+            conversation["phone_e164"],
+            body,
+            jid=conversation.get("remote_jid") or "",
+        )
     except EvolutionClientError as error:
         return None, str(error)
 
@@ -133,6 +137,7 @@ def send_media_message(
             caption=caption,
             filename=filename,
             mimetype=mimetype,
+            jid=conversation.get("remote_jid") or "",
         )
     except EvolutionClientError as error:
         return None, str(error)

@@ -131,24 +131,87 @@ def normalize_phone_from_jid(jid: str) -> str:
     return digits
 
 
-def _number_candidates(phone: str) -> list[str]:
-    number = normalize_digits(phone)
-    if not number:
-        return []
-    if not number.startswith("55") and len(number) >= 10:
-        number = f"55{number}"
-    candidates = [number]
-    # Brasil: com/sem o 9º dígito após o DDD
-    if number.startswith("55") and len(number) == 12:
-        candidates.append(number[:4] + "9" + number[4:])
-    if number.startswith("55") and len(number) == 13 and number[4] == "9":
-        candidates.append(number[:4] + number[5:])
-    # unique preserve order
+def resolve_contact_identity(key: dict | None, item: dict | None = None) -> tuple[str, str]:
+    """
+    Retorna (phone_e164, remote_jid_para_envio).
+
+    WhatsApp/Evolution às vezes manda @lid em remoteJid e o número real em remoteJidAlt.
+    Para responder, precisamos do JID original da conversa.
+    """
+    key = key if isinstance(key, dict) else {}
+    item = item if isinstance(item, dict) else {}
+
+    remote_jid = normalize_text(key.get("remoteJid") or item.get("remoteJid") or "")
+    remote_alt = normalize_text(
+        key.get("remoteJidAlt")
+        or item.get("remoteJidAlt")
+        or key.get("participant")
+        or ""
+    )
+    sender_pn = normalize_text(
+        key.get("senderPn")
+        or item.get("senderPn")
+        or item.get("sender")
+        or ""
+    )
+
+    phone = ""
+    send_jid = remote_jid
+
+    # Preferir JID de telefone real
+    for candidate in (remote_alt, sender_pn, remote_jid):
+        if not candidate:
+            continue
+        lower = candidate.lower()
+        if lower.endswith("@g.us") or "broadcast" in lower:
+            continue
+        if "@lid" in lower:
+            continue
+        if "@s.whatsapp.net" in lower or "@c.us" in lower or "@" not in candidate:
+            digits = normalize_phone_from_jid(candidate)
+            if digits and len(digits) >= 10:
+                phone = digits
+                send_jid = candidate if "@" in candidate else f"{digits}@s.whatsapp.net"
+                break
+
+    if not phone and remote_jid:
+        # fallback: conversa só com LID — ainda assim guardamos o jid para reply
+        phone = normalize_phone_from_jid(remote_jid) or normalize_digits(remote_jid.split("@")[0])
+        send_jid = remote_jid
+
+    return phone, send_jid
+
+
+def _number_candidates(phone: str, jid: str = "") -> list[str]:
     out: list[str] = []
-    for item in candidates:
-        if item and item not in out:
-            out.append(item)
-    return out
+    jid = normalize_text(jid)
+    if jid:
+        out.append(jid)
+        if "@" in jid:
+            out.append(jid.split("@", 1)[0])
+
+    number = normalize_digits(phone)
+    if number:
+        if not number.startswith("55") and len(number) >= 10:
+            number = f"55{number}"
+        out.append(number)
+        out.append(f"{number}@s.whatsapp.net")
+        out.append(f"{number}@c.us")
+        if number.startswith("55") and len(number) == 12:
+            with_nine = number[:4] + "9" + number[4:]
+            out.append(with_nine)
+            out.append(f"{with_nine}@s.whatsapp.net")
+        if number.startswith("55") and len(number) == 13 and number[4] == "9":
+            without_nine = number[:4] + number[5:]
+            out.append(without_nine)
+            out.append(f"{without_nine}@s.whatsapp.net")
+
+    unique: list[str] = []
+    for item in out:
+        value = normalize_text(item)
+        if value and value not in unique:
+            unique.append(value)
+    return unique
 
 
 def get_connection_state() -> str:
@@ -197,7 +260,7 @@ def _text_payloads(number: str, body: str) -> list[dict[str, Any]]:
     ]
 
 
-def send_text(phone: str, text: str) -> dict[str, Any]:
+def send_text(phone: str, text: str, *, jid: str = "") -> dict[str, Any]:
     if not is_configured():
         raise EvolutionClientError("Evolution API não configurada.")
     body = str(text or "").strip()
@@ -206,9 +269,9 @@ def send_text(phone: str, text: str) -> dict[str, Any]:
 
     assert_instance_ready()
 
-    numbers = _number_candidates(phone)
+    numbers = _number_candidates(phone, jid)
     if not numbers:
-        raise EvolutionClientError("Telefone da conversa inválido para envio.")
+        raise EvolutionClientError("Telefone/JID da conversa inválido para envio.")
 
     urls = _instance_urls("/message/sendText")
     errors: list[str] = []
@@ -232,7 +295,6 @@ def send_text(phone: str, text: str) -> dict[str, Any]:
 
                 msg_id = extract_message_id(data)
                 if not msg_id:
-                    # algumas versões devolvem o id em data.key
                     errors.append(
                         f"{number}: Evolution respondeu sem ID de mensagem: {str(data)[:180]}"
                     )
@@ -261,14 +323,15 @@ def send_media(
     caption: str = "",
     filename: str = "",
     mimetype: str = "",
+    jid: str = "",
 ) -> dict[str, Any]:
     """Envia mídia via Evolution (image/document/audio)."""
     if not is_configured():
         raise EvolutionClientError("Evolution API não configurada.")
     assert_instance_ready()
-    numbers = _number_candidates(phone)
+    numbers = _number_candidates(phone, jid)
     if not numbers:
-        raise EvolutionClientError("Telefone da conversa inválido para envio.")
+        raise EvolutionClientError("Telefone/JID da conversa inválido para envio.")
     mediatype = {
         "image": "image",
         "document": "document",
