@@ -37,8 +37,23 @@ app.include_router(registration.router)
 app.include_router(contracts.router)
 app.include_router(settings_router.router)
 
-# Leads e Empresas (registro explícito para garantir rota no deploy)
-from app.routers.leads import leads_filters, leads_page, leads_refresh  # noqa: E402
+# Atendimentos (registro explícito para garantir rota no deploy)
+from app.routers.attendances import (  # noqa: E402
+    attendances_evolution_diag,
+    attendances_filters,
+    attendances_page,
+    attendances_test_send,
+)
+
+app.add_api_route("/atendimentos", attendances_page, methods=["GET"], tags=["attendances"])
+app.add_api_route("/atendimentos/filtros", attendances_filters, methods=["POST"], tags=["attendances"])
+app.add_api_route("/atendimentos/diagnostico-evolution", attendances_evolution_diag, methods=["GET"], tags=["attendances"])
+app.add_api_route(
+    "/atendimentos/conversa/{conversation_id}/teste-envio",
+    attendances_test_send,
+    methods=["POST"],
+    tags=["attendances"],
+)
 
 app.add_api_route("/leads-e-empresas", leads_page, methods=["GET"], tags=["leads"])
 app.add_api_route("/leads-e-empresas/filtros", leads_filters, methods=["POST"], tags=["leads"])

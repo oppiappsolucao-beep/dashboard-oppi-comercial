@@ -288,6 +288,10 @@ def attendances_test_send(request: Request, conversation_id: str):
             },
             status_code=400,
         )
+
+
+@router.get("/atendimentos/diagnostico-evolution")
+def attendances_evolution_diag(request: Request, conversation_id: str = ""):
     """Diagnóstico rápido da integração Evolution (sem expor a API key)."""
     require_auth(request)
     from app.config import settings
