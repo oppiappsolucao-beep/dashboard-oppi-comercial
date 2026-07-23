@@ -42,13 +42,74 @@ def _instance_name() -> str:
     return name
 
 
+def fetch_instance_names() -> list[str]:
+    try:
+        response = requests.get(_url("/instance/fetchInstances"), headers=_headers(), timeout=20)
+    except requests.RequestException:
+        return []
+    if response.status_code >= 400:
+        return []
+    data = _parse_json(response)
+    rows = data if isinstance(data, list) else data.get("data") or data.get("instances") or []
+    if isinstance(data, dict) and not rows and data.get("name"):
+        rows = [data]
+    names: list[str] = []
+    if not isinstance(rows, list):
+        return names
+    for item in rows:
+        if isinstance(item, str):
+            names.append(item)
+            continue
+        if not isinstance(item, dict):
+            continue
+        nested = item.get("instance") if isinstance(item.get("instance"), dict) else {}
+        candidate = (
+            item.get("name")
+            or item.get("instanceName")
+            or item.get("instanceId")
+            or nested.get("instanceName")
+            or nested.get("name")
+            or ""
+        )
+        candidate = normalize_text(candidate)
+        if candidate and candidate not in names:
+            names.append(candidate)
+    return names
+
+
+def resolved_instance_name() -> str:
+    configured = _instance_name()
+    names = fetch_instance_names()
+    if not names:
+        return configured
+    if configured in names:
+        return configured
+    lower = configured.lower()
+    for name in names:
+        if name.lower() == lower:
+            return name
+    # match parcial (ex.: configurado "Oppi" e existe "Oppi Comercial")
+    for name in names:
+        if lower in name.lower() or name.lower() in lower:
+            return name
+    raise EvolutionClientError(
+        f"Instância '{configured}' não encontrada na Evolution. "
+        f"Disponíveis: {', '.join(names)}. "
+        "Ajuste EVOLUTION_INSTANCE no Easypanel."
+    )
+
+
 def _instance_urls(segment: str) -> list[str]:
     """Gera URLs com nome da instância encoded e raw (alguns proxies diferem)."""
-    name = _instance_name()
+    name = resolved_instance_name()
     encoded = quote(name, safe="")
     paths = [f"{segment}/{encoded}"]
     if encoded != name:
         paths.append(f"{segment}/{name}")
+    # também tenta o nome configurado cru, se diferente
+    configured = _instance_name()
+    if configured != name:
+        paths.append(f"{segment}/{quote(configured, safe='')}")
     return [_url(p) for p in paths]
 
 
@@ -214,6 +275,55 @@ def _number_candidates(phone: str, jid: str = "") -> list[str]:
     return unique
 
 
+def enrich_targets_from_chats(phone: str, jid: str = "") -> list[str]:
+    targets = _number_candidates(phone, jid)
+    phone_digits = normalize_digits(phone)
+    needle = normalize_text(jid)
+    try:
+        for url in _instance_urls("/chat/findChats"):
+            response = requests.get(url, headers=_headers(), timeout=25)
+            if response.status_code >= 400:
+                continue
+            data = _parse_json(response)
+            chats = data if isinstance(data, list) else (
+                data.get("data") or data.get("chats") or data.get("response") or []
+            )
+            if not isinstance(chats, list):
+                continue
+            matched: list[str] = []
+            for chat in chats:
+                if not isinstance(chat, dict):
+                    continue
+                cid = normalize_text(
+                    chat.get("id")
+                    or chat.get("remoteJid")
+                    or _dig_chat_jid(chat)
+                    or ""
+                )
+                if not cid or cid.endswith("@g.us") or "broadcast" in cid:
+                    continue
+                digits = normalize_digits(cid.split("@", 1)[0])
+                if needle and (cid == needle or needle in cid or cid in needle):
+                    matched.append(cid)
+                elif phone_digits and digits and phone_digits[-8:] == digits[-8:]:
+                    matched.append(cid)
+            if matched:
+                return list(dict.fromkeys(matched + targets))
+            break
+    except Exception as error:
+        logger.warning("findChats falhou: %s", error)
+    return targets
+
+
+def _dig_chat_jid(chat: dict) -> str:
+    for key in ("remoteJid", "jid", "chatId"):
+        if chat.get(key):
+            return normalize_text(chat.get(key))
+    last = chat.get("lastMessage") if isinstance(chat.get("lastMessage"), dict) else {}
+    key = last.get("key") if isinstance(last.get("key"), dict) else {}
+    return normalize_text(key.get("remoteJid") or "")
+
+
 def get_connection_state() -> str:
     last_error = ""
     for url in _instance_urls("/instance/connectionState"):
@@ -269,7 +379,7 @@ def send_text(phone: str, text: str, *, jid: str = "") -> dict[str, Any]:
 
     assert_instance_ready()
 
-    numbers = _number_candidates(phone, jid)
+    numbers = enrich_targets_from_chats(phone, jid)
     if not numbers:
         raise EvolutionClientError("Telefone/JID da conversa inválido para envio.")
 
@@ -302,7 +412,7 @@ def send_text(phone: str, text: str, *, jid: str = "") -> dict[str, Any]:
 
                 logger.info(
                     "Evolution sendText ok instance=%s number=%s id=%s",
-                    _instance_name(),
+                    resolved_instance_name(),
                     number,
                     msg_id,
                 )
@@ -311,7 +421,7 @@ def send_text(phone: str, text: str, *, jid: str = "") -> dict[str, Any]:
     detail = " | ".join(errors[-4:]) if errors else "sem detalhes"
     raise EvolutionClientError(
         "Não foi possível enviar no WhatsApp via Evolution. "
-        f"Instância={_instance_name()}. {detail}"
+        f"Instância={resolved_instance_name()}. {detail}"
     )
 
 
@@ -329,7 +439,7 @@ def send_media(
     if not is_configured():
         raise EvolutionClientError("Evolution API não configurada.")
     assert_instance_ready()
-    numbers = _number_candidates(phone, jid)
+    numbers = enrich_targets_from_chats(phone, jid)
     if not numbers:
         raise EvolutionClientError("Telefone/JID da conversa inválido para envio.")
     mediatype = {

@@ -247,7 +247,11 @@ def attendances_evolution_diag(request: Request, conversation_id: str = ""):
     masked = (key[:4] + "…" + key[-4:]) if len(key) > 8 else ("*" * len(key))
     state = ""
     state_error = ""
+    resolved = ""
+    names: list[str] = []
     try:
+        names = evolution_client.fetch_instance_names()
+        resolved = evolution_client.resolved_instance_name()
         state = evolution_client.get_connection_state()
     except Exception as error:
         state_error = str(error)
@@ -257,7 +261,9 @@ def attendances_evolution_diag(request: Request, conversation_id: str = ""):
         {
             "configured": settings.evolution_configured,
             "api_url": settings.evolution_api_url,
-            "instance": settings.evolution_instance,
+            "instance_configured": settings.evolution_instance,
+            "instance_resolved": resolved or None,
+            "instances_available": names,
             "api_key_masked": masked,
             "connection_state": state or None,
             "connection_error": state_error or None,
@@ -270,8 +276,9 @@ def attendances_evolution_diag(request: Request, conversation_id: str = ""):
             if conversation
             else None,
             "hint": (
-                "Peça ao cliente para enviar uma mensagem nova depois do deploy; "
-                "isso grava o remote_jid correto. Depois responda de novo."
+                "1) EVOLUTION_INSTANCE deve bater com instances_available. "
+                "2) Peça uma msg nova do cliente para gravar remote_jid. "
+                "3) Teste enviar pelo Chat do Manager Evolution; se lá também falhar, o problema é a instância."
             ),
         }
     )

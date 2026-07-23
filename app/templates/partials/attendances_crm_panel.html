@@ -7,10 +7,17 @@
     <div><dt>Empresa</dt><dd>{% if crm.edit_href %}<a href="{{ crm.edit_href }}">{{ crm.empresa }}</a>{% else %}{{ crm.empresa }}{% endif %}</dd></div>
     <div><dt>Contato</dt><dd>{{ crm.contato }}</dd></div>
     <div><dt>WhatsApp</dt><dd>{{ selected.phone_e164 }}</dd></div>
+    {% if selected.remote_jid %}<div><dt>JID</dt><dd style="font-size:11px;word-break:break-all">{{ selected.remote_jid }}</dd></div>{% endif %}
     <div><dt>Responsável</dt><dd>{{ selected.assignee or crm.vendedor }}</dd></div>
     <div><dt>Status CRM</dt><dd>{{ crm.etapa }}</dd></div>
     <div><dt>Status chat</dt><dd><span class="att-status-badge status-{{ selected.status }}">{{ selected.status_label }}</span></dd></div>
   </dl>
+
+  <p class="att-hint" style="margin:0 0 12px">
+    <a href="/atendimentos/diagnostico-evolution?conversation_id={{ selected.id }}" target="_blank" rel="noopener">
+      Abrir diagnóstico Evolution
+    </a>
+  </p>
 
   <div class="att-crm-actions">
     {% if selected.ai_mode != ai_mode_paused %}
