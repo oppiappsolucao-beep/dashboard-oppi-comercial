@@ -35,110 +35,85 @@ def _url(path: str) -> str:
     return f"{base}{path}"
 
 
-def _instance_path(segment: str) -> str:
-    """Nome da instância pode ter espaço (ex.: Oppi Comercial)."""
+def _instance_name() -> str:
     name = normalize_text(settings.evolution_instance)
     if not name:
         raise EvolutionClientError("EVOLUTION_INSTANCE não configurada.")
-    return f"{segment}/{quote(name, safe='')}"
+    return name
 
 
-def _ensure_ok_response(response: requests.Response) -> dict[str, Any]:
-    if response.status_code >= 400:
-        raise EvolutionClientError(
-            f"Evolution retornou {response.status_code}: {response.text[:300]}"
-        )
+def _instance_urls(segment: str) -> list[str]:
+    """Gera URLs com nome da instância encoded e raw (alguns proxies diferem)."""
+    name = _instance_name()
+    encoded = quote(name, safe="")
+    paths = [f"{segment}/{encoded}"]
+    if encoded != name:
+        paths.append(f"{segment}/{name}")
+    return [_url(p) for p in paths]
+
+
+def _parse_json(response: requests.Response) -> dict[str, Any]:
     try:
         data = response.json()
     except ValueError:
         data = {"raw": response.text}
-    if not isinstance(data, dict):
-        return {"data": data}
-    # Alguns erros vêm com HTTP 200
-    status = normalize_text(data.get("status") or data.get("error") or "").lower()
-    if status in {"error", "unauthorized", "forbidden"} or data.get("error"):
-        message = data.get("message") or data.get("error") or data
-        raise EvolutionClientError(f"Evolution recusou o envio: {message}")
-    return data
+    if isinstance(data, dict):
+        return data
+    return {"data": data}
 
 
-def send_text(phone: str, text: str) -> dict[str, Any]:
-    if not is_configured():
-        raise EvolutionClientError("Evolution API não configurada.")
-    # Preserva o texto exatamente (só trim nas pontas) — sem “correção”
-    body = str(text or "").strip()
-    if not body:
-        raise EvolutionClientError("Mensagem vazia.")
-    number = normalize_digits(phone)
-    if number.startswith("55") and len(number) >= 12:
-        pass
-    elif len(number) >= 10:
-        number = f"55{number}"
-    payload = {
-        "number": number,
-        "text": body,
-    }
-    url = _url(_instance_path("/message/sendText"))
-    try:
-        response = requests.post(url, json=payload, headers=_headers(), timeout=30)
-    except requests.RequestException as error:
-        raise EvolutionClientError(f"Falha ao enviar mensagem: {error}") from error
-    return _ensure_ok_response(response)
-
-
-def send_media(
-    phone: str,
-    *,
-    media_url: str,
-    media_type: str = "image",
-    caption: str = "",
-    filename: str = "",
-    mimetype: str = "",
-) -> dict[str, Any]:
-    """Envia mídia via Evolution (image/document/audio)."""
-    if not is_configured():
-        raise EvolutionClientError("Evolution API não configurada.")
-    number = normalize_digits(phone)
-    if not number.startswith("55") and len(number) >= 10:
-        number = f"55{number}"
-    mediatype = {
-        "image": "image",
-        "document": "document",
-        "audio": "audio",
-        "video": "video",
-    }.get(media_type, "document")
-    payload = {
-        "number": number,
-        "mediatype": mediatype,
-        "media": media_url,
-        "caption": str(caption or "").strip(),
-        "fileName": normalize_text(filename) or "arquivo",
-    }
-    if mimetype:
-        payload["mimetype"] = mimetype
-    url = _url(_instance_path("/message/sendMedia"))
-    try:
-        response = requests.post(url, json=payload, headers=_headers(), timeout=60)
-    except requests.RequestException as error:
-        raise EvolutionClientError(f"Falha ao enviar mídia: {error}") from error
-    return _ensure_ok_response(response)
+def _response_looks_like_error(data: dict[str, Any]) -> str:
+    status = normalize_text(data.get("status") or "").lower()
+    if status in {"error", "unauthorized", "forbidden", "not found", "404"}:
+        return str(data.get("message") or data.get("error") or data)
+    if data.get("error"):
+        return str(data.get("message") or data.get("error"))
+    # formato comum: {"status":404,"error":"Not Found","response":{"message":[...]}}
+    nested = data.get("response")
+    if isinstance(nested, dict) and nested.get("message"):
+        msg = nested.get("message")
+        if isinstance(msg, list):
+            return "; ".join(str(x) for x in msg)
+        return str(msg)
+    return ""
 
 
 def extract_message_id(response: dict | None) -> str:
     data = response or {}
-    for key in ("key", "message", "data"):
-        nested = data.get(key)
-        if isinstance(nested, dict):
-            for candidate in ("id", "messageId", "message_id"):
-                value = nested.get(candidate)
-                if value:
-                    return normalize_text(value)
-            nested_key = nested.get("key")
-            if isinstance(nested_key, dict) and nested_key.get("id"):
-                return normalize_text(nested_key.get("id"))
-    for candidate in ("id", "messageId", "message_id"):
-        if data.get(candidate):
-            return normalize_text(data.get(candidate))
+    stack = [data]
+    seen = 0
+    while stack and seen < 30:
+        seen += 1
+        cur = stack.pop(0)
+        if not isinstance(cur, dict):
+            continue
+        for candidate in ("id", "messageId", "message_id"):
+            value = cur.get(candidate)
+            if value and candidate != "instance" and len(str(value)) >= 6:
+                # evita pegar ids genéricos demais; ids WA costumam ser longos
+                text = normalize_text(value)
+                if text and text.lower() not in {"open", "close", "connected"}:
+                    # key.id do WhatsApp
+                    if cur.get("fromMe") is not None or cur.get("remoteJid") or candidate.startswith("message"):
+                        return text
+        key = cur.get("key")
+        if isinstance(key, dict) and key.get("id"):
+            return normalize_text(key.get("id"))
+        for child_key in ("data", "message", "key", "response"):
+            child = cur.get(child_key)
+            if isinstance(child, dict):
+                stack.append(child)
+            elif isinstance(child, list):
+                stack.extend([x for x in child if isinstance(x, dict)])
+    # fallback: qualquer key.id
+    key = data.get("key") if isinstance(data.get("key"), dict) else None
+    if key and key.get("id"):
+        return normalize_text(key.get("id"))
+    nested = data.get("data") if isinstance(data.get("data"), dict) else None
+    if nested:
+        key = nested.get("key") if isinstance(nested.get("key"), dict) else None
+        if key and key.get("id"):
+            return normalize_text(key.get("id"))
     return ""
 
 
@@ -154,3 +129,177 @@ def normalize_phone_from_jid(jid: str) -> str:
     if len(digits) >= 10:
         return f"55{digits}"
     return digits
+
+
+def _number_candidates(phone: str) -> list[str]:
+    number = normalize_digits(phone)
+    if not number:
+        return []
+    if not number.startswith("55") and len(number) >= 10:
+        number = f"55{number}"
+    candidates = [number]
+    # Brasil: com/sem o 9º dígito após o DDD
+    if number.startswith("55") and len(number) == 12:
+        candidates.append(number[:4] + "9" + number[4:])
+    if number.startswith("55") and len(number) == 13 and number[4] == "9":
+        candidates.append(number[:4] + number[5:])
+    # unique preserve order
+    out: list[str] = []
+    for item in candidates:
+        if item and item not in out:
+            out.append(item)
+    return out
+
+
+def get_connection_state() -> str:
+    last_error = ""
+    for url in _instance_urls("/instance/connectionState"):
+        try:
+            response = requests.get(url, headers=_headers(), timeout=15)
+        except requests.RequestException as error:
+            last_error = str(error)
+            continue
+        data = _parse_json(response)
+        if response.status_code >= 400:
+            last_error = _response_looks_like_error(data) or response.text[:200]
+            continue
+        state = ""
+        if isinstance(data.get("instance"), dict):
+            state = normalize_text(data["instance"].get("state") or data["instance"].get("status"))
+        state = state or normalize_text(data.get("state") or data.get("status"))
+        return state.lower()
+    if last_error:
+        logger.warning("connectionState falhou: %s", last_error)
+    return ""
+
+
+def assert_instance_ready() -> None:
+    state = get_connection_state()
+    if not state:
+        # não bloqueia se o endpoint não existir em algumas versões
+        return
+    if state not in {"open", "connected"}:
+        raise EvolutionClientError(
+            f"Instância Evolution não está conectada (estado: {state}). "
+            "Reconecte o QR no Manager e tente de novo."
+        )
+
+
+def _text_payloads(number: str, body: str) -> list[dict[str, Any]]:
+    return [
+        {"number": number, "text": body},
+        {"number": number, "textMessage": {"text": body}},
+        {
+            "number": number,
+            "textMessage": {"text": body},
+            "options": {"delay": 0, "presence": "composing", "linkPreview": False},
+        },
+    ]
+
+
+def send_text(phone: str, text: str) -> dict[str, Any]:
+    if not is_configured():
+        raise EvolutionClientError("Evolution API não configurada.")
+    body = str(text or "").strip()
+    if not body:
+        raise EvolutionClientError("Mensagem vazia.")
+
+    assert_instance_ready()
+
+    numbers = _number_candidates(phone)
+    if not numbers:
+        raise EvolutionClientError("Telefone da conversa inválido para envio.")
+
+    urls = _instance_urls("/message/sendText")
+    errors: list[str] = []
+
+    for number in numbers:
+        for url in urls:
+            for payload in _text_payloads(number, body):
+                try:
+                    response = requests.post(url, json=payload, headers=_headers(), timeout=30)
+                except requests.RequestException as error:
+                    errors.append(f"{number}: {error}")
+                    continue
+
+                data = _parse_json(response)
+                err = _response_looks_like_error(data)
+                if response.status_code >= 400 or err:
+                    errors.append(
+                        f"{number} HTTP {response.status_code}: {err or response.text[:180]}"
+                    )
+                    continue
+
+                msg_id = extract_message_id(data)
+                if not msg_id:
+                    # algumas versões devolvem o id em data.key
+                    errors.append(
+                        f"{number}: Evolution respondeu sem ID de mensagem: {str(data)[:180]}"
+                    )
+                    continue
+
+                logger.info(
+                    "Evolution sendText ok instance=%s number=%s id=%s",
+                    _instance_name(),
+                    number,
+                    msg_id,
+                )
+                return data
+
+    detail = " | ".join(errors[-4:]) if errors else "sem detalhes"
+    raise EvolutionClientError(
+        "Não foi possível enviar no WhatsApp via Evolution. "
+        f"Instância={_instance_name()}. {detail}"
+    )
+
+
+def send_media(
+    phone: str,
+    *,
+    media_url: str,
+    media_type: str = "image",
+    caption: str = "",
+    filename: str = "",
+    mimetype: str = "",
+) -> dict[str, Any]:
+    """Envia mídia via Evolution (image/document/audio)."""
+    if not is_configured():
+        raise EvolutionClientError("Evolution API não configurada.")
+    assert_instance_ready()
+    numbers = _number_candidates(phone)
+    if not numbers:
+        raise EvolutionClientError("Telefone da conversa inválido para envio.")
+    mediatype = {
+        "image": "image",
+        "document": "document",
+        "audio": "audio",
+        "video": "video",
+    }.get(media_type, "document")
+    errors: list[str] = []
+    for number in numbers:
+        payload = {
+            "number": number,
+            "mediatype": mediatype,
+            "media": media_url,
+            "caption": str(caption or "").strip(),
+            "fileName": normalize_text(filename) or "arquivo",
+        }
+        if mimetype:
+            payload["mimetype"] = mimetype
+        for url in _instance_urls("/message/sendMedia"):
+            try:
+                response = requests.post(url, json=payload, headers=_headers(), timeout=60)
+            except requests.RequestException as error:
+                errors.append(str(error))
+                continue
+            data = _parse_json(response)
+            err = _response_looks_like_error(data)
+            if response.status_code >= 400 or err:
+                errors.append(err or response.text[:180])
+                continue
+            if extract_message_id(data):
+                return data
+            errors.append(f"sem ID: {str(data)[:160]}")
+    raise EvolutionClientError(
+        "Falha ao enviar mídia via Evolution. " + (" | ".join(errors[-3:]) if errors else "")
+    )
