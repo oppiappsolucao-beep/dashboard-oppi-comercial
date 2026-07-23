@@ -48,7 +48,15 @@
       ＋
       <input type="file" id="att-media-input" accept="image/*,audio/*,.pdf,.doc,.docx" hidden>
     </label>
-    <textarea name="text" rows="1" class="att-composer-input" placeholder="Digite uma mensagem…" required {% if not evolution_configured %}disabled{% endif %}></textarea>
+    <textarea name="text" rows="1" class="att-composer-input"
+              placeholder="Digite uma mensagem…"
+              required
+              autocomplete="off"
+              autocorrect="off"
+              autocapitalize="off"
+              spellcheck="false"
+              data-form-type="other"
+              {% if not evolution_configured %}disabled{% endif %}></textarea>
     <button type="submit" class="btn att-send-btn" {% if not evolution_configured %}disabled{% endif %}>Enviar</button>
   </form>
 </div>

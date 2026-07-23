@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 from typing import Any
+from urllib.parse import quote
 
 import requests
 
@@ -34,27 +35,15 @@ def _url(path: str) -> str:
     return f"{base}{path}"
 
 
-def send_text(phone: str, text: str) -> dict[str, Any]:
-    if not is_configured():
-        raise EvolutionClientError("Evolution API não configurada.")
-    body = normalize_text(text)
-    if not body:
-        raise EvolutionClientError("Mensagem vazia.")
-    number = normalize_digits(phone)
-    if number.startswith("55") and len(number) >= 12:
-        pass
-    elif len(number) >= 10:
-        number = f"55{number}"
-    instance = settings.evolution_instance
-    payload = {
-        "number": number,
-        "text": body,
-    }
-    url = _url(f"/message/sendText/{instance}")
-    try:
-        response = requests.post(url, json=payload, headers=_headers(), timeout=30)
-    except requests.RequestException as error:
-        raise EvolutionClientError(f"Falha ao enviar mensagem: {error}") from error
+def _instance_path(segment: str) -> str:
+    """Nome da instância pode ter espaço (ex.: Oppi Comercial)."""
+    name = normalize_text(settings.evolution_instance)
+    if not name:
+        raise EvolutionClientError("EVOLUTION_INSTANCE não configurada.")
+    return f"{segment}/{quote(name, safe='')}"
+
+
+def _ensure_ok_response(response: requests.Response) -> dict[str, Any]:
     if response.status_code >= 400:
         raise EvolutionClientError(
             f"Evolution retornou {response.status_code}: {response.text[:300]}"
@@ -63,7 +52,38 @@ def send_text(phone: str, text: str) -> dict[str, Any]:
         data = response.json()
     except ValueError:
         data = {"raw": response.text}
-    return data if isinstance(data, dict) else {"data": data}
+    if not isinstance(data, dict):
+        return {"data": data}
+    # Alguns erros vêm com HTTP 200
+    status = normalize_text(data.get("status") or data.get("error") or "").lower()
+    if status in {"error", "unauthorized", "forbidden"} or data.get("error"):
+        message = data.get("message") or data.get("error") or data
+        raise EvolutionClientError(f"Evolution recusou o envio: {message}")
+    return data
+
+
+def send_text(phone: str, text: str) -> dict[str, Any]:
+    if not is_configured():
+        raise EvolutionClientError("Evolution API não configurada.")
+    # Preserva o texto exatamente (só trim nas pontas) — sem “correção”
+    body = str(text or "").strip()
+    if not body:
+        raise EvolutionClientError("Mensagem vazia.")
+    number = normalize_digits(phone)
+    if number.startswith("55") and len(number) >= 12:
+        pass
+    elif len(number) >= 10:
+        number = f"55{number}"
+    payload = {
+        "number": number,
+        "text": body,
+    }
+    url = _url(_instance_path("/message/sendText"))
+    try:
+        response = requests.post(url, json=payload, headers=_headers(), timeout=30)
+    except requests.RequestException as error:
+        raise EvolutionClientError(f"Falha ao enviar mensagem: {error}") from error
+    return _ensure_ok_response(response)
 
 
 def send_media(
@@ -81,7 +101,6 @@ def send_media(
     number = normalize_digits(phone)
     if not number.startswith("55") and len(number) >= 10:
         number = f"55{number}"
-    instance = settings.evolution_instance
     mediatype = {
         "image": "image",
         "document": "document",
@@ -92,25 +111,17 @@ def send_media(
         "number": number,
         "mediatype": mediatype,
         "media": media_url,
-        "caption": normalize_text(caption),
+        "caption": str(caption or "").strip(),
         "fileName": normalize_text(filename) or "arquivo",
     }
     if mimetype:
         payload["mimetype"] = mimetype
-    url = _url(f"/message/sendMedia/{instance}")
+    url = _url(_instance_path("/message/sendMedia"))
     try:
         response = requests.post(url, json=payload, headers=_headers(), timeout=60)
     except requests.RequestException as error:
         raise EvolutionClientError(f"Falha ao enviar mídia: {error}") from error
-    if response.status_code >= 400:
-        raise EvolutionClientError(
-            f"Evolution retornou {response.status_code}: {response.text[:300]}"
-        )
-    try:
-        data = response.json()
-    except ValueError:
-        data = {"raw": response.text}
-    return data if isinstance(data, dict) else {"data": data}
+    return _ensure_ok_response(response)
 
 
 def extract_message_id(response: dict | None) -> str:

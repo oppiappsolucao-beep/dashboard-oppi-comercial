@@ -75,7 +75,7 @@ def send_text_message(
     conversation = store.get_conversation(conversation_id)
     if not conversation:
         return None, "Conversa não encontrada."
-    body = normalize_text(text)
+    body = str(text or "").strip()
     if not body:
         return None, "Digite uma mensagem."
     if not settings.evolution_configured:
@@ -101,6 +101,9 @@ def send_text_message(
         updates["status"] = store.STATUS_EM_ATENDIMENTO
     if assignee and not conversation.get("assignee"):
         updates["assignee"] = assignee
+    # Atendente humano enviou → pausa a IA (evita confusão / resposta automática)
+    if sender == "agent":
+        updates["ai_mode"] = store.AI_MODE_PAUSED
     if updates:
         store.update_conversation(conversation_id, **updates)
     return message, ""
