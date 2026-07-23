@@ -172,6 +172,113 @@
 </div>
 {% endif %}
 
+{% if settings_params.tab == 'nichos' %}
+<div class="settings-goals-layout settings-services-tab">
+  <div class="panel settings-single-card">
+    <div class="section-heading">Nichos</div>
+    <div class="section-subtitle">Lista usada no cadastro de clientes. Em “Outros”, o usuário pode incluir um nicho novo.</div>
+    {% if niche_success %}<div class="settings-alert success">{{ niche_success }}</div>{% endif %}
+    {% if niche_error %}<div class="settings-alert error">{{ niche_error }}</div>{% endif %}
+    {% if is_admin %}
+    <form method="post" action="/configuracoes/nichos/adicionar" class="settings-goals-form settings-service-form">
+      <input type="hidden" name="tab" value="nichos">
+      <label>
+        <span class="settings-company-label">Novo nicho</span>
+        <input type="text" name="niche_name" placeholder="Ex.: Energia solar" required maxlength="120" autocomplete="off">
+      </label>
+      <button type="submit" class="btn">Cadastrar nicho</button>
+    </form>
+    {% else %}
+    <div class="settings-empty">Somente administradores podem cadastrar ou remover nichos.</div>
+    {% endif %}
+  </div>
+  <div class="panel settings-single-card">
+    <div class="section-heading">Nichos cadastrados</div>
+    <div class="settings-service-list settings-service-list-full">
+      {% for niche in niches %}
+      <div class="settings-service-row">
+        <span>{{ niche.name }}{% if niche.is_system %} <small class="settings-field-hint">(padrão)</small>{% endif %}</span>
+        <div class="settings-service-actions">
+          <span class="settings-service-badge {{ niche.status_class }}">{{ niche.status_label }}</span>
+          {% if is_admin %}
+          <form method="post" action="/configuracoes/nichos/remover" class="settings-inline-form"
+            onsubmit="return confirm('Remover/desativar este nicho?');">
+            <input type="hidden" name="tab" value="nichos">
+            <input type="hidden" name="niche_name" value="{{ niche.name }}">
+            <button type="submit" class="settings-link-btn danger">Remover</button>
+          </form>
+          {% endif %}
+        </div>
+      </div>
+      {% else %}
+      <div class="settings-empty">Nenhum nicho cadastrado.</div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% if settings_params.tab == 'setores' %}
+<div class="settings-goals-layout settings-services-tab">
+  <div class="panel settings-single-card">
+    <div class="section-heading">Setores</div>
+    <div class="section-subtitle">Vincule usuários responsáveis a cada setor. Usado em Atendimentos e cadastro.</div>
+    {% if sector_success %}<div class="settings-alert success">{{ sector_success }}</div>{% endif %}
+    {% if sector_error %}<div class="settings-alert error">{{ sector_error }}</div>{% endif %}
+    {% if is_admin %}
+    <form method="post" action="/configuracoes/setores/adicionar" class="settings-goals-form">
+      <input type="hidden" name="tab" value="setores">
+      <label>
+        <span class="settings-company-label">Nome do setor</span>
+        <input type="text" name="sector_name" placeholder="Ex.: Comercial" required maxlength="120">
+      </label>
+      <label>
+        <span class="settings-company-label">Responsáveis (usuários)</span>
+        <select name="user_ids" multiple size="6" style="min-height:120px;width:100%">
+          {% for user in account_users_options %}
+          <option value="{{ user.id }}">{{ user.name }}</option>
+          {% endfor %}
+        </select>
+        <small class="settings-field-hint">Segure Ctrl (Windows) ou Cmd (Mac) para selecionar vários.</small>
+      </label>
+      <button type="submit" class="btn">Cadastrar setor</button>
+    </form>
+    {% else %}
+    <div class="settings-empty">Somente administradores podem cadastrar setores.</div>
+    {% endif %}
+  </div>
+  <div class="panel settings-single-card">
+    <div class="section-heading">Setores cadastrados</div>
+    {% for sector in sectors %}
+    <div class="settings-service-row" style="flex-wrap:wrap;gap:8px;align-items:flex-start">
+      <div style="flex:1;min-width:180px">
+        <strong>{{ sector.name }}</strong>
+        <div class="settings-field-hint">{{ sector.users_label }}</div>
+      </div>
+      {% if is_admin %}
+      <form method="post" action="/configuracoes/setores/editar" class="settings-goals-form" style="flex:2;min-width:220px">
+        <input type="hidden" name="sector_id" value="{{ sector.id }}">
+        <input type="text" name="sector_name" value="{{ sector.name }}" required>
+        <select name="user_ids" multiple size="4" style="width:100%;margin-top:6px">
+          {% for user in account_users_options %}
+          <option value="{{ user.id }}" {% if user.id in sector.user_ids %}selected{% endif %}>{{ user.name }}</option>
+          {% endfor %}
+        </select>
+        <button type="submit" class="btn btn-secondary" style="margin-top:6px">Salvar</button>
+      </form>
+      <form method="post" action="/configuracoes/setores/remover" onsubmit="return confirm('Remover este setor?');">
+        <input type="hidden" name="sector_id" value="{{ sector.id }}">
+        <button type="submit" class="settings-link-btn danger">Remover</button>
+      </form>
+      {% endif %}
+    </div>
+    {% else %}
+    <div class="settings-empty">Nenhum setor cadastrado.</div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
 <div id="settings-filters">
   <input type="hidden" name="tab" value="{{ settings_params.tab }}" id="settings-tab-input">
   <input type="hidden" name="page" value="{{ users_table.page }}" id="settings-page-input">

@@ -76,4 +76,18 @@
   }
 
   document.addEventListener("DOMContentLoaded", initRegistrationNewPage);
+  document.addEventListener("DOMContentLoaded", function () {
+    var select = document.getElementById("nicho-select");
+    var wrap = document.getElementById("nicho-outro-wrap");
+    var input = document.getElementById("nicho-outro");
+    if (!select || !wrap) return;
+    function sync() {
+      var isOutros = String(select.value || "").trim().toLowerCase() === "outros";
+      wrap.style.display = isOutros ? "" : "none";
+      if (input) input.required = isOutros;
+      if (!isOutros && input) input.value = "";
+    }
+    select.addEventListener("change", sync);
+    sync();
+  });
 })();

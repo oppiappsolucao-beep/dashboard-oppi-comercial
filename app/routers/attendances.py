@@ -165,12 +165,51 @@ def attendances_media_file(request: Request, filename: str):
 
 
 @router.post("/atendimentos/conversa/{conversation_id}/assumir", response_class=HTMLResponse)
-def attendances_assume(request: Request, conversation_id: str):
+async def attendances_assume(request: Request, conversation_id: str):
     require_auth(request)
-    attendances_service.assume_conversation(conversation_id, _username(request))
+    form = await request.form()
+    assignee = normalize_text(form.get("assignee")) or _username(request)
+    attendances_service.assume_conversation(
+        conversation_id,
+        assignee,
+        sector_id=form.get("sector_id"),
+    )
     search, status, _ = _filters(request)
     ctx = attendances_service.page_context(
         search=search, status=status, selected_id=conversation_id, flash="Atendimento assumido. IA pausada."
+    )
+    return render(request, "partials/attendances_thread.html", ctx)
+
+
+@router.post("/atendimentos/conversa/{conversation_id}/direcionar", response_class=HTMLResponse)
+async def attendances_assign(request: Request, conversation_id: str):
+    require_auth(request)
+    form = await request.form()
+    action = normalize_text(form.get("action")) or "direcionar"
+    assignee = normalize_text(form.get("assignee"))
+    if action == "assumir" and not assignee:
+        assignee = _username(request)
+    if not assignee and action != "assumir":
+        search, status, _ = _filters(request)
+        ctx = attendances_service.page_context(
+            search=search,
+            status=status,
+            selected_id=conversation_id,
+            error="Selecione o responsável para direcionar.",
+        )
+        return render(request, "partials/attendances_thread.html", ctx)
+
+    attendances_service.assign_conversation(
+        conversation_id,
+        assignee=assignee or _username(request),
+        sector_id=form.get("sector_id"),
+        pause_ai=True,
+        set_in_progress=True,
+    )
+    search, status, _ = _filters(request)
+    flash = "Atendimento assumido. IA pausada." if action == "assumir" else "Atendimento direcionado."
+    ctx = attendances_service.page_context(
+        search=search, status=status, selected_id=conversation_id, flash=flash
     )
     return render(request, "partials/attendances_thread.html", ctx)
 

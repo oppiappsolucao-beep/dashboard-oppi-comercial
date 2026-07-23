@@ -12,13 +12,14 @@ from app.services.crm_validation_service import get_actions_for_stage, normalize
 from app.services.legacy_core import DuplicateRegistrationError, STATUS_OPTIONS, get_colaborador_options, normalize_text
 from app.services.registration import (
     CADASTRO_TIPO_OPTIONS,
-    NICHE_OPTIONS,
     build_cadastro_new_page_context,
+    get_niche_options,
     get_seller_options,
     infer_partners_count,
     save_cadastro_tipo,
     save_new_company,
     save_nicho,
+    save_setor,
 )
 from app.templating import render
 from config.crm_options import CHANNEL_OPTIONS, PIPELINE_STAGE_OPTIONS, PRIORITY_OPTIONS
@@ -61,6 +62,9 @@ def _registration_page_context(request: Request, df, *, error: str = "", values:
     if not vendedor:
         vendedor = current_user if current_user in seller_options else (seller_options[0] if seller_options else "Sem vendedor")
 
+    from app.services.sectors import list_sector_options
+
+    sector_options = list_sector_options()
     from_page = _resolve_registration_from_page(values.get("from") or request.query_params.get("from"))
     active_page = "leads" if from_page == "leads" else "registration_new"
     back_href = {
@@ -84,7 +88,8 @@ def _registration_page_context(request: Request, df, *, error: str = "", values:
         "back_href": back_href,
         "back_label": back_label,
         "seller_options": seller_options,
-        "niche_options": NICHE_OPTIONS,
+        "niche_options": get_niche_options(),
+        "sector_options": sector_options,
         "status_options": STATUS_OPTIONS,
         "service_options": get_commercial_service_options(),
         "payment_method_options": PAYMENT_METHOD_OPTIONS,
@@ -148,7 +153,22 @@ async def new_registration_submit(request: Request):
         from app.services.registration import save_access_fields
         if int(sheet_row or 0) > 0:
             save_access_fields(DEFAULT_TENANT_ID, sheet_row, form_dict)
-            save_nicho(DEFAULT_TENANT_ID, sheet_row, form_dict.get("nicho", ""))
+            save_nicho(
+                DEFAULT_TENANT_ID,
+                sheet_row,
+                form_dict.get("nicho", ""),
+                form_dict.get("nicho_outro", ""),
+            )
+            from app.services.sectors import get_sector
+
+            setor_id = form_dict.get("setor_id", "")
+            setor = get_sector(setor_id)
+            save_setor(
+                DEFAULT_TENANT_ID,
+                sheet_row,
+                setor_id,
+                (setor or {}).get("name", ""),
+            )
         if closed_services_has_data(closed_items):
             save_closed_services(DEFAULT_TENANT_ID, sheet_row, closed_items)
 

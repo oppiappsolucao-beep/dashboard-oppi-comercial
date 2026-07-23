@@ -2,47 +2,60 @@
 <div class="att-crm-inner">
   <h3 class="att-crm-title">CRM</h3>
   {% if flash %}<div class="att-flash sm">{{ flash }}</div>{% endif %}
+  {% if error %}<div class="att-flash sm" style="background:#fde8e8;color:#9b1c1c">{{ error }}</div>{% endif %}
 
   <dl class="att-crm-dl">
     <div><dt>Empresa</dt><dd>{% if crm.edit_href %}<a href="{{ crm.edit_href }}">{{ crm.empresa }}</a>{% else %}{{ crm.empresa }}{% endif %}</dd></div>
     <div><dt>Contato</dt><dd>{{ crm.contato }}</dd></div>
     <div><dt>WhatsApp</dt><dd>{{ selected.phone_e164 }}</dd></div>
-    {% if selected.remote_jid %}<div><dt>JID</dt><dd style="font-size:11px;word-break:break-all">{{ selected.remote_jid }}</dd></div>{% endif %}
-    <div><dt>Responsável</dt><dd>{{ selected.assignee or crm.vendedor }}</dd></div>
+    <div><dt>Setor</dt><dd>{{ selected.sector_name or '—' }}</dd></div>
+    <div><dt>Responsável</dt><dd>{{ selected.assignee or crm.vendedor or '—' }}</dd></div>
     <div><dt>Status CRM</dt><dd>{{ crm.etapa }}</dd></div>
     <div><dt>Status chat</dt><dd><span class="att-status-badge status-{{ selected.status }}">{{ selected.status_label }}</span></dd></div>
   </dl>
 
-  <p class="att-hint" style="margin:0 0 12px">
-    <a href="/atendimentos/diagnostico-evolution?conversation_id={{ selected.id }}" target="_blank" rel="noopener">
-      Abrir diagnóstico Evolution
-    </a>
-    ·
-    <a href="#"
-       onclick="fetch('/atendimentos/conversa/{{ selected.id }}/teste-envio',{method:'POST',credentials:'same-origin'}).then(r=>r.json()).then(j=>{alert(JSON.stringify(j,null,2)); location.reload();}).catch(e=>alert(e)); return false;">
-      Testar envio agora
-    </a>
-  </p>
-
-  <div class="att-crm-actions">
-    {% if selected.ai_mode != ai_mode_paused %}
-    <button type="button" class="btn"
-            hx-post="/atendimentos/conversa/{{ selected.id }}/assumir"
-            hx-target="#att-chat-root"
-            hx-swap="innerHTML">Assumir</button>
-    {% else %}
-    <button type="button" class="btn btn-secondary"
-            hx-post="/atendimentos/conversa/{{ selected.id }}/devolver-ia"
-            hx-target="#att-chat-root"
-            hx-swap="innerHTML">Devolver à IA</button>
-    {% endif %}
-    {% if selected.status != 'finalizado' %}
-    <button type="button" class="btn btn-secondary"
-            hx-post="/atendimentos/conversa/{{ selected.id }}/finalizar"
-            hx-target="#att-chat-root"
-            hx-swap="innerHTML">Finalizar</button>
-    {% endif %}
-  </div>
+  <form class="att-notes-form att-assign-form"
+        hx-post="/atendimentos/conversa/{{ selected.id }}/direcionar"
+        hx-target="#att-chat-root"
+        hx-swap="innerHTML"
+        style="margin-bottom:14px">
+    <label class="att-label">Setor</label>
+    <select name="sector_id" id="att-sector-select" class="att-input">
+      <option value="">Selecione o setor</option>
+      {% for sector in sector_options or [] %}
+      <option value="{{ sector.id }}"
+              data-users="{{ sector.users_names_joined }}"
+              {% if selected.sector_id and selected.sector_id == sector.id %}selected{% endif %}>
+        {{ sector.name }}
+      </option>
+      {% endfor %}
+    </select>
+    <label class="att-label">Responsável</label>
+    <select name="assignee" id="att-assignee-select" class="att-input">
+      <option value="">Selecione</option>
+      {% for name in responsible_options or [] %}
+      <option value="{{ name }}" {% if selected.assignee == name %}selected{% endif %}>{{ name }}</option>
+      {% endfor %}
+    </select>
+    <div class="att-crm-actions" style="margin-top:10px">
+      {% if selected.ai_mode != ai_mode_paused %}
+      <button type="submit" name="action" value="assumir" class="btn">Assumir</button>
+      {% endif %}
+      <button type="submit" name="action" value="direcionar" class="btn btn-secondary">Direcionar</button>
+      {% if selected.ai_mode == ai_mode_paused %}
+      <button type="button" class="btn btn-secondary"
+              hx-post="/atendimentos/conversa/{{ selected.id }}/devolver-ia"
+              hx-target="#att-chat-root"
+              hx-swap="innerHTML">Devolver à IA</button>
+      {% endif %}
+      {% if selected.status != 'finalizado' %}
+      <button type="button" class="btn btn-secondary"
+              hx-post="/atendimentos/conversa/{{ selected.id }}/finalizar"
+              hx-target="#att-chat-root"
+              hx-swap="innerHTML">Finalizar</button>
+      {% endif %}
+    </div>
+  </form>
 
   <form class="att-notes-form"
         hx-post="/atendimentos/conversa/{{ selected.id }}/notas"
@@ -55,4 +68,25 @@
     <button type="submit" class="btn btn-secondary att-notes-save">Salvar</button>
   </form>
 </div>
+<script>
+(function () {
+  var sector = document.getElementById('att-sector-select');
+  var assignee = document.getElementById('att-assignee-select');
+  if (!sector || !assignee) return;
+  function refill() {
+    var opt = sector.options[sector.selectedIndex];
+    var names = (opt && opt.getAttribute('data-users') || '').split('||').filter(Boolean);
+    var current = assignee.value;
+    assignee.innerHTML = '<option value="">Selecione</option>';
+    names.forEach(function (name) {
+      var o = document.createElement('option');
+      o.value = name;
+      o.textContent = name;
+      if (name === current) o.selected = true;
+      assignee.appendChild(o);
+    });
+  }
+  sector.addEventListener('change', refill);
+})();
+</script>
 {% endif %}

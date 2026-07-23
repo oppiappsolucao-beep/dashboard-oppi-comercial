@@ -127,6 +127,8 @@ def _conversation_to_dict(row: AttendanceConversation | None) -> dict:
         "last_message_preview": row.last_message_preview or "",
         "unread_count": int(row.unread_count or 0),
         "typing": bool(row.typing),
+        "sector_id": int(row.sector_id) if getattr(row, "sector_id", None) else None,
+        "sector_name": getattr(row, "sector_name", None) or "",
         "created_at": row.created_at or "",
         "updated_at": row.updated_at or "",
         "initials": _initials(row.contact_name or row.phone_e164),
@@ -271,6 +273,8 @@ def upsert_conversation_by_phone(
             unread_count=0,
             typing=False,
             remote_jid=remote_jid,
+            sector_id=None,
+            sector_name="",
             created_at=now,
             updated_at=now,
         )
@@ -301,6 +305,8 @@ def _update_conversation(conversation_id: str, fields: dict) -> None:
         "updated_at",
         "remote_jid",
         "phone_e164",
+        "sector_id",
+        "sector_name",
     }
     with _lock, _session() as db:
         row = db.get(AttendanceConversation, conversation_id)
@@ -311,6 +317,11 @@ def _update_conversation(conversation_id: str, fields: dict) -> None:
                 continue
             if key == "typing":
                 setattr(row, key, bool(value))
+            elif key == "sector_id":
+                try:
+                    setattr(row, key, int(value) if value not in (None, "") else None)
+                except (TypeError, ValueError):
+                    setattr(row, key, None)
             else:
                 setattr(row, key, value)
 

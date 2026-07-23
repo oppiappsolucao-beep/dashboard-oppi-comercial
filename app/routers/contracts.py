@@ -39,8 +39,8 @@ from app.services.lead_actions_storage import DEFAULT_TENANT_ID
 from app.services.activity_service import build_cadastro_activities_context
 from app.services.registration import (
     CADASTRO_TIPO_OPTIONS,
-    NICHE_OPTIONS,
     build_cadastro_edit_page_context,
+    get_niche_options,
     get_seller_options,
     infer_partners_count,
     is_cadastro_ativo,
@@ -52,6 +52,7 @@ from app.services.registration import (
     save_cadastro_tipo,
     save_company_edit,
     save_nicho,
+    save_setor,
     delete_company_registration,
 )
 
@@ -229,6 +230,17 @@ async def contract_edit_page(request: Request, sheet_row: int):
         empresa=values.get("empresa", ""),
         fallback=normalize_text(row.get("_nicho", "")),
     )
+    from app.services.lead_actions_storage import get_lead_action
+    from app.services.sectors import list_sector_options
+
+    lead_extra = get_lead_action(DEFAULT_TENANT_ID, sheet_row) or {}
+    values["setor_id"] = normalize_text(lead_extra.get("setor_id"))
+    values["setor"] = normalize_text(lead_extra.get("setor"))
+    # Se nicho custom não está na lista padrão, ainda mostra no select via niche_options merge
+    niche_options = get_niche_options()
+    if values["nicho"] and values["nicho"] not in niche_options:
+        niche_options = list(niche_options) + [values["nicho"]]
+    sector_options = list_sector_options()
 
     cadastro_tipo = resolve_cadastro_tipo(DEFAULT_TENANT_ID, sheet_row, cnpj=values.get("cnpj", ""))
     cadastro_ativo = is_cadastro_ativo(DEFAULT_TENANT_ID, sheet_row)
@@ -300,7 +312,8 @@ async def contract_edit_page(request: Request, sheet_row: int):
             }.get(from_page, "Todos os cadastros"),
             "sheet_row": sheet_row,
             "seller_options": get_seller_options(df),
-            "niche_options": NICHE_OPTIONS,
+            "niche_options": niche_options,
+            "sector_options": sector_options,
             "status_options": STATUS_OPTIONS,
             "current_status": current_status,
             "data_chamado": parsed_date.isoformat(),
@@ -367,7 +380,22 @@ async def contract_edit_submit(request: Request, sheet_row: int):
         save_company_edit(sheet_row, form_dict)
         save_cadastro_tipo(DEFAULT_TENANT_ID, sheet_row, form_dict.get("cadastro_tipo", "lead"))
         save_access_fields(DEFAULT_TENANT_ID, sheet_row, form_dict)
-        save_nicho(DEFAULT_TENANT_ID, sheet_row, form_dict.get("nicho", ""))
+        save_nicho(
+            DEFAULT_TENANT_ID,
+            sheet_row,
+            form_dict.get("nicho", ""),
+            form_dict.get("nicho_outro", ""),
+        )
+        from app.services.sectors import get_sector
+
+        setor_id = form_dict.get("setor_id", "")
+        setor = get_sector(setor_id)
+        save_setor(
+            DEFAULT_TENANT_ID,
+            sheet_row,
+            setor_id,
+            (setor or {}).get("name", ""),
+        )
         invalidate_sheet_cache()
         request.session["edit_success"] = "Cadastro salvo com sucesso."
         return RedirectResponse(url=_edit_page_url(sheet_row, from_page=from_page), status_code=303)

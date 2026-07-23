@@ -349,6 +349,8 @@ class AttendanceConversation(Base):
     unread_count = Column(Integer, nullable=False, default=0)
     typing = Column(Boolean, nullable=False, default=False)
     remote_jid = Column(String(255), nullable=False, default="")
+    sector_id = Column(Integer, nullable=True, index=True)
+    sector_name = Column(String(150), nullable=False, default="")
     created_at = Column(String(40), nullable=False, default="")
     updated_at = Column(String(40), nullable=False, default="")
 
@@ -398,3 +400,29 @@ class AppMeta(Base):
 
     key = Column(String(100), primary_key=True)
     value = Column(Text, nullable=False, default="")
+
+
+class CrmNiche(Base):
+    """Nichos comerciais (Configurações + cadastro)."""
+
+    __tablename__ = "crm_niches"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(150), unique=True, nullable=False)
+    is_system = Column(Boolean, nullable=False, default=False)
+    active = Column(Boolean, nullable=False, default=True)
+    sort_order = Column(Integer, nullable=False, default=0)
+    created_at = Column(String(40), nullable=False, default="")
+
+
+class CrmSector(Base):
+    """Setores com usuários responsáveis vinculados (account_users.id)."""
+
+    __tablename__ = "crm_sectors"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(150), unique=True, nullable=False)
+    active = Column(Boolean, nullable=False, default=True)
+    user_ids_json = Column(Text, nullable=False, default="[]")
+    created_at = Column(String(40), nullable=False, default="")
+    updated_at = Column(String(40), nullable=False, default="")

@@ -24,6 +24,15 @@ def page_context(
     selected = None
     messages: list[dict] = []
     crm = attendance_crm.build_crm_panel(None)
+    sector_options: list[dict] = []
+    responsible_options: list[str] = []
+    try:
+        from app.services.sectors import list_sectors, responsible_options_for_sector
+
+        sector_options = list_sectors(active_only=True)
+    except Exception:
+        sector_options = []
+
     if selected_id:
         selected = store.get_conversation(selected_id)
         if selected:
@@ -31,9 +40,22 @@ def page_context(
             selected = store.get_conversation(selected_id)
             messages = store.list_messages(selected_id)
             crm = attendance_crm.build_crm_panel(selected.get("sheet_row"))
+            try:
+                from app.services.sectors import responsible_options_for_sector
+
+                responsible_options = responsible_options_for_sector(selected.get("sector_id"))
+            except Exception:
+                responsible_options = []
     elif conversations:
-        # sem seleção explícita: não auto-abre no MVP (lista só)
         pass
+
+    if not responsible_options:
+        try:
+            from app.services.sectors import responsible_options_for_sector
+
+            responsible_options = responsible_options_for_sector(None)
+        except Exception:
+            responsible_options = []
 
     return {
         "active_page": "attendances",
@@ -50,6 +72,8 @@ def page_context(
         "error": error,
         "ai_mode_on": store.AI_MODE_ON,
         "ai_mode_paused": store.AI_MODE_PAUSED,
+        "sector_options": sector_options,
+        "responsible_options": responsible_options,
     }
 
 
@@ -157,13 +181,55 @@ def send_media_message(
     return message, ""
 
 
-def assume_conversation(conversation_id: str, assignee: str) -> dict | None:
-    return store.update_conversation(
+def assume_conversation(
+    conversation_id: str,
+    assignee: str,
+    *,
+    sector_id: str | int | None = None,
+) -> dict | None:
+    return assign_conversation(
         conversation_id,
-        ai_mode=store.AI_MODE_PAUSED,
-        assignee=normalize_text(assignee) or "Atendente",
-        status=store.STATUS_EM_ATENDIMENTO,
+        assignee=assignee,
+        sector_id=sector_id,
+        pause_ai=True,
+        set_in_progress=True,
     )
+
+
+def assign_conversation(
+    conversation_id: str,
+    *,
+    assignee: str = "",
+    sector_id: str | int | None = None,
+    pause_ai: bool = True,
+    set_in_progress: bool = True,
+) -> dict | None:
+    fields: dict = {}
+    if set_in_progress:
+        fields["status"] = store.STATUS_EM_ATENDIMENTO
+    if pause_ai:
+        fields["ai_mode"] = store.AI_MODE_PAUSED
+
+    name = normalize_text(assignee)
+    if name:
+        fields["assignee"] = name
+
+    try:
+        from app.services.sectors import get_sector
+
+        sector = get_sector(sector_id) if sector_id not in (None, "") else None
+    except Exception:
+        sector = None
+    if sector:
+        fields["sector_id"] = sector["id"]
+        fields["sector_name"] = sector["name"]
+    elif sector_id in (None, "", 0, "0"):
+        # limpa só se explicitamente vazio e veio no form de direcionar
+        pass
+
+    if not fields:
+        return store.get_conversation(conversation_id)
+    return store.update_conversation(conversation_id, **fields)
 
 
 def return_to_ai(conversation_id: str) -> dict | None:

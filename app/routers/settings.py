@@ -61,6 +61,30 @@ def _settings_context(request: Request, settings_params: dict):
     df, _columns = get_prepared_data()
     integrations = build_integrations()
 
+    niches_rows: list[dict] = []
+    sectors_rows: list[dict] = []
+    account_users_options: list[dict] = []
+    try:
+        from app.services.niches import list_niches_rows
+        from app.services.sectors import list_sectors
+        from app.services.account_users import load_account_users
+
+        niches_rows = list_niches_rows()
+        sectors_rows = list_sectors(active_only=False)
+        account_users_options = [
+            {
+                "id": u.get("id"),
+                "name": u.get("name") or u.get("username") or "",
+                "active": bool(u.get("active", True)),
+            }
+            for u in load_account_users()
+            if u.get("id") and u.get("active", True)
+        ]
+    except Exception:
+        niches_rows = []
+        sectors_rows = []
+        account_users_options = []
+
     return {
         "active_page": "settings",
         "settings_params": settings_params,
@@ -77,6 +101,9 @@ def _settings_context(request: Request, settings_params: dict):
             edit_user_id=settings_params.get("edit_user_id", ""),
         ),
         "services": build_services_list(),
+        "niches": niches_rows,
+        "sectors": sectors_rows,
+        "account_users_options": account_users_options,
         "permissions": build_permissions(_get_permissions(request)),
         "integrations": integrations,
         "company": build_company_profile(df),
@@ -89,6 +116,10 @@ def _settings_context(request: Request, settings_params: dict):
         "template_error": request.session.pop("settings_template_error", ""),
         "service_success": request.session.pop("settings_service_success", ""),
         "service_error": request.session.pop("settings_service_error", ""),
+        "niche_success": request.session.pop("settings_niche_success", ""),
+        "niche_error": request.session.pop("settings_niche_error", ""),
+        "sector_success": request.session.pop("settings_sector_success", ""),
+        "sector_error": request.session.pop("settings_sector_error", ""),
         "user_success": request.session.pop("settings_user_success", ""),
         "user_error": request.session.pop("settings_user_error", ""),
         "sheet_sync_success": request.session.pop("settings_sheet_sync_success", ""),
@@ -279,6 +310,127 @@ async def settings_remove_service(
         request.session["settings_service_error"] = f"Não consegui remover o serviço: {error}"
 
     return RedirectResponse(url="/configuracoes?tab=servicos", status_code=303)
+
+
+@router.post("/configuracoes/nichos/adicionar")
+async def settings_add_niche(
+    request: Request,
+    niche_name: str = Form(...),
+    tab: str = Form("nichos"),
+):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+    if not is_admin(request):
+        request.session["settings_niche_error"] = "Apenas o administrador pode cadastrar nichos."
+        return RedirectResponse(url="/configuracoes?tab=nichos", status_code=303)
+    from app.services.niches import add_niche
+
+    try:
+        add_niche(niche_name)
+        request.session["settings_niche_success"] = "Nicho cadastrado com sucesso."
+    except ValueError as error:
+        request.session["settings_niche_error"] = str(error)
+    except Exception as error:
+        request.session["settings_niche_error"] = f"Não consegui cadastrar o nicho: {error}"
+    return RedirectResponse(url="/configuracoes?tab=nichos", status_code=303)
+
+
+@router.post("/configuracoes/nichos/remover")
+async def settings_remove_niche(
+    request: Request,
+    niche_name: str = Form(...),
+    tab: str = Form("nichos"),
+):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+    if not is_admin(request):
+        request.session["settings_niche_error"] = "Apenas o administrador pode remover nichos."
+        return RedirectResponse(url="/configuracoes?tab=nichos", status_code=303)
+    from app.services.niches import remove_niche
+
+    try:
+        remove_niche(niche_name)
+        request.session["settings_niche_success"] = "Nicho removido/desativado."
+    except ValueError as error:
+        request.session["settings_niche_error"] = str(error)
+    except Exception as error:
+        request.session["settings_niche_error"] = f"Não consegui remover o nicho: {error}"
+    return RedirectResponse(url="/configuracoes?tab=nichos", status_code=303)
+
+
+@router.post("/configuracoes/setores/adicionar")
+async def settings_add_sector(request: Request):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+    if not is_admin(request):
+        request.session["settings_sector_error"] = "Apenas o administrador pode cadastrar setores."
+        return RedirectResponse(url="/configuracoes?tab=setores", status_code=303)
+
+    form = await request.form()
+    from app.services.sectors import add_sector
+
+    user_ids = form.getlist("user_ids") if hasattr(form, "getlist") else []
+    try:
+        add_sector(form.get("sector_name", ""), user_ids=list(user_ids))
+        request.session["settings_sector_success"] = "Setor cadastrado com sucesso."
+    except ValueError as error:
+        request.session["settings_sector_error"] = str(error)
+    except Exception as error:
+        request.session["settings_sector_error"] = f"Não consegui cadastrar o setor: {error}"
+    return RedirectResponse(url="/configuracoes?tab=setores", status_code=303)
+
+
+@router.post("/configuracoes/setores/editar")
+async def settings_edit_sector(request: Request):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+    if not is_admin(request):
+        request.session["settings_sector_error"] = "Apenas o administrador pode editar setores."
+        return RedirectResponse(url="/configuracoes?tab=setores", status_code=303)
+
+    form = await request.form()
+    from app.services.sectors import update_sector
+
+    user_ids = form.getlist("user_ids") if hasattr(form, "getlist") else []
+    try:
+        update_sector(
+            form.get("sector_id"),
+            name=form.get("sector_name"),
+            user_ids=list(user_ids),
+        )
+        request.session["settings_sector_success"] = "Setor atualizado."
+    except ValueError as error:
+        request.session["settings_sector_error"] = str(error)
+    except Exception as error:
+        request.session["settings_sector_error"] = f"Não consegui atualizar o setor: {error}"
+    return RedirectResponse(url="/configuracoes?tab=setores", status_code=303)
+
+
+@router.post("/configuracoes/setores/remover")
+async def settings_remove_sector(
+    request: Request,
+    sector_id: str = Form(...),
+):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+    if not is_admin(request):
+        request.session["settings_sector_error"] = "Apenas o administrador pode remover setores."
+        return RedirectResponse(url="/configuracoes?tab=setores", status_code=303)
+    from app.services.sectors import delete_sector
+
+    try:
+        delete_sector(sector_id)
+        request.session["settings_sector_success"] = "Setor removido."
+    except ValueError as error:
+        request.session["settings_sector_error"] = str(error)
+    except Exception as error:
+        request.session["settings_sector_error"] = f"Não consegui remover o setor: {error}"
+    return RedirectResponse(url="/configuracoes?tab=setores", status_code=303)
 
 
 @router.post("/configuracoes/usuarios/adicionar")

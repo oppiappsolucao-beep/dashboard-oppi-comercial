@@ -310,17 +310,39 @@ def save_cadastro_ativo(tenant_id: str | None, sheet_row: int, ativo: bool) -> N
 
 
 NICHE_OPTIONS = [
-    "Marmoraria",
-    "Marcenaria",
-    "Academia",
-    "Clínica",
-    "Pet shop",
-    "Construção civil",
-    "Restaurante",
-    "Loja",
+    "Saúde e Bem-estar",
+    "Beleza e Estética",
+    "Alimentação",
+    "Comércio e Varejo",
     "Serviços",
+    "Tecnologia",
+    "Construção e Imóveis",
+    "Automotivo",
+    "Educação",
+    "Pet",
+    "Indústria",
+    "Agronegócio",
+    "Transporte e Logística",
+    "Marketing e Comunicação",
+    "Financeiro e Contábil",
+    "Jurídico",
+    "Turismo e Eventos",
+    "Telecomunicações",
     "Outros",
+    "Não informado",
 ]
+
+
+def get_niche_options() -> list[str]:
+    try:
+        from app.services.niches import list_niche_options
+
+        options = list_niche_options()
+        if options:
+            return options
+    except Exception:
+        pass
+    return list(NICHE_OPTIONS)
 
 
 def resolve_nicho(
@@ -343,11 +365,35 @@ def resolve_nicho(
     return infer_niche_from_company_name(empresa)
 
 
-def save_nicho(tenant_id: str | None, sheet_row: int, nicho: str) -> None:
+def save_nicho(tenant_id: str | None, sheet_row: int, nicho: str, nicho_outro: str = "") -> None:
     if not sheet_row:
         return
-    normalized = normalize_text(nicho)
+    try:
+        from app.services.niches import resolve_nicho_for_save
+
+        normalized = resolve_nicho_for_save(nicho, nicho_outro)
+    except Exception:
+        normalized = normalize_text(nicho_outro) or normalize_text(nicho)
+    if not normalized:
+        return
     save_lead_action(tenant_id, sheet_row, {"nicho": normalized})
+
+
+def save_setor(tenant_id: str | None, sheet_row: int, setor_id: str | int | None, setor_name: str = "") -> None:
+    if not sheet_row:
+        return
+    payload: dict = {}
+    try:
+        sid = int(setor_id) if setor_id not in (None, "") else None
+    except (TypeError, ValueError):
+        sid = None
+    if sid:
+        payload["setor_id"] = sid
+    name = normalize_text(setor_name)
+    if name:
+        payload["setor"] = name
+    if payload:
+        save_lead_action(tenant_id, sheet_row, payload)
 
 
 def _cadastro_initials(name: str) -> str:

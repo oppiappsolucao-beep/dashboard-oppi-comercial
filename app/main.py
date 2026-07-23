@@ -108,9 +108,15 @@ async def startup_maintenance() -> None:
     try:
         from database.connection import Base, engine
         from database import models  # noqa: F401 — registra tabelas (incl. attendance_*)
-        from app.services.attendance_db_migrate import migrate_attendance_from_sqlite_if_needed
+        from app.services.attendance_db_migrate import (
+            ensure_attendance_schema_columns,
+            migrate_attendance_from_sqlite_if_needed,
+        )
+        from app.services.niches import ensure_default_niches
 
         Base.metadata.create_all(bind=engine)
+        ensure_attendance_schema_columns()
+        ensure_default_niches()
         migrate_info = migrate_attendance_from_sqlite_if_needed()
         log.info("Attendance DB migrate: %s", migrate_info)
     except Exception as error:

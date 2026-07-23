@@ -18,6 +18,8 @@ SETTINGS_TABS = [
     ("metas", "Metas"),
     ("usuarios", "Usuários e Permissões"),
     ("servicos", "Serviços"),
+    ("nichos", "Nichos"),
+    ("setores", "Setores"),
     ("integracoes", "Integrações"),
     ("faturamento", "Faturamento"),
 ]

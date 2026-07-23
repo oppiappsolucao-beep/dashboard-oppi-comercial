@@ -5,13 +5,41 @@ import logging
 import sqlite3
 from pathlib import Path
 
+from sqlalchemy import inspect, text
+
 from app.services.crm_local_db import _db_path
-from database.connection import SessionLocal
+from database.connection import SessionLocal, engine
 from database.models import AppMeta, AttendanceConversation, AttendanceMessage
 
 logger = logging.getLogger(__name__)
 
 MIGRATION_KEY = "attendance_sqlite_migrated"
+
+
+def ensure_attendance_schema_columns() -> None:
+    """Adiciona colunas novas em attendance_conversations se o banco já existia."""
+    try:
+        insp = inspect(engine)
+        if "attendance_conversations" not in insp.get_table_names():
+            return
+        cols = {c["name"] for c in insp.get_columns("attendance_conversations")}
+        statements: list[str] = []
+        if "sector_id" not in cols:
+            statements.append(
+                "ALTER TABLE attendance_conversations ADD COLUMN sector_id INTEGER"
+            )
+        if "sector_name" not in cols:
+            statements.append(
+                "ALTER TABLE attendance_conversations ADD COLUMN sector_name VARCHAR(150) DEFAULT ''"
+            )
+        if not statements:
+            return
+        with engine.begin() as conn:
+            for stmt in statements:
+                conn.execute(text(stmt))
+        logger.info("Schema attendance atualizado: %s", ", ".join(statements))
+    except Exception:
+        logger.exception("Falha ao atualizar colunas de attendance_conversations")
 
 
 def _sqlite_has_attendance_tables(conn: sqlite3.Connection) -> bool:
