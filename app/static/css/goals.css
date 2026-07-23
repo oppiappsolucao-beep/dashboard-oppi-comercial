@@ -198,12 +198,23 @@
 }
 
 .goals-report-card {
-  padding: 0 0 8px;
+  padding: 18px 0 8px;
   overflow: hidden;
 }
 
+.goals-report-card .section-heading,
+.goals-report-card .section-subtitle {
+  padding-left: 18px;
+  padding-right: 18px;
+}
+
+.goals-report-card .section-subtitle {
+  margin-top: 4px;
+  margin-bottom: 4px;
+}
+
 .goals-report-table {
-  margin-top: 8px;
+  margin-top: 12px;
 }
 
 .goals-report-table th {
