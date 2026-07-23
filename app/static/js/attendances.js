@@ -72,7 +72,22 @@
     lastUnread = count;
   }
 
-  function refreshList() {
+  function bumpConversationToTop(conversationId) {
+    var list = $("#att-conversation-list");
+    if (!list || !conversationId) return;
+    var item = list.querySelector(
+      '[data-conversation-id="' + conversationId.replace(/"/g, "") + '"]'
+    );
+    if (!item) return;
+    if (list.firstElementChild !== item) {
+      item.classList.add("att-conv-bump");
+      list.insertBefore(item, list.firstChild);
+    }
+    list.scrollTop = 0;
+  }
+
+  function refreshList(opts) {
+    opts = opts || {};
     var list = $("#att-conversation-list");
     var form = $(".att-filters");
     if (!list || !window.htmx || !form) return;
@@ -86,6 +101,14 @@
         conversation_id: selectedId(),
       },
     });
+    if (opts.bumpId) {
+      // Reaplica bump após o swap do HTMX
+      setTimeout(function () {
+        bumpConversationToTop(opts.bumpId);
+      }, 120);
+    } else {
+      list.scrollTop = 0;
+    }
   }
 
   function refreshThread() {
@@ -111,11 +134,15 @@
     if (data.type === "typing") {
       var el = document.getElementById("att-typing-" + data.conversation_id);
       if (el) el.hidden = !data.typing;
-      refreshList();
+      if (data.typing) bumpConversationToTop(data.conversation_id);
       return;
     }
     if (data.type === "message" || data.type === "conversation_upsert" || data.type === "conversation_read") {
-      refreshList();
+      // Sobe na hora (estilo WhatsApp) e depois reordena pelo servidor
+      if (data.type === "message" || data.type === "conversation_upsert") {
+        bumpConversationToTop(data.conversation_id);
+      }
+      refreshList({ bumpId: data.conversation_id });
       if (data.conversation_id && data.conversation_id === selectedId()) {
         refreshThread();
       }
@@ -174,8 +201,17 @@
     el.style.height = Math.min(el.scrollHeight, 120) + "px";
   }
 
-  document.body.addEventListener("htmx:afterSwap", function (ev) {
-    if (ev && ev.target && (ev.target.id === "att-chat-root" || ev.target.id === "att-messages")) {
+.  document.body.addEventListener("htmx:afterSwap", function (ev) {
+    if (!ev || !ev.target) return;
+    if (ev.target.id === "att-conversation-list") {
+      var first = ev.target.querySelector(".att-conv-item");
+      if (first) {
+        first.classList.add("att-conv-bump");
+        ev.target.scrollTop = 0;
+      }
+      return;
+    }
+    if (ev.target.id === "att-chat-root" || ev.target.id === "att-messages") {
       scrollMessages();
       autoGrow($(".att-composer-input"));
       var thread = $("[data-conversation-id]", $("#att-chat-root"));
@@ -183,6 +219,19 @@
       if (shell && thread) {
         shell.setAttribute("data-selected", thread.getAttribute("data-conversation-id") || "");
       }
+    }
+  });
+
+  // Após enviar mensagem, sobe a conversa no topo (como WhatsApp)
+  document.body.addEventListener("htmx:afterRequest", function (ev) {
+    var path = (ev.detail && ev.detail.pathInfo && ev.detail.pathInfo.requestPath) || "";
+    if (path.indexOf("/atendimentos/conversa/") === -1) return;
+    if (path.indexOf("/enviar") === -1 && path.indexOf("/midia") === -1) return;
+    if (ev.detail && ev.detail.successful === false) return;
+    var id = selectedId();
+    if (id) {
+      bumpConversationToTop(id);
+      refreshList({ bumpId: id });
     }
   });
 

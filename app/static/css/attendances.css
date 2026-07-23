@@ -104,6 +104,25 @@
   border-left: 3px solid #25D366;
 }
 
+.att-conv-item.att-conv-bump {
+  animation: att-bump-in 0.35s ease;
+}
+
+@keyframes att-bump-in {
+  from {
+    background: #dcfce7;
+    transform: translateY(-4px);
+  }
+  to {
+    background: transparent;
+    transform: translateY(0);
+  }
+}
+
+.att-conv-item.active.att-conv-bump {
+  background: #ecfdf5;
+}
+
 .att-avatar {
   width: 42px;
   height: 42px;

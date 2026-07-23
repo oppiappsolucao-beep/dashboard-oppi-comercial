@@ -178,7 +178,13 @@ def list_conversations(
             f"""
             SELECT * FROM attendance_conversations
             {where}
-            ORDER BY CASE WHEN last_message_at = '' THEN updated_at ELSE last_message_at END DESC
+            ORDER BY
+              CASE
+                WHEN last_message_at IS NOT NULL AND last_message_at != '' THEN last_message_at
+                ELSE updated_at
+              END DESC,
+              unread_count DESC,
+              updated_at DESC
             LIMIT ?
             """,
             params,
