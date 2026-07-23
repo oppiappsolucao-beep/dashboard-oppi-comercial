@@ -222,7 +222,18 @@ def attendances_unread(request: Request):
 def attendances_sync(request: Request, conversation_id: str = ""):
     """Poll leve baseado no SQLite — mensagens novas aparecem sem F5."""
     require_auth(request)
-    return JSONResponse(store.get_sync_snapshot(conversation_id))
+    try:
+        return JSONResponse(store.get_sync_snapshot(conversation_id))
+    except Exception:
+        return JSONResponse(
+            {
+                "unread": 0,
+                "inbox_token": "",
+                "conversation_id": conversation_id or None,
+                "conversation_token": None,
+            },
+            status_code=200,
+        )
 
 
 @router.get("/atendimentos/stream")

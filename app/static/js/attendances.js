@@ -1,9 +1,8 @@
 (function () {
   "use strict";
 
-  // Poll no SQLite — SSE costuma falhar atrás do proxy do Easypanel.
-  var POLL_MS = 2000;
-  var es = null;
+  // Poll no SQLite (leve). SSE desligado: costuma travar/estressar o proxy do painel.
+  var POLL_MS = 4000;
   var pollTimer = null;
   var lastUnread = 0;
   var lastInboxToken = "";
@@ -207,25 +206,6 @@
     pollTimer = setInterval(pollSync, POLL_MS);
   }
 
-  function startSSE() {
-    if (!window.EventSource) return;
-    try {
-      es = new EventSource("/atendimentos/stream");
-      es.onmessage = function (ev) {
-        try {
-          handleEvent(JSON.parse(ev.data));
-        } catch (e) { /* ignore */ }
-      };
-      es.onerror = function () {
-        if (es) {
-          es.close();
-          es = null;
-        }
-        setTimeout(startSSE, 15000);
-      };
-    } catch (e) { /* ignore */ }
-  }
-
   function autoGrow(el) {
     if (!el) return;
     el.style.height = "auto";
@@ -330,6 +310,5 @@
     lastUnread = pill ? Number(pill.getAttribute("data-count") || 0) : 0;
     scrollMessages();
     startPoll();
-    startSSE();
   }
 })();
