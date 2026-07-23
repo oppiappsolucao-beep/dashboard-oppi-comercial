@@ -15,8 +15,8 @@ class Settings:
     cache_ttl_seconds: int = int(os.getenv("SHEET_CACHE_TTL_SECONDS", "300"))
     proposal_template_doc_id: str = "1iTBG1ZUMCVB-aS7QoYiC4Sym6Dgn9Z7gMN-LGLgyprI"
     proposal_pdf_folder_id: str = ""
-    support_whatsapp_number: str = "5511942157917"
-    support_whatsapp_label: str = "+55 11 94215-7917"
+    support_whatsapp_number: str = "5511920679171"
+    support_whatsapp_label: str = "+55 11 92067-9171"
     evolution_api_url: str = ""
     evolution_api_key: str = ""
     evolution_instance: str = ""
