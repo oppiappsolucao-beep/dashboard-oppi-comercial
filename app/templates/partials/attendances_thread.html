@@ -1,0 +1,64 @@
+{% if selected %}
+<div class="att-thread" data-conversation-id="{{ selected.id }}">
+  {% if flash %}<div class="att-flash">{{ flash }}</div>{% endif %}
+  {% if error %}<div class="att-error">{{ error }}</div>{% endif %}
+  <header class="att-chat-header">
+    <div class="att-avatar sm">{{ selected.initials }}</div>
+    <div class="att-chat-header-text">
+      <div class="att-chat-title">{{ selected.contact_name or selected.phone_e164 }}</div>
+      <div class="att-chat-sub">
+        {{ selected.phone_e164 }}
+        · <span class="att-status-badge status-{{ selected.status }}">{{ selected.status_label }}</span>
+        {% if selected.ai_mode == ai_mode_paused %}· IA pausada{% elif selected.ai_mode == ai_mode_on %}· IA ativa{% else %}· IA off{% endif %}
+        <span class="att-typing-indicator" id="att-typing-{{ selected.id }}" {% if not selected.typing %}hidden{% endif %}>digitando…</span>
+      </div>
+    </div>
+  </header>
+
+  <div class="att-messages" id="att-messages" data-conversation-id="{{ selected.id }}">
+    {% for m in messages %}
+    <div class="att-bubble {% if m.direction == 'out' %}out{% else %}in{% endif %} sender-{{ m.sender }}">
+      {% if m.type == 'image' and m.media_url %}
+        <a class="att-media-link" href="{{ m.media_url }}" target="_blank" rel="noopener">🖼 Imagem</a>
+        {% if m.body %}<div class="att-bubble-text">{{ m.body }}</div>{% endif %}
+      {% elif m.type == 'audio' and m.media_url %}
+        <audio controls preload="none" src="{{ m.media_url }}" class="att-audio"></audio>
+      {% elif m.type in ('document', 'video') %}
+        <a class="att-media-link" href="{{ m.media_url or '#' }}" target="_blank" rel="noopener">📎 {{ m.media_filename or m.type|capitalize }}</a>
+        {% if m.body %}<div class="att-bubble-text">{{ m.body }}</div>{% endif %}
+      {% else %}
+        <div class="att-bubble-text">{{ m.body }}</div>
+      {% endif %}
+      <div class="att-bubble-meta">
+        {% if m.sender == 'ai' %}IA · {% elif m.sender == 'agent' %}Você · {% endif %}
+        {{ m.created_at[11:16] if m.created_at|length >= 16 else '' }}
+      </div>
+    </div>
+    {% else %}
+    <div class="att-messages-empty">Nenhuma mensagem nesta conversa.</div>
+    {% endfor %}
+  </div>
+
+  <form class="att-composer"
+        hx-post="/atendimentos/conversa/{{ selected.id }}/enviar"
+        hx-target="#att-chat-root"
+        hx-swap="innerHTML"
+        hx-disabled-elt="button[type=submit]">
+    <label class="att-attach-btn" title="Enviar mídia (URL pública)">
+      ＋
+      <input type="file" id="att-media-input" accept="image/*,audio/*,.pdf,.doc,.docx" hidden>
+    </label>
+    <textarea name="text" rows="1" class="att-composer-input" placeholder="Digite uma mensagem…" required {% if not evolution_configured %}disabled{% endif %}></textarea>
+    <button type="submit" class="btn att-send-btn" {% if not evolution_configured %}disabled{% endif %}>Enviar</button>
+  </form>
+</div>
+
+<aside class="att-crm" id="att-crm-panel">
+  {% include "partials/attendances_crm_panel.html" %}
+</aside>
+{% else %}
+<div class="att-empty-state">
+  <div class="att-empty-icon">💬</div>
+  <h2>Selecione uma conversa</h2>
+</div>
+{% endif %}

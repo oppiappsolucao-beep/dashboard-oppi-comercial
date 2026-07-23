@@ -1,0 +1,37 @@
+{% if conversations %}
+  {% for c in conversations %}
+  <a href="/atendimentos?c={{ c.id }}&search={{ search | urlencode }}&status={{ status_filter | urlencode }}"
+     class="att-conv-item {% if selected and selected.id == c.id %}active{% endif %}"
+     data-conversation-id="{{ c.id }}"
+     hx-get="/atendimentos/conversa/{{ c.id }}?search={{ search | urlencode }}&status={{ status_filter | urlencode }}"
+     hx-target="#att-chat-root"
+     hx-swap="innerHTML"
+     hx-push-url="/atendimentos?c={{ c.id }}">
+    <div class="att-avatar" {% if c.profile_pic_url %}style="background-image:url('{{ c.profile_pic_url }}')"{% endif %}>
+      {% if not c.profile_pic_url %}{{ c.initials }}{% endif %}
+    </div>
+    <div class="att-conv-body">
+      <div class="att-conv-top">
+        <span class="att-conv-name">{{ c.contact_name or c.phone_e164 }}</span>
+        <span class="att-conv-time">{{ c.last_message_at[11:16] if c.last_message_at|length >= 16 else (c.last_message_at[-8:-3] if c.last_message_at else '') }}</span>
+      </div>
+      <div class="att-conv-preview">
+        {% if c.typing %}<em class="att-typing-preview">digitando…</em>{% else %}{{ c.last_message_preview or '—' }}{% endif %}
+      </div>
+      <div class="att-conv-meta">
+        <span class="att-status-badge status-{{ c.status }}">{{ c.status_label }}</span>
+        {% if c.unread_count %}<span class="att-unread-dot">{{ c.unread_count }}</span>{% endif %}
+      </div>
+    </div>
+  </a>
+  {% endfor %}
+{% else %}
+  <div class="att-list-empty">
+    {% if evolution_configured %}
+      Nenhuma conversa ainda. Envie um WhatsApp para a instância Evolution.
+    {% else %}
+      Configure <code>EVOLUTION_API_*</code> e o webhook<br>
+      <code>https://comercial.oppitech.com.br/webhooks/evolution</code>
+    {% endif %}
+  </div>
+{% endif %}

@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block content %}
+<link rel="stylesheet" href="/static/css/attendances.css?v={{ static_version }}">
+<div class="page-header att-page-header">
+  <div>
+    <div class="page-title">Atendimentos</div>
+    <div class="page-subtitle">Inbox WhatsApp integrado ao CRM — responda leads e pause a IA quando assumir.</div>
+  </div>
+  <div class="page-actions att-page-actions">
+    {% if not evolution_configured %}
+    <span class="att-config-badge" title="Defina EVOLUTION_API_URL, EVOLUTION_API_KEY e EVOLUTION_INSTANCE">Evolution não configurada</span>
+    {% else %}
+    <span class="att-config-badge att-config-ok">Evolution conectada</span>
+    {% endif %}
+    <span class="att-unread-pill" id="att-unread-pill" data-count="{{ unread_total }}" {% if unread_total <= 0 %}hidden{% endif %}>
+      {{ unread_total }} nova{{ 's' if unread_total != 1 else '' }}
+    </span>
+  </div>
+</div>
+
+<div class="att-shell" id="att-shell"
+     data-selected="{{ selected.id if selected else '' }}"
+     data-evolution="{{ '1' if evolution_configured else '0' }}">
+  <aside class="att-col att-col-list">
+    <form class="att-filters"
+          hx-post="/atendimentos/filtros"
+          hx-target="#att-conversation-list"
+          hx-swap="innerHTML"
+          hx-trigger="submit, keyup changed delay:300ms from:#att-search, change from:#att-status">
+      <input type="search" id="att-search" name="search" value="{{ search }}" placeholder="Buscar nome ou telefone…" class="att-input" autocomplete="off">
+      <select id="att-status" name="status" class="att-input att-select">
+        {% for value, label in status_options %}
+        <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      {% if selected %}<input type="hidden" name="conversation_id" value="{{ selected.id }}">{% endif %}
+    </form>
+    <div id="att-conversation-list" class="att-conversation-list">
+      {% include "partials/attendances_list.html" %}
+    </div>
+  </aside>
+
+  <section class="att-col att-col-chat" id="att-chat-root">
+    {% if selected %}
+      {% include "partials/attendances_thread.html" %}
+    {% else %}
+      <div class="att-empty-state">
+        <div class="att-empty-icon">💬</div>
+        <h2>Selecione uma conversa</h2>
+        <p>{% if evolution_configured %}Mensagens do WhatsApp aparecem aqui em tempo real.{% else %}Configure a Evolution API no Easypanel para receber mensagens.{% endif %}</p>
+      </div>
+    {% endif %}
+  </section>
+</div>
+
+<script src="/static/js/attendances.js?v={{ static_version }}"></script>
+{% endblock %}

@@ -21,6 +21,7 @@ PAGE_BACK_FALLBACKS = {
     "funnel": "/funil-de-vendas",
     "leads": "/leads-e-empresas",
     "activities": "/atividades",
+    "attendances": "/atendimentos",
     "proposals": "/propostas",
     "goals": "/metas-e-relatorios",
     "registration_new": "/cadastro/todos",

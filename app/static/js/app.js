@@ -59,6 +59,33 @@ function renderGoalsCharts() {
   renderPlotlyChart("goals-seller-chart");
 }
 
+function initAttendanceSidebarBadge() {
+  const badge = document.getElementById("att-sidebar-badge");
+  if (!badge) return;
+
+  const apply = (count) => {
+    const n = Number(count) || 0;
+    if (n > 0) {
+      badge.hidden = false;
+      badge.textContent = n > 99 ? "99+" : String(n);
+    } else {
+      badge.hidden = true;
+    }
+  };
+
+  const refresh = () => {
+    fetch("/atendimentos/unread", { credentials: "same-origin" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (j) apply(j.unread);
+      })
+      .catch(() => {});
+  };
+
+  refresh();
+  setInterval(refresh, 30000);
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   renderPlotlyChart("weekly-chart");
   renderOverviewCharts();
@@ -66,6 +93,7 @@ document.addEventListener("DOMContentLoaded", () => {
   renderFunnelCharts();
   initMobileNavigation();
   initPageBackButtons();
+  initAttendanceSidebarBadge();
 });
 
 document.body.addEventListener("htmx:afterSwap", (event) => {

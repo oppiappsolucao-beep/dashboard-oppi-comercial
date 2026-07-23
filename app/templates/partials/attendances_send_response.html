@@ -1,0 +1,5 @@
+{# Resposta do envio: re-render thread + OOB lista #}
+{% include "partials/attendances_thread.html" %}
+<div id="att-conversation-list" hx-swap-oob="innerHTML">
+  {% include "partials/attendances_list.html" %}
+</div>

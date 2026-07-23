@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import APP_BUILD, settings
-from app.routers import auth, activities, contracts, funnel, goals_reports, leads, overview, proposals, registration
+from app.routers import auth, activities, attendances, contracts, evolution_webhook, funnel, goals_reports, leads, overview, proposals, registration
 from app.routers import settings as settings_router
 from app.templating import render
 
@@ -28,6 +28,8 @@ app.include_router(auth.router)
 app.include_router(overview.router)
 app.include_router(funnel.router)
 app.include_router(activities.router)
+app.include_router(attendances.router)
+app.include_router(evolution_webhook.router)
 app.include_router(proposals.router)
 app.include_router(goals_reports.router)
 app.include_router(leads.router)

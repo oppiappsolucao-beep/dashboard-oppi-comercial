@@ -1,0 +1,46 @@
+{% if selected %}
+<div class="att-crm-inner">
+  <h3 class="att-crm-title">CRM</h3>
+  {% if flash %}<div class="att-flash sm">{{ flash }}</div>{% endif %}
+
+  <dl class="att-crm-dl">
+    <div><dt>Empresa</dt><dd>{% if crm.edit_href %}<a href="{{ crm.edit_href }}">{{ crm.empresa }}</a>{% else %}{{ crm.empresa }}{% endif %}</dd></div>
+    <div><dt>Contato</dt><dd>{{ crm.contato }}</dd></div>
+    <div><dt>WhatsApp</dt><dd>{{ selected.phone_e164 }}</dd></div>
+    <div><dt>Responsável</dt><dd>{{ selected.assignee or crm.vendedor }}</dd></div>
+    <div><dt>Status CRM</dt><dd>{{ crm.etapa }}</dd></div>
+    <div><dt>Status chat</dt><dd><span class="att-status-badge status-{{ selected.status }}">{{ selected.status_label }}</span></dd></div>
+  </dl>
+
+  <div class="att-crm-actions">
+    {% if selected.ai_mode != ai_mode_paused %}
+    <button type="button" class="btn"
+            hx-post="/atendimentos/conversa/{{ selected.id }}/assumir"
+            hx-target="#att-chat-root"
+            hx-swap="innerHTML">Assumir</button>
+    {% else %}
+    <button type="button" class="btn btn-secondary"
+            hx-post="/atendimentos/conversa/{{ selected.id }}/devolver-ia"
+            hx-target="#att-chat-root"
+            hx-swap="innerHTML">Devolver à IA</button>
+    {% endif %}
+    {% if selected.status != 'finalizado' %}
+    <button type="button" class="btn btn-secondary"
+            hx-post="/atendimentos/conversa/{{ selected.id }}/finalizar"
+            hx-target="#att-chat-root"
+            hx-swap="innerHTML">Finalizar</button>
+    {% endif %}
+  </div>
+
+  <form class="att-notes-form"
+        hx-post="/atendimentos/conversa/{{ selected.id }}/notas"
+        hx-target="#att-crm-panel"
+        hx-swap="innerHTML">
+    <label class="att-label">Tags <span class="att-hint">(vírgula)</span></label>
+    <input type="text" name="tags" class="att-input" value="{{ selected.tags | join(', ') }}" placeholder="quente, proposta…">
+    <label class="att-label">Observações</label>
+    <textarea name="notes" class="att-input" rows="4" placeholder="Anotações do atendimento…">{{ selected.notes }}</textarea>
+    <button type="submit" class="btn btn-secondary att-notes-save">Salvar</button>
+  </form>
+</div>
+{% endif %}

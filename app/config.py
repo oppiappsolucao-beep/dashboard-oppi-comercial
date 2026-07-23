@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-APP_BUILD = os.getenv("APP_BUILD", "20260722-cadastro-header-v15").strip() or "20260722-cadastro-header-v15"
+APP_BUILD = os.getenv("APP_BUILD", "20260723-atendimentos-v1").strip() or "20260723-atendimentos-v1"
 
 
 class Settings:
@@ -17,6 +17,12 @@ class Settings:
     proposal_pdf_folder_id: str = ""
     support_whatsapp_number: str = "5511942157917"
     support_whatsapp_label: str = "+55 11 94215-7917"
+    evolution_api_url: str = ""
+    evolution_api_key: str = ""
+    evolution_instance: str = ""
+    evolution_webhook_token: str = ""
+    ai_attendance_prompt: str = ""
+    ai_attendance_enabled: bool = False
 
     app_username: str
     app_password: str
@@ -61,6 +67,18 @@ class Settings:
             os.getenv("SUPPORT_WHATSAPP_LABEL", self.support_whatsapp_label).strip()
             or self.support_whatsapp_label
         )
+        self.evolution_api_url = os.getenv("EVOLUTION_API_URL", "").strip().rstrip("/")
+        self.evolution_api_key = os.getenv("EVOLUTION_API_KEY", "").strip()
+        self.evolution_instance = os.getenv("EVOLUTION_INSTANCE", "").strip()
+        self.evolution_webhook_token = os.getenv("EVOLUTION_WEBHOOK_TOKEN", "").strip()
+        self.ai_attendance_prompt = os.getenv("AI_ATTENDANCE_PROMPT", "").strip()
+        self.ai_attendance_enabled = os.getenv("AI_ATTENDANCE_ENABLED", "").strip().lower() in {
+            "1", "true", "sim", "yes", "on",
+        }
+
+    @property
+    def evolution_configured(self) -> bool:
+        return bool(self.evolution_api_url and self.evolution_api_key and self.evolution_instance)
 
     @property
     def support_whatsapp_url(self) -> str:

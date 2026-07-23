@@ -71,6 +71,49 @@ def init_crm_local_db() -> None:
                     key TEXT PRIMARY KEY,
                     value_json TEXT NOT NULL
                 );
+
+                CREATE TABLE IF NOT EXISTS attendance_conversations (
+                    id TEXT PRIMARY KEY,
+                    phone_e164 TEXT NOT NULL,
+                    contact_name TEXT NOT NULL DEFAULT '',
+                    profile_pic_url TEXT NOT NULL DEFAULT '',
+                    sheet_row INTEGER,
+                    status TEXT NOT NULL DEFAULT 'novo_lead',
+                    assignee TEXT NOT NULL DEFAULT '',
+                    ai_mode TEXT NOT NULL DEFAULT 'on',
+                    tags_json TEXT NOT NULL DEFAULT '[]',
+                    notes TEXT NOT NULL DEFAULT '',
+                    last_message_at TEXT NOT NULL DEFAULT '',
+                    last_message_preview TEXT NOT NULL DEFAULT '',
+                    unread_count INTEGER NOT NULL DEFAULT 0,
+                    typing INTEGER NOT NULL DEFAULT 0,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_attendance_phone
+                    ON attendance_conversations(phone_e164);
+                CREATE INDEX IF NOT EXISTS idx_attendance_last_msg
+                    ON attendance_conversations(last_message_at);
+
+                CREATE TABLE IF NOT EXISTS attendance_messages (
+                    id TEXT PRIMARY KEY,
+                    conversation_id TEXT NOT NULL,
+                    direction TEXT NOT NULL,
+                    msg_type TEXT NOT NULL DEFAULT 'text',
+                    body TEXT NOT NULL DEFAULT '',
+                    media_url TEXT NOT NULL DEFAULT '',
+                    media_mime TEXT NOT NULL DEFAULT '',
+                    media_filename TEXT NOT NULL DEFAULT '',
+                    evolution_id TEXT NOT NULL DEFAULT '',
+                    sender TEXT NOT NULL DEFAULT 'contact',
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY(conversation_id) REFERENCES attendance_conversations(id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_attendance_msg_conv
+                    ON attendance_messages(conversation_id, created_at);
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_attendance_msg_evolution
+                    ON attendance_messages(evolution_id)
+                    WHERE evolution_id != '';
                 """
             )
             conn.commit()
