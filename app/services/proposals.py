@@ -324,6 +324,7 @@ def _proposal_pdf_query(
     value: str | None = None,
     servico: str | None = None,
     colaboradores: str | None = None,
+    services_description: str | None = None,
 ) -> str:
     params = {}
     if value:
@@ -332,6 +333,8 @@ def _proposal_pdf_query(
         params["servico"] = servico
     if colaboradores:
         params["colaboradores"] = colaboradores
+    if services_description:
+        params["servicos"] = services_description
     return f"?{urlencode(params)}" if params else ""
 
 
@@ -343,10 +346,13 @@ def build_generated_proposal(
     *,
     servico: str | None = None,
     colaboradores: str | None = None,
+    services_description: str | None = None,
+    plans_text: str | None = None,
 ) -> dict:
     company = resolve_company_name(company, df)
     encoded_company = quote(company)
-    query = _proposal_pdf_query(value, servico, colaboradores)
+    # PDF usa sessão + cache; evita URL gigante com a descrição dos serviços
+    query = _proposal_pdf_query(value, servico, colaboradores, None)
     preview_query = f"{query}&inline=1" if query else "?inline=1"
     value_label = ""
     if value:
@@ -362,6 +368,8 @@ def build_generated_proposal(
         value=value,
         servico=servico,
         colaboradores=colaboradores,
+        services_description=services_description,
+        plans_text=plans_text,
     )
     subject = quote(f"Proposta comercial - {company}")
     body = quote(
@@ -381,6 +389,8 @@ def build_generated_proposal(
         "value": value,
         "servico": servico or "",
         "colaboradores": colaboradores or "",
+        "services_description": services_description or "",
+        "plans_text": plans_text or "",
         "value_label": value_label,
         "servico_label": normalize_text(servico) or "",
         "colaboradores_label": normalize_text(colaboradores) or "",
@@ -451,75 +461,164 @@ def handle_proposal_chat_message(
     servico: str | None = None,
     colaboradores: str | None = None,
     company_override: str | None = None,
-) -> tuple[list[dict], dict | None]:
+    pending_company: str | None = None,
+    services_description: str | None = None,
+) -> tuple[list[dict], dict | None, str | None]:
+    """
+    Retorna (mensagens, proposta_gerada|None, pending_company|None).
+    Fluxo: escolhe empresa → pergunta serviços → gera PDF comercial.
+    """
     clean_message = normalize_text(message)
-    if not clean_message:
-        return chat_messages, None
+    services_description = normalize_text(services_description) or None
+    company_pick = normalize_text(company_override) or None
 
-    chat_messages.append({"role": "user", "content": clean_message, "time": _now_time()})
+    # Formulário só com empresa (sem descrição ainda)
+    if company_pick and not services_description and (
+        not clean_message
+        or clean_message.lower().startswith("selecionei a empresa")
+        or clean_message.lower().startswith("empresa selecionada")
+    ):
+        company = resolve_company_name(company_pick, df)
+        if not company:
+            chat_messages.append({
+                "role": "assistant",
+                "content": "Não encontrei essa empresa no cadastro. Selecione um cliente da lista.",
+                "time": _now_time(),
+            })
+            return chat_messages, None, None
+        chat_messages.append({
+            "role": "user",
+            "content": f"Empresa selecionada: {company}",
+            "time": _now_time(),
+        })
+        chat_messages.append({
+            "role": "assistant",
+            "content": (
+                f"Perfeito. Vou usar o cadastro de **{company}**.\n\n"
+                "Quais os serviços que deseja incluir para esse cliente?\n"
+                "(Descreva o plano — ex.: plano até 25 colaboradores, ponto eletrônico…)"
+            ),
+            "time": _now_time(),
+        })
+        return chat_messages, None, company
+
+    if not clean_message and not services_description:
+        return chat_messages, None, pending_company
+
+    if clean_message:
+        chat_messages.append({"role": "user", "content": clean_message, "time": _now_time()})
+
     company = None
-    if normalize_text(company_override):
-        company = resolve_company_name(company_override, df)
+    if company_pick:
+        company = resolve_company_name(company_pick, df)
+    if not company and pending_company:
+        company = resolve_company_name(pending_company, df)
     if not company:
         extracted = _extract_company(clean_message, df)
         company = resolve_company_name(extracted, df) if extracted else None
-    value = _extract_value(clean_message)
-    servico = normalize_text(servico) or _extract_servico(clean_message) or None
-    colaboradores = normalize_text(colaboradores) or _extract_colaboradores(clean_message) or None
-    generated = None
 
-    if company:
-        if columns is None:
-            columns = identify_columns(df)
-        generated = build_generated_proposal(
-            company,
-            value,
-            df,
-            columns,
-            servico=servico,
-            colaboradores=colaboradores,
+    description = services_description or clean_message
+    # Se só escolheu empresa no texto sem descrição útil
+    if company and description and description.lower() in {
+        f"empresa selecionada: {company.lower()}",
+        f"selecionei a empresa {company.lower()}",
+        company.lower(),
+    }:
+        chat_messages.append({
+            "role": "assistant",
+            "content": (
+                f"Quais os serviços que deseja incluir para **{company}**?\n"
+                "Descreva o plano desejado (ex.: plano até 10 colaboradores)."
+            ),
+            "time": _now_time(),
+        })
+        return chat_messages, None, company
+
+    if not company:
+        chat_messages.append({
+            "role": "assistant",
+            "content": (
+                "Selecione a empresa do cadastro no formulário ao lado "
+                "(ou digite o nome exato). Depois descreva os serviços."
+            ),
+            "time": _now_time(),
+        })
+        return chat_messages, None, pending_company
+
+    if not description or len(description) < 3:
+        chat_messages.append({
+            "role": "assistant",
+            "content": (
+                f"Quais os serviços que deseja incluir para **{company}**?\n"
+                "Descreva livremente o que deve entrar na proposta."
+            ),
+            "time": _now_time(),
+        })
+        return chat_messages, None, company
+
+    if columns is None:
+        columns = identify_columns(df)
+
+    from app.services.proposal_ai import interpret_services_description
+    from app.services.proposal_commercial_pdf import collect_client_data
+
+    client = collect_client_data(company, df, columns)
+    ai_result = interpret_services_description(
+        description,
+        cadastro_collaborators=client.get("colaboradores") or "",
+    )
+    pricing = ai_result.get("pricing")
+    value = str(getattr(pricing, "boleto_monthly", "") or "")
+    generated = build_generated_proposal(
+        company,
+        value,
+        df,
+        columns,
+        servico=ai_result.get("product_label") or servico,
+        colaboradores=client.get("colaboradores") or colaboradores,
+        services_description=description,
+        plans_text=ai_result.get("plans_text"),
+    )
+    details = [
+        f"Faixa: até {ai_result.get('included_collaborators')} colaboradores",
+    ]
+    if pricing:
+        from app.services.proposal_pricing import _fmt
+
+        details.extend(
+            [
+                f"Boleto: R$ {_fmt(pricing.boleto_monthly)}/mês",
+                f"Recorrente: R$ {_fmt(pricing.recorrente_monthly)}/mês",
+                f"Anual: R$ {_fmt(pricing.anual_upfront)} à vista",
+            ]
         )
-        details = []
-        if generated.get("servico_label"):
-            details.append(f"Serviço: {generated['servico_label']}")
-        if generated.get("colaboradores_label"):
-            details.append(f"Colaboradores: {generated['colaboradores_label']}")
-        details_text = ("\n" + "\n".join(details)) if details else ""
-        if generated.get("pdf_error"):
-            footer = f"\n\nNão foi possível gerar o PDF.\n{generated['pdf_error']}"
-        else:
-            footer = "\n\nO PDF já está disponível ao lado, com opções para baixar ou enviar por e-mail."
-        chat_messages.append({
-            "role": "assistant",
-            "content": (
-                f"Proposta gerada para **{company}**"
-                + (f" no valor de {generated['value_label']}." if generated.get("value_label") else ".")
-                + details_text
-                + footer
-            ),
-            "time": _now_time(),
-        })
-        if generated.get("pdf_ready"):
-            chat_messages.append({
-                "role": "assistant",
-                "type": "pdf_card",
-                "company": company,
-                "filename": generated["filename"],
-                "value": value,
-                "generated": generated,
-                "time": _now_time(),
-            })
+    if ai_result.get("ai_used"):
+        details.append("Texto dos planos enriquecido com IA.")
+    details_text = "\n".join(details)
+    if generated.get("pdf_error"):
+        footer = f"\n\nNão foi possível gerar o PDF.\n{generated['pdf_error']}"
     else:
+        footer = "\n\nO PDF comercial já está disponível ao lado (modelo Oppi)."
+    chat_messages.append({
+        "role": "assistant",
+        "content": (
+            f"Proposta gerada para **{company}** com base no cadastro e na descrição dos serviços.\n\n"
+            f"{details_text}"
+            f"{footer}"
+        ),
+        "time": _now_time(),
+    })
+    if generated.get("pdf_ready"):
         chat_messages.append({
             "role": "assistant",
-            "content": (
-                "Para gerar a proposta, informe o nome da empresa e o valor.\n\n"
-                "Exemplo: Crie uma proposta para Clínica PetCare com implantação + automação comercial. Valor R$ 24.900."
-            ),
+            "type": "pdf_card",
+            "company": company,
+            "filename": generated["filename"],
+            "value": value,
+            "generated": generated,
             "time": _now_time(),
         })
-
-    return chat_messages, generated
+    return chat_messages, generated, None
 
 
 def render_proposal_chat_messages(messages: list[dict]) -> str:
@@ -568,7 +667,8 @@ def render_proposal_chat_messages(messages: list[dict]) -> str:
 
 
 def should_show_proposal_quick_form(messages: list[dict]) -> bool:
-    return not any(message.get("role") == "user" for message in messages)
+    # Mostra formulário enquanto não houver PDF gerado
+    return not any(message.get("type") == "pdf_card" for message in messages)
 
 
 def build_proposal_company_options(df: pd.DataFrame) -> list[str]:
@@ -590,8 +690,17 @@ def build_proposal_form_message(
     servico: str = "",
     valor_proposta: str = "",
     colaboradores: str = "",
+    services_description: str = "",
 ) -> str:
-    parts = [f"Crie uma proposta para {normalize_text(empresa)}"]
+    empresa = normalize_text(empresa)
+    services_description = normalize_text(services_description)
+    if empresa and not services_description:
+        return f"Empresa selecionada: {empresa}"
+    if empresa and services_description:
+        return services_description
+    parts = []
+    if empresa:
+        parts.append(f"Crie uma proposta para {empresa}")
     if normalize_text(servico):
         parts.append(f"Serviço: {normalize_text(servico)}")
     if normalize_text(valor_proposta):
@@ -601,15 +710,20 @@ def build_proposal_form_message(
         parts.append(f"Valor {value}")
     if normalize_text(colaboradores):
         parts.append(f"Colaboradores: {normalize_text(colaboradores)}")
-    return ". ".join(parts) + "."
+    if services_description:
+        parts.append(services_description)
+    return ". ".join(parts) + ("." if parts else "")
 
 
 def default_proposal_chat_messages() -> list[dict]:
     return [{
         "role": "assistant",
         "content": (
-            "Olá! Sou o agente de IA para propostas.\n\n"
-            "Descreva a proposta que deseja gerar ou use o formulário abaixo para montar o PDF pronto para enviar ao cliente."
+            "Olá! Sou o agente de IA para propostas Oppi.\n\n"
+            "1) Selecione a empresa do cadastro no formulário.\n"
+            "2) Eu pergunto quais serviços incluir.\n"
+            "3) Você descreve o plano e eu monto o PDF comercial completo "
+            "(com boleto, recorrente e anual)."
         ),
         "time": _now_time(),
     }]

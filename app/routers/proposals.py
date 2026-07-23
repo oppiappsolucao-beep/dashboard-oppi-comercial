@@ -61,6 +61,7 @@ def _proposals_chat_context(request: Request, chat_messages: list[dict], df) -> 
         "show_quick_form": should_show_proposal_quick_form(chat_messages),
         "company_options": build_proposal_company_options(df),
         "service_options": get_commercial_service_options(),
+        "pending_company": normalize_text(request.session.get("proposals_pending_company")),
     }
 
 
@@ -147,6 +148,7 @@ async def proposals_chat(
     servico: str = Form(""),
     valor_proposta: str = Form(""),
     colaboradores: str = Form(""),
+    services_description: str = Form(""),
 ):
     redirect = require_auth(request)
     if redirect:
@@ -154,11 +156,16 @@ async def proposals_chat(
 
     df, columns = get_prepared_data()
     chat_messages = _get_chat_messages(request)
+    pending = normalize_text(request.session.get("proposals_pending_company"))
 
-    if empresa.strip():
-        message = build_proposal_form_message(empresa, servico, valor_proposta, colaboradores)
+    if empresa.strip() and not services_description.strip() and not message.strip():
+        message = build_proposal_form_message(empresa)
+    elif services_description.strip():
+        message = services_description.strip()
+        if not empresa.strip() and pending:
+            empresa = pending
 
-    chat_messages, generated = handle_proposal_chat_message(
+    chat_messages, generated, new_pending = handle_proposal_chat_message(
         message,
         df,
         chat_messages,
@@ -166,8 +173,14 @@ async def proposals_chat(
         servico=servico or None,
         colaboradores=colaboradores or None,
         company_override=empresa.strip() or None,
+        pending_company=pending or None,
+        services_description=services_description.strip() or None,
     )
     request.session["proposals_chat"] = chat_messages
+    if new_pending:
+        request.session["proposals_pending_company"] = new_pending
+    elif generated:
+        request.session.pop("proposals_pending_company", None)
     if generated:
         request.session["proposals_generated"] = generated
 
@@ -215,6 +228,7 @@ async def proposals_chat_reset(request: Request):
         return redirect
     request.session["proposals_chat"] = default_proposal_chat_messages()
     request.session.pop("proposals_generated", None)
+    request.session.pop("proposals_pending_company", None)
     return RedirectResponse(url="/propostas", status_code=303)
 
 
@@ -225,16 +239,21 @@ async def proposals_pdf(
     valor: str = "",
     servico: str = "",
     colaboradores: str = "",
+    servicos: str = "",
 ):
     redirect = require_auth(request)
     if redirect:
         return redirect
 
     generated = request.session.get("proposals_generated") or {}
+    plans_text = ""
+    services_description = servicos
     if isinstance(generated, dict) and normalize_text(generated.get("company")) == normalize_text(empresa):
         valor = valor or generated.get("value") or ""
         servico = servico or generated.get("servico") or ""
         colaboradores = colaboradores or generated.get("colaboradores") or ""
+        services_description = services_description or generated.get("services_description") or ""
+        plans_text = generated.get("plans_text") or ""
 
     df, columns = get_prepared_data()
     try:
@@ -245,6 +264,8 @@ async def proposals_pdf(
             value=valor or None,
             servico=servico or None,
             colaboradores=colaboradores or None,
+            services_description=services_description or None,
+            plans_text=plans_text or None,
         )
     except Exception as error:
         return HTMLResponse(f"<p>Erro ao gerar PDF: {error}</p>", status_code=500)

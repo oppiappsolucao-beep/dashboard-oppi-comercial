@@ -176,13 +176,17 @@ def _proposal_cache_key(
     value: str | None = None,
     servico: str | None = None,
     colaboradores: str | None = None,
+    services_description: str | None = None,
+    plans_text: str | None = None,
 ) -> str:
     payload = "|".join([
         normalize_text(company_name).lower(),
         normalize_text(value),
         normalize_text(servico),
         normalize_text(colaboradores),
-        normalize_text(get_proposal_template_doc_id()),
+        normalize_text(services_description),
+        normalize_text(plans_text),
+        "commercial-v1" if normalize_text(services_description) else normalize_text(get_proposal_template_doc_id()),
         normalize_text(os.environ.get("APP_BUILD", "")),
     ])
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
@@ -830,6 +834,8 @@ def generate_proposal_pdf(
     servico: str | None = None,
     colaboradores: str | None = None,
     *,
+    services_description: str | None = None,
+    plans_text: str | None = None,
     use_cache: bool = True,
 ) -> bytes:
     if df is None or columns is None:
@@ -838,11 +844,31 @@ def generate_proposal_pdf(
         df = prepare_data(raw_df, columns)
 
     resolved_company = resolve_company_name(company_name, df)
-    cache_key = _proposal_cache_key(resolved_company, value, servico, colaboradores)
+    cache_key = _proposal_cache_key(
+        resolved_company,
+        value,
+        servico,
+        colaboradores,
+        services_description,
+        plans_text,
+    )
     if use_cache:
         cached = get_cached_proposal_pdf(cache_key)
         if cached:
             return cached
+
+    if normalize_text(services_description):
+        from app.services.proposal_commercial_pdf import generate_commercial_proposal_pdf
+
+        pdf_bytes = generate_commercial_proposal_pdf(
+            resolved_company,
+            df,
+            columns,
+            services_description=services_description,
+            plans_text=plans_text,
+        )
+        store_proposal_pdf_cache(cache_key, pdf_bytes)
+        return pdf_bytes
 
     template_id = get_proposal_template_doc_id()
     if not template_id:
@@ -870,10 +896,20 @@ def prepare_generated_proposal_pdf(
     value: str | None = None,
     servico: str | None = None,
     colaboradores: str | None = None,
+    *,
+    services_description: str | None = None,
+    plans_text: str | None = None,
 ) -> tuple[str | None, str | None]:
     """Gera o PDF antecipadamente. Retorna (cache_key, erro)."""
     resolved_company = resolve_company_name(company_name, df)
-    cache_key = _proposal_cache_key(resolved_company, value, servico, colaboradores)
+    cache_key = _proposal_cache_key(
+        resolved_company,
+        value,
+        servico,
+        colaboradores,
+        services_description,
+        plans_text,
+    )
     try:
         generate_proposal_pdf(
             resolved_company,
@@ -882,6 +918,8 @@ def prepare_generated_proposal_pdf(
             value=value,
             servico=servico,
             colaboradores=colaboradores,
+            services_description=services_description,
+            plans_text=plans_text,
             use_cache=True,
         )
     except Exception as error:

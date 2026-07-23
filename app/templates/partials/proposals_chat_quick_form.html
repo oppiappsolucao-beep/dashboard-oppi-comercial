@@ -7,46 +7,34 @@
   <div class="proposals-quick-form-title">Montar proposta</div>
 
   <label class="proposals-quick-field">
-    <span>Empresa</span>
+    <span>Empresa (cadastro)</span>
     <input
       type="text"
       name="empresa"
       list="proposals-company-options"
       placeholder="Nome da empresa"
+      value="{{ pending_company or '' }}"
       required
       autocomplete="off"
     >
   </label>
 
+  {% if pending_company %}
   <label class="proposals-quick-field">
-    <span>Serviço</span>
-    <select name="servico" {% if not service_options %}disabled{% endif %}>
-      <option value="">Selecione</option>
-      {% for service in service_options %}
-      <option value="{{ service }}">{{ service }}</option>
-      {% endfor %}
-    </select>
-    {% if not service_options %}
-    <small class="proposals-quick-hint">Cadastre serviços em <a href="/configuracoes?tab=servicos">Configurações → Serviços</a>.</small>
-    {% endif %}
-  </label>
-
-  <label class="proposals-quick-field">
-    <span>Valor</span>
-    <input type="text" name="valor_proposta" placeholder="Ex.: R$ 8.500" autocomplete="off">
-  </label>
-
-  <label class="proposals-quick-field">
-    <span>Colaboradores</span>
+    <span>Quais os serviços que deseja incluir para esse cliente?</span>
     <textarea
-      name="colaboradores"
-      rows="2"
-      placeholder="Descreva livremente a quantidade ou contexto dos colaboradores"
+      name="services_description"
+      rows="4"
+      placeholder="Ex.: Plano até 25 colaboradores — ponto eletrônico Oppi"
+      required
       autocomplete="off"
     ></textarea>
   </label>
-
   <button type="submit" class="btn proposals-quick-form-btn">Gerar proposta</button>
+  {% else %}
+  <button type="submit" class="btn proposals-quick-form-btn">Continuar</button>
+  <small class="proposals-quick-hint">Depois eu peço a descrição dos serviços.</small>
+  {% endif %}
 </form>
 
 <datalist id="proposals-company-options">
