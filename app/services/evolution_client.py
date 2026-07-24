@@ -213,15 +213,55 @@ def normalize_phone_from_jid(jid: str) -> str:
     return digits
 
 
+def is_whatsapp_group_jid(value: str) -> bool:
+    """True para grupos/broadcast — não entram no inbox de leads."""
+    text = normalize_text(value).lower()
+    if not text:
+        return False
+    if text.endswith("@g.us") or text.endswith("@broadcast") or "status@broadcast" in text:
+        return True
+    # ID numérico típico de grupo (ex.: 1203630...), sem ser celular BR (55…)
+    digits = normalize_digits(text.split("@", 1)[0])
+    if digits.startswith("120") and len(digits) >= 15:
+        return True
+    return False
+
+
+def message_looks_like_group(key: dict | None = None, item: dict | None = None) -> bool:
+    """Detecta mensagem de grupo mesmo quando o participant traz número individual."""
+    key = key if isinstance(key, dict) else {}
+    item = item if isinstance(item, dict) else {}
+    if item.get("isGroup") is True or key.get("isGroup") is True:
+        return True
+    for candidate in (
+        key.get("remoteJid"),
+        item.get("remoteJid"),
+        key.get("remoteJidAlt"),
+        item.get("remoteJidAlt"),
+    ):
+        if is_whatsapp_group_jid(str(candidate or "")):
+            return True
+    # Em grupos o Baileys/Evolution costuma preencher participant
+    participant = normalize_text(key.get("participant") or item.get("participant") or "")
+    remote = normalize_text(key.get("remoteJid") or item.get("remoteJid") or "")
+    if participant and is_whatsapp_group_jid(remote):
+        return True
+    return False
+
+
 def resolve_contact_identity(key: dict | None, item: dict | None = None) -> tuple[str, str]:
     """
     Retorna (phone_e164, remote_jid_para_envio).
 
     WhatsApp/Evolution às vezes manda @lid em remoteJid e o número real em remoteJidAlt.
     Para entrega 1:1, priorizamos o @lid (PN JID costuma ficar PENDING no Baileys atual).
+    Grupos (@g.us) retornam ("", "") — inbox só aceita leads individuais.
     """
     key = key if isinstance(key, dict) else {}
     item = item if isinstance(item, dict) else {}
+
+    if message_looks_like_group(key, item):
+        return "", ""
 
     remote_jid = normalize_text(key.get("remoteJid") or item.get("remoteJid") or "")
     remote_alt = normalize_text(
@@ -237,36 +277,54 @@ def resolve_contact_identity(key: dict | None, item: dict | None = None) -> tupl
         or ""
     )
 
+    # Nunca use participant como identidade principal (é membro de grupo)
+    if is_whatsapp_group_jid(remote_jid):
+        return "", ""
+    remote_alt_safe = remote_alt
+    if is_whatsapp_group_jid(remote_alt) or (
+        normalize_text(key.get("participant")) and remote_alt == normalize_text(key.get("participant"))
+    ):
+        # participant só importa em grupo — já filtrado acima; evita promover membro a lead
+        if normalize_text(key.get("participant")) == remote_alt:
+            remote_alt_safe = ""
+
     lid_jid = ""
-    for candidate in (remote_jid, remote_alt):
+    for candidate in (remote_jid, remote_alt_safe):
         if candidate and "@lid" in candidate.lower():
             lid_jid = candidate
             break
 
     phone = ""
     phone_jid = ""
-    for candidate in (remote_alt, sender_pn, remote_jid):
+    for candidate in (remote_alt_safe, sender_pn, remote_jid):
         if not candidate:
             continue
         lower = candidate.lower()
-        if lower.endswith("@g.us") or "broadcast" in lower:
+        if is_whatsapp_group_jid(candidate) or "broadcast" in lower:
             continue
         if "@lid" in lower:
             continue
         if "@s.whatsapp.net" in lower or "@c.us" in lower or "@" not in candidate:
             digits = normalize_phone_from_jid(candidate)
-            if digits and len(digits) >= 10:
+            if digits and len(digits) >= 10 and not is_whatsapp_group_jid(digits):
                 phone = digits
                 phone_jid = candidate if "@" in candidate else f"{digits}@s.whatsapp.net"
                 break
 
     if not phone and remote_jid and "@lid" not in remote_jid.lower():
+        if is_whatsapp_group_jid(remote_jid):
+            return "", ""
         phone = normalize_phone_from_jid(remote_jid) or normalize_digits(remote_jid.split("@")[0])
-        if phone and len(phone) >= 10:
+        if phone and len(phone) >= 10 and not is_whatsapp_group_jid(phone):
             phone_jid = remote_jid if "@" in remote_jid else f"{phone}@s.whatsapp.net"
+        else:
+            phone = ""
+            phone_jid = ""
 
     # @lid primeiro — necessário para entrega em várias versões Baileys/WhatsApp
     send_jid = lid_jid or phone_jid or remote_jid
+    if is_whatsapp_group_jid(send_jid):
+        return "", ""
     return phone, send_jid
 
 

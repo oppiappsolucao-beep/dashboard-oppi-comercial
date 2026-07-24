@@ -182,6 +182,8 @@ def list_conversations(
     status: str = "",
     limit: int = 100,
 ) -> list[dict]:
+    from app.services.evolution_client import is_whatsapp_group_jid
+
     with _session(commit=False) as db:
         q = db.query(AttendanceConversation)
         if status and status != "todos":
@@ -209,7 +211,13 @@ def list_conversations(
             .limit(max(1, min(int(limit or 100), 500)))
             .all()
         )
-        return [_conversation_to_dict(row) for row in rows]
+        conversations = []
+        for row in rows:
+            # Esconde grupos já gravados (legado / vazamento via participant)
+            if is_whatsapp_group_jid(row.remote_jid or "") or is_whatsapp_group_jid(row.phone_e164 or ""):
+                continue
+            conversations.append(_conversation_to_dict(row))
+        return conversations
 
 
 def upsert_conversation_by_phone(
@@ -221,7 +229,12 @@ def upsert_conversation_by_phone(
     status: str | None = None,
     remote_jid: str = "",
 ) -> dict:
+    from app.services.evolution_client import is_whatsapp_group_jid
+
     phone = normalize_text(phone_e164)
+    remote_jid = normalize_text(remote_jid)
+    if is_whatsapp_group_jid(phone) or is_whatsapp_group_jid(remote_jid):
+        return {}
     if not phone:
         raise ValueError("Telefone obrigatório")
     now = _now_iso()

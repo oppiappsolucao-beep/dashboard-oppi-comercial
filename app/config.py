@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-APP_BUILD = os.getenv("APP_BUILD", "20260724-notranslate-v24").strip() or "20260724-notranslate-v24"
+APP_BUILD = os.getenv("APP_BUILD", "20260724-no-groups-v25").strip() or "20260724-no-groups-v25"
 
 
 class Settings:

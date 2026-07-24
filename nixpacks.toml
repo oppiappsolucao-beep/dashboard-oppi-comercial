@@ -6,4 +6,4 @@ aptPkgs = ["...", "libreoffice-writer-nogui", "fontconfig", "fonts-dejavu-core"]
 cmd = "uvicorn app.main:app --host 0.0.0.0 --port 8501 --proxy-headers"
 
 [variables]
-APP_BUILD = "20260724-notranslate-v24"
+APP_BUILD = "20260724-no-groups-v25"

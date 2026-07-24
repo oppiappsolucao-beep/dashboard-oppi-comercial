@@ -9,7 +9,12 @@ from fastapi.responses import JSONResponse
 
 from app.config import settings
 from app.services import attendance_crm, attendances, attendances_storage as store
-from app.services.evolution_client import normalize_phone_from_jid, resolve_contact_identity
+from app.services.evolution_client import (
+    is_whatsapp_group_jid,
+    message_looks_like_group,
+    normalize_phone_from_jid,
+    resolve_contact_identity,
+)
 from app.services.legacy_core import normalize_text
 
 logger = logging.getLogger(__name__)
@@ -132,12 +137,13 @@ def _handle_messages_upsert(payload: dict) -> int:
     count = 0
     for item in _iter_upsert_messages(payload):
         key = item.get("key") if isinstance(item.get("key"), dict) else {}
+        # Bloqueia grupos ANTES de resolver identidade (participant vira "lead" falso)
+        if message_looks_like_group(key, item):
+            continue
         phone, remote_jid = resolve_contact_identity(key, item)
-        if not remote_jid:
+        if not remote_jid or not phone:
             continue
-        if remote_jid.endswith("@g.us") or remote_jid.endswith("@broadcast") or "status@broadcast" in remote_jid:
-            continue
-        if not phone:
+        if is_whatsapp_group_jid(remote_jid) or is_whatsapp_group_jid(phone):
             continue
 
         from_me = bool(key.get("fromMe") or item.get("fromMe"))
@@ -200,7 +206,7 @@ def _handle_presence_or_typing(payload: dict) -> bool:
         or _dig(data, "key", "remoteJid")
         or ""
     )
-    if not jid or "@g.us" in jid:
+    if not jid or is_whatsapp_group_jid(jid):
         return False
     phone = normalize_phone_from_jid(jid)
     conversation = store.get_conversation_by_phone(phone)
