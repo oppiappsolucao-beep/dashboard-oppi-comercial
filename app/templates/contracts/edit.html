@@ -138,6 +138,6 @@
   <input type="hidden" name="ativo" value="{% if cadastro_ativo %}0{% else %}1{% endif %}">
 </form>
 
-<script src="/static/js/partners-form.js?v=1" defer></script>
-<script src="/static/js/registration-edit.js?v=4" defer></script>
+<script src="/static/js/partners-form.js?v={{ static_version }}" defer></script>
+<script src="/static/js/registration-edit.js?v={{ static_version }}" defer></script>
 {% endblock %}
