@@ -24,8 +24,8 @@ SETTINGS_TABS = [
 ]
 
 USERS_SUBTABS = [
-    ("setores", "Setores"),
     ("usuarios", "Usuários"),
+    ("setores", "Setores"),
     ("metas", "Metas e comissões"),
 ]
 
@@ -122,32 +122,91 @@ def _role_class(role: str) -> str:
 
 
 def _build_users_from_sheet(df: pd.DataFrame, app_username: str) -> list[dict]:
+    from app.services.account_users import ensure_default_account_users
+
+    try:
+        ensure_default_account_users()
+    except Exception:
+        pass
+
     users = []
     seen_emails: set[str] = set()
     seen_names: set[str] = set()
+    seen_ids: set[str] = set()
+    seen_usernames: set[str] = set()
 
-    admin_name = normalize_name(app_username) or "Administrador"
-    admin_email = _slug_email(admin_name)
-    users.append({
-        "id": "__admin__",
-        "name": admin_name,
-        "email": admin_email,
-        "username": normalize_name(app_username).lower() or "admin",
-        "role": "Administrador",
-        "role_class": "admin",
-        "status_label": "Ativo",
-        "status_class": "active",
-        "last_access": datetime.now().strftime("%d/%m/%Y %H:%M"),
-        "initials": _initials(admin_name),
-        "managed": False,
-        "can_edit": False,
-        "can_delete": False,
-        "source_label": "Administrador principal",
-    })
-    seen_emails.add(admin_email.lower())
-    seen_names.add(admin_name.lower())
+    admin_username = normalize_name(app_username).lower() or "admin"
+    admin_aliases = {admin_username, "oppi", "oppitech", "oppi tech"}
+    stored_users = load_account_users()
 
-    for stored in load_account_users():
+    admin_managed = next(
+        (
+            stored
+            for stored in stored_users
+            if normalize_text(stored.get("username")).lower() in admin_aliases
+            or normalize_text(stored.get("name")).lower() in {"oppi", "oppitech", "oppi tech"}
+            or (
+                stored.get("role") == "Administrador"
+                and normalize_text(stored.get("username")).lower() == admin_username
+            )
+        ),
+        None,
+    )
+
+    if admin_managed:
+        users.append({
+            "id": admin_managed["id"],
+            "name": admin_managed["name"],
+            "email": admin_managed["email"],
+            "username": admin_managed["username"],
+            "role": "Administrador",
+            "role_class": "admin",
+            "status_label": admin_managed["status_label"],
+            "status_class": admin_managed["status_class"],
+            "last_access": admin_managed["last_access"] or datetime.now().strftime("%d/%m/%Y %H:%M"),
+            "initials": _initials(admin_managed["name"]),
+            "managed": True,
+            "can_edit": True,
+            "can_delete": False,
+            "active": admin_managed["active"],
+            "source_label": "Administrador principal",
+            "department_id": str(admin_managed.get("department_id") or ""),
+            "department_name": admin_managed.get("department_name") or "—",
+        })
+        seen_ids.add(admin_managed["id"])
+        seen_emails.add(admin_managed["email"].lower())
+        seen_names.add(admin_managed["name"].lower())
+        seen_usernames.add(admin_managed["username"].lower())
+    else:
+        admin_name = normalize_name(app_username) or "Administrador"
+        if admin_name.lower() in {"admin", "administrador"}:
+            admin_name = "Oppi"
+        admin_email = _slug_email(admin_name)
+        users.append({
+            "id": "__admin__",
+            "name": admin_name,
+            "email": admin_email,
+            "username": admin_username,
+            "role": "Administrador",
+            "role_class": "admin",
+            "status_label": "Ativo",
+            "status_class": "active",
+            "last_access": datetime.now().strftime("%d/%m/%Y %H:%M"),
+            "initials": _initials(admin_name),
+            "managed": False,
+            "can_edit": False,
+            "can_delete": False,
+            "source_label": "Administrador principal",
+        })
+        seen_emails.add(admin_email.lower())
+        seen_names.add(admin_name.lower())
+        seen_usernames.add(admin_username)
+
+    for stored in stored_users:
+        if stored["id"] in seen_ids:
+            continue
+        if stored["username"].lower() in seen_usernames:
+            continue
         users.append({
             "id": stored["id"],
             "name": stored["name"],
@@ -167,8 +226,10 @@ def _build_users_from_sheet(df: pd.DataFrame, app_username: str) -> list[dict]:
             "department_id": str(stored.get("department_id") or ""),
             "department_name": stored.get("department_name") or "—",
         })
+        seen_ids.add(stored["id"])
         seen_emails.add(stored["email"].lower())
         seen_names.add(stored["name"].lower())
+        seen_usernames.add(stored["username"].lower())
 
     if df.empty:
         return users
@@ -176,6 +237,13 @@ def _build_users_from_sheet(df: pd.DataFrame, app_username: str) -> list[dict]:
     for seller in sorted(df["_vendedor"].dropna().astype(str).unique().tolist()):
         seller_name = normalize_name(seller)
         if not seller_name or seller_name.lower() in seen_names or seller_name == "Sem vendedor":
+            continue
+        # Evita duplicar Higo / Raíssa da planilha quando já há cadastro gerenciável
+        seller_key = seller_name.lower()
+        if any(
+            seller_key == known or seller_key.startswith(known + " ") or known.startswith(seller_key + " ")
+            for known in seen_names
+        ):
             continue
 
         seller_rows = df[df["_vendedor"] == seller]

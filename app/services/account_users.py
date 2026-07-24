@@ -557,3 +557,81 @@ def delete_account_user(user_id: str) -> None:
     with _lock:
         global _cache
         _cache = filtered
+
+
+DEFAULT_TEAM_USERS = [
+    {
+        "name": "Oppi",
+        "username": "oppi",
+        "email": "oppi@oppitech.com.br",
+        "role": "Administrador",
+        "aliases": ("oppi", "oppitech", "oppi tech"),
+    },
+    {
+        "name": "Higo Silva",
+        "username": "higo",
+        "email": "higo@oppitech.com.br",
+        "role": "Vendedor",
+        "aliases": ("higo", "higo silva"),
+    },
+    {
+        "name": "Raíssa",
+        "username": "raissa",
+        "email": "raissa@oppitech.com.br",
+        "role": "Vendedor",
+        "aliases": ("raissa", "raíssa"),
+    },
+]
+
+
+def ensure_default_account_users() -> list[dict]:
+    """Garante Oppi, Higo Silva e Raíssa no cadastro de usuários da conta."""
+    import secrets
+
+    users = load_account_users()
+    by_username = {normalize_text(u.get("username")).lower(): u for u in users if u.get("username")}
+    by_name = {normalize_text(u.get("name")).lower(): u for u in users if u.get("name")}
+    created = False
+
+    for spec in DEFAULT_TEAM_USERS:
+        aliases = {normalize_text(a).lower() for a in spec["aliases"]}
+        aliases.add(normalize_text(spec["name"]).lower())
+        aliases.add(normalize_text(spec["username"]).lower())
+
+        if any(alias in by_username or alias in by_name for alias in aliases):
+            continue
+
+        short = normalize_text(spec["username"]).lower()
+        if short and any(
+            normalize_text(n).lower() == short or normalize_text(n).lower().startswith(short + " ")
+            for n in by_name
+        ):
+            continue
+
+        user = _serialize_user(
+            {
+                "id": str(uuid.uuid4()),
+                "name": spec["name"],
+                "email": spec["email"],
+                "username": spec["username"],
+                "password_hash": _hash_password(secrets.token_urlsafe(18)),
+                "role": spec["role"],
+                "active": True,
+                "created_at": _now_iso(),
+                "updated_at": _now_iso(),
+                "last_access": "",
+                "department_id": "",
+                "department_name": "",
+            }
+        )
+        users.append(user)
+        by_username[user["username"].lower()] = user
+        by_name[normalize_text(user["name"]).lower()] = user
+        created = True
+
+    if created:
+        _persist_users(users)
+        with _lock:
+            global _cache
+            _cache = users
+    return load_account_users()

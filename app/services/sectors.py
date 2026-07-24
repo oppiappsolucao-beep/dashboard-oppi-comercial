@@ -220,11 +220,6 @@ def update_sector(
             clean = normalize_text(name)
             if not clean:
                 raise ValueError("Informe o nome do setor.")
-            if (
-                normalize_text(row.name).lower() in SYSTEM_SECTOR_NAMES
-                and clean.lower() != normalize_text(row.name).lower()
-            ):
-                raise ValueError("O nome dos setores padrão não pode ser alterado.")
             row.name = clean
         if user_ids is not None:
             row.user_ids_json = json.dumps(_parse_user_ids(user_ids), ensure_ascii=False)
@@ -258,6 +253,10 @@ def delete_sector(sector_id: int | str) -> None:
         db.commit()
     finally:
         db.close()
+
+
+def is_todos_sector_name(name: str | None) -> bool:
+    return normalize_text(name).lower() == "todos"
 
 
 def assign_user_to_sector(user_id: str, sector_id: int | str | None) -> None:
@@ -294,23 +293,55 @@ def assign_user_to_sector(user_id: str, sector_id: int | str | None) -> None:
         db.close()
 
 
+def _place_user_on_sector(user_id: str, sector_id: int, *, preserve_todos: bool = False) -> None:
+    """Coloca o usuário no setor; opcionalmente mantém o vínculo com Todos."""
+    uid = normalize_text(user_id)
+    if not uid:
+        return
+    ensure_default_sectors()
+    db = SessionLocal()
+    try:
+        rows = db.query(CrmSector).all()
+        now = _now_iso()
+        for row in rows:
+            ids = _parse_user_ids(row.user_ids_json)
+            if row.id == sector_id:
+                if uid not in ids:
+                    ids.append(uid)
+                    row.user_ids_json = json.dumps(ids, ensure_ascii=False)
+                    row.updated_at = now
+                continue
+            if preserve_todos and is_todos_sector_name(row.name):
+                continue
+            if uid in ids:
+                ids = [item for item in ids if item != uid]
+                row.user_ids_json = json.dumps(ids, ensure_ascii=False)
+                row.updated_at = now
+        db.commit()
+    finally:
+        db.close()
+
+
 def sector_id_for_user(user_id: str) -> int | None:
     uid = normalize_text(user_id)
     if not uid:
         return None
+    # Prefer setor específico; Todos só se for o único vínculo
+    todos_id = None
     for sector in list_sectors(active_only=False):
-        if uid in (sector.get("user_ids") or []):
-            return int(sector["id"])
-    return None
+        if uid not in (sector.get("user_ids") or []):
+            continue
+        if is_todos_sector_name(sector.get("name")):
+            todos_id = int(sector["id"])
+            continue
+        return int(sector["id"])
+    return todos_id
 
 
-def link_users_to_sector(sector_id: int | str, user_ids: list[str] | None) -> dict:
-    """Atualiza responsáveis do setor e sincroniza o departamento nos usuários."""
-    sector = update_sector(sector_id, user_ids=list(user_ids or []))
-    selected = {normalize_text(uid) for uid in (user_ids or []) if normalize_text(uid)}
+def _sync_user_departments(sector: dict, selected: set[str], *, skip_ids: set[str] | None = None) -> None:
+    skip_ids = skip_ids or set()
     sid = str(sector["id"])
     sname = normalize_text(sector.get("name"))
-
     try:
         from app.services import account_users as account_users_service
 
@@ -318,7 +349,7 @@ def link_users_to_sector(sector_id: int | str, user_ids: list[str] | None) -> di
         changed = False
         for user in users:
             uid = normalize_text(user.get("id"))
-            if not uid:
+            if not uid or uid in skip_ids:
                 continue
             if uid in selected:
                 if user.get("department_id") != sid or user.get("department_name") != sname:
@@ -336,16 +367,76 @@ def link_users_to_sector(sector_id: int | str, user_ids: list[str] | None) -> di
     except Exception:
         pass
 
-    for uid in selected:
-        try:
-            assign_user_to_sector(uid, sector["id"])
-        except Exception:
-            continue
-    return sector
+
+def link_users_to_sector(sector_id: int | str, user_ids: list[str] | None) -> dict:
+    """Atualiza responsáveis do setor e sincroniza o departamento nos usuários.
+
+    Quem está em Todos aparece em todos os setores na UI e não é removido de
+    Todos ao salvar um setor específico.
+    """
+    ensure_default_sectors()
+    target = get_sector(sector_id)
+    if not target:
+        raise ValueError("Setor não encontrado.")
+
+    todos = next(
+        (s for s in list_sectors(active_only=False) if is_todos_sector_name(s.get("name"))),
+        None,
+    )
+    todos_ids = {
+        normalize_text(uid)
+        for uid in (todos.get("user_ids") if todos else [])
+        if normalize_text(uid)
+    }
+    is_todos = is_todos_sector_name(target.get("name"))
+    selected = {normalize_text(uid) for uid in (user_ids or []) if normalize_text(uid)}
+
+    if not is_todos:
+        selected = {uid for uid in selected if uid not in todos_ids}
+
+    sector = update_sector(sector_id, user_ids=list(selected))
+
+    if is_todos:
+        for uid in selected:
+            try:
+                assign_user_to_sector(uid, sector["id"])
+            except Exception:
+                continue
+        _sync_user_departments(sector, selected)
+    else:
+        for uid in selected:
+            try:
+                _place_user_on_sector(uid, int(sector["id"]), preserve_todos=True)
+            except Exception:
+                continue
+        _sync_user_departments(sector, selected, skip_ids=todos_ids)
+
+    return get_sector(sector_id) or sector
 
 
-def is_todos_sector_name(name: str | None) -> bool:
-    return normalize_text(name).lower() == "todos"
+def enrich_sectors_for_settings(sectors: list[dict]) -> list[dict]:
+    """Marca usuários de Todos como vinculados em todos os setores (somente UI)."""
+    todos = next((s for s in sectors if is_todos_sector_name(s.get("name"))), None)
+    todos_ids = list(todos.get("user_ids") or []) if todos else []
+    enriched = []
+    for sector in sectors:
+        direct = list(sector.get("user_ids") or [])
+        if is_todos_sector_name(sector.get("name")):
+            checked = direct
+            from_todos = []
+        else:
+            checked = list(dict.fromkeys([*direct, *todos_ids]))
+            from_todos = [uid for uid in todos_ids if uid not in set(direct)]
+        enriched.append(
+            {
+                **sector,
+                "checked_user_ids": checked,
+                "todos_user_ids": from_todos,
+                "is_todos": is_todos_sector_name(sector.get("name")),
+                "users_count_display": len(checked),
+            }
+        )
+    return enriched
 
 
 def attendance_scope_for_user(user: dict | None) -> dict:

@@ -340,7 +340,10 @@
         <div class="settings-sector-card-head">
           <div>
             <div class="settings-sector-card-title">{{ sector.name }}</div>
-            <div class="settings-field-hint">{% if sector.is_system %}Setor padrão{% else %}Personalizado{% endif %} · {{ sector.users|length }} usuário(s)</div>
+            <div class="settings-field-hint">
+              {% if sector.is_todos %}Setor Todos — vê todos os setores{% elif sector.is_system %}Setor padrão{% else %}Personalizado{% endif %}
+              · {{ sector.users_count_display or sector.users|length }} usuário(s)
+            </div>
           </div>
           {% if is_admin and not sector.is_system %}
           <form method="post" action="/configuracoes/setores/remover" onsubmit="return confirm('Remover este setor?');">
@@ -356,20 +359,23 @@
           <input type="hidden" name="subtab" value="setores">
           <div class="settings-goals-field">
             <label>Nome</label>
-            <input type="text" name="sector_name" value="{{ sector.name }}" required {% if sector.is_system %}readonly{% endif %}>
+            <input type="text" name="sector_name" value="{{ sector.name }}" required maxlength="120">
           </div>
           <div class="settings-sector-users-box">
             <div class="settings-company-label">Usuários vinculados</div>
             <div class="settings-user-check-grid">
               {% for user in account_users_options %}
-              <label class="settings-user-check">
-                <input type="checkbox" name="user_ids" value="{{ user.id }}" {% if user.id in sector.user_ids %}checked{% endif %}>
-                <span>{{ user.name }}</span>
+              {% set from_todos = user.id in (sector.todos_user_ids or []) %}
+              <label class="settings-user-check {% if from_todos %}is-from-todos{% endif %}">
+                <input type="checkbox" name="user_ids" value="{{ user.id }}"
+                  {% if user.id in (sector.checked_user_ids or sector.user_ids) %}checked{% endif %}
+                  {% if from_todos and not sector.is_todos %}disabled title="Vinculado pelo setor Todos"{% endif %}>
+                <span>{{ user.name }}{% if from_todos and not sector.is_todos %} <em>(Todos)</em>{% endif %}</span>
               </label>
               {% endfor %}
             </div>
           </div>
-          <button type="submit" class="btn btn-secondary">Salvar vínculos</button>
+          <button type="submit" class="btn btn-secondary">Salvar setor</button>
         </form>
         {% else %}
         <div class="settings-field-hint">Responsáveis: {{ sector.users_label }}</div>
@@ -385,7 +391,7 @@
 
   {% if settings_params.subtab == 'usuarios' %}
 
-  <div class="settings-layout">
+  <div class="settings-layout settings-users-layout">
     <div class="settings-main">
       <div class="panel settings-users-panel">
         <div class="settings-section-header">

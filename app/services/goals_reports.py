@@ -113,15 +113,11 @@ def _seller_goal(realized_prev: float, realized_current: float) -> float:
 
 
 def _resolved_seller_goal(base_df: pd.DataFrame, month: int, year: int, seller: str) -> float:
+    """Só usa meta cadastrada. Sem cadastro → 0 (não inventa R$ 20.000)."""
     configured = get_monthly_goal(year, month, seller)
     if configured is not None:
-        return configured
-
-    seller_df = base_df if seller == TEAM_SELLER_LABEL else base_df[base_df["_vendedor"] == seller].copy()
-    month_df = _filter_month(seller_df, month, year)
-    prev_month, prev_year = _previous_month(month, year)
-    prev_df = _filter_month(seller_df, prev_month, prev_year)
-    return _seller_goal(_realized_value(prev_df), _realized_value(month_df))
+        return float(configured)
+    return 0.0
 
 
 def _achievement_status(pct: float) -> tuple[str, str]:
@@ -181,13 +177,13 @@ def _seller_rows(base_df: pd.DataFrame, month: int, year: int) -> list[dict]:
         conversion = round((closed / total_leads) * 100, 1) if total_leads else 0.0
         commission = realized * _commission_rate(year, month, seller)
         achievement = round((realized / goal) * 100, 1) if goal else 0.0
-        status_label, status_class = _achievement_status(achievement)
+        status_label, status_class = _achievement_status(achievement) if goal else ("Sem meta", "inline")
 
         rows.append({
             "vendedor": seller,
             "vendedor_initials": _initials(seller),
             "meta": goal,
-            "meta_label": _format_money(goal),
+            "meta_label": _format_money(goal) if goal else "Sem meta",
             "realizado": realized,
             "realizado_label": _format_money(realized),
             "propostas": proposals,
@@ -197,9 +193,10 @@ def _seller_rows(base_df: pd.DataFrame, month: int, year: int) -> list[dict]:
             "comissao": commission,
             "comissao_label": _format_money_decimal(commission),
             "atingimento": achievement,
-            "atingimento_label": _format_percent(achievement, 0),
+            "atingimento_label": _format_percent(achievement, 0) if goal else "—",
             "status_label": status_label,
             "status_class": status_class,
+            "has_goal": bool(goal),
         })
 
     rows.sort(key=lambda item: item["realizado"], reverse=True)

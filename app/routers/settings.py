@@ -86,12 +86,13 @@ def _settings_context(request: Request, settings_params: dict):
     account_users_options: list[dict] = []
     try:
         from app.services.niches import list_niches_rows
-        from app.services.sectors import list_sectors
+        from app.services.sectors import enrich_sectors_for_settings, list_sectors
         from app.services.attendance_tags import list_attendance_tags
-        from app.services.account_users import load_account_users
+        from app.services.account_users import ensure_default_account_users, load_account_users
 
+        ensure_default_account_users()
         niches_rows = list_niches_rows()
-        sectors_rows = list_sectors(active_only=False)
+        sectors_rows = enrich_sectors_for_settings(list_sectors(active_only=False))
         attendance_tags_rows = list_attendance_tags(active_only=False)
         account_users_options = [
             {
