@@ -49,18 +49,21 @@
       ＋
       <input type="file" id="att-media-input" accept="image/*,audio/*,.pdf,.doc,.docx" hidden>
     </label>
-    {# name="text" fica no hidden: o Windows corrige o textarea no blur ao clicar Enviar #}
-    <input type="hidden" name="text" class="att-text-snap" value="">
+    {# name="text" no hidden: Windows/Chrome corrigem o textarea no blur (olá→óleo) #}
+    <input type="hidden" name="text" class="att-text-snap" value="" autocomplete="off">
     <textarea rows="1" class="att-composer-input"
               placeholder="Digite uma mensagem…"
               autocomplete="off"
               autocorrect="off"
-              autocapitalize="off"
+              autocapitalize="none"
               spellcheck="false"
               lang="zxx"
               inputmode="text"
               data-lpignore="true"
               data-form-type="other"
+              data-gramm="false"
+              data-gramm_editor="false"
+              data-enable-grammarly="false"
               {% if not evolution_configured %}disabled{% endif %}></textarea>
     <button type="submit" class="btn att-send-btn" {% if not evolution_configured %}disabled{% endif %}>Enviar</button>
   </form>

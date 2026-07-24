@@ -224,6 +224,7 @@
     }
     if (ev.target.id === "att-chat-root" || ev.target.id === "att-messages") {
       scrollMessages();
+      bindComposerGuards(ev.target);
       autoGrow($(".att-composer-input"));
       var thread = $("[data-conversation-id]", $("#att-chat-root"));
       var shell = $("#att-shell");
@@ -249,23 +250,98 @@
     }
   });
 
-  function snapComposerText(form) {
-    if (!form) return "";
-    var ta = form.querySelector(".att-composer-input");
-    var snap = form.querySelector(".att-text-snap");
-    if (!ta || !snap) return "";
-    var value = ta.value || "";
-    snap.value = value;
-    return value;
+  // Fonte da verdade do texto digitado (NÃO usar ta.value no envio —
+  // Windows/Chrome troca "olá"→"óleo" no blur e no insertReplacementText).
+  var composerRaw = new WeakMap();
+
+  function composerForm(el) {
+    return el && el.closest ? el.closest(".att-composer") : null;
   }
 
-  // Captura o texto ANTES do blur/autocorrect do Windows (olá → óleo)
+  function getComposerRaw(form) {
+    if (!form) return "";
+    if (composerRaw.has(form)) return composerRaw.get(form) || "";
+    var ta = form.querySelector(".att-composer-input");
+    return (ta && ta.value) || "";
+  }
+
+  function setComposerRaw(form, value) {
+    if (!form) return "";
+    var text = value == null ? "" : String(value);
+    composerRaw.set(form, text);
+    var snap = form.querySelector(".att-text-snap");
+    if (snap) snap.value = text;
+    return text;
+  }
+
+  function syncSnapFromRaw(form) {
+    return setComposerRaw(form, getComposerRaw(form));
+  }
+
+  function bindComposerGuards(root) {
+    var scope = root || document;
+    scope.querySelectorAll(".att-composer-input").forEach(function (ta) {
+      if (ta.dataset.attGuard === "1") return;
+      ta.dataset.attGuard = "1";
+      ta.setAttribute("spellcheck", "false");
+      ta.setAttribute("autocorrect", "off");
+      ta.setAttribute("autocapitalize", "off");
+      ta.setAttribute("autocomplete", "off");
+      ta.setAttribute("lang", "zxx");
+
+      var form = composerForm(ta);
+      if (form && !composerRaw.has(form)) {
+        setComposerRaw(form, ta.value || "");
+      }
+
+      // Bloqueia autocorreção do SO/navegador (olá → óleo)
+      ta.addEventListener("beforeinput", function (ev) {
+        var type = ev.inputType || "";
+        if (type === "insertReplacementText") {
+          ev.preventDefault();
+        }
+      });
+
+      ta.addEventListener("input", function (ev) {
+        autoGrow(ta);
+        var f = composerForm(ta);
+        if (!f) return;
+        var type = (ev && ev.inputType) || "";
+        if (type === "insertReplacementText") {
+          ta.value = getComposerRaw(f);
+          return;
+        }
+        // Correção do Windows no blur: o campo já perdeu o foco — ignora e reverte
+        if (document.activeElement !== ta) {
+          ta.value = getComposerRaw(f);
+          return;
+        }
+        setComposerRaw(f, ta.value || "");
+      });
+
+      // Se o SO corrigir no blur, reverte para o que foi digitado
+      ta.addEventListener("blur", function () {
+        var f = composerForm(ta);
+        if (!f) return;
+        var raw = getComposerRaw(f);
+        if (ta.value !== raw) {
+          ta.value = raw;
+        }
+      });
+    });
+  }
+
+  bindComposerGuards(document);
+
+  // Evita blur no textarea ao clicar Enviar (blur dispara autocorrect do Windows)
   document.addEventListener(
     "mousedown",
     function (ev) {
       var btn = ev.target && ev.target.closest ? ev.target.closest(".att-send-btn") : null;
       if (!btn) return;
-      snapComposerText(btn.closest("form"));
+      ev.preventDefault();
+      var form = btn.closest("form");
+      syncSnapFromRaw(form);
     },
     true
   );
@@ -278,8 +354,8 @@
       if (ev.key !== "Enter" || ev.shiftKey) return;
       ev.preventDefault();
       var form = ta.closest("form");
-      var value = snapComposerText(form);
-      if (!value.trim()) return;
+      var value = syncSnapFromRaw(form);
+      if (!String(value).trim()) return;
       if (form && window.htmx) {
         window.htmx.trigger(form, "submit");
       } else if (form) {
@@ -294,17 +370,9 @@
     if (!form) return;
     var path = (ev.detail && ev.detail.path) || "";
     if (path.indexOf("/enviar") === -1) return;
-    var value = snapComposerText(form);
+    var value = syncSnapFromRaw(form);
     if (ev.detail && ev.detail.parameters) {
       ev.detail.parameters.text = value;
-    }
-  });
-
-  document.addEventListener("input", function (ev) {
-    if (ev.target && ev.target.classList.contains("att-composer-input")) {
-      autoGrow(ev.target);
-      // Mantém o snap atualizado a cada digitação
-      snapComposerText(ev.target.closest("form"));
     }
   });
 
@@ -315,8 +383,9 @@
     if (!id) return;
     var fd = new FormData();
     fd.append("file", input.files[0]);
-    var captionEl = $(".att-composer-input");
-    if (captionEl && captionEl.value) fd.append("caption", captionEl.value);
+    var form = $(".att-composer");
+    var caption = form ? getComposerRaw(form) : "";
+    if (caption) fd.append("caption", caption);
     fetch("/atendimentos/conversa/" + encodeURIComponent(id) + "/midia", {
       method: "POST",
       body: fd,
@@ -331,6 +400,7 @@
           if (window.htmx) window.htmx.process(root);
         }
         scrollMessages();
+        bindComposerGuards(root || document);
         refreshList({ bumpId: id });
         lastInboxToken = "";
         lastConversationToken = "";
