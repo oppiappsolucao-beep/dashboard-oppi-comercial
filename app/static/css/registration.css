@@ -1041,6 +1041,88 @@
   margin-top: 8px;
 }
 
+.registration-activity-drawer-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  position: relative;
+  padding: 8px 4px 0;
+}
+
+.registration-activity-drawer-timeline .activity-drawer-timeline-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  position: relative;
+  padding-bottom: 18px;
+}
+
+.registration-activity-drawer-timeline .activity-drawer-timeline-step:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  left: 9px;
+  top: 18px;
+  bottom: 0;
+  width: 2px;
+  background: #E5E7EB;
+}
+
+.registration-activity-drawer-timeline .activity-drawer-timeline-dot {
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  border: 2px solid #CBD5E1;
+  background: #fff;
+  flex-shrink: 0;
+  margin-top: 1px;
+  position: relative;
+  z-index: 1;
+}
+
+.registration-activity-drawer-timeline .activity-drawer-timeline-step.state-done .activity-drawer-timeline-dot {
+  border-color: #22C55E;
+  background: #22C55E;
+}
+
+.registration-activity-drawer-timeline .activity-drawer-timeline-step.state-done .activity-drawer-timeline-dot::after {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 2px;
+  width: 5px;
+  height: 9px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.registration-activity-drawer-timeline .activity-drawer-timeline-step.state-current .activity-drawer-timeline-dot {
+  border-color: #2563EB;
+  background: #EFF6FF;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
+}
+
+.registration-activity-drawer-timeline .activity-drawer-timeline-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.registration-activity-drawer-timeline .activity-drawer-timeline-body strong {
+  font-size: 0.9rem;
+  color: var(--text);
+}
+
+.registration-activity-drawer-timeline .activity-drawer-timeline-body span {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.registration-activity-drawer-timeline .activity-drawer-timeline-meta {
+  font-size: 0.78rem;
+}
+
 .client-edit-page {
   display: flex;
   flex-direction: column;

@@ -46,15 +46,18 @@
 
   <div class="registration-activities-timeline">
     <div class="section-heading">Linha do tempo</div>
-    <div class="section-subtitle">Interações e movimentações registradas automaticamente.</div>
-    {% if interactions %}
-    <div class="operational-timeline">
-      {% for item in interactions %}
-      <div class="operational-timeline-item">
-        <div class="operational-timeline-time">{{ item.at }}</div>
-        <div class="operational-timeline-body">
-          <div class="operational-timeline-title">{{ item.description }}</div>
-          <div class="operational-timeline-meta">{{ item.user }}{% if item.note %} · {{ item.note }}{% endif %}</div>
+    <div class="section-subtitle">Mesmo histórico exibido no painel de Atividades.</div>
+    {% if timeline %}
+    <div class="activity-drawer-timeline registration-activity-drawer-timeline">
+      {% for step in timeline %}
+      <div class="activity-drawer-timeline-step state-{{ step.state }}">
+        <span class="activity-drawer-timeline-dot" aria-hidden="true"></span>
+        <div class="activity-drawer-timeline-body">
+          <strong>{{ step.label }}</strong>
+          <span>{{ step.at }}</span>
+          {% if step.meta %}
+          <span class="activity-drawer-timeline-meta">{{ step.meta }}</span>
+          {% endif %}
         </div>
       </div>
       {% endfor %}

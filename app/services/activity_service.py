@@ -107,22 +107,47 @@ def _resolve_effective_stage(record: dict, tenant_id: str | None = None) -> str:
     return stage or "Novo Lead"
 
 
+def _empresa_match_key(value: str) -> str:
+    return normalize_search_text(normalize_text(value))
+
+
 def _resolve_sheet_row_for_activity(activity: dict, df: pd.DataFrame) -> int:
-    sheet_row = int(activity.get("sheet_row") or 0)
-    if sheet_row or df.empty:
-        return sheet_row
+    """Resolve o cadastro da atividade priorizando o nome da empresa.
 
+    Se o sheet_row gravado aponta para outro cliente, corrige pelo nome
+    para o botão Abrir cadastro não abrir o registro errado.
+    """
+    stored = int(activity.get("sheet_row") or 0)
     empresa = normalize_text(activity.get("empresa"))
-    if not empresa or empresa == "—":
-        return 0
+    empresa_key = _empresa_match_key(empresa)
 
-    if "_empresa" not in df.columns or "_sheet_row" not in df.columns:
-        return 0
+    if df.empty or "_sheet_row" not in df.columns:
+        return stored
 
-    match = df[df["_empresa"].astype(str).str.strip() == empresa]
-    if match.empty:
-        return 0
-    return int(match.iloc[0]["_sheet_row"] or 0)
+    def _match_by_empresa() -> int:
+        if not empresa_key or "_empresa" not in df.columns:
+            return 0
+        keys = df["_empresa"].map(lambda value: _empresa_match_key(str(value)))
+        matches = df[keys == empresa_key]
+        if matches.empty:
+            return 0
+        matches = matches.sort_values("_sheet_row", ascending=False)
+        return int(matches.iloc[0]["_sheet_row"] or 0)
+
+    if stored:
+        row_match = df[df["_sheet_row"].astype(int) == int(stored)]
+        if not row_match.empty:
+            row_empresa = normalize_text(row_match.iloc[0].get("_empresa", ""))
+            if not empresa_key or _empresa_match_key(row_empresa) == empresa_key:
+                return stored
+            # sheet_row gravado pertence a outro cliente — resolve pelo nome
+            resolved = _match_by_empresa()
+            return resolved or stored
+        # sheet_row fora do dataframe: tenta pelo nome antes de confiar no valor
+        resolved = _match_by_empresa()
+        return resolved or stored
+
+    return _match_by_empresa()
 
 
 def _status_for_pipeline_stage(stage: str) -> str:
@@ -189,7 +214,7 @@ def _build_registration_prefill_params(activity: dict) -> dict[str, str]:
 
 def _build_lead_href_for_activity(activity: dict, sheet_row: int) -> str:
     if sheet_row:
-        return f"/cadastro/todos/{sheet_row}/editar?from=activities"
+        return f"/cadastro/todos/{sheet_row}/editar?from=activities&tab=atividades"
 
     params = _build_registration_prefill_params(activity)
     if not params:
@@ -572,6 +597,31 @@ def buscar_atividades(
                 if activity_day > period_end and not (period_end >= today and activity_day > today):
                     continue
         serialized = _serialize_activity(record, tenant_id)
+        resolved_row = _resolve_sheet_row_for_activity(serialized, filtered_df)
+        stored_row = int(serialized.get("sheet_row") or 0)
+        if resolved_row and resolved_row != stored_row:
+            save_activity(
+                tenant_id,
+                record.get("id"),
+                {
+                    "sheet_row": resolved_row,
+                    "lead_id": str(resolved_row),
+                    "company_id": str(resolved_row),
+                },
+                sync_pipeline=False,
+            )
+            serialized["sheet_row"] = resolved_row
+            # Recalcula tipo após corrigir o vínculo
+            try:
+                from app.services.registration import resolve_cadastro_tipo
+
+                cadastro_tipo = resolve_cadastro_tipo(tenant_id, resolved_row) or "lead"
+                serialized["cadastro_tipo"] = cadastro_tipo
+                serialized["tipo_label"] = "Empresa" if cadastro_tipo == "empresa" else "Lead"
+            except Exception:
+                pass
+        elif resolved_row:
+            serialized["sheet_row"] = resolved_row
         if search:
             blob = " | ".join([
                 serialized["title"],
@@ -1450,13 +1500,31 @@ def build_activity_detail_panel(
     observation = normalize_text(activity["note"]) or normalize_text(activity["description"]) or "—"
 
     lead_created_at = None
+    stored_sheet_row = int(activity.get("sheet_row") or 0)
     sheet_row = _resolve_sheet_row_for_activity(activity, df)
     activity["sheet_row"] = sheet_row
+    # Corrige vínculo persistido quando o sheet_row aponta para outro cliente
+    if sheet_row and sheet_row != stored_sheet_row:
+        save_activity(
+            tenant_id,
+            activity_id,
+            {
+                "sheet_row": sheet_row,
+                "lead_id": str(sheet_row),
+                "company_id": str(sheet_row),
+            },
+            sync_pipeline=False,
+        )
+        record["sheet_row"] = sheet_row
     if sheet_row and not df.empty:
         row_match = df[df["_sheet_row"] == sheet_row]
         if not row_match.empty:
             lead = _lead_record(row_match.iloc[0], columns, tenant_id)
             lead_created_at = lead.get("created_at")
+            # Garante que o nome exibido no painel bate com o cadastro aberto
+            lead_empresa = normalize_text(lead.get("empresa"))
+            if lead_empresa:
+                activity["empresa"] = lead_empresa
 
     suggestion = suggest_from_result("Cliente respondeu", stage)
     next_action_current = next_action_display_stage(
@@ -1561,20 +1629,128 @@ def buscar_atividades_do_cadastro(
     return items
 
 
+def build_cadastro_timeline(
+    tenant_id: str | None,
+    sheet_row: int,
+    *,
+    lead_created_at=None,
+) -> list[dict]:
+    """Mesma linha do tempo do painel de Atividades, agregada por cadastro."""
+    if not sheet_row:
+        return []
+
+    steps: list[dict] = []
+    seen: set[tuple[str, str]] = set()
+
+    def add_step(step: dict) -> None:
+        key = _timeline_step_key(step.get("label", ""), step.get("sort_at"))
+        if key in seen:
+            return
+        seen.add(key)
+        steps.append(step)
+
+    activities = buscar_atividades_do_cadastro(tenant_id, sheet_row)
+    activities_asc = list(reversed(activities))
+
+    first_activity_created = None
+    for activity in activities_asc:
+        record = get_activity(tenant_id, activity.get("id"))
+        if record and record.get("created_at"):
+            first_activity_created = record.get("created_at")
+            break
+
+    entered_at = lead_created_at or first_activity_created
+    if entered_at:
+        add_step(_make_timeline_step(
+            label="Lead entrou",
+            sort_at=entered_at,
+        ))
+
+    for activity in activities_asc:
+        record = get_activity(tenant_id, activity.get("id"))
+        if not record:
+            continue
+        process_action = normalize_text(activity.get("title")) or "Atividade"
+        add_step(_make_timeline_step(
+            label=f"Atividade criada: {process_action}",
+            sort_at=record.get("created_at"),
+            user=normalize_text(activity.get("vendedor")),
+        ))
+        activity_timeline = record.get("timeline") if isinstance(record.get("timeline"), list) else []
+        for item in activity_timeline:
+            if not isinstance(item, dict):
+                continue
+            add_step(_make_timeline_step(
+                label=normalize_text(item.get("label")) or "Ação registrada",
+                sort_at=item.get("at"),
+                user=item.get("user", ""),
+                note=item.get("note", ""),
+            ))
+        if activity.get("status") == "concluida" and record.get("completed_at"):
+            result = normalize_text(activity.get("result_value") or "")
+            completion_label = f"Atividade concluída: {process_action}"
+            if result and result != "Selecione":
+                completion_label = f"{completion_label} — {result}"
+            add_step(_make_timeline_step(
+                label=completion_label,
+                sort_at=record.get("completed_at"),
+                user=normalize_text(record.get("updated_by") or activity.get("vendedor")),
+                note=normalize_text(activity.get("note") or activity.get("result_notes") or ""),
+            ))
+
+    stored = get_lead_action(tenant_id, sheet_row) or {}
+    interactions = stored.get("interactions") if isinstance(stored.get("interactions"), list) else []
+    for interaction in interactions:
+        if not isinstance(interaction, dict):
+            continue
+        if interaction.get("type") == "atividade_criada":
+            continue
+        step = _interaction_to_timeline_step(interaction)
+        step["sort_at"] = interaction.get("at")
+        add_step(step)
+
+    steps.sort(key=lambda step: _timeline_sort_value(step.get("sort_at")))
+
+    open_activity = next(
+        (item for item in activities if item.get("status") not in {"concluida", "cancelada"}),
+        None,
+    )
+    if open_activity and steps:
+        for step in steps:
+            step["state"] = "done"
+        steps[-1]["state"] = "current"
+    else:
+        for step in steps:
+            step["state"] = "done"
+
+    for step in steps:
+        step.pop("sort_at", None)
+
+    return steps
+
+
 def build_cadastro_activities_context(
     tenant_id: str | None,
     sheet_row: int,
     empresa: str,
+    *,
+    lead_created_at=None,
 ) -> dict:
     activities = buscar_atividades_do_cadastro(tenant_id, sheet_row)
     lead_action = get_lead_action(tenant_id, sheet_row) or {}
     interactions = lead_action.get("interactions") if isinstance(lead_action.get("interactions"), list) else []
     interactions = list(reversed(interactions))
+    timeline = build_cadastro_timeline(
+        tenant_id,
+        sheet_row,
+        lead_created_at=lead_created_at,
+    )
     query = urlencode({"sheet_row": sheet_row, "empresa": empresa})
     return {
         "activities": activities,
         "activities_count": len(activities),
         "interactions": interactions,
+        "timeline": timeline,
         "activities_href": "/atividades",
         "new_activity_href": f"/atividades?{query}",
     }

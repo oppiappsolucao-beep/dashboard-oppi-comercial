@@ -135,12 +135,8 @@ async def activities_detail_panel(request: Request, activity_id: str):
         return redirect
 
     df, columns = get_prepared_data()
-    options = get_filter_options(df)
-    filters = apply_default_period_filters(parse_dashboard_filters(request), df)
-    filters = apply_seller_scope(request, filters, options["seller_options"], is_admin(request))
-    scoped_df = apply_dashboard_filters(df, columns, filters)
-
-    panel = build_activity_detail_panel(DEFAULT_TENANT_ID, activity_id, scoped_df, columns)
+    # Dataframe completo: o vínculo Abrir cadastro não pode depender do filtro de período
+    panel = build_activity_detail_panel(DEFAULT_TENANT_ID, activity_id, df, columns)
     if not panel:
         return HTMLResponse("Atividade não encontrada.", status_code=404)
 
