@@ -510,7 +510,7 @@ def find_messages(remote_jid: str, *, limit: int = 30) -> list[dict]:
     last_error = ""
     for url in _instance_urls("/chat/findMessages"):
         try:
-            response = requests.post(url, headers=_headers(), json=payload, timeout=20)
+            response = requests.post(url, headers=_headers(), json=payload, timeout=8)
         except requests.RequestException as error:
             last_error = str(error)
             continue

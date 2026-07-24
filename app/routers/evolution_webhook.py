@@ -341,21 +341,26 @@ async def evolution_webhook(
     event = _extract_event_name(payload)
     handled = 0
     typing_ok = False
+    error = ""
 
-    if "messages_upsert" in event or "message_upsert" in event or not event:
-        handled = _handle_messages_upsert(payload)
-        if not event and handled == 0:
-            # tenta typing se não for upsert clássico
+    try:
+        if "messages_upsert" in event or "message_upsert" in event or not event:
+            handled = _handle_messages_upsert(payload)
+            if not event and handled == 0:
+                typing_ok = _handle_presence_or_typing(payload)
+        elif "presence" in event or "typing" in event or "chats_update" in event:
             typing_ok = _handle_presence_or_typing(payload)
-    elif "presence" in event or "typing" in event or "chats_update" in event:
-        typing_ok = _handle_presence_or_typing(payload)
-    else:
-        # eventos desconhecidos: tenta upsert por segurança
-        handled = _handle_messages_upsert(payload)
+        else:
+            handled = _handle_messages_upsert(payload)
+    except Exception as exc:
+        # Sempre responde 200 rápido — senão a Evolution para de entregar inbound
+        logger.exception("webhook evolution falhou event=%s", event or "unknown")
+        error = str(exc)[:200]
 
     return JSONResponse({
-        "ok": True,
+        "ok": not bool(error),
         "event": event or "unknown",
         "messages": handled,
         "typing": typing_ok,
+        "error": error or None,
     })

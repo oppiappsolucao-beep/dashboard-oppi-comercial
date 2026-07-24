@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 
 from app.config import settings
 from app.services import attendance_ai, attendance_crm, attendances_storage as store
@@ -402,7 +403,33 @@ def maybe_ai_reply(conversation_id: str, inbound_text: str) -> None:
 
 
 _SYNC_LAST_AT: dict[str, float] = {}
-_SYNC_MIN_INTERVAL_SEC = 12.0
+_SYNC_MIN_INTERVAL_SEC = 30.0
+_SYNC_IN_FLIGHT: set[str] = set()
+_SYNC_GUARD = threading.Lock()
+
+
+def schedule_sync_messages_from_evolution(
+    conversation_id: str,
+    *,
+    limit: int = 30,
+    force: bool = False,
+) -> None:
+    """Dispara sync em thread daemon — nunca bloqueia o worker do FastAPI/webhook."""
+    conversation_id = normalize_text(conversation_id)
+    if not conversation_id:
+        return
+
+    def _run() -> None:
+        try:
+            sync_messages_from_evolution(conversation_id, limit=limit, force=force)
+        except Exception:
+            logger.exception("Sync Evolution em background falhou (%s)", conversation_id)
+
+    threading.Thread(
+        target=_run,
+        daemon=True,
+        name=f"evo-sync-{conversation_id[:10]}",
+    ).start()
 
 
 def sync_messages_from_evolution(
@@ -417,55 +444,64 @@ def sync_messages_from_evolution(
     conversation_id = normalize_text(conversation_id)
     if not conversation_id:
         return 0
-    now = time.monotonic()
-    last = _SYNC_LAST_AT.get(conversation_id, 0.0)
-    if not force and (now - last) < _SYNC_MIN_INTERVAL_SEC:
-        return 0
-    _SYNC_LAST_AT[conversation_id] = now
 
-    conversation = store.get_conversation(conversation_id)
-    if not conversation or not settings.evolution_configured:
-        return 0
+    with _SYNC_GUARD:
+        now = time.monotonic()
+        last = _SYNC_LAST_AT.get(conversation_id, 0.0)
+        if not force and (now - last) < _SYNC_MIN_INTERVAL_SEC:
+            return 0
+        if conversation_id in _SYNC_IN_FLIGHT:
+            return 0
+        _SYNC_IN_FLIGHT.add(conversation_id)
+        _SYNC_LAST_AT[conversation_id] = now
 
-    targets: list[str] = []
-    remote = normalize_text(conversation.get("remote_jid") or "")
-    phone = normalize_text(conversation.get("phone_e164") or "")
-    if remote:
-        targets.append(remote)
-    if phone:
-        targets.append(f"{phone}@s.whatsapp.net")
-        try:
-            from app.services.evolution_client import phone_match_variants
+    try:
+        conversation = store.get_conversation(conversation_id)
+        if not conversation or not settings.evolution_configured:
+            return 0
 
-            for variant in phone_match_variants(phone):
-                targets.append(f"{variant}@s.whatsapp.net")
-        except Exception:
-            pass
-    targets = list(dict.fromkeys(t for t in targets if t))
-    if not targets:
-        return 0
-
-    from app.routers.evolution_webhook import ingest_evolution_message_item
-
-    imported = 0
-    for jid in targets:
-        try:
-            records = evolution_client.find_messages(jid, limit=limit)
-        except Exception:
-            logger.exception("findMessages falhou para %s", jid)
-            continue
-        for item in records:
+        targets: list[str] = []
+        remote = normalize_text(conversation.get("remote_jid") or "")
+        phone = normalize_text(conversation.get("phone_e164") or "")
+        if remote:
+            targets.append(remote)
+        if phone:
+            targets.append(f"{phone}@s.whatsapp.net")
             try:
-                if ingest_evolution_message_item(
-                    item,
-                    push_name=conversation.get("contact_name") or "",
-                ):
-                    imported += 1
+                from app.services.evolution_client import phone_match_variants
+
+                for variant in phone_match_variants(phone):
+                    targets.append(f"{variant}@s.whatsapp.net")
             except Exception:
-                logger.exception("Falha ao importar mensagem Evolution")
-        if imported:
-            break
-    return imported
+                pass
+        targets = list(dict.fromkeys(t for t in targets if t))
+        if not targets:
+            return 0
+
+        from app.routers.evolution_webhook import ingest_evolution_message_item
+
+        imported = 0
+        for jid in targets:
+            try:
+                records = evolution_client.find_messages(jid, limit=limit)
+            except Exception:
+                logger.exception("findMessages falhou para %s", jid)
+                continue
+            for item in records:
+                try:
+                    if ingest_evolution_message_item(
+                        item,
+                        push_name=conversation.get("contact_name") or "",
+                    ):
+                        imported += 1
+                except Exception:
+                    logger.exception("Falha ao importar mensagem Evolution")
+            if imported:
+                break
+        return imported
+    finally:
+        with _SYNC_GUARD:
+            _SYNC_IN_FLIGHT.discard(conversation_id)
 
 
 def update_notes_tags(

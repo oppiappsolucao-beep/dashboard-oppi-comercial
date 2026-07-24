@@ -122,8 +122,11 @@ async def attendances_filters(request: Request):
 @router.get("/atendimentos/conversa/{conversation_id}", response_class=HTMLResponse)
 def attendances_conversation(request: Request, conversation_id: str):
     require_auth(request)
+    # Sync em background — se for síncrono, trava o único worker e o webhook para de receber
     try:
-        attendances_service.sync_messages_from_evolution(conversation_id, limit=40, force=True)
+        attendances_service.schedule_sync_messages_from_evolution(
+            conversation_id, limit=40, force=True
+        )
     except Exception:
         pass
     ctx = _page_ctx(request, selected_id=conversation_id)
@@ -291,10 +294,12 @@ def attendances_sync(request: Request, conversation_id: str = ""):
     """Poll leve baseado no SQLite — mensagens novas aparecem sem F5."""
     require_auth(request)
     try:
-        # Compensa webhook perdido: a cada poll da conversa aberta, tenta puxar do Evolution
+        # NÃO chama Evolution aqui: o poll a cada 4s travava o worker e o webhook parava.
         if conversation_id:
             try:
-                attendances_service.sync_messages_from_evolution(conversation_id, limit=20)
+                attendances_service.schedule_sync_messages_from_evolution(
+                    conversation_id, limit=20, force=False
+                )
             except Exception:
                 pass
         return JSONResponse(store.get_sync_snapshot(conversation_id))
