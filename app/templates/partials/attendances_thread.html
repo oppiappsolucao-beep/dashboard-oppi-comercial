@@ -43,29 +43,36 @@
         hx-post="/atendimentos/conversa/{{ selected.id }}/enviar"
         hx-target="#att-chat-root"
         hx-swap="innerHTML"
-        hx-disabled-elt="button[type=submit]"
-        autocomplete="off">
-    <label class="att-attach-btn" title="Enviar mídia (URL pública)">
+        hx-disabled-elt=".att-send-btn"
+        autocomplete="off"
+        spellcheck="false">
+    <label class="att-attach-btn" title="Anexar arquivo">
       ＋
       <input type="file" id="att-media-input" accept="image/*,audio/*,.pdf,.doc,.docx" hidden>
     </label>
-    {# name="text" no hidden: Windows/Chrome corrigem o textarea no blur (olá→óleo) #}
+    {# Hidden = valor enviado. Div contenteditable: Windows não "corrige" como no textarea. #}
     <input type="hidden" name="text" class="att-text-snap" value="" autocomplete="off">
-    <textarea rows="1" class="att-composer-input"
-              placeholder="Digite uma mensagem…"
-              autocomplete="off"
-              autocorrect="off"
-              autocapitalize="none"
-              spellcheck="false"
-              lang="zxx"
-              inputmode="text"
-              data-lpignore="true"
-              data-form-type="other"
-              data-gramm="false"
-              data-gramm_editor="false"
-              data-enable-grammarly="false"
-              {% if not evolution_configured %}disabled{% endif %}></textarea>
-    <button type="submit" class="btn att-send-btn" {% if not evolution_configured %}disabled{% endif %}>Enviar</button>
+    <div class="att-composer-input"
+         contenteditable="plaintext-only"
+         role="textbox"
+         aria-multiline="true"
+         aria-label="Mensagem"
+         tabindex="0"
+         spellcheck="false"
+         autocapitalize="off"
+         autocomplete="off"
+         autocorrect="off"
+         lang="zxx"
+         data-lpignore="true"
+         data-gramm="false"
+         data-enable-grammarly="false"
+         data-placeholder="Digite uma mensagem…"
+         {% if not evolution_configured %}aria-disabled="true"{% endif %}></div>
+    {# Texto do botão só no CSS (::before) — o corretor do Windows alterava "Enviar" → "estampar" #}
+    <button type="button"
+            class="btn att-send-btn"
+            aria-label="Enviar mensagem"
+            {% if not evolution_configured %}disabled{% endif %}></button>
   </form>
 </div>
 

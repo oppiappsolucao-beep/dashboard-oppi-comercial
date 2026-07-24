@@ -354,10 +354,26 @@
   resize: none;
   min-height: 40px;
   max-height: 120px;
+  overflow-y: auto;
   border: none;
   border-radius: 10px;
   padding: 10px 12px;
   font: inherit;
+  background: #fff;
+  outline: none;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.att-composer-input[aria-disabled="true"] {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.att-composer-input:empty::before {
+  content: attr(data-placeholder);
+  color: #9ca3af;
+  pointer-events: none;
 }
 
 .att-attach-btn {
@@ -377,6 +393,12 @@
 
 .att-send-btn {
   flex-shrink: 0;
+  min-width: 88px;
+}
+
+/* Rótulo imune ao corretor do Windows (Enviar → estampar) */
+.att-send-btn::before {
+  content: "Enviar";
 }
 
 .att-crm {

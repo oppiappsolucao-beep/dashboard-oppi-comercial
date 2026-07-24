@@ -212,6 +212,141 @@
     el.style.height = Math.min(el.scrollHeight, 120) + "px";
   }
 
+  // Fonte da verdade do texto (Windows corrigia textarea: olá→óleo, Enviar→estampar).
+  var composerRaw = new WeakMap();
+
+  function composerForm(el) {
+    return el && el.closest ? el.closest(".att-composer") : null;
+  }
+
+  function composerInput(form) {
+    return form ? form.querySelector(".att-composer-input") : null;
+  }
+
+  function readComposerVisible(el) {
+    if (!el) return "";
+    if (el.tagName === "TEXTAREA" || el.tagName === "INPUT") {
+      return el.value || "";
+    }
+    return String(el.innerText || el.textContent || "")
+      .replace(/\u00a0/g, " ")
+      .replace(/\r\n/g, "\n")
+      .replace(/\r/g, "\n");
+  }
+
+  function writeComposerVisible(el, value) {
+    if (!el) return;
+    var text = value == null ? "" : String(value);
+    if (el.tagName === "TEXTAREA" || el.tagName === "INPUT") {
+      el.value = text;
+      return;
+    }
+    el.textContent = text;
+  }
+
+  function getComposerRaw(form) {
+    if (!form) return "";
+    if (composerRaw.has(form)) return composerRaw.get(form) || "";
+    return readComposerVisible(composerInput(form));
+  }
+
+  function setComposerRaw(form, value) {
+    if (!form) return "";
+    var text = value == null ? "" : String(value);
+    composerRaw.set(form, text);
+    var snap = form.querySelector(".att-text-snap");
+    if (snap) snap.value = text;
+    return text;
+  }
+
+  function textForSend(form) {
+    if (!form) return "";
+    var el = composerInput(form);
+    var raw = getComposerRaw(form);
+    var visible = readComposerVisible(el);
+    var value = String(raw).length ? raw : visible;
+    setComposerRaw(form, value);
+    if (el && readComposerVisible(el) !== value) writeComposerVisible(el, value);
+    return value;
+  }
+
+  function clearComposer(form) {
+    if (!form) return;
+    setComposerRaw(form, "");
+    writeComposerVisible(composerInput(form), "");
+  }
+
+  function bindComposerGuards(root) {
+    var scope = root || document;
+    scope.querySelectorAll(".att-composer-input").forEach(function (el) {
+      if (el.dataset.attGuard === "1") return;
+      el.dataset.attGuard = "1";
+      el.setAttribute("spellcheck", "false");
+      el.setAttribute("autocorrect", "off");
+      el.setAttribute("autocapitalize", "off");
+      el.setAttribute("autocomplete", "off");
+      el.setAttribute("lang", "zxx");
+      // Firefox/Safari: plaintext-only pode falhar — força contenteditable simples
+      if (!el.isContentEditable) {
+        el.setAttribute("contenteditable", "true");
+      }
+
+      var form = composerForm(el);
+      if (form && !composerRaw.has(form)) {
+        setComposerRaw(form, readComposerVisible(el));
+      }
+
+      el.addEventListener("beforeinput", function (ev) {
+        var type = ev.inputType || "";
+        if (type === "insertReplacementText" || type === "insertTranspose") {
+          ev.preventDefault();
+        }
+      });
+
+      el.addEventListener("input", function (ev) {
+        autoGrow(el);
+        var f = composerForm(el);
+        if (!f) return;
+        var type = (ev && ev.inputType) || "";
+        if (type === "insertReplacementText") {
+          writeComposerVisible(el, getComposerRaw(f));
+          return;
+        }
+        if (document.activeElement !== el) {
+          writeComposerVisible(el, getComposerRaw(f));
+          return;
+        }
+        setComposerRaw(f, readComposerVisible(el));
+      });
+
+      el.addEventListener("paste", function (ev) {
+        ev.preventDefault();
+        var f = composerForm(el);
+        var clip = (ev.clipboardData || window.clipboardData);
+        var text = clip ? clip.getData("text/plain") : "";
+        text = String(text || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+        if (document.queryCommandSupported && document.queryCommandSupported("insertText")) {
+          document.execCommand("insertText", false, text);
+        } else {
+          var current = readComposerVisible(el);
+          writeComposerVisible(el, current + text);
+          if (f) setComposerRaw(f, current + text);
+        }
+        if (f) setComposerRaw(f, readComposerVisible(el));
+        autoGrow(el);
+      });
+
+      el.addEventListener("blur", function () {
+        var f = composerForm(el);
+        if (!f) return;
+        var raw = getComposerRaw(f);
+        if (readComposerVisible(el) !== raw) writeComposerVisible(el, raw);
+      });
+    });
+  }
+
+  bindComposerGuards(document);
+
   document.body.addEventListener("htmx:afterSwap", function (ev) {
     if (!ev || !ev.target) return;
     if (ev.target.id === "att-conversation-list") {
@@ -231,7 +366,6 @@
       if (shell && thread) {
         shell.setAttribute("data-selected", thread.getAttribute("data-conversation-id") || "");
       }
-      // reset token da conversa aberta para o próximo poll
       lastConversationToken = "";
     }
   });
@@ -250,116 +384,24 @@
     }
   });
 
-  // Fonte da verdade do texto digitado (Windows/Chrome: "olá"→"óleo").
-  var composerRaw = new WeakMap();
-
-  function composerForm(el) {
-    return el && el.closest ? el.closest(".att-composer") : null;
+  function submitComposer(form) {
+    if (!form) return;
+    var value = textForSend(form);
+    if (!String(value).trim()) return;
+    if (window.htmx) {
+      window.htmx.trigger(form, "submit");
+    } else {
+      form.requestSubmit();
+    }
   }
 
-  function getComposerRaw(form) {
-    if (!form) return "";
-    if (composerRaw.has(form)) return composerRaw.get(form) || "";
-    var ta = form.querySelector(".att-composer-input");
-    return (ta && ta.value) || "";
-  }
-
-  function setComposerRaw(form, value) {
-    if (!form) return "";
-    var text = value == null ? "" : String(value);
-    composerRaw.set(form, text);
-    var snap = form.querySelector(".att-text-snap");
-    if (snap) snap.value = text;
-    return text;
-  }
-
-  function textForSend(form) {
-    if (!form) return "";
-    var raw = getComposerRaw(form);
-    var ta = form.querySelector(".att-composer-input");
-    var visible = (ta && ta.value) || "";
-    // Se o buffer ficou vazio por algum motivo, usa o que está na tela
-    var value = String(raw).length ? raw : visible;
-    setComposerRaw(form, value);
-    if (ta && ta.value !== value) ta.value = value;
-    return value;
-  }
-
-  function bindComposerGuards(root) {
-    var scope = root || document;
-    scope.querySelectorAll(".att-composer-input").forEach(function (ta) {
-      if (ta.dataset.attGuard === "1") return;
-      ta.dataset.attGuard = "1";
-      ta.setAttribute("spellcheck", "false");
-      ta.setAttribute("autocorrect", "off");
-      ta.setAttribute("autocapitalize", "off");
-      ta.setAttribute("autocomplete", "off");
-      ta.setAttribute("lang", "zxx");
-      ta.readOnly = false;
-
-      var form = composerForm(ta);
-      if (form && !composerRaw.has(form)) {
-        setComposerRaw(form, ta.value || "");
-      }
-
-      ta.addEventListener("beforeinput", function (ev) {
-        if ((ev.inputType || "") === "insertReplacementText") {
-          ev.preventDefault();
-        }
-      });
-
-      ta.addEventListener("input", function (ev) {
-        autoGrow(ta);
-        var f = composerForm(ta);
-        if (!f) return;
-        if ((ev.inputType || "") === "insertReplacementText") {
-          ta.value = getComposerRaw(f);
-          return;
-        }
-        if (document.activeElement !== ta) {
-          ta.value = getComposerRaw(f);
-          return;
-        }
-        setComposerRaw(f, ta.value || "");
-      });
-
-      ta.addEventListener("blur", function () {
-        var f = composerForm(ta);
-        if (!f) return;
-        var raw = getComposerRaw(f);
-        if (ta.value !== raw) ta.value = raw;
-        ta.readOnly = false;
-      });
-    });
-  }
-
-  bindComposerGuards(document);
-
-  // No mousedown: congela o texto e evita autocorrect no blur.
-  // NÃO usar preventDefault aqui — no Chrome isso cancela o click/submit.
   document.addEventListener(
-    "mousedown",
+    "click",
     function (ev) {
       var btn = ev.target && ev.target.closest ? ev.target.closest(".att-send-btn") : null;
       if (!btn || btn.disabled) return;
-      var form = btn.closest("form");
-      if (!form) return;
-      var value = textForSend(form);
-      var ta = form.querySelector(".att-composer-input");
-      if (ta) {
-        ta.value = value;
-        ta.readOnly = true;
-      }
-    },
-    true
-  );
-
-  document.addEventListener(
-    "mouseup",
-    function () {
-      document.querySelectorAll(".att-composer-input").forEach(function (ta) {
-        if (ta.readOnly) ta.readOnly = false;
-      });
+      ev.preventDefault();
+      submitComposer(btn.closest("form"));
     },
     true
   );
@@ -367,18 +409,11 @@
   document.addEventListener(
     "keydown",
     function (ev) {
-      var ta = ev.target;
-      if (!ta || !ta.classList || !ta.classList.contains("att-composer-input")) return;
+      var el = ev.target;
+      if (!el || !el.classList || !el.classList.contains("att-composer-input")) return;
       if (ev.key !== "Enter" || ev.shiftKey) return;
       ev.preventDefault();
-      var form = ta.closest("form");
-      var value = textForSend(form);
-      if (!String(value).trim()) return;
-      if (form && window.htmx) {
-        window.htmx.trigger(form, "submit");
-      } else if (form) {
-        form.requestSubmit();
-      }
+      submitComposer(el.closest("form"));
     },
     true
   );
