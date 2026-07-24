@@ -35,6 +35,112 @@
   border-bottom-color: var(--violet);
 }
 
+.settings-subtabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 0 0 18px;
+  padding: 6px;
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.settings-subtab {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 14px;
+  border-radius: 9px;
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: var(--muted);
+  text-decoration: none;
+  border: 1px solid transparent;
+}
+
+.settings-subtab:hover {
+  color: var(--text);
+  background: #fff;
+}
+
+.settings-subtab.active {
+  color: var(--violet);
+  background: #fff;
+  border-color: #ddd6fe;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+}
+
+.settings-sectors-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.settings-sector-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+}
+
+.settings-sector-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+}
+
+.settings-sector-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.settings-sector-card-title {
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.settings-sector-users-box {
+  margin: 10px 0 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fafafa;
+}
+
+.settings-user-check-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+  max-height: 180px;
+  overflow: auto;
+}
+
+.settings-user-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.settings-user-check:has(input:checked) {
+  border-color: #c4b5fd;
+  background: #f5f3ff;
+}
+
+.settings-user-check input {
+  margin: 0;
+}
+
 .settings-layout {
   display: grid;
   grid-template-columns: 1.5fr 1fr;
@@ -728,6 +834,25 @@
   .settings-tab {
     flex: 0 0 auto;
     white-space: nowrap;
+  }
+
+  .settings-subtabs {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .settings-subtab {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  .settings-sector-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-user-check-grid {
+    grid-template-columns: 1fr 1fr;
   }
 
   .settings-section-header {

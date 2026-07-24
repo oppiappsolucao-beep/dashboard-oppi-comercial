@@ -10,6 +10,7 @@ from app.services.monthly_goals import TEAM_SELLER_LABEL, delete_monthly_goal, p
 from app.services.settings_page import (
     ROLE_OPTIONS,
     SETTINGS_TABS,
+    USERS_SUBTABS,
     build_company_profile,
     build_goals_settings,
     build_integrations,
@@ -37,9 +38,24 @@ def _parse_settings_params(request: Request, form: dict | None = None) -> dict:
         data = dict(request.query_params)
 
     tab = data.get("tab", "usuarios")
+    # Compatibilidade com URLs antigas
+    if tab == "metas":
+        tab = "usuarios"
+        data = {**data, "subtab": data.get("subtab") or "metas"}
     if tab == "setores":
-        tab = "atendimentos"
+        tab = "usuarios"
+        data = {**data, "subtab": data.get("subtab") or "setores"}
+
     valid_tabs = {tab_id for tab_id, _ in SETTINGS_TABS}
+    valid_subtabs = {tab_id for tab_id, _ in USERS_SUBTABS}
+    subtab = data.get("subtab", "usuarios")
+    if data.get("edit_user_id"):
+        subtab = "usuarios"
+    if tab == "usuarios" and subtab not in valid_subtabs:
+        subtab = "usuarios"
+    if tab != "usuarios":
+        subtab = ""
+
     try:
         page = int(data.get("page", 1))
     except (TypeError, ValueError):
@@ -51,6 +67,7 @@ def _parse_settings_params(request: Request, form: dict | None = None) -> dict:
 
     return {
         "tab": tab if tab in valid_tabs else "usuarios",
+        "subtab": subtab,
         "search": data.get("search", ""),
         "role": data.get("role", "Todos os perfis"),
         "page": max(1, page),
@@ -95,6 +112,7 @@ def _settings_context(request: Request, settings_params: dict):
         "active_page": "settings",
         "settings_params": settings_params,
         "settings_tabs": SETTINGS_TABS,
+        "users_subtabs": USERS_SUBTABS,
         "role_options": ["Todos os perfis"] + ROLE_OPTIONS,
         "kpi_cards": build_settings_kpi_cards(df, integrations),
         "users_table": build_users_table(
@@ -224,7 +242,7 @@ async def settings_save_goal(
 
     if not is_admin(request):
         request.session["settings_goal_error"] = "Apenas o administrador pode definir a meta do mês."
-        return RedirectResponse(url="/configuracoes?tab=metas", status_code=303)
+        return RedirectResponse(url="/configuracoes?tab=usuarios&subtab=metas", status_code=303)
 
     try:
         goal_value = parse_money(amount)
@@ -238,7 +256,7 @@ async def settings_save_goal(
     except Exception as error:
         request.session["settings_goal_error"] = f"Não consegui salvar a meta: {error}"
 
-    return RedirectResponse(url="/configuracoes?tab=metas", status_code=303)
+    return RedirectResponse(url="/configuracoes?tab=usuarios&subtab=metas", status_code=303)
 
 
 @router.post("/configuracoes/metas/remover")
@@ -255,7 +273,7 @@ async def settings_remove_goal(
 
     if not is_admin(request):
         request.session["settings_goal_error"] = "Apenas o administrador pode remover metas."
-        return RedirectResponse(url="/configuracoes?tab=metas", status_code=303)
+        return RedirectResponse(url="/configuracoes?tab=usuarios&subtab=metas", status_code=303)
 
     try:
         delete_monthly_goal(year, month, seller)
@@ -265,7 +283,7 @@ async def settings_remove_goal(
     except Exception as error:
         request.session["settings_goal_error"] = f"Não consegui remover a meta: {error}"
 
-    return RedirectResponse(url="/configuracoes?tab=metas", status_code=303)
+    return RedirectResponse(url="/configuracoes?tab=usuarios&subtab=metas", status_code=303)
 
 
 @router.post("/configuracoes/servicos/adicionar")
@@ -377,20 +395,21 @@ async def settings_add_sector(request: Request):
         return redirect
     if not is_admin(request):
         request.session["settings_sector_error"] = "Apenas o administrador pode cadastrar setores."
-        return RedirectResponse(url="/configuracoes?tab=atendimentos", status_code=303)
+        return RedirectResponse(url="/configuracoes?tab=usuarios&subtab=setores", status_code=303)
 
     form = await request.form()
-    from app.services.sectors import add_sector
+    from app.services.sectors import add_sector, link_users_to_sector
 
     user_ids = form.getlist("user_ids") if hasattr(form, "getlist") else []
     try:
-        add_sector(form.get("sector_name", ""), user_ids=list(user_ids))
-        request.session["settings_sector_success"] = "Setor cadastrado com sucesso."
+        created = add_sector(form.get("sector_name", ""), user_ids=list(user_ids))
+        link_users_to_sector(created["id"], list(user_ids))
+        request.session["settings_sector_success"] = "Setor cadastrado e usuários vinculados."
     except ValueError as error:
         request.session["settings_sector_error"] = str(error)
     except Exception as error:
         request.session["settings_sector_error"] = f"Não consegui cadastrar o setor: {error}"
-    return RedirectResponse(url="/configuracoes?tab=atendimentos", status_code=303)
+    return RedirectResponse(url="/configuracoes?tab=usuarios&subtab=setores", status_code=303)
 
 
 @router.post("/configuracoes/setores/editar")
@@ -400,24 +419,21 @@ async def settings_edit_sector(request: Request):
         return redirect
     if not is_admin(request):
         request.session["settings_sector_error"] = "Apenas o administrador pode editar setores."
-        return RedirectResponse(url="/configuracoes?tab=atendimentos", status_code=303)
+        return RedirectResponse(url="/configuracoes?tab=usuarios&subtab=setores", status_code=303)
 
     form = await request.form()
-    from app.services.sectors import update_sector
+    from app.services.sectors import link_users_to_sector, update_sector
 
     user_ids = form.getlist("user_ids") if hasattr(form, "getlist") else []
     try:
-        update_sector(
-            form.get("sector_id"),
-            name=form.get("sector_name"),
-            user_ids=list(user_ids),
-        )
-        request.session["settings_sector_success"] = "Setor atualizado."
+        update_sector(form.get("sector_id"), name=form.get("sector_name"))
+        link_users_to_sector(form.get("sector_id"), list(user_ids))
+        request.session["settings_sector_success"] = "Setor e vínculos atualizados."
     except ValueError as error:
         request.session["settings_sector_error"] = str(error)
     except Exception as error:
         request.session["settings_sector_error"] = f"Não consegui atualizar o setor: {error}"
-    return RedirectResponse(url="/configuracoes?tab=atendimentos", status_code=303)
+    return RedirectResponse(url="/configuracoes?tab=usuarios&subtab=setores", status_code=303)
 
 
 @router.post("/configuracoes/setores/remover")
@@ -430,7 +446,7 @@ async def settings_remove_sector(
         return redirect
     if not is_admin(request):
         request.session["settings_sector_error"] = "Apenas o administrador pode remover setores."
-        return RedirectResponse(url="/configuracoes?tab=atendimentos", status_code=303)
+        return RedirectResponse(url="/configuracoes?tab=usuarios&subtab=setores", status_code=303)
     from app.services.sectors import delete_sector
 
     try:
@@ -440,7 +456,7 @@ async def settings_remove_sector(
         request.session["settings_sector_error"] = str(error)
     except Exception as error:
         request.session["settings_sector_error"] = f"Não consegui remover o setor: {error}"
-    return RedirectResponse(url="/configuracoes?tab=atendimentos", status_code=303)
+    return RedirectResponse(url="/configuracoes?tab=usuarios&subtab=setores", status_code=303)
 
 
 @router.post("/configuracoes/tags/adicionar")
@@ -509,7 +525,7 @@ async def settings_add_user(
 
     if not is_admin(request):
         request.session["settings_user_error"] = "Apenas o administrador pode cadastrar usuários."
-        return RedirectResponse(url="/configuracoes?tab=usuarios", status_code=303)
+        return RedirectResponse(url="/configuracoes?tab=usuarios&subtab=usuarios", status_code=303)
 
     from app.services.account_users import create_account_user
 
@@ -529,7 +545,7 @@ async def settings_add_user(
     except Exception as error:
         request.session["settings_user_error"] = f"Não consegui cadastrar o usuário: {error}"
 
-    return RedirectResponse(url="/configuracoes?tab=usuarios", status_code=303)
+    return RedirectResponse(url="/configuracoes?tab=usuarios&subtab=usuarios", status_code=303)
 
 
 @router.post("/configuracoes/usuarios/editar")
@@ -551,7 +567,7 @@ async def settings_edit_user(
 
     if not is_admin(request):
         request.session["settings_user_error"] = "Apenas o administrador pode editar usuários."
-        return RedirectResponse(url="/configuracoes?tab=usuarios", status_code=303)
+        return RedirectResponse(url="/configuracoes?tab=usuarios&subtab=usuarios", status_code=303)
 
     from app.services.account_users import create_account_user, update_account_user
 
@@ -586,7 +602,7 @@ async def settings_edit_user(
     except Exception as error:
         request.session["settings_user_error"] = f"Não consegui salvar o usuário: {error}"
 
-    return RedirectResponse(url="/configuracoes?tab=usuarios", status_code=303)
+    return RedirectResponse(url="/configuracoes?tab=usuarios&subtab=usuarios", status_code=303)
 
 
 @router.post("/configuracoes/usuarios/remover")
@@ -601,16 +617,16 @@ async def settings_remove_user(
 
     if not is_admin(request):
         request.session["settings_user_error"] = "Apenas o administrador pode remover usuários."
-        return RedirectResponse(url="/configuracoes?tab=usuarios", status_code=303)
+        return RedirectResponse(url="/configuracoes?tab=usuarios&subtab=usuarios", status_code=303)
 
     if user_id.startswith("__admin__") or user_id.startswith("sheet:"):
         request.session["settings_user_error"] = "Este usuário não pode ser removido por aqui."
-        return RedirectResponse(url="/configuracoes?tab=usuarios", status_code=303)
+        return RedirectResponse(url="/configuracoes?tab=usuarios&subtab=usuarios", status_code=303)
 
     current_user_id = request.session.get("user_id", "")
     if current_user_id and user_id == current_user_id:
         request.session["settings_user_error"] = "Você não pode remover o usuário da sessão atual."
-        return RedirectResponse(url="/configuracoes?tab=usuarios", status_code=303)
+        return RedirectResponse(url="/configuracoes?tab=usuarios&subtab=usuarios", status_code=303)
 
     from app.services.account_users import delete_account_user
 
@@ -622,7 +638,7 @@ async def settings_remove_user(
     except Exception as error:
         request.session["settings_user_error"] = f"Não consegui remover o usuário: {error}"
 
-    return RedirectResponse(url="/configuracoes?tab=usuarios", status_code=303)
+    return RedirectResponse(url="/configuracoes?tab=usuarios&subtab=usuarios", status_code=303)
 
 
 @router.post("/configuracoes/modelo-proposta")

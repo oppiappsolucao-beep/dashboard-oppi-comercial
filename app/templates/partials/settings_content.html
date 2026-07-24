@@ -22,7 +22,18 @@
   {% endfor %}
 </div>
 
-{% if settings_params.tab == 'usuarios' and is_admin %}
+{% if settings_params.tab == 'usuarios' %}
+<div class="settings-subtabs" role="tablist" aria-label="Usuários e Permissões">
+  {% for sub_id, sub_label in users_subtabs %}
+  <a href="/configuracoes?tab=usuarios&amp;subtab={{ sub_id }}"
+     class="settings-subtab {% if settings_params.subtab == sub_id %}active{% endif %}">
+    {{ sub_label }}
+  </a>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if settings_params.tab == 'usuarios' and settings_params.subtab == 'usuarios' and is_admin %}
 <div class="panel settings-user-form-card" id="settings-user-form-card">
   <div class="section-heading">
     {% if users_table.edit_user %}
@@ -35,7 +46,7 @@
     {% if users_table.edit_user and users_table.edit_user.is_new_access %}
       Este vendedor veio da planilha. Defina login e senha para liberar o acesso ao CRM.
     {% else %}
-      Cadastre logins da equipe com perfil, e-mail e senha de acesso.
+      Cadastre logins da equipe com perfil, departamento, e-mail e senha de acesso.
     {% endif %}
   </div>
 
@@ -50,6 +61,7 @@
     action="{% if users_table.edit_user %}/configuracoes/usuarios/editar{% else %}/configuracoes/usuarios/adicionar{% endif %}"
     class="settings-goals-form settings-user-form">
     <input type="hidden" name="tab" value="usuarios">
+    <input type="hidden" name="subtab" value="usuarios">
     {% if users_table.edit_user %}
     <input type="hidden" name="user_id" value="{{ users_table.edit_user.id }}">
     {% endif %}
@@ -85,7 +97,7 @@
         </select>
       </div>
       <div class="settings-goals-field">
-        <label for="user-department">Departamento</label>
+        <label for="user-department">Setor / Departamento</label>
         <select id="user-department" name="department_id">
           <option value="">Selecione</option>
           {% for sector in sector_options or [] %}
@@ -124,7 +136,7 @@
         {% endif %}
       </button>
       {% if users_table.edit_user %}
-      <a href="/configuracoes?tab=usuarios" class="settings-outline-btn">Cancelar</a>
+      <a href="/configuracoes?tab=usuarios&amp;subtab=usuarios" class="settings-outline-btn">Cancelar</a>
       {% endif %}
     </div>
   </form>
@@ -233,65 +245,8 @@
 {% if settings_params.tab == 'atendimentos' %}
 <div class="settings-goals-layout settings-services-tab">
   <div class="panel settings-single-card">
-    <div class="section-heading">Departamentos / Setores</div>
-    <div class="section-subtitle">Setores padrão: Suporte, Comercial, Financeiro e Todos. Cadastre outros e vincule usuários. Define a fila de Atendimentos de cada pessoa.</div>
-    {% if sector_success %}<div class="settings-alert success">{{ sector_success }}</div>{% endif %}
-    {% if sector_error %}<div class="settings-alert error">{{ sector_error }}</div>{% endif %}
-    {% if is_admin %}
-    <form method="post" action="/configuracoes/setores/adicionar" class="settings-goals-form">
-      <input type="hidden" name="tab" value="atendimentos">
-      <label>
-        <span class="settings-company-label">Nome do setor</span>
-        <input type="text" name="sector_name" placeholder="Ex.: Operações" required maxlength="120">
-      </label>
-      <label>
-        <span class="settings-company-label">Responsáveis (usuários)</span>
-        <select name="user_ids" multiple size="6" style="min-height:120px;width:100%">
-          {% for user in account_users_options %}
-          <option value="{{ user.id }}">{{ user.name }}</option>
-          {% endfor %}
-        </select>
-        <small class="settings-field-hint">Segure Ctrl (Windows) ou Cmd (Mac) para selecionar vários.</small>
-      </label>
-      <button type="submit" class="btn">Cadastrar setor</button>
-    </form>
-    {% else %}
-    <div class="settings-empty">Somente administradores podem cadastrar setores.</div>
-    {% endif %}
-  </div>
-  <div class="panel settings-single-card">
-    <div class="section-heading">Setores cadastrados</div>
-    {% for sector in sectors %}
-    <div class="settings-service-row" style="flex-wrap:wrap;gap:8px;align-items:flex-start">
-      <div style="flex:1;min-width:180px">
-        <strong>{{ sector.name }}</strong>
-        <div class="settings-field-hint">{{ sector.users_label }}</div>
-      </div>
-      {% if is_admin %}
-      <form method="post" action="/configuracoes/setores/editar" class="settings-goals-form" style="flex:2;min-width:220px">
-        <input type="hidden" name="sector_id" value="{{ sector.id }}">
-        <input type="text" name="sector_name" value="{{ sector.name }}" required {% if sector.is_system %}readonly title="Setor padrão — nome fixo"{% endif %}>
-        <select name="user_ids" multiple size="4" style="width:100%;margin-top:6px">
-          {% for user in account_users_options %}
-          <option value="{{ user.id }}" {% if user.id in sector.user_ids %}selected{% endif %}>{{ user.name }}</option>
-          {% endfor %}
-        </select>
-        <button type="submit" class="btn btn-secondary" style="margin-top:6px">Salvar</button>
-      </form>
-      <form method="post" action="/configuracoes/setores/remover" onsubmit="return confirm('Remover este setor?');">
-        <input type="hidden" name="sector_id" value="{{ sector.id }}">
-        <button type="submit" class="settings-link-btn danger" {% if sector.is_system %}disabled title="Setor padrão — não pode remover"{% endif %}>Remover</button>
-      </form>
-      {% endif %}
-    </div>
-    {% else %}
-    <div class="settings-empty">Nenhum setor cadastrado.</div>
-    {% endfor %}
-  </div>
-
-  <div class="panel settings-single-card">
     <div class="section-heading">Tags de atendimento</div>
-    <div class="section-subtitle">Padrão: Novo contato, Parceiros e Atendimento interno. Use nas conversas da inbox.</div>
+    <div class="section-subtitle">Padrão: Novo contato, Parceiros e Atendimento interno. Use nas conversas da inbox. Setores ficam em Usuários e Permissões.</div>
     {% if tag_success %}<div class="settings-alert success">{{ tag_success }}</div>{% endif %}
     {% if tag_error %}<div class="settings-alert error">{{ tag_error }}</div>{% endif %}
     {% if is_admin %}
@@ -336,9 +291,100 @@
 
 <div id="settings-filters">
   <input type="hidden" name="tab" value="{{ settings_params.tab }}" id="settings-tab-input">
+  <input type="hidden" name="subtab" value="{{ settings_params.subtab }}" id="settings-subtab-input">
   <input type="hidden" name="page" value="{{ users_table.page }}" id="settings-page-input">
 
   {% if settings_params.tab == 'usuarios' %}
+
+  {% if settings_params.subtab == 'setores' %}
+  <div class="settings-sectors-layout">
+    {% if sector_success %}<div class="settings-alert success">{{ sector_success }}</div>{% endif %}
+    {% if sector_error %}<div class="settings-alert error">{{ sector_error }}</div>{% endif %}
+
+    <div class="panel settings-single-card">
+      <div class="section-heading">Cadastrar setor</div>
+      <div class="section-subtitle">Padrão: Suporte, Comercial, Financeiro e Todos. Vincule usuários ao setor — isso define o departamento e a fila de Atendimentos.</div>
+      {% if is_admin %}
+      <form method="post" action="/configuracoes/setores/adicionar" class="settings-goals-form settings-sector-create">
+        <input type="hidden" name="tab" value="usuarios">
+        <input type="hidden" name="subtab" value="setores">
+        <div class="settings-goals-grid">
+          <div class="settings-goals-field">
+            <label for="new-sector-name">Nome do setor</label>
+            <input id="new-sector-name" type="text" name="sector_name" placeholder="Ex.: Operações" required maxlength="120">
+          </div>
+        </div>
+        <div class="settings-sector-users-box">
+          <div class="settings-company-label">Vincular usuários</div>
+          <div class="settings-user-check-grid">
+            {% for user in account_users_options %}
+            <label class="settings-user-check">
+              <input type="checkbox" name="user_ids" value="{{ user.id }}">
+              <span>{{ user.name }}</span>
+            </label>
+            {% else %}
+            <span class="settings-field-hint">Cadastre usuários na subaba Usuários primeiro.</span>
+            {% endfor %}
+          </div>
+        </div>
+        <button type="submit" class="btn">Cadastrar setor</button>
+      </form>
+      {% else %}
+      <div class="settings-empty">Somente administradores podem cadastrar setores.</div>
+      {% endif %}
+    </div>
+
+    <div class="settings-sector-cards">
+      {% for sector in sectors %}
+      <div class="panel settings-sector-card">
+        <div class="settings-sector-card-head">
+          <div>
+            <div class="settings-sector-card-title">{{ sector.name }}</div>
+            <div class="settings-field-hint">{% if sector.is_system %}Setor padrão{% else %}Personalizado{% endif %} · {{ sector.users|length }} usuário(s)</div>
+          </div>
+          {% if is_admin and not sector.is_system %}
+          <form method="post" action="/configuracoes/setores/remover" onsubmit="return confirm('Remover este setor?');">
+            <input type="hidden" name="sector_id" value="{{ sector.id }}">
+            <button type="submit" class="settings-link-btn danger">Remover</button>
+          </form>
+          {% endif %}
+        </div>
+        {% if is_admin %}
+        <form method="post" action="/configuracoes/setores/editar" class="settings-goals-form">
+          <input type="hidden" name="sector_id" value="{{ sector.id }}">
+          <input type="hidden" name="tab" value="usuarios">
+          <input type="hidden" name="subtab" value="setores">
+          <div class="settings-goals-field">
+            <label>Nome</label>
+            <input type="text" name="sector_name" value="{{ sector.name }}" required {% if sector.is_system %}readonly{% endif %}>
+          </div>
+          <div class="settings-sector-users-box">
+            <div class="settings-company-label">Usuários vinculados</div>
+            <div class="settings-user-check-grid">
+              {% for user in account_users_options %}
+              <label class="settings-user-check">
+                <input type="checkbox" name="user_ids" value="{{ user.id }}" {% if user.id in sector.user_ids %}checked{% endif %}>
+                <span>{{ user.name }}</span>
+              </label>
+              {% endfor %}
+            </div>
+          </div>
+          <button type="submit" class="btn btn-secondary">Salvar vínculos</button>
+        </form>
+        {% else %}
+        <div class="settings-field-hint">Responsáveis: {{ sector.users_label }}</div>
+        {% endif %}
+      </div>
+      {% else %}
+      <div class="settings-empty">Nenhum setor cadastrado.</div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+
+  {% if settings_params.subtab == 'usuarios' %}
+
   <div class="settings-layout">
     <div class="settings-main">
       <div class="panel settings-users-panel">
@@ -398,7 +444,7 @@
                 <td class="table-actions">
                   <div class="settings-user-actions">
                     {% if is_admin and row.can_edit %}
-                    <a href="/configuracoes?tab=usuarios&amp;edit_user_id={{ row.id | urlencode }}"
+                    <a href="/configuracoes?tab=usuarios&amp;subtab=usuarios&amp;edit_user_id={{ row.id | urlencode }}"
                       class="settings-action-btn">
                       {% if row.managed %}Editar{% else %}Cadastrar{% endif %}
                     </a>
@@ -407,6 +453,7 @@
                     <form method="post" action="/configuracoes/usuarios/remover" class="settings-inline-form"
                       onsubmit="return confirm('Remover o usuário {{ row.name }}?');">
                       <input type="hidden" name="tab" value="usuarios">
+                      <input type="hidden" name="subtab" value="usuarios">
                       <input type="hidden" name="user_id" value="{{ row.id }}">
                       <button type="submit" class="settings-action-btn danger">Excluir</button>
                     </form>
@@ -531,67 +578,11 @@
     </div>
   </div>
 
-  {% elif settings_params.tab == 'geral' %}
-  <div class="settings-goals-layout">
-    <div class="panel settings-single-card">
-      <div class="section-heading">Dados gerais da operação</div>
-      <div class="settings-company-grid settings-company-grid-wide">
-        <div><span class="settings-company-label">Nome da empresa</span><strong>{{ company.company_name }}</strong></div>
-        <div><span class="settings-company-label">Nome fantasia</span><strong>{{ company.trade_name }}</strong></div>
-        <div><span class="settings-company-label">CNPJ</span><strong>{{ company.cnpj }}</strong></div>
-        <div><span class="settings-company-label">Planilha conectada</span><strong>{{ company.worksheet_name }}</strong></div>
-        <div><span class="settings-company-label">Empresas na planilha</span><strong>{{ company.companies_count }}</strong></div>
-        <div><span class="settings-company-label">Capital monitorado</span><strong>{{ company.total_capital_label }}</strong></div>
-        <div><span class="settings-company-label">Google Sheets</span><strong>{% if company.sheet_configured %}Conectado{% else %}Pendente{% endif %}</strong></div>
-        <div><span class="settings-company-label">Usuário admin</span><strong>{{ app_username }}</strong></div>
-      </div>
-    </div>
+  
+  {% endif %}
 
-    <div class="panel settings-single-card">
-      <div class="section-heading">Modelo de proposta (PDF)</div>
-      <div class="section-subtitle">Use um Google Docs como base. O sistema preenche os campos e gera o PDF automaticamente.</div>
+  {% if settings_params.subtab == 'metas' %}
 
-      {% if template_success %}
-      <div class="settings-alert success">{{ template_success }}</div>
-      {% endif %}
-      {% if template_error %}
-      <div class="settings-alert error">{{ template_error }}</div>
-      {% endif %}
-
-      {% if proposal_template_settings.template_configured %}
-      <div class="settings-template-status connected">Modelo ativo</div>
-      {% else %}
-      <div class="settings-template-status disconnected">Nenhum modelo configurado</div>
-      {% endif %}
-
-      {% if is_admin %}
-      <form method="post" action="/configuracoes/modelo-proposta" class="settings-goals-form">
-        <input type="hidden" name="tab" value="geral">
-        <div class="settings-goals-field">
-          <label for="proposal-template-url">Link do Google Docs</label>
-          <input id="proposal-template-url" name="template_url" type="url"
-            value="{{ proposal_template_settings.template_url }}"
-            placeholder="https://docs.google.com/document/d/.../edit" required>
-        </div>
-        <button type="submit" class="btn">Salvar modelo</button>
-      </form>
-      {% else %}
-      <div class="settings-empty">Somente o administrador pode alterar o modelo de proposta.</div>
-      {% endif %}
-
-      <div class="settings-template-help">
-        <div class="settings-company-label">Campos disponíveis no documento</div>
-        <div class="settings-template-tags">
-          {% for item in proposal_template_settings.placeholders %}
-          <code>{{ item }}</code>
-          {% endfor %}
-        </div>
-        <p>Compartilhe o documento com a conta de serviço do Google Sheets (permissão de editor).</p>
-      </div>
-    </div>
-  </div>
-
-  {% elif settings_params.tab == 'metas' %}
   <div class="settings-goals-layout">
     <div class="panel settings-single-card">
       <div class="section-heading">Meta do mês</div>
@@ -606,7 +597,8 @@
 
       {% if is_admin %}
       <form method="post" action="/configuracoes/metas" class="settings-goals-form">
-        <input type="hidden" name="tab" value="metas">
+        <input type="hidden" name="tab" value="usuarios">
+        <input type="hidden" name="subtab" value="metas">
         <div class="settings-goals-grid">
           <div class="settings-goals-field">
             <label for="goal-month">Mês</label>
@@ -676,7 +668,8 @@
               <td class="table-actions">
                 <form method="post" action="/configuracoes/metas/remover" class="settings-inline-form"
                   onsubmit="return confirm('Remover a meta de {{ row.month_label }}/{{ row.year }} ({{ row.seller }})?');">
-                  <input type="hidden" name="tab" value="metas">
+                  <input type="hidden" name="tab" value="usuarios">
+        <input type="hidden" name="subtab" value="metas">
                   <input type="hidden" name="month" value="{{ row.month }}">
                   <input type="hidden" name="year" value="{{ row.year }}">
                   <input type="hidden" name="seller" value="{{ row.seller }}">
@@ -695,12 +688,75 @@
     </div>
   </div>
 
+  
+  {% endif %}
+
+{% elif settings_params.tab == 'geral' %}
+  <div class="settings-goals-layout">
+    <div class="panel settings-single-card">
+      <div class="section-heading">Dados gerais da operação</div>
+      <div class="settings-company-grid settings-company-grid-wide">
+        <div><span class="settings-company-label">Nome da empresa</span><strong>{{ company.company_name }}</strong></div>
+        <div><span class="settings-company-label">Nome fantasia</span><strong>{{ company.trade_name }}</strong></div>
+        <div><span class="settings-company-label">CNPJ</span><strong>{{ company.cnpj }}</strong></div>
+        <div><span class="settings-company-label">Planilha conectada</span><strong>{{ company.worksheet_name }}</strong></div>
+        <div><span class="settings-company-label">Empresas na planilha</span><strong>{{ company.companies_count }}</strong></div>
+        <div><span class="settings-company-label">Capital monitorado</span><strong>{{ company.total_capital_label }}</strong></div>
+        <div><span class="settings-company-label">Google Sheets</span><strong>{% if company.sheet_configured %}Conectado{% else %}Pendente{% endif %}</strong></div>
+        <div><span class="settings-company-label">Usuário admin</span><strong>{{ app_username }}</strong></div>
+      </div>
+    </div>
+
+    <div class="panel settings-single-card">
+      <div class="section-heading">Modelo de proposta (PDF)</div>
+      <div class="section-subtitle">Use um Google Docs como base. O sistema preenche os campos e gera o PDF automaticamente.</div>
+
+      {% if template_success %}
+      <div class="settings-alert success">{{ template_success }}</div>
+      {% endif %}
+      {% if template_error %}
+      <div class="settings-alert error">{{ template_error }}</div>
+      {% endif %}
+
+      {% if proposal_template_settings.template_configured %}
+      <div class="settings-template-status connected">Modelo ativo</div>
+      {% else %}
+      <div class="settings-template-status disconnected">Nenhum modelo configurado</div>
+      {% endif %}
+
+      {% if is_admin %}
+      <form method="post" action="/configuracoes/modelo-proposta" class="settings-goals-form">
+        <input type="hidden" name="tab" value="geral">
+        <div class="settings-goals-field">
+          <label for="proposal-template-url">Link do Google Docs</label>
+          <input id="proposal-template-url" name="template_url" type="url"
+            value="{{ proposal_template_settings.template_url }}"
+            placeholder="https://docs.google.com/document/d/.../edit" required>
+        </div>
+        <button type="submit" class="btn">Salvar modelo</button>
+      </form>
+      {% else %}
+      <div class="settings-empty">Somente o administrador pode alterar o modelo de proposta.</div>
+      {% endif %}
+
+      <div class="settings-template-help">
+        <div class="settings-company-label">Campos disponíveis no documento</div>
+        <div class="settings-template-tags">
+          {% for item in proposal_template_settings.placeholders %}
+          <code>{{ item }}</code>
+          {% endfor %}
+        </div>
+        <p>Compartilhe o documento com a conta de serviço do Google Sheets (permissão de editor).</p>
+      </div>
+    </div>
+  </div>
+
   {% elif settings_params.tab == 'integracoes' %}
   <div class="settings-goals-layout">
     <div class="panel settings-single-card">
       <div class="section-heading">Integrações</div>
       <div class="section-subtitle">
-        Usuários, metas e serviços comerciais ficam salvos nas abas
+        Usuários, metas e serviços comerciais ficam salvos em
         <strong>Usuarios</strong>, <strong>Metas</strong> e <strong>Configuracoes</strong> da planilha Google Sheets.
       </div>
       <div class="settings-integrations-grid settings-integrations-grid-full">

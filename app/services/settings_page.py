@@ -15,13 +15,18 @@ from app.services.registration import get_seller_options
 
 SETTINGS_TABS = [
     ("geral", "Geral"),
-    ("metas", "Metas"),
     ("usuarios", "Usuários e Permissões"),
     ("atendimentos", "Atendimentos"),
     ("servicos", "Serviços"),
     ("nichos", "Nichos"),
     ("integracoes", "Integrações"),
     ("faturamento", "Faturamento"),
+]
+
+USERS_SUBTABS = [
+    ("setores", "Setores"),
+    ("usuarios", "Usuários"),
+    ("metas", "Metas e comissões"),
 ]
 
 ROLE_OPTIONS = ["Administrador", "Gerente", "Vendedor", "Analista"]

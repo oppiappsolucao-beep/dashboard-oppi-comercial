@@ -304,6 +304,46 @@ def sector_id_for_user(user_id: str) -> int | None:
     return None
 
 
+def link_users_to_sector(sector_id: int | str, user_ids: list[str] | None) -> dict:
+    """Atualiza responsáveis do setor e sincroniza o departamento nos usuários."""
+    sector = update_sector(sector_id, user_ids=list(user_ids or []))
+    selected = {normalize_text(uid) for uid in (user_ids or []) if normalize_text(uid)}
+    sid = str(sector["id"])
+    sname = normalize_text(sector.get("name"))
+
+    try:
+        from app.services import account_users as account_users_service
+
+        users = account_users_service.load_account_users()
+        changed = False
+        for user in users:
+            uid = normalize_text(user.get("id"))
+            if not uid:
+                continue
+            if uid in selected:
+                if user.get("department_id") != sid or user.get("department_name") != sname:
+                    user["department_id"] = sid
+                    user["department_name"] = sname
+                    changed = True
+            elif str(user.get("department_id") or "") == sid:
+                user["department_id"] = ""
+                user["department_name"] = ""
+                changed = True
+        if changed:
+            account_users_service._persist_users(users)
+            with account_users_service._lock:
+                account_users_service._cache = users
+    except Exception:
+        pass
+
+    for uid in selected:
+        try:
+            assign_user_to_sector(uid, sector["id"])
+        except Exception:
+            continue
+    return sector
+
+
 def is_todos_sector_name(name: str | None) -> bool:
     return normalize_text(name).lower() == "todos"
 
