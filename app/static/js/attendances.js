@@ -369,9 +369,24 @@
   document.body.addEventListener("htmx:afterRequest", function (ev) {
     var path = (ev.detail && ev.detail.pathInfo && ev.detail.pathInfo.requestPath) || "";
     if (path.indexOf("/atendimentos/conversa/") === -1) return;
-    if (path.indexOf("/enviar") === -1 && path.indexOf("/midia") === -1) return;
+    if (
+      path.indexOf("/enviar") === -1
+      && path.indexOf("/midia") === -1
+      && path.indexOf("/excluir") === -1
+      && path.indexOf("/finalizar") === -1
+    ) {
+      return;
+    }
     if (ev.detail && ev.detail.successful === false) return;
     var id = selectedId();
+    if (path.indexOf("/excluir") !== -1) {
+      var shell = $("#att-shell");
+      if (shell) shell.setAttribute("data-selected", "");
+      refreshList({});
+      lastInboxToken = "";
+      lastConversationToken = "";
+      return;
+    }
     if (id) {
       bumpConversationToTop(id);
       refreshList({ bumpId: id });

@@ -236,6 +236,20 @@ def attendances_finalize(request: Request, conversation_id: str):
     return render(request, "partials/attendances_thread.html", ctx)
 
 
+@router.post("/atendimentos/conversa/{conversation_id}/excluir", response_class=HTMLResponse)
+def attendances_delete(request: Request, conversation_id: str):
+    require_auth(request)
+    attendances_service.delete_conversation(conversation_id)
+    search, status, _ = _filters(request)
+    ctx = attendances_service.page_context(
+        search=search,
+        status=status,
+        selected_id="",
+        flash="Conversa removida da inbox.",
+    )
+    return render(request, "partials/attendances_thread.html", ctx)
+
+
 @router.post("/atendimentos/conversa/{conversation_id}/notas", response_class=HTMLResponse)
 async def attendances_notes(request: Request, conversation_id: str):
     require_auth(request)

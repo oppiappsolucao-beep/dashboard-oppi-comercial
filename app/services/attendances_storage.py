@@ -177,27 +177,52 @@ def get_conversation_by_phone(phone_e164: str) -> dict | None:
 
 
 def purge_group_conversations() -> dict:
-    """Apaga do banco conversas de grupo WhatsApp (@g.us / broadcast / id de grupo)."""
-    from app.services.evolution_client import is_whatsapp_group_jid
+    """Apaga do banco conversas de grupo (@g.us, id de grupo, nomes tipo 'Equipe')."""
+    from app.services.evolution_client import conversation_looks_like_group
 
     removed_ids: list[str] = []
+    removed_names: list[str] = []
     with _lock, _session() as db:
         rows = db.query(AttendanceConversation).all()
         for row in rows:
-            if not (
-                is_whatsapp_group_jid(row.remote_jid or "")
-                or is_whatsapp_group_jid(row.phone_e164 or "")
+            if not conversation_looks_like_group(
+                remote_jid=row.remote_jid or "",
+                phone_e164=row.phone_e164 or "",
+                contact_name=row.contact_name or "",
             ):
                 continue
             removed_ids.append(row.id)
+            removed_names.append(row.contact_name or row.phone_e164 or row.id)
             db.query(AttendanceMessage).filter(
                 AttendanceMessage.conversation_id == row.id
             ).delete(synchronize_session=False)
             db.delete(row)
     if removed_ids:
-        logger.info("Removidas %s conversas de grupo: %s", len(removed_ids), removed_ids)
+        logger.info(
+            "Removidas %s conversas de grupo: %s (%s)",
+            len(removed_ids),
+            removed_ids,
+            removed_names,
+        )
         _notify({"type": "groups_purged", "count": len(removed_ids), "ids": removed_ids})
-    return {"removed": len(removed_ids), "ids": removed_ids}
+    return {"removed": len(removed_ids), "ids": removed_ids, "names": removed_names}
+
+
+def delete_conversation(conversation_id: str) -> bool:
+    """Remove conversa e mensagens permanentemente."""
+    conversation_id = normalize_text(conversation_id)
+    if not conversation_id:
+        return False
+    with _lock, _session() as db:
+        row = db.get(AttendanceConversation, conversation_id)
+        if not row:
+            return False
+        db.query(AttendanceMessage).filter(
+            AttendanceMessage.conversation_id == conversation_id
+        ).delete(synchronize_session=False)
+        db.delete(row)
+    _notify({"type": "conversation_deleted", "conversation_id": conversation_id})
+    return True
 
 
 def list_conversations(
@@ -206,7 +231,7 @@ def list_conversations(
     status: str = "",
     limit: int = 100,
 ) -> list[dict]:
-    from app.services.evolution_client import is_whatsapp_group_jid
+    from app.services.evolution_client import conversation_looks_like_group
 
     with _session(commit=False) as db:
         q = db.query(AttendanceConversation)
@@ -237,8 +262,11 @@ def list_conversations(
         )
         conversations = []
         for row in rows:
-            # Esconde grupos já gravados (legado / vazamento via participant)
-            if is_whatsapp_group_jid(row.remote_jid or "") or is_whatsapp_group_jid(row.phone_e164 or ""):
+            if conversation_looks_like_group(
+                remote_jid=row.remote_jid or "",
+                phone_e164=row.phone_e164 or "",
+                contact_name=row.contact_name or "",
+            ):
                 continue
             conversations.append(_conversation_to_dict(row))
         return conversations
@@ -253,11 +281,16 @@ def upsert_conversation_by_phone(
     status: str | None = None,
     remote_jid: str = "",
 ) -> dict:
-    from app.services.evolution_client import is_whatsapp_group_jid
+    from app.services.evolution_client import conversation_looks_like_group, is_whatsapp_group_jid
 
     phone = normalize_text(phone_e164)
     remote_jid = normalize_text(remote_jid)
-    if is_whatsapp_group_jid(phone) or is_whatsapp_group_jid(remote_jid):
+    contact_name = normalize_text(contact_name)
+    if conversation_looks_like_group(
+        remote_jid=remote_jid,
+        phone_e164=phone,
+        contact_name=contact_name,
+    ) or is_whatsapp_group_jid(phone) or is_whatsapp_group_jid(remote_jid):
         return {}
     if not phone:
         raise ValueError("Telefone obrigatório")

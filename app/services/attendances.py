@@ -42,18 +42,29 @@ def page_context(
     if selected_id:
         selected = store.get_conversation(selected_id)
         if selected:
-            store.mark_conversation_read(selected_id)
-            selected = store.get_conversation(selected_id)
-            messages = store.list_messages(selected_id)
-            crm = attendance_crm.build_crm_panel(selected.get("sheet_row"))
-            try:
-                from app.services.sectors import responsible_options_for_sector
+            from app.services.evolution_client import conversation_looks_like_group
 
-                responsible_options = responsible_options_for_sector(selected.get("sector_id"))
-            except Exception:
-                responsible_options = []
-    elif conversations:
-        pass
+            if conversation_looks_like_group(
+                remote_jid=selected.get("remote_jid") or "",
+                phone_e164=selected.get("phone_e164") or "",
+                contact_name=selected.get("contact_name") or "",
+            ):
+                store.delete_conversation(selected_id)
+                selected = None
+                selected_id = ""
+            else:
+                store.mark_conversation_read(selected_id)
+                selected = store.get_conversation(selected_id)
+                messages = store.list_messages(selected_id)
+                crm = attendance_crm.build_crm_panel(selected.get("sheet_row") if selected else None)
+                try:
+                    from app.services.sectors import responsible_options_for_sector
+
+                    responsible_options = responsible_options_for_sector(
+                        selected.get("sector_id") if selected else None
+                    )
+                except Exception:
+                    responsible_options = []
 
     if not responsible_options:
         try:
@@ -248,6 +259,10 @@ def finalize_conversation(conversation_id: str) -> dict | None:
         status=store.STATUS_FINALIZADO,
         ai_mode=store.AI_MODE_OFF,
     )
+
+
+def delete_conversation(conversation_id: str) -> bool:
+    return store.delete_conversation(conversation_id)
 
 
 def maybe_ai_reply(conversation_id: str, inbound_text: str) -> None:

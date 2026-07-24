@@ -54,6 +54,12 @@
               hx-target="#att-chat-root"
               hx-swap="innerHTML">Finalizar</button>
       {% endif %}
+      <button type="button" class="btn btn-secondary"
+              style="color:#9b1c1c;border-color:#f5c2c2"
+              hx-post="/atendimentos/conversa/{{ selected.id }}/excluir"
+              hx-target="#att-chat-root"
+              hx-swap="innerHTML"
+              hx-confirm="Remover esta conversa da inbox? Isso não apaga no WhatsApp.">Excluir da inbox</button>
     </div>
   </form>
 

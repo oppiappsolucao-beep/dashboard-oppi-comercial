@@ -218,11 +218,41 @@ def is_whatsapp_group_jid(value: str) -> bool:
     text = normalize_text(value).lower()
     if not text:
         return False
-    if text.endswith("@g.us") or text.endswith("@broadcast") or "status@broadcast" in text:
+    if "@g.us" in text or text.endswith("@broadcast") or "status@broadcast" in text:
         return True
     # ID numérico típico de grupo (ex.: 1203630...), sem ser celular BR (55…)
     digits = normalize_digits(text.split("@", 1)[0])
     if digits.startswith("120") and len(digits) >= 15:
+        return True
+    if len(digits) >= 17 and not digits.startswith("55"):
+        return True
+    return False
+
+
+def contact_name_looks_like_group(name: str) -> bool:
+    """Nomes típicos de grupo interno (ex.: 'Oppi Equipe') — não são lead."""
+    import re
+
+    text = normalize_text(name).lower()
+    if not text:
+        return False
+    return bool(
+        re.search(
+            r"(^|[\s\-_/])(equipe|grupo|group|team|broadcast)([\s\-_/]|$)",
+            text,
+        )
+    )
+
+
+def conversation_looks_like_group(
+    *,
+    remote_jid: str = "",
+    phone_e164: str = "",
+    contact_name: str = "",
+) -> bool:
+    if is_whatsapp_group_jid(remote_jid) or is_whatsapp_group_jid(phone_e164):
+        return True
+    if contact_name_looks_like_group(contact_name):
         return True
     return False
 
