@@ -1,12 +1,13 @@
 {% if conversations %}
   {% for c in conversations %}
-  <a href="/atendimentos?c={{ c.id }}&search={{ search | urlencode }}&status={{ status_filter | urlencode }}"
+  <a href="/atendimentos?c={{ c.id }}&search={{ search | urlencode }}&status={{ status_filter | urlencode }}&sector={{ sector_filter | urlencode }}"
      class="att-conv-item {% if selected and selected.id == c.id %}active{% endif %}"
      data-conversation-id="{{ c.id }}"
-     hx-get="/atendimentos/conversa/{{ c.id }}?search={{ search | urlencode }}&status={{ status_filter | urlencode }}"
+     hx-get="/atendimentos/conversa/{{ c.id }}?search={{ search | urlencode }}&status={{ status_filter | urlencode }}&sector={{ sector_filter | urlencode }}"
      hx-target="#att-chat-root"
      hx-swap="innerHTML"
-     hx-push-url="/atendimentos?c={{ c.id }}">
+     hx-push-url="/atendimentos?c={{ c.id }}&search={{ search | urlencode }}&status={{ status_filter | urlencode }}&sector={{ sector_filter | urlencode }}"
+     hx-on::after-request="document.getElementById('att-shell')?.classList.add('att-shell--chat-open')">
     <div class="att-avatar" {% if c.profile_pic_url %}style="background-image:url('{{ c.profile_pic_url }}')"{% endif %}>
       {% if not c.profile_pic_url %}{{ c.initials }}{% endif %}
     </div>
@@ -20,6 +21,7 @@
       </div>
       <div class="att-conv-meta">
         <span class="att-status-badge status-{{ c.status }}">{{ c.status_label }}</span>
+        {% if c.sector_name %}<span class="att-sector-pill">{{ c.sector_name }}</span>{% endif %}
         {% if c.unread_count %}<span class="att-unread-dot">{{ c.unread_count }}</span>{% endif %}
       </div>
     </div>

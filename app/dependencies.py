@@ -117,6 +117,8 @@ def get_session_user(request: Request) -> dict | None:
         "name": user["name"],
         "role": user["role"],
         "managed": True,
+        "department_id": str(user.get("department_id") or ""),
+        "department_name": user.get("department_name") or "",
     }
 
 

@@ -302,3 +302,46 @@ def sector_id_for_user(user_id: str) -> int | None:
         if uid in (sector.get("user_ids") or []):
             return int(sector["id"])
     return None
+
+
+def is_todos_sector_name(name: str | None) -> bool:
+    return normalize_text(name).lower() == "todos"
+
+
+def attendance_scope_for_user(user: dict | None) -> dict:
+    """Escopo de fila: Todos/admin vê tudo; setor específico fica restrito."""
+    if not user:
+        return {"see_all": True, "sector_id": None, "sector_name": "", "locked": False}
+
+    if user.get("role") == "Administrador" or not user.get("managed", True):
+        return {"see_all": True, "sector_id": None, "sector_name": "", "locked": False}
+
+    dept_id = normalize_text(user.get("department_id") or "")
+    dept_name = normalize_text(user.get("department_name") or "")
+    if not dept_id:
+        sid = sector_id_for_user(user.get("id") or "")
+        if sid:
+            sector = get_sector(sid)
+            if sector:
+                dept_id = str(sector["id"])
+                dept_name = normalize_text(sector.get("name"))
+
+    if not dept_id or is_todos_sector_name(dept_name):
+        return {
+            "see_all": True,
+            "sector_id": int(dept_id) if dept_id and not is_todos_sector_name(dept_name) else None,
+            "sector_name": dept_name,
+            "locked": False,
+        }
+
+    try:
+        sid = int(dept_id)
+    except (TypeError, ValueError):
+        return {"see_all": True, "sector_id": None, "sector_name": dept_name, "locked": False}
+
+    return {
+        "see_all": False,
+        "sector_id": sid,
+        "sector_name": dept_name,
+        "locked": True,
+    }

@@ -17,9 +17,9 @@ SETTINGS_TABS = [
     ("geral", "Geral"),
     ("metas", "Metas"),
     ("usuarios", "Usuários e Permissões"),
+    ("atendimentos", "Atendimentos"),
     ("servicos", "Serviços"),
     ("nichos", "Nichos"),
-    ("setores", "Setores"),
     ("integracoes", "Integrações"),
     ("faturamento", "Faturamento"),
 ]

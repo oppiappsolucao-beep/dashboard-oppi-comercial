@@ -230,16 +230,16 @@
 </div>
 {% endif %}
 
-{% if settings_params.tab == 'setores' %}
+{% if settings_params.tab == 'atendimentos' %}
 <div class="settings-goals-layout settings-services-tab">
   <div class="panel settings-single-card">
-    <div class="section-heading">Setores</div>
-    <div class="section-subtitle">Setores padrão: Suporte, Comercial, Financeiro e Todos. Cadastre outros abaixo e vincule usuários. Usado em Atendimentos e no departamento do usuário.</div>
+    <div class="section-heading">Departamentos / Setores</div>
+    <div class="section-subtitle">Setores padrão: Suporte, Comercial, Financeiro e Todos. Cadastre outros e vincule usuários. Define a fila de Atendimentos de cada pessoa.</div>
     {% if sector_success %}<div class="settings-alert success">{{ sector_success }}</div>{% endif %}
     {% if sector_error %}<div class="settings-alert error">{{ sector_error }}</div>{% endif %}
     {% if is_admin %}
     <form method="post" action="/configuracoes/setores/adicionar" class="settings-goals-form">
-      <input type="hidden" name="tab" value="setores">
+      <input type="hidden" name="tab" value="atendimentos">
       <label>
         <span class="settings-company-label">Nome do setor</span>
         <input type="text" name="sector_name" placeholder="Ex.: Operações" required maxlength="120">
@@ -288,8 +288,51 @@
     <div class="settings-empty">Nenhum setor cadastrado.</div>
     {% endfor %}
   </div>
+
+  <div class="panel settings-single-card">
+    <div class="section-heading">Tags de atendimento</div>
+    <div class="section-subtitle">Padrão: Novo contato, Parceiros e Atendimento interno. Use nas conversas da inbox.</div>
+    {% if tag_success %}<div class="settings-alert success">{{ tag_success }}</div>{% endif %}
+    {% if tag_error %}<div class="settings-alert error">{{ tag_error }}</div>{% endif %}
+    {% if is_admin %}
+    <form method="post" action="/configuracoes/tags/adicionar" class="settings-goals-form settings-service-form">
+      <input type="hidden" name="tab" value="atendimentos">
+      <label>
+        <span class="settings-company-label">Nova tag</span>
+        <input type="text" name="tag_name" placeholder="Ex.: VIP" required maxlength="120" autocomplete="off">
+      </label>
+      <button type="submit" class="btn">Cadastrar tag</button>
+    </form>
+    {% else %}
+    <div class="settings-empty">Somente administradores podem cadastrar tags.</div>
+    {% endif %}
+  </div>
+  <div class="panel settings-single-card">
+    <div class="section-heading">Tags cadastradas</div>
+    <div class="settings-service-list settings-service-list-full">
+      {% for tag in attendance_tags %}
+      <div class="settings-service-row">
+        <span>{{ tag.name }}{% if tag.is_system %} <small class="settings-field-hint">(padrão)</small>{% endif %}</span>
+        <div class="settings-service-actions">
+          <span class="settings-service-badge {{ tag.status_class }}">{{ tag.status_label }}</span>
+          {% if is_admin %}
+          <form method="post" action="/configuracoes/tags/remover" class="settings-inline-form"
+            onsubmit="return confirm('Remover/desativar esta tag?');">
+            <input type="hidden" name="tab" value="atendimentos">
+            <input type="hidden" name="tag_name" value="{{ tag.name }}">
+            <button type="submit" class="settings-link-btn danger">Remover</button>
+          </form>
+          {% endif %}
+        </div>
+      </div>
+      {% else %}
+      <div class="settings-empty">Nenhuma tag cadastrada.</div>
+      {% endfor %}
+    </div>
+  </div>
 </div>
 {% endif %}
+
 
 <div id="settings-filters">
   <input type="hidden" name="tab" value="{{ settings_params.tab }}" id="settings-tab-input">

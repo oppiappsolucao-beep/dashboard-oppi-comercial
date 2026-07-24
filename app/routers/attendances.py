@@ -12,7 +12,7 @@ from pathlib import Path
 from fastapi import APIRouter, File, Form, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
 
-from app.dependencies import require_auth
+from app.dependencies import get_session_user, require_auth
 from app.services import attendances as attendances_service
 from app.services import attendances_storage as store
 from app.services.legacy_core import normalize_text
@@ -28,7 +28,7 @@ def _username(request: Request) -> str:
     return normalize_text(request.session.get("username", "")) or "Atendente"
 
 
-def _filters(request: Request, form: dict | None = None) -> tuple[str, str, str]:
+def _filters(request: Request, form: dict | None = None) -> tuple[str, str, str, str]:
     data = form or {}
     search = normalize_text(data.get("search") or request.query_params.get("search", ""))
     # Padrão: só abertos (finalizados saem da fila)
@@ -36,7 +36,28 @@ def _filters(request: Request, form: dict | None = None) -> tuple[str, str, str]
     selected = normalize_text(
         data.get("conversation_id") or request.query_params.get("c", "")
     )
-    return search, status, selected
+    sector = normalize_text(data.get("sector") or request.query_params.get("sector", ""))
+    return search, status, selected, sector
+
+
+def _page_ctx(
+    request: Request,
+    *,
+    form: dict | None = None,
+    selected_id: str | None = None,
+    flash: str = "",
+    error: str = "",
+) -> dict:
+    search, status, selected, sector = _filters(request, form)
+    return attendances_service.page_context(
+        search=search,
+        status=status,
+        sector_filter=sector,
+        selected_id=selected if selected_id is None else selected_id,
+        session_user=get_session_user(request),
+        flash=flash,
+        error=error,
+    )
 
 
 def _media_dir() -> Path:
@@ -60,27 +81,20 @@ def _guess_media_type(mime: str, filename: str) -> str:
 @router.get("/atendimentos", response_class=HTMLResponse)
 def attendances_page(request: Request):
     require_auth(request)
-    search, status, selected = _filters(request)
-    ctx = attendances_service.page_context(search=search, status=status, selected_id=selected)
-    return render(request, "attendances/index.html", ctx)
+    return render(request, "attendances/index.html", _page_ctx(request))
 
 
 @router.post("/atendimentos/filtros", response_class=HTMLResponse)
 async def attendances_filters(request: Request):
     require_auth(request)
     form = dict(await request.form())
-    search, status, selected = _filters(request, form)
-    ctx = attendances_service.page_context(search=search, status=status, selected_id=selected)
-    return render(request, "partials/attendances_list.html", ctx)
+    return render(request, "partials/attendances_list.html", _page_ctx(request, form=form))
 
 
 @router.get("/atendimentos/conversa/{conversation_id}", response_class=HTMLResponse)
 def attendances_conversation(request: Request, conversation_id: str):
     require_auth(request)
-    search, status, _ = _filters(request)
-    ctx = attendances_service.page_context(
-        search=search, status=status, selected_id=conversation_id
-    )
+    ctx = _page_ctx(request, selected_id=conversation_id)
     if not ctx.get("selected"):
         return HTMLResponse("<div class='att-empty'>Conversa não encontrada.</div>", status_code=404)
     return render(request, "partials/attendances_thread.html", ctx)
@@ -95,10 +109,7 @@ async def attendances_send(request: Request, conversation_id: str, text: str = F
         sender="agent",
         assignee=_username(request),
     )
-    search, status, _ = _filters(request)
-    ctx = attendances_service.page_context(
-        search=search, status=status, selected_id=conversation_id, error=error
-    )
+    ctx = _page_ctx(request, selected_id=conversation_id, error=error)
     return render(request, "partials/attendances_send_response.html", ctx)
 
 
@@ -111,19 +122,11 @@ async def attendances_send_media(
 ):
     require_auth(request)
     raw = await file.read()
-    search, status, _ = _filters(request)
     if not raw:
-        ctx = attendances_service.page_context(
-            search=search, status=status, selected_id=conversation_id, error="Arquivo vazio."
-        )
+        ctx = _page_ctx(request, selected_id=conversation_id, error="Arquivo vazio.")
         return render(request, "partials/attendances_send_response.html", ctx)
     if len(raw) > _MEDIA_MAX_BYTES:
-        ctx = attendances_service.page_context(
-            search=search,
-            status=status,
-            selected_id=conversation_id,
-            error="Arquivo maior que 15 MB.",
-        )
+        ctx = _page_ctx(request, selected_id=conversation_id, error="Arquivo maior que 15 MB.")
         return render(request, "partials/attendances_send_response.html", ctx)
 
     filename = normalize_text(file.filename) or "arquivo"
@@ -148,9 +151,7 @@ async def attendances_send_media(
         store_media_url=local_url,
     )
 
-    ctx = attendances_service.page_context(
-        search=search, status=status, selected_id=conversation_id, error=error
-    )
+    ctx = _page_ctx(request, selected_id=conversation_id, error=error)
     return render(request, "partials/attendances_send_response.html", ctx)
 
 
@@ -175,10 +176,7 @@ async def attendances_assume(request: Request, conversation_id: str):
         assignee,
         sector_id=form.get("sector_id"),
     )
-    search, status, _ = _filters(request)
-    ctx = attendances_service.page_context(
-        search=search, status=status, selected_id=conversation_id, flash="Atendimento assumido. IA pausada."
-    )
+    ctx = _page_ctx(request, selected_id=conversation_id, flash="Atendimento assumido. IA pausada.")
     return render(request, "partials/attendances_thread.html", ctx)
 
 
@@ -191,10 +189,8 @@ async def attendances_assign(request: Request, conversation_id: str):
     if action == "assumir" and not assignee:
         assignee = _username(request)
     if not assignee and action != "assumir":
-        search, status, _ = _filters(request)
-        ctx = attendances_service.page_context(
-            search=search,
-            status=status,
+        ctx = _page_ctx(
+            request,
             selected_id=conversation_id,
             error="Selecione o responsável para direcionar.",
         )
@@ -207,11 +203,8 @@ async def attendances_assign(request: Request, conversation_id: str):
         pause_ai=True,
         set_in_progress=True,
     )
-    search, status, _ = _filters(request)
     flash = "Atendimento assumido. IA pausada." if action == "assumir" else "Atendimento direcionado."
-    ctx = attendances_service.page_context(
-        search=search, status=status, selected_id=conversation_id, flash=flash
-    )
+    ctx = _page_ctx(request, selected_id=conversation_id, flash=flash)
     return render(request, "partials/attendances_thread.html", ctx)
 
 
@@ -219,10 +212,7 @@ async def attendances_assign(request: Request, conversation_id: str):
 def attendances_return_ai(request: Request, conversation_id: str):
     require_auth(request)
     attendances_service.return_to_ai(conversation_id)
-    search, status, _ = _filters(request)
-    ctx = attendances_service.page_context(
-        search=search, status=status, selected_id=conversation_id, flash="Conversação devolvida à IA."
-    )
+    ctx = _page_ctx(request, selected_id=conversation_id, flash="Conversação devolvida à IA.")
     return render(request, "partials/attendances_thread.html", ctx)
 
 
@@ -230,10 +220,7 @@ def attendances_return_ai(request: Request, conversation_id: str):
 def attendances_finalize(request: Request, conversation_id: str):
     require_auth(request)
     attendances_service.finalize_conversation(conversation_id)
-    search, status, _ = _filters(request)
-    ctx = attendances_service.page_context(
-        search=search, status=status, selected_id=conversation_id, flash="Atendimento finalizado."
-    )
+    ctx = _page_ctx(request, selected_id=conversation_id, flash="Atendimento finalizado.")
     return render(request, "partials/attendances_thread.html", ctx)
 
 
@@ -241,28 +228,23 @@ def attendances_finalize(request: Request, conversation_id: str):
 def attendances_delete(request: Request, conversation_id: str):
     require_auth(request)
     attendances_service.delete_conversation(conversation_id)
-    search, status, _ = _filters(request)
-    ctx = attendances_service.page_context(
-        search=search,
-        status=status,
-        selected_id="",
-        flash="Conversa removida da inbox.",
-    )
+    ctx = _page_ctx(request, selected_id="", flash="Conversa removida da inbox.")
     return render(request, "partials/attendances_thread.html", ctx)
 
 
 @router.post("/atendimentos/conversa/{conversation_id}/notas", response_class=HTMLResponse)
 async def attendances_notes(request: Request, conversation_id: str):
     require_auth(request)
-    form = dict(await request.form())
+    form = await request.form()
     notes = normalize_text(form.get("notes", ""))
-    tags_raw = normalize_text(form.get("tags", ""))
-    tags = [t.strip() for t in tags_raw.split(",") if t.strip()]
+    raw_tags = form.getlist("tags") if hasattr(form, "getlist") else []
+    if not raw_tags:
+        tags_raw = normalize_text(form.get("tags", ""))
+        tags = [t.strip() for t in tags_raw.split(",") if t.strip()]
+    else:
+        tags = [normalize_text(t) for t in raw_tags if normalize_text(t)]
     attendances_service.update_notes_tags(conversation_id, notes=notes, tags=tags)
-    search, status, _ = _filters(request)
-    ctx = attendances_service.page_context(
-        search=search, status=status, selected_id=conversation_id, flash="Observações salvas."
-    )
+    ctx = _page_ctx(request, selected_id=conversation_id, flash="Observações salvas.")
     return render(request, "partials/attendances_crm_panel.html", ctx)
 
 

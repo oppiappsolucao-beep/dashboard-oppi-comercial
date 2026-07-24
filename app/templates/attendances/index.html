@@ -18,7 +18,7 @@
   </div>
 </div>
 
-<div class="att-shell" id="att-shell"
+<div class="att-shell {% if selected %}att-shell--chat-open{% endif %}" id="att-shell"
      data-selected="{{ selected.id if selected else '' }}"
      data-evolution="{{ '1' if evolution_configured else '0' }}">
   <aside class="att-col att-col-list">
@@ -26,13 +26,26 @@
           hx-post="/atendimentos/filtros"
           hx-target="#att-conversation-list"
           hx-swap="innerHTML"
-          hx-trigger="submit, keyup changed delay:300ms from:#att-search, change from:#att-status">
+          hx-trigger="submit, keyup changed delay:300ms from:#att-search, change from:#att-status, change from:#att-sector">
       <input type="search" id="att-search" name="search" value="{{ search }}" placeholder="Buscar nome ou telefone…" class="att-input" autocomplete="off">
       <select id="att-status" name="status" class="att-input att-select">
         {% for value, label in status_options %}
         <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>
         {% endfor %}
       </select>
+      <select id="att-sector" name="sector" class="att-input att-select"
+              {% if sector_filter_locked %}disabled{% endif %}>
+        {% if not sector_filter_locked %}
+        <option value="todos" {% if sector_filter == 'todos' %}selected{% endif %}>Todos os setores</option>
+        {% endif %}
+        {% for sector in sector_options or [] %}
+        <option value="{{ sector.id }}" {% if sector_filter == sector.id|string %}selected{% endif %}>{{ sector.name }}</option>
+        {% endfor %}
+      </select>
+      {% if sector_filter_locked %}
+      <input type="hidden" name="sector" value="{{ sector_filter }}">
+      <small class="att-filter-hint">Fila do setor: {{ user_sector_name or 'seu departamento' }}</small>
+      {% endif %}
       {% if selected %}<input type="hidden" name="conversation_id" value="{{ selected.id }}">{% endif %}
     </form>
     <div id="att-conversation-list" class="att-conversation-list">

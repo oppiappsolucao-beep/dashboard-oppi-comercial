@@ -426,3 +426,16 @@ class CrmSector(Base):
     user_ids_json = Column(Text, nullable=False, default="[]")
     created_at = Column(String(40), nullable=False, default="")
     updated_at = Column(String(40), nullable=False, default="")
+
+
+class CrmAttendanceTag(Base):
+    """Tags de atendimento (Configurações → Atendimentos)."""
+
+    __tablename__ = "crm_attendance_tags"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(150), unique=True, nullable=False)
+    is_system = Column(Boolean, nullable=False, default=False)
+    active = Column(Boolean, nullable=False, default=True)
+    sort_order = Column(Integer, nullable=False, default=0)
+    created_at = Column(String(40), nullable=False, default="")

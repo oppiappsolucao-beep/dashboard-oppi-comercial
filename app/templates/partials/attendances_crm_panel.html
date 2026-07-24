@@ -67,8 +67,18 @@
         hx-post="/atendimentos/conversa/{{ selected.id }}/notas"
         hx-target="#att-crm-panel"
         hx-swap="innerHTML">
-    <label class="att-label">Tags <span class="att-hint">(vírgula)</span></label>
-    <input type="text" name="tags" class="att-input" value="{{ selected.tags | join(', ') }}" placeholder="quente, proposta…">
+    <label class="att-label">Tags</label>
+    <div class="att-tags-list">
+      {% for tag in tag_options or [] %}
+      <label class="att-tag-chip">
+        <input type="checkbox" name="tags" value="{{ tag }}"
+               {% if tag in (selected.tags or []) %}checked{% endif %}>
+        <span>{{ tag }}</span>
+      </label>
+      {% else %}
+      <small class="att-hint">Cadastre tags em Configurações → Atendimentos.</small>
+      {% endfor %}
+    </div>
     <label class="att-label">Observações</label>
     <textarea name="notes" class="att-input" rows="4" placeholder="Anotações do atendimento…">{{ selected.notes }}</textarea>
     <button type="submit" class="btn btn-secondary att-notes-save">Salvar</button>

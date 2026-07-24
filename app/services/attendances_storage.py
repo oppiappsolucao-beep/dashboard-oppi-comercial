@@ -278,6 +278,7 @@ def list_conversations(
     *,
     search: str = "",
     status: str = "",
+    sector_id: int | str | None = None,
     limit: int = 100,
 ) -> list[dict]:
     from app.services.evolution_client import is_whatsapp_group_jid
@@ -289,6 +290,13 @@ def list_conversations(
                 q = q.filter(AttendanceConversation.status != STATUS_FINALIZADO)
             else:
                 q = q.filter(AttendanceConversation.status == status)
+        if sector_id not in (None, "", "todos", "all"):
+            try:
+                sid = int(sector_id)
+            except (TypeError, ValueError):
+                sid = None
+            if sid is not None:
+                q = q.filter(AttendanceConversation.sector_id == sid)
         search_norm = normalize_text(search).lower()
         if search_norm:
             like = f"%{search_norm}%"

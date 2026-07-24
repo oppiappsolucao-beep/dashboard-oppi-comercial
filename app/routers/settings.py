@@ -37,6 +37,8 @@ def _parse_settings_params(request: Request, form: dict | None = None) -> dict:
         data = dict(request.query_params)
 
     tab = data.get("tab", "usuarios")
+    if tab == "setores":
+        tab = "atendimentos"
     valid_tabs = {tab_id for tab_id, _ in SETTINGS_TABS}
     try:
         page = int(data.get("page", 1))
@@ -63,14 +65,17 @@ def _settings_context(request: Request, settings_params: dict):
 
     niches_rows: list[dict] = []
     sectors_rows: list[dict] = []
+    attendance_tags_rows: list[dict] = []
     account_users_options: list[dict] = []
     try:
         from app.services.niches import list_niches_rows
         from app.services.sectors import list_sectors
+        from app.services.attendance_tags import list_attendance_tags
         from app.services.account_users import load_account_users
 
         niches_rows = list_niches_rows()
         sectors_rows = list_sectors(active_only=False)
+        attendance_tags_rows = list_attendance_tags(active_only=False)
         account_users_options = [
             {
                 "id": u.get("id"),
@@ -83,6 +88,7 @@ def _settings_context(request: Request, settings_params: dict):
     except Exception:
         niches_rows = []
         sectors_rows = []
+        attendance_tags_rows = []
         account_users_options = []
 
     return {
@@ -103,6 +109,7 @@ def _settings_context(request: Request, settings_params: dict):
         "services": build_services_list(),
         "niches": niches_rows,
         "sectors": sectors_rows,
+        "attendance_tags": attendance_tags_rows,
         "sector_options": [{"id": s["id"], "name": s["name"]} for s in sectors_rows if s.get("active", True)],
         "account_users_options": account_users_options,
         "permissions": build_permissions(_get_permissions(request)),
@@ -121,6 +128,8 @@ def _settings_context(request: Request, settings_params: dict):
         "niche_error": request.session.pop("settings_niche_error", ""),
         "sector_success": request.session.pop("settings_sector_success", ""),
         "sector_error": request.session.pop("settings_sector_error", ""),
+        "tag_success": request.session.pop("settings_tag_success", ""),
+        "tag_error": request.session.pop("settings_tag_error", ""),
         "user_success": request.session.pop("settings_user_success", ""),
         "user_error": request.session.pop("settings_user_error", ""),
         "sheet_sync_success": request.session.pop("settings_sheet_sync_success", ""),
@@ -368,7 +377,7 @@ async def settings_add_sector(request: Request):
         return redirect
     if not is_admin(request):
         request.session["settings_sector_error"] = "Apenas o administrador pode cadastrar setores."
-        return RedirectResponse(url="/configuracoes?tab=setores", status_code=303)
+        return RedirectResponse(url="/configuracoes?tab=atendimentos", status_code=303)
 
     form = await request.form()
     from app.services.sectors import add_sector
@@ -381,7 +390,7 @@ async def settings_add_sector(request: Request):
         request.session["settings_sector_error"] = str(error)
     except Exception as error:
         request.session["settings_sector_error"] = f"Não consegui cadastrar o setor: {error}"
-    return RedirectResponse(url="/configuracoes?tab=setores", status_code=303)
+    return RedirectResponse(url="/configuracoes?tab=atendimentos", status_code=303)
 
 
 @router.post("/configuracoes/setores/editar")
@@ -391,7 +400,7 @@ async def settings_edit_sector(request: Request):
         return redirect
     if not is_admin(request):
         request.session["settings_sector_error"] = "Apenas o administrador pode editar setores."
-        return RedirectResponse(url="/configuracoes?tab=setores", status_code=303)
+        return RedirectResponse(url="/configuracoes?tab=atendimentos", status_code=303)
 
     form = await request.form()
     from app.services.sectors import update_sector
@@ -408,7 +417,7 @@ async def settings_edit_sector(request: Request):
         request.session["settings_sector_error"] = str(error)
     except Exception as error:
         request.session["settings_sector_error"] = f"Não consegui atualizar o setor: {error}"
-    return RedirectResponse(url="/configuracoes?tab=setores", status_code=303)
+    return RedirectResponse(url="/configuracoes?tab=atendimentos", status_code=303)
 
 
 @router.post("/configuracoes/setores/remover")
@@ -421,7 +430,7 @@ async def settings_remove_sector(
         return redirect
     if not is_admin(request):
         request.session["settings_sector_error"] = "Apenas o administrador pode remover setores."
-        return RedirectResponse(url="/configuracoes?tab=setores", status_code=303)
+        return RedirectResponse(url="/configuracoes?tab=atendimentos", status_code=303)
     from app.services.sectors import delete_sector
 
     try:
@@ -431,7 +440,55 @@ async def settings_remove_sector(
         request.session["settings_sector_error"] = str(error)
     except Exception as error:
         request.session["settings_sector_error"] = f"Não consegui remover o setor: {error}"
-    return RedirectResponse(url="/configuracoes?tab=setores", status_code=303)
+    return RedirectResponse(url="/configuracoes?tab=atendimentos", status_code=303)
+
+
+@router.post("/configuracoes/tags/adicionar")
+async def settings_add_tag(
+    request: Request,
+    tag_name: str = Form(...),
+    tab: str = Form("atendimentos"),
+):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+    if not is_admin(request):
+        request.session["settings_tag_error"] = "Apenas o administrador pode cadastrar tags."
+        return RedirectResponse(url="/configuracoes?tab=atendimentos", status_code=303)
+    from app.services.attendance_tags import add_attendance_tag
+
+    try:
+        add_attendance_tag(tag_name)
+        request.session["settings_tag_success"] = "Tag cadastrada com sucesso."
+    except ValueError as error:
+        request.session["settings_tag_error"] = str(error)
+    except Exception as error:
+        request.session["settings_tag_error"] = f"Não consegui cadastrar a tag: {error}"
+    return RedirectResponse(url="/configuracoes?tab=atendimentos", status_code=303)
+
+
+@router.post("/configuracoes/tags/remover")
+async def settings_remove_tag(
+    request: Request,
+    tag_name: str = Form(...),
+    tab: str = Form("atendimentos"),
+):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+    if not is_admin(request):
+        request.session["settings_tag_error"] = "Apenas o administrador pode remover tags."
+        return RedirectResponse(url="/configuracoes?tab=atendimentos", status_code=303)
+    from app.services.attendance_tags import remove_attendance_tag
+
+    try:
+        remove_attendance_tag(tag_name)
+        request.session["settings_tag_success"] = "Tag removida/desativada."
+    except ValueError as error:
+        request.session["settings_tag_error"] = str(error)
+    except Exception as error:
+        request.session["settings_tag_error"] = f"Não consegui remover a tag: {error}"
+    return RedirectResponse(url="/configuracoes?tab=atendimentos", status_code=303)
 
 
 @router.post("/configuracoes/usuarios/adicionar")

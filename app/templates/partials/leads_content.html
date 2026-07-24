@@ -20,6 +20,7 @@
   </div>
 
   <div class="toolbar-card leads-toolbar-card">
+    <input type="hidden" name="stage" value="Todas as etapas">
     <div class="filters-row filters-row-main">
       <div class="filter-field filter-field-sm">
         <label>Vendedor</label>
@@ -27,14 +28,6 @@
           <option value="Todos os vendedores">Todos os vendedores</option>
           {% for seller in options.seller_options %}
           <option value="{{ seller }}" {% if filters.seller == seller %}selected{% endif %}>{{ seller }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="filter-field filter-field-sm">
-        <label>Etapa</label>
-        <select name="stage" onchange="document.getElementById('leads-page-input').value='1'; document.getElementById('leads-filters').requestSubmit();">
-          {% for stage in stage_options %}
-          <option value="{{ stage }}" {% if leads_params.stage == stage %}selected{% endif %}>{{ stage }}</option>
           {% endfor %}
         </select>
       </div>

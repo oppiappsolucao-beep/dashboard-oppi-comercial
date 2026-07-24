@@ -3,6 +3,7 @@
   {% if flash %}<div class="att-flash">{{ flash }}</div>{% endif %}
   {% if error %}<div class="att-error">{{ error }}</div>{% endif %}
   <header class="att-chat-header">
+    <a href="/atendimentos" class="att-back-btn" aria-label="Voltar para a lista">‹</a>
     <div class="att-avatar sm">{{ selected.initials }}</div>
     <div class="att-chat-header-text">
       <div class="att-chat-title">{{ selected.contact_name or selected.phone_e164 }}</div>

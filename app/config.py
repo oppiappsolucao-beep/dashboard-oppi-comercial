@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-APP_BUILD = os.getenv("APP_BUILD", "20260724-dept-proposals-v29").strip() or "20260724-dept-proposals-v29"
+APP_BUILD = os.getenv("APP_BUILD", "20260724-att-tags-mobile-v30").strip() or "20260724-att-tags-mobile-v30"
 
 
 class Settings:

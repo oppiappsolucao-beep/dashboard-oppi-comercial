@@ -12,11 +12,29 @@ from app.services.legacy_core import normalize_text
 logger = logging.getLogger(__name__)
 
 
+def _resolve_sector_filter(session_user: dict | None, sector_filter: str) -> tuple[int | str | None, dict]:
+    from app.services.sectors import attendance_scope_for_user
+
+    scope = attendance_scope_for_user(session_user)
+    if scope.get("locked") and scope.get("sector_id"):
+        return scope["sector_id"], scope
+
+    raw = normalize_text(sector_filter).lower()
+    if raw in ("", "todos", "all"):
+        return None, scope
+    try:
+        return int(sector_filter), scope
+    except (TypeError, ValueError):
+        return None, scope
+
+
 def page_context(
     *,
     search: str = "",
     status: str = "",
+    sector_filter: str = "",
     selected_id: str = "",
+    session_user: dict | None = None,
     flash: str = "",
     error: str = "",
 ) -> dict:
@@ -27,18 +45,33 @@ def page_context(
     except Exception:
         logger.exception("Falha ao limpar conversas indesejadas da inbox")
 
-    conversations = store.list_conversations(search=search, status=status)
+    effective_sector, scope = _resolve_sector_filter(session_user, sector_filter)
+    conversations = store.list_conversations(
+        search=search,
+        status=status,
+        sector_id=effective_sector,
+    )
     selected = None
     messages: list[dict] = []
     crm = attendance_crm.build_crm_panel(None)
     sector_options: list[dict] = []
     responsible_options: list[str] = []
+    tag_options: list[str] = []
     try:
         from app.services.sectors import list_sectors, responsible_options_for_sector
 
         sector_options = list_sectors(active_only=True)
+        if scope.get("locked") and scope.get("sector_id"):
+            sector_options = [s for s in sector_options if s.get("id") == scope["sector_id"]]
     except Exception:
         sector_options = []
+
+    try:
+        from app.services.attendance_tags import list_attendance_tag_options
+
+        tag_options = list_attendance_tag_options()
+    except Exception:
+        tag_options = []
 
     if selected_id:
         selected = store.get_conversation(selected_id)
@@ -52,6 +85,14 @@ def page_context(
                 or name_key in store.UNWANTED_INBOX_CONTACT_KEYS
             ):
                 store.delete_conversation(selected_id)
+                selected = None
+                selected_id = ""
+            elif (
+                effective_sector is not None
+                and selected.get("sector_id") not in (None, effective_sector)
+                and int(selected.get("sector_id") or 0) != int(effective_sector)
+            ):
+                # Fora do escopo do usuário/filtro — não abre a conversa
                 selected = None
                 selected_id = ""
             else:
@@ -76,6 +117,12 @@ def page_context(
         except Exception:
             responsible_options = []
 
+    ui_sector_filter = str(scope["sector_id"]) if scope.get("locked") and scope.get("sector_id") else (
+        str(effective_sector) if effective_sector is not None else (normalize_text(sector_filter) or "todos")
+    )
+    if ui_sector_filter in ("", "None"):
+        ui_sector_filter = "todos"
+
     return {
         "active_page": "attendances",
         "conversations": conversations,
@@ -88,6 +135,9 @@ def page_context(
             ("abertos", "Em aberto"),
             ("todos", "Todos"),
         ] + store.STATUS_OPTIONS,
+        "sector_filter": ui_sector_filter,
+        "sector_filter_locked": bool(scope.get("locked")),
+        "user_sector_name": scope.get("sector_name") or "",
         "evolution_configured": settings.evolution_configured,
         "unread_total": store.count_unread(),
         "flash": flash,
@@ -96,6 +146,7 @@ def page_context(
         "ai_mode_paused": store.AI_MODE_PAUSED,
         "sector_options": sector_options,
         "responsible_options": responsible_options,
+        "tag_options": tag_options,
     }
 
 
