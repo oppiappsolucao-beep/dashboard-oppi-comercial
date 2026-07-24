@@ -9,7 +9,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Stre
 from app.dependencies import get_prepared_data, require_auth
 from app.services.filters import apply_dashboard_filters, apply_last_days_period_filters, get_filter_options, parse_dashboard_filters
 from app.services.lead_actions_storage import DEFAULT_TENANT_ID
-from app.services.leads import ETAPA_STAGES, atualizar_proxima_acao_lead, build_leads_export_rows, build_leads_kpi_cards, build_leads_table
+from app.services.leads import ETAPA_STAGES, atualizar_proxima_acao_lead, apply_leads_view, build_leads_export_rows, build_leads_kpi_cards, build_leads_table
 from app.services.legacy_core import invalidate_sheet_cache, normalize_text
 from app.templating import render
 
@@ -49,6 +49,14 @@ def _leads_context(request: Request, filters, leads_params: dict):
     filters = replace(filters, status="Todos os status")
 
     filtered_df = apply_dashboard_filters(df, columns, filters)
+    empresas_df = apply_leads_view(
+        filtered_df,
+        tab=leads_params["tab"],
+        stage=leads_params["stage"],
+        sort=leads_params["sort"],
+        tenant_id=DEFAULT_TENANT_ID,
+        columns=columns,
+    )
     table = build_leads_table(
         filtered_df,
         columns,
@@ -66,7 +74,7 @@ def _leads_context(request: Request, filters, leads_params: dict):
         "options": options,
         "leads_params": leads_params,
         "stage_options": ["Todas as etapas"] + ETAPA_STAGES,
-        "kpi_cards": build_leads_kpi_cards(filtered_df),
+        "kpi_cards": build_leads_kpi_cards(empresas_df),
         "table": table,
     }
 

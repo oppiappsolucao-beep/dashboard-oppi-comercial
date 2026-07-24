@@ -484,4 +484,20 @@
     scrollMessages();
     startPoll();
   }
+
+  var newCallToggle = $("#att-new-call-toggle");
+  var newCallPanel = $("#att-new-call-panel");
+  var newCallCancel = $("#att-new-call-cancel");
+  if (newCallToggle && newCallPanel) {
+    newCallToggle.addEventListener("click", function () {
+      var open = newCallPanel.hasAttribute("hidden");
+      if (open) newCallPanel.removeAttribute("hidden");
+      else newCallPanel.setAttribute("hidden", "hidden");
+    });
+  }
+  if (newCallCancel && newCallPanel) {
+    newCallCancel.addEventListener("click", function () {
+      newCallPanel.setAttribute("hidden", "hidden");
+    });
+  }
 })();

@@ -15,7 +15,36 @@
     <span class="att-unread-pill" id="att-unread-pill" data-count="{{ unread_total }}" {% if unread_total <= 0 %}hidden{% endif %}>
       {{ unread_total }} nova{{ 's' if unread_total != 1 else '' }}
     </span>
+    <button type="button" class="btn" id="att-new-call-toggle">＋ Novo chamado</button>
   </div>
+</div>
+
+{% if flash %}<div class="att-page-flash ok">{{ flash }}</div>{% endif %}
+{% if error %}<div class="att-page-flash err">{{ error }}</div>{% endif %}
+
+<div class="att-new-call-panel" id="att-new-call-panel" hidden>
+  <form method="post" action="/atendimentos/novo" class="att-new-call-form">
+    <div class="att-new-call-title">Chamar no WhatsApp</div>
+    <p class="att-new-call-hint">Digite o número. Se ainda não existir no CRM, entra como lead novo.</p>
+    <div class="att-new-call-grid">
+      <label class="att-new-call-field">
+        <span>WhatsApp *</span>
+        <input type="tel" name="phone" class="att-input" required placeholder="Ex.: 11999998888" autocomplete="off" inputmode="tel">
+      </label>
+      <label class="att-new-call-field">
+        <span>Nome / empresa</span>
+        <input type="text" name="contact_name" class="att-input" placeholder="Opcional" autocomplete="off">
+      </label>
+      <label class="att-new-call-field att-new-call-field-wide">
+        <span>Mensagem inicial</span>
+        <input type="text" name="first_message" class="att-input" placeholder="Opcional — envia ao abrir o chamado" autocomplete="off">
+      </label>
+    </div>
+    <div class="att-new-call-actions">
+      <button type="submit" class="btn">Abrir chamado</button>
+      <button type="button" class="btn btn-secondary" id="att-new-call-cancel">Cancelar</button>
+    </div>
+  </form>
 </div>
 
 <div class="att-shell {% if selected %}att-shell--chat-open{% endif %}" id="att-shell"

@@ -321,6 +321,65 @@ def delete_conversation(conversation_id: str) -> bool:
     return store.delete_conversation(conversation_id)
 
 
+def start_whatsapp_call(
+    *,
+    phone: str,
+    contact_name: str = "",
+    first_message: str = "",
+    assignee: str = "",
+) -> tuple[dict | None, str]:
+    """Abre chamado WhatsApp: cria/vincula lead e conversa na inbox."""
+    from app.services.evolution_client import normalize_phone_from_jid
+
+    phone_e164 = normalize_phone_from_jid(phone)
+    if not phone_e164 or len(phone_e164) < 12:
+        return None, "Informe um WhatsApp válido com DDD (ex.: 11999998888)."
+
+    sheet_row = attendance_crm.resolve_or_create_lead(
+        phone=phone_e164,
+        contact_name=contact_name,
+    )
+    name = normalize_text(contact_name)
+    if not name and sheet_row:
+        crm = attendance_crm.build_crm_panel(sheet_row)
+        name = normalize_text(crm.get("contato") or crm.get("empresa"))
+
+    conversation = store.upsert_conversation_by_phone(
+        phone_e164,
+        contact_name=name or f"WhatsApp {phone_e164}",
+        sheet_row=sheet_row,
+        status=store.STATUS_EM_ATENDIMENTO if first_message or assignee else store.STATUS_NOVO_LEAD,
+        remote_jid=f"{phone_e164}@s.whatsapp.net",
+    )
+    if not conversation:
+        return None, "Não foi possível abrir a conversa."
+
+    conversation_id = conversation["id"]
+    updates: dict = {}
+    if assignee:
+        updates["assignee"] = normalize_text(assignee)
+        updates["ai_mode"] = store.AI_MODE_PAUSED
+        updates["status"] = store.STATUS_EM_ATENDIMENTO
+    if updates:
+        conversation = store.update_conversation(conversation_id, **updates) or conversation
+
+    message_text = normalize_text(first_message)
+    if message_text:
+        if not settings.evolution_configured:
+            return conversation, "Conversa aberta, mas a Evolution API não está configurada para enviar a mensagem."
+        _, error = send_text_message(
+            conversation_id,
+            message_text,
+            sender="agent",
+            assignee=assignee,
+        )
+        if error:
+            return conversation, f"Conversa aberta, mas a mensagem não foi enviada: {error}"
+        conversation = store.get_conversation(conversation_id) or conversation
+
+    return conversation, ""
+
+
 def maybe_ai_reply(conversation_id: str, inbound_text: str) -> None:
     conversation = store.get_conversation(conversation_id)
     if not conversation:

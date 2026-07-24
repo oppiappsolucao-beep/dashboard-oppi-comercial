@@ -78,6 +78,34 @@ def _guess_media_type(mime: str, filename: str) -> str:
     return "document"
 
 
+@router.post("/atendimentos/novo", response_class=HTMLResponse)
+async def attendances_start_call(
+    request: Request,
+    phone: str = Form(""),
+    contact_name: str = Form(""),
+    first_message: str = Form(""),
+):
+    require_auth(request)
+    conversation, error = attendances_service.start_whatsapp_call(
+        phone=phone,
+        contact_name=contact_name,
+        first_message=first_message,
+        assignee=_username(request),
+    )
+    selected_id = (conversation or {}).get("id") or ""
+    flash = ""
+    if conversation and not error:
+        flash = "Chamado aberto. Se for número novo, o lead já foi cadastrado."
+    ctx = _page_ctx(
+        request,
+        selected_id=selected_id or None,
+        flash=flash,
+        error=error,
+    )
+    # Atualiza a página completa para listar a nova conversa e abrir o chat
+    return render(request, "attendances/index.html", ctx)
+
+
 @router.get("/atendimentos", response_class=HTMLResponse)
 def attendances_page(request: Request):
     require_auth(request)
