@@ -176,6 +176,21 @@ def get_conversation_by_phone(phone_e164: str) -> dict | None:
         return _conversation_to_dict(row) if row else None
 
 
+def get_conversation_by_remote_jid(remote_jid: str) -> dict | None:
+    """Localiza conversa pelo JID (@lid ou @s.whatsapp.net) — útil quando o webhook não traz telefone."""
+    jid = normalize_text(remote_jid)
+    if not jid:
+        return None
+    with _session(commit=False) as db:
+        row = (
+            db.query(AttendanceConversation)
+            .filter(AttendanceConversation.remote_jid == jid)
+            .order_by(AttendanceConversation.updated_at.desc())
+            .first()
+        )
+        return _conversation_to_dict(row) if row else None
+
+
 def purge_group_conversations() -> dict:
     """Apaga do banco só conversas de grupo WhatsApp reais (@g.us / broadcast / id)."""
     from app.services.evolution_client import is_whatsapp_group_jid
@@ -361,8 +376,20 @@ def upsert_conversation_by_phone(
             .order_by(AttendanceConversation.updated_at.desc())
             .first()
         )
+        # Mesmo contato pode ter sido aberto só com @lid (sem telefone no 1º payload)
+        phone_linked_from_jid = False
+        if not existing and remote_jid:
+            existing = (
+                db.query(AttendanceConversation)
+                .filter(AttendanceConversation.remote_jid == remote_jid)
+                .order_by(AttendanceConversation.updated_at.desc())
+                .first()
+            )
+            if existing and phone and existing.phone_e164 != phone:
+                existing.phone_e164 = phone
+                phone_linked_from_jid = True
         if existing:
-            changed = False
+            changed = phone_linked_from_jid
             if contact_name and not (existing.contact_name or "").strip():
                 existing.contact_name = normalize_text(contact_name)
                 changed = True

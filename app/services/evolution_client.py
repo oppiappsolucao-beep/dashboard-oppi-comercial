@@ -214,9 +214,15 @@ def normalize_phone_from_jid(jid: str) -> str:
 
 
 def is_whatsapp_group_jid(value: str) -> bool:
-    """True para grupos/broadcast — não entram no inbox de leads."""
+    """True para grupos/broadcast — não entram no inbox de leads.
+
+    Linked ID (@lid) é contato individual — nunca tratar como grupo
+    (IDs longos sem 55 eram confundidos com id de grupo e sumiam do webhook).
+    """
     text = normalize_text(value).lower()
     if not text:
+        return False
+    if "@lid" in text:
         return False
     if "@g.us" in text or text.endswith("@broadcast") or "status@broadcast" in text:
         return True
@@ -252,12 +258,15 @@ def message_looks_like_group(key: dict | None = None, item: dict | None = None) 
         key.get("remoteJidAlt"),
         item.get("remoteJidAlt"),
     ):
-        if is_whatsapp_group_jid(str(candidate or "")):
+        text = normalize_text(str(candidate or "")).lower()
+        if not text or "@lid" in text:
+            continue
+        if is_whatsapp_group_jid(text):
             return True
     # Em grupos o Baileys/Evolution costuma preencher participant
     participant = normalize_text(key.get("participant") or item.get("participant") or "")
     remote = normalize_text(key.get("remoteJid") or item.get("remoteJid") or "")
-    if participant and is_whatsapp_group_jid(remote):
+    if participant and "@lid" not in remote.lower() and is_whatsapp_group_jid(remote):
         return True
     return False
 

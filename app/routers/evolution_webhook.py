@@ -137,13 +137,21 @@ def _handle_messages_upsert(payload: dict) -> int:
     count = 0
     for item in _iter_upsert_messages(payload):
         key = item.get("key") if isinstance(item.get("key"), dict) else {}
+        remote_raw = normalize_text(key.get("remoteJid") or item.get("remoteJid") or "")
         # Bloqueia grupos ANTES de resolver identidade (participant vira "lead" falso)
         if message_looks_like_group(key, item):
+            logger.info(
+                "webhook drop group remoteJid=%s alt=%s",
+                remote_raw,
+                normalize_text(key.get("remoteJidAlt") or item.get("remoteJidAlt") or ""),
+            )
             continue
         phone, remote_jid = resolve_contact_identity(key, item)
-        if not remote_jid or not phone:
+        if not remote_jid:
+            logger.info("webhook drop no_jid raw=%s", remote_raw)
             continue
-        if is_whatsapp_group_jid(remote_jid) or is_whatsapp_group_jid(phone):
+        if is_whatsapp_group_jid(remote_jid) or (phone and is_whatsapp_group_jid(phone)):
+            logger.info("webhook drop group_jid phone=%s jid=%s", phone, remote_jid)
             continue
 
         from_me = bool(key.get("fromMe") or item.get("fromMe"))
@@ -157,15 +165,32 @@ def _handle_messages_upsert(payload: dict) -> int:
         msg_type, body, media_url, media_mime, media_filename = _message_type_and_body(item)
         if not body and not media_url and msg_type == "text":
             # mensagem sem conteúdo útil (ex.: reaction-only)
+            logger.info("webhook drop empty_body jid=%s type=%s", remote_jid, msg_type)
             continue
 
         evolution_id = normalize_text(key.get("id") or item.get("id") or "")
-        conversation = store.upsert_conversation_by_phone(
-            phone,
-            contact_name=push_name,
-            remote_jid=remote_jid,
-        )
+        conversation = None
+        if phone:
+            conversation = store.upsert_conversation_by_phone(
+                phone,
+                contact_name=push_name,
+                remote_jid=remote_jid,
+            )
+        if not conversation and remote_jid:
+            conversation = store.get_conversation_by_remote_jid(remote_jid)
+            if conversation and phone and conversation.get("phone_e164") != phone:
+                conversation = store.upsert_conversation_by_phone(
+                    phone,
+                    contact_name=push_name or conversation.get("contact_name", ""),
+                    remote_jid=remote_jid,
+                )
         if not conversation:
+            logger.info(
+                "webhook drop no_conversation phone=%s jid=%s from_me=%s",
+                phone,
+                remote_jid,
+                from_me,
+            )
             continue
 
         # CRM bridge
