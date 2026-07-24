@@ -170,7 +170,6 @@
 
     root.addEventListener("click", function (event) {
       if (Date.now() < suppressClickUntil) return;
-      if (event.target.closest(".activities-kanban-card-ver")) return;
       var card = event.target.closest(".activities-kanban-card");
       if (!card || !root.contains(card)) return;
       openActivityPanel(card);

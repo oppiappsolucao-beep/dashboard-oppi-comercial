@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-APP_BUILD = os.getenv("APP_BUILD", "20260724-cadastro-nicho-sem-setor-v48").strip() or "20260724-cadastro-nicho-sem-setor-v48"
+APP_BUILD = os.getenv("APP_BUILD", "20260724-atividades-sem-ver-v49").strip() or "20260724-atividades-sem-ver-v49"
 
 
 class Settings:
