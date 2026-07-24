@@ -1,8 +1,9 @@
 <article
   class="activities-kanban-card sla-{{ card.sla_class }}"
-  title="{{ card.title }} · {{ card.vendedor }} · Arraste para mover · Clique para abrir"
+  title="{{ card.title }} · {{ card.vendedor }} · Arraste para mover · Clique para abrir o cadastro"
   data-activity-id="{{ card.id }}"
   data-current-stage="{{ card.stage }}"
+  data-cadastro-href="{% if card.sheet_row %}/cadastro/todos/{{ card.sheet_row }}/editar?from=activities{% endif %}"
   draggable="true"
   tabindex="0"
   aria-grabbed="false">
@@ -33,4 +34,12 @@
     {% endif %}
     <span>{{ card.sla_label }}</span>
   </div>
+  {% if card.sheet_row %}
+  <div class="activities-kanban-card-actions">
+    <a href="/cadastro/todos/{{ card.sheet_row }}/editar?from=activities"
+      class="btn btn-small btn-secondary activities-kanban-card-ver"
+      draggable="false"
+      onclick="event.stopPropagation()">Ver</a>
+  </div>
+  {% endif %}
 </article>

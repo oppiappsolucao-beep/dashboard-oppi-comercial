@@ -157,12 +157,18 @@ def page_context(
     }
 
 
-def ensure_crm_link(conversation: dict, *, contact_name: str = "") -> dict:
+def ensure_crm_link(
+    conversation: dict,
+    *,
+    contact_name: str = "",
+    vendedor: str = "",
+) -> dict:
     if conversation.get("sheet_row"):
         return conversation
     sheet_row = attendance_crm.resolve_or_create_lead(
         phone=conversation.get("phone_e164", ""),
         contact_name=contact_name or conversation.get("contact_name", ""),
+        vendedor=vendedor or conversation.get("assignee", ""),
     )
     if sheet_row:
         return store.update_conversation(conversation["id"], sheet_row=int(sheet_row)) or conversation
@@ -345,6 +351,7 @@ def start_whatsapp_call(
     sheet_row = attendance_crm.resolve_or_create_lead(
         phone=phone_e164,
         contact_name=contact_name,
+        vendedor=assignee,
     )
     name = normalize_text(contact_name)
     if not name and sheet_row:

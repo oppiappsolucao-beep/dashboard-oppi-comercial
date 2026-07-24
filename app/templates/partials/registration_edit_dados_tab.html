@@ -12,15 +12,15 @@
       <div class="form-group"><label>CNPJ</label><input name="cnpj" value="{{ values.cnpj }}"></div>
       <div class="form-group"><label>Nicho</label>
         <select name="nicho" id="nicho-select">
-          <option value="">Selecione</option>
+          <option value="">Selecione (opcional)</option>
           {% for niche in niche_options %}
           <option value="{{ niche }}" {% if values.nicho == niche %}selected{% endif %}>{{ niche }}</option>
           {% endfor %}
         </select>
       </div>
       <div class="form-group" id="nicho-outro-wrap" style="{% if values.nicho == 'Outros' %}{% else %}display:none{% endif %}">
-        <label>Novo nicho <span class="req">*</span></label>
-        <input name="nicho_outro" id="nicho-outro" value="{{ values.nicho_outro or '' }}" placeholder="Digite o nicho">
+        <label>Novo nicho</label>
+        <input name="nicho_outro" id="nicho-outro" value="{{ values.nicho_outro or '' }}" placeholder="Opcional — ou cadastre em Configurações">
       </div>
       <div class="form-group"><label>Setor</label>
         <select name="setor_id">

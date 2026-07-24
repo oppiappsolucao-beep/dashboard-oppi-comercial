@@ -292,6 +292,19 @@ body.activity-kanban-dragging * {
   color: var(--text);
 }
 
+.activities-kanban-card-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid #F1F5F9;
+}
+
+.activities-kanban-card-ver {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
 .activities-kanban-card.sla-no_prazo .activities-kanban-card-status { color: #15803D; }
 .activities-kanban-card.sla-vence_hoje .activities-kanban-card-status { color: #B45309; }
 .activities-kanban-card.sla-atrasado .activities-kanban-card-status { color: #DC2626; }

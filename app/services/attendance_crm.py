@@ -68,7 +68,12 @@ def find_sheet_row_by_phone(phone: str) -> int | None:
     return None
 
 
-def create_lead_from_whatsapp(*, phone: str, contact_name: str = "") -> int:
+def create_lead_from_whatsapp(
+    *,
+    phone: str,
+    contact_name: str = "",
+    vendedor: str = "",
+) -> int:
     digits = normalize_phone_for_duplicate(phone)
     display_phone = phone
     if digits:
@@ -77,13 +82,14 @@ def create_lead_from_whatsapp(*, phone: str, contact_name: str = "") -> int:
         elif len(digits) == 10:
             display_phone = f"({digits[:2]}) {digits[2:6]}-{digits[6:]}"
     name = normalize_text(contact_name) or f"Lead WhatsApp {display_phone}"
+    seller = normalize_text(vendedor) or "Sem vendedor"
     form = {
         "empresa": name,
         "telefone_b2b": display_phone,
         "status": "Novo Lead",
         "data_chamado": date.today().strftime("%d/%m/%Y"),
         "cadastro_tipo": "lead",
-        "vendedor": "Sem vendedor",
+        "vendedor": seller,
         "observacoes": "Lead criado automaticamente pelo Atendimento WhatsApp.",
     }
     sheet_row = save_new_company(form)
@@ -96,12 +102,21 @@ def create_lead_from_whatsapp(*, phone: str, contact_name: str = "") -> int:
     return int(sheet_row or 0)
 
 
-def resolve_or_create_lead(*, phone: str, contact_name: str = "") -> int | None:
+def resolve_or_create_lead(
+    *,
+    phone: str,
+    contact_name: str = "",
+    vendedor: str = "",
+) -> int | None:
     existing = find_sheet_row_by_phone(phone)
     if existing:
         return existing
     try:
-        return create_lead_from_whatsapp(phone=phone, contact_name=contact_name)
+        return create_lead_from_whatsapp(
+            phone=phone,
+            contact_name=contact_name,
+            vendedor=vendedor,
+        )
     except Exception:
         return None
 

@@ -28,6 +28,19 @@ def _username(request: Request) -> str:
     return normalize_text(request.session.get("username", "")) or "Atendente"
 
 
+def _seller_label(request: Request) -> str:
+    """Nome comercial do responsável (preferência: nome do usuário, senão login)."""
+    user = get_session_user(request)
+    if user:
+        name = normalize_text(user.get("name") or "")
+        if name:
+            return name
+        username = normalize_text(user.get("username") or "")
+        if username:
+            return username
+    return _username(request)
+
+
 def _filters(request: Request, form: dict | None = None) -> tuple[str, str, str, str]:
     data = form or {}
     search = normalize_text(data.get("search") or request.query_params.get("search", ""))
@@ -90,7 +103,7 @@ async def attendances_start_call(
         phone=phone,
         contact_name=contact_name,
         first_message=first_message,
-        assignee=_username(request),
+        assignee=_seller_label(request),
     )
     selected_id = (conversation or {}).get("id") or ""
     flash = ""

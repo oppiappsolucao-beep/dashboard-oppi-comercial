@@ -214,8 +214,7 @@ def _build_registration_prefill_params(activity: dict) -> dict[str, str]:
 
 def _build_lead_href_for_activity(activity: dict, sheet_row: int) -> str:
     if sheet_row:
-        return f"/cadastro/todos/{sheet_row}/editar?from=activities&tab=atividades"
-
+        return f"/cadastro/todos/{sheet_row}/editar?from=activities"
     params = _build_registration_prefill_params(activity)
     if not params:
         return ""
@@ -578,12 +577,23 @@ def buscar_atividades(
     sync_auto_activities(filtered_df, columns, tenant_id)
     rows = []
     allowed_rows = set(filtered_df["_sheet_row"].astype(int).tolist()) if not filtered_df.empty else set()
+    sellers_in_scope: set[str] = set()
+    if not filtered_df.empty and "_vendedor" in filtered_df.columns:
+        sellers_in_scope = {
+            normalize_text(value)
+            for value in filtered_df["_vendedor"].tolist()
+            if normalize_text(value)
+        }
 
     for record in list_activities(tenant_id):
         sheet_row = int(record.get("sheet_row") or 0)
-        # Mantém atividades sem vínculo; só restringe quando há sheet_row conhecido
+        assigned = normalize_text(record.get("assigned_user_id"))
+        # Mantém atividades sem vínculo; para sheet_row fora do filtro de cadastro
+        # (ex.: empresa "Sem vendedor"), ainda mostra se o responsável da atividade
+        # está no escopo atual — assim leads e empresas com atividade aparecem.
         if sheet_row and allowed_rows and sheet_row not in allowed_rows:
-            continue
+            if not assigned or (sellers_in_scope and assigned not in sellers_in_scope):
+                continue
         if period_start and period_end:
             activity_dt = _parse_datetime(
                 record.get("scheduled_at") or record.get("created_at") or record.get("updated_at")
@@ -1763,9 +1773,18 @@ def build_activity_page_context(
     params: ActivitiesViewParams,
     tenant_id: str | None = None,
 ) -> dict:
-    # Escopo de cadastros (leads + empresas): vendedor/status/nicho/UF, sem período.
-    # Período é aplicado na data da atividade em buscar_atividades.
-    scope_filters = replace(filters, period_start=None, period_end=None, search="")
+    # Escopo de cadastros (leads + empresas): só vendedor.
+    # Status/nicho/UF do dashboard não escondem atividades de empresas convertidas
+    # nem leads fora do funil filtrado. Período filtra a data da atividade.
+    scope_filters = replace(
+        filters,
+        period_start=None,
+        period_end=None,
+        search="",
+        status="Todos os status",
+        niche="Todos os nichos",
+        state="Todos os estados",
+    )
     scope_df = apply_dashboard_filters(df, columns, scope_filters)
     activities = buscar_atividades(
         scope_df,

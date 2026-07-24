@@ -147,7 +147,7 @@
       function sync() {
         var isOutros = String(select.value || "").trim().toLowerCase() === "outros";
         wrap.style.display = isOutros ? "" : "none";
-        if (input) input.required = isOutros;
+        if (input) input.required = false;
         if (!isOutros && input) input.value = "";
       }
       select.addEventListener("change", sync);
