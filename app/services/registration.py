@@ -249,13 +249,17 @@ def resolve_cadastro_tipo(
     *,
     cnpj: str = "",
 ) -> str:
+    """Tipo do cadastro: fonte da verdade é o botão Lead/Empresa.
+
+    Sem tipo explícito, assume lead — CNPJ sozinho não promove a empresa.
+    """
     if sheet_row:
         stored = get_lead_action(tenant_id, sheet_row) or {}
         tipo = normalize_text(stored.get("cadastro_tipo")).lower()
         if tipo in {"lead", "empresa"}:
             return tipo
-    if normalize_text(cnpj):
-        return "empresa"
+    # cnpj é aceito por compatibilidade de assinatura, mas não altera o tipo
+    _ = cnpj
     return "lead"
 
 

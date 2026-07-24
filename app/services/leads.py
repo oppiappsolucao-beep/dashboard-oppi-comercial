@@ -223,13 +223,10 @@ def apply_leads_view(
             return result.iloc[0:0]
 
     if tab in {"leads", "empresas"} and tenant_id:
-        from app.services.legacy_core import status_group
-        from app.services.lead_actions_storage import get_lead_action
-
         filtered_rows = []
         for _, row in result.iterrows():
             if bool(row.get("_pending_local")):
-                tipo_payload = normalize_text(row.get("_cadastro_tipo")).lower()
+                tipo_payload = normalize_text(row.get("_cadastro_tipo")).lower() or "lead"
                 if tab == "leads" and tipo_payload == "empresa":
                     continue
                 if tab == "empresas" and tipo_payload != "empresa":
@@ -239,24 +236,18 @@ def apply_leads_view(
 
             sheet_row = int(row.get("_sheet_row", 0) or 0)
             cnpj = row_field_value(row, columns, "cnpj")
-            stored = get_lead_action(tenant_id, sheet_row) or {}
-            tipo_stored = normalize_text(stored.get("cadastro_tipo")).lower()
-            status_raw = row.get("_status_grupo") or row.get("_status_original") or ""
+            tipo = resolve_cadastro_tipo(tenant_id, sheet_row, cnpj=cnpj)
 
+            # Lead → Funil de vendas; Empresa → listagem de Empresas; Atividades usa ambos.
             if tab == "leads":
-                if tipo_stored == "empresa":
+                if tipo == "empresa":
                     continue
                 filtered_rows.append(row)
                 continue
 
-            # Empresas: convertidas (tipo empresa) ou fechadas com CNPJ
-            if tipo_stored == "empresa":
-                filtered_rows.append(row)
-                continue
-            if tipo_stored == "lead":
-                continue
-            if normalize_text(cnpj) and status_group(status_raw) == "Fechado":
-                filtered_rows.append(row)
+            if tab == "empresas":
+                if tipo == "empresa":
+                    filtered_rows.append(row)
 
         if filtered_rows:
             result = pd.DataFrame(filtered_rows)
