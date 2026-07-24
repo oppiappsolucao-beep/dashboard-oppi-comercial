@@ -134,9 +134,10 @@ async def startup_maintenance() -> None:
         except Exception as error:
             log.error("Startup DATABASE_URL / attendance migrate: %s", error)
 
-        # Evita rajada de leituras na Sheets API no boot (erro 429).
-        time.sleep(3)
+        # Evita rajada de leituras na Sheets API no boot (erro 429/OOM).
+        time.sleep(2)
 
+        # Só hidrata cache local — NÃO chama Google Sheets no boot (429/OOM).
         steps = [
             ("activities", lambda: __import__("app.services.activities_storage", fromlist=["reload_activities_store"]).reload_activities_store(force_refresh=False)),
             ("lead_actions", lambda: __import__("app.services.lead_actions_storage", fromlist=["reload_lead_actions_store"]).reload_lead_actions_store(force_refresh=False)),
@@ -144,7 +145,6 @@ async def startup_maintenance() -> None:
             ("account_users", lambda: __import__("app.services.account_users", fromlist=["load_account_users"]).load_account_users()),
             ("app_settings", lambda: __import__("app.services.app_settings", fromlist=["load_app_settings"]).load_app_settings()),
             ("monthly_goals", lambda: __import__("app.services.monthly_goals", fromlist=["load_monthly_goals"]).load_monthly_goals()),
-            ("sheet_data", lambda: __import__("app.services.legacy_core", fromlist=["load_sheet_data"]).load_sheet_data()),
             (
                 "pending_recover",
                 lambda: __import__(

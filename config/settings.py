@@ -43,4 +43,7 @@ class Settings:
 
 
 settings = Settings()
-settings.proposals_dir.mkdir(parents=True, exist_ok=True)
+try:
+    settings.proposals_dir.mkdir(parents=True, exist_ok=True)
+except Exception:
+    pass

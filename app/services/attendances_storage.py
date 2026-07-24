@@ -38,7 +38,10 @@ _event_listeners: list = []
 
 
 def _now() -> datetime:
-    return datetime.now(ZoneInfo("America/Sao_Paulo")).replace(tzinfo=None)
+    try:
+        return datetime.now(ZoneInfo("America/Sao_Paulo")).replace(tzinfo=None)
+    except Exception:
+        return datetime.utcnow()
 
 
 def _now_iso() -> str:
