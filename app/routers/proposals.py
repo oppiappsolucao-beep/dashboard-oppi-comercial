@@ -56,13 +56,28 @@ def _parse_proposals_params(request: Request, form: dict | None = None) -> dict:
 
 
 def _proposals_chat_context(request: Request, chat_messages: list[dict], df) -> dict:
+    draft = request.session.get("proposals_draft") or {}
     return {
         "chat_messages_html": render_proposal_chat_messages(chat_messages),
         "show_quick_form": should_show_proposal_quick_form(chat_messages),
         "company_options": build_proposal_company_options(df),
         "service_options": get_commercial_service_options(),
         "pending_company": normalize_text(request.session.get("proposals_pending_company")),
+        "proposal_draft": draft if isinstance(draft, dict) else {},
+        "proposal_history": _proposal_history_for_context(request),
     }
+
+
+def _proposal_history_for_context(request: Request) -> list[dict]:
+    try:
+        from app.services.proposal_history import load_proposal_history
+
+        company = normalize_text((request.session.get("proposals_generated") or {}).get("company"))
+        if company:
+            return load_proposal_history(company, limit=20)
+        return load_proposal_history(limit=20)
+    except Exception:
+        return []
 
 
 def _proposals_context(request: Request, filters, proposals_params: dict):
@@ -149,6 +164,18 @@ async def proposals_chat(
     valor_proposta: str = Form(""),
     colaboradores: str = Form(""),
     services_description: str = Form(""),
+    action: str = Form(""),
+    plan_key: str = Form(""),
+    valor_mensal: str = Form(""),
+    valor_anual: str = Form(""),
+    valor_mensal_equivalente: str = Form(""),
+    desconto_valor: str = Form(""),
+    desconto_percentual: str = Form(""),
+    valor_final: str = Form(""),
+    parcelas: str = Form(""),
+    valor_parcela: str = Form(""),
+    observacao: str = Form(""),
+    validade_dias: str = Form("10"),
 ):
     redirect = require_auth(request)
     if redirect:
@@ -157,13 +184,29 @@ async def proposals_chat(
     df, columns = get_prepared_data()
     chat_messages = _get_chat_messages(request)
     pending = normalize_text(request.session.get("proposals_pending_company"))
+    draft = request.session.get("proposals_draft") or {}
+    step = normalize_text((draft or {}).get("step"))
 
-    if empresa.strip() and not services_description.strip() and not message.strip():
+    # Recalcular planos quando a quantidade muda na etapa de escolha
+    if step == "choose_plan" and colaboradores.strip() and not action.strip():
+        draft = {**draft, "step": "ask_collaborators"}
+
+    if action.strip() == "salvar_manual":
+        action = "salvar_manual"
+        draft = {**draft, "step": "manual_edit"}
+
+    if empresa.strip() and not services_description.strip() and not message.strip() and not action.strip() and not colaboradores.strip():
         message = build_proposal_form_message(empresa)
     elif services_description.strip():
         message = services_description.strip()
         if not empresa.strip() and pending:
             empresa = pending
+
+    usuario = normalize_text(
+        (request.session.get("user") or {}).get("name")
+        or (request.session.get("user") or {}).get("username")
+        or ""
+    )
 
     chat_messages, generated, new_pending, new_draft = handle_proposal_chat_message(
         message,
@@ -175,7 +218,23 @@ async def proposals_chat(
         company_override=empresa.strip() or None,
         pending_company=pending or None,
         services_description=services_description.strip() or None,
-        draft=request.session.get("proposals_draft") or {},
+        draft=draft,
+        action=action or None,
+        plan_key=plan_key or None,
+        manual_fields={
+            "plan_key": plan_key,
+            "valor_mensal": valor_mensal,
+            "valor_anual": valor_anual,
+            "valor_mensal_equivalente": valor_mensal_equivalente,
+            "desconto_valor": desconto_valor,
+            "desconto_percentual": desconto_percentual,
+            "valor_final": valor_final,
+            "parcelas": parcelas,
+            "valor_parcela": valor_parcela,
+            "observacao": observacao,
+            "validade_dias": validade_dias or "10",
+        },
+        usuario=usuario,
     )
     request.session["proposals_chat"] = chat_messages
     if new_pending:
@@ -193,7 +252,7 @@ async def proposals_chat(
         request,
         "partials/proposals_chat_response.html",
         {
-            "generated_proposal": generated,
+            "generated_proposal": generated or request.session.get("proposals_generated"),
             **_proposals_chat_context(request, chat_messages, df),
         },
     )
@@ -227,6 +286,17 @@ async def proposals_delete_generated(request: Request):
     )
 
 
+@router.post("/propostas/historico/excluir")
+async def proposals_history_delete(request: Request, entry_id: str = Form(...)):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+    from app.services.proposal_history import delete_proposal_history_entry
+
+    delete_proposal_history_entry(entry_id)
+    return RedirectResponse(url="/propostas", status_code=303)
+
+
 @router.post("/propostas/chat/reset")
 async def proposals_chat_reset(request: Request):
     redirect = require_auth(request)
@@ -255,12 +325,14 @@ async def proposals_pdf(
     generated = request.session.get("proposals_generated") or {}
     plans_text = ""
     services_description = servicos
+    proposal_snapshot = None
     if isinstance(generated, dict) and normalize_text(generated.get("company")) == normalize_text(empresa):
         valor = valor or generated.get("value") or ""
         servico = servico or generated.get("servico") or ""
         colaboradores = colaboradores or generated.get("colaboradores") or ""
         services_description = services_description or generated.get("services_description") or ""
         plans_text = generated.get("plans_text") or ""
+        proposal_snapshot = generated.get("proposal_snapshot") or None
 
     df, columns = get_prepared_data()
     try:
@@ -273,6 +345,7 @@ async def proposals_pdf(
             colaboradores=colaboradores or None,
             services_description=services_description or None,
             plans_text=plans_text or None,
+            proposal_snapshot=proposal_snapshot,
         )
     except Exception as error:
         return HTMLResponse(f"<p>Erro ao gerar PDF: {error}</p>", status_code=500)

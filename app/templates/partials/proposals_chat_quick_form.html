@@ -4,7 +4,9 @@
   hx-target="#proposals-chat-panel"
   hx-swap="innerHTML"
 >
-  <div class="proposals-quick-form-title">Montar proposta</div>
+  <div class="proposals-quick-form-title">Nova proposta</div>
+
+  {% set step = (proposal_draft.step if proposal_draft else '') %}
 
   <label class="proposals-quick-field">
     <span>Buscar empresa cadastrada</span>
@@ -19,31 +21,88 @@
   </label>
 
   <label class="proposals-quick-field">
-    <span>Empresa (cadastro)</span>
+    <span>Cliente (cadastro)</span>
     <select
       name="empresa"
       id="proposals-company-select"
       class="proposals-company-select"
       required
-      size="8"
+      size="6"
       {% if pending_company %}disabled{% endif %}
     >
-      <option value="" disabled {% if not pending_company %}selected{% endif %}>Selecione a empresa…</option>
+      <option value="" disabled {% if not pending_company %}selected{% endif %}>Selecione o cliente…</option>
       {% for company in company_options %}
       <option value="{{ company }}" {% if pending_company == company %}selected{% endif %}>{{ company }}</option>
       {% endfor %}
     </select>
     {% if pending_company %}
     <input type="hidden" name="empresa" value="{{ pending_company }}">
-    <small class="proposals-quick-hint">Empresa selecionada: <strong>{{ pending_company }}</strong></small>
+    <small class="proposals-quick-hint">Cliente: <strong>{{ pending_company }}</strong></small>
     {% endif %}
   </label>
 
   {% if not pending_company %}
-  <button type="submit" class="btn proposals-quick-form-btn">Continuar</button>
-  <small class="proposals-quick-hint">Em seguida eu pergunto a quantidade de colaboradores e sugiro o valor.</small>
-  {% else %}
-  <small class="proposals-quick-hint">Responda no chat: colaboradores → valor sugerido → confirmar ou alterar.</small>
+  <button type="submit" class="btn proposals-quick-form-btn" name="action" value="continuar">Continuar</button>
+  <small class="proposals-quick-hint">Em seguida informamos a quantidade de colaboradores.</small>
+  {% elif step == 'ask_collaborators' or not step or step == 'pick_company' %}
+  <label class="proposals-quick-field">
+    <span>Quantos colaboradores a empresa possui?</span>
+    <input
+      type="number"
+      name="colaboradores"
+      min="1"
+      step="1"
+      inputmode="numeric"
+      placeholder="Ex.: 12"
+      required
+      value=""
+      autocomplete="off"
+    >
+  </label>
+  <button type="submit" class="btn proposals-quick-form-btn">Calcular planos</button>
+  {% elif step == 'choose_plan' %}
+  <div class="proposals-plan-actions">
+    <button type="submit" class="btn" name="action" value="sugerido">Gerar com valor sugerido</button>
+    <button type="submit" class="btn btn-secondary" name="action" value="boleto">Boleto mensal</button>
+    <button type="submit" class="btn btn-secondary" name="action" value="cartao">Cartão recorrente</button>
+    <button type="submit" class="btn btn-secondary" name="action" value="anual">Anual à vista</button>
+    <button type="submit" class="btn btn-secondary" name="action" value="alterar">Alterar valor manualmente</button>
+  </div>
+  <label class="proposals-quick-field">
+    <span>Recalcular com outra quantidade</span>
+    <input type="number" name="colaboradores" min="1" step="1" inputmode="numeric" placeholder="Alterar quantidade" value="">
+  </label>
+  <button type="submit" class="btn btn-secondary proposals-quick-form-btn" name="action" value="">Atualizar cálculos</button>
+  {% elif step == 'manual_edit' %}
+  <div class="proposals-manual-grid">
+    <label class="proposals-quick-field">
+      <span>Forma de pagamento</span>
+      <select name="plan_key">
+        <option value="anual">Anual à vista</option>
+        <option value="cartao">Cartão recorrente</option>
+        <option value="boleto">Boleto mensal</option>
+      </select>
+    </label>
+    <label class="proposals-quick-field"><span>Valor mensal</span><input type="text" name="valor_mensal" placeholder="Ex.: 49,90"></label>
+    <label class="proposals-quick-field"><span>Valor anual</span><input type="text" name="valor_anual" placeholder="Ex.: 468,00"></label>
+    <label class="proposals-quick-field"><span>Mensal equivalente</span><input type="text" name="valor_mensal_equivalente" placeholder="Ex.: 39,00"></label>
+    <label class="proposals-quick-field"><span>Desconto (R$)</span><input type="text" name="desconto_valor" placeholder="0,00"></label>
+    <label class="proposals-quick-field"><span>Desconto (%)</span><input type="text" name="desconto_percentual" placeholder="0"></label>
+    <label class="proposals-quick-field"><span>Valor final</span><input type="text" name="valor_final" placeholder="Opcional"></label>
+    <label class="proposals-quick-field"><span>Parcelas</span><input type="number" name="parcelas" min="1" value="1"></label>
+    <label class="proposals-quick-field"><span>Valor da parcela</span><input type="text" name="valor_parcela" placeholder="Opcional"></label>
+    <label class="proposals-quick-field"><span>Validade (dias)</span><input type="number" name="validade_dias" min="1" value="10"></label>
+    <label class="proposals-quick-field proposals-quick-field-full">
+      <span>Observação comercial</span>
+      <textarea name="observacao" rows="2" placeholder="Opcional"></textarea>
+    </label>
+  </div>
+  <button type="submit" class="btn proposals-quick-form-btn" name="action" value="salvar_manual">Continuar para resumo</button>
+  {% elif step == 'confirm_summary' %}
+  <div class="proposals-plan-actions">
+    <button type="submit" class="btn btn-secondary" name="action" value="voltar">Voltar e editar</button>
+    <button type="submit" class="btn" name="action" value="gerar">Gerar proposta em PDF</button>
+  </div>
   {% endif %}
 </form>
 

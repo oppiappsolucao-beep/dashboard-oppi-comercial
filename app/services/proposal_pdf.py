@@ -836,6 +836,7 @@ def generate_proposal_pdf(
     *,
     services_description: str | None = None,
     plans_text: str | None = None,
+    proposal_snapshot: dict | None = None,
     use_cache: bool = True,
 ) -> bytes:
     if df is None or columns is None:
@@ -844,13 +845,19 @@ def generate_proposal_pdf(
         df = prepare_data(raw_df, columns)
 
     resolved_company = resolve_company_name(company_name, df)
+    snapshot_key = ""
+    if isinstance(proposal_snapshot, dict) and proposal_snapshot:
+        try:
+            snapshot_key = json.dumps(proposal_snapshot, ensure_ascii=False, sort_keys=True, default=str)
+        except Exception:
+            snapshot_key = str(proposal_snapshot)
     cache_key = _proposal_cache_key(
         resolved_company,
         value,
         servico,
         colaboradores,
         services_description,
-        plans_text,
+        (plans_text or "") + "|" + snapshot_key,
     )
     if use_cache:
         cached = get_cached_proposal_pdf(cache_key)
@@ -871,6 +878,7 @@ def generate_proposal_pdf(
         columns,
         services_description=description,
         plans_text=plans_text,
+        proposal_snapshot=proposal_snapshot,
     )
     store_proposal_pdf_cache(cache_key, pdf_bytes)
     return pdf_bytes
@@ -886,16 +894,23 @@ def prepare_generated_proposal_pdf(
     *,
     services_description: str | None = None,
     plans_text: str | None = None,
+    proposal_snapshot: dict | None = None,
 ) -> tuple[str | None, str | None]:
     """Gera o PDF antecipadamente. Retorna (cache_key, erro)."""
     resolved_company = resolve_company_name(company_name, df)
+    snapshot_key = ""
+    if isinstance(proposal_snapshot, dict) and proposal_snapshot:
+        try:
+            snapshot_key = json.dumps(proposal_snapshot, ensure_ascii=False, sort_keys=True, default=str)
+        except Exception:
+            snapshot_key = str(proposal_snapshot)
     cache_key = _proposal_cache_key(
         resolved_company,
         value,
         servico,
         colaboradores,
         services_description,
-        plans_text,
+        (plans_text or "") + "|" + snapshot_key,
     )
     try:
         generate_proposal_pdf(
@@ -907,6 +922,7 @@ def prepare_generated_proposal_pdf(
             colaboradores=colaboradores,
             services_description=services_description,
             plans_text=plans_text,
+            proposal_snapshot=proposal_snapshot,
             use_cache=True,
         )
     except Exception as error:
@@ -938,5 +954,6 @@ def _format_pdf_generation_error(error: Exception) -> str:
 
 
 def proposal_pdf_filename(company_name: str) -> str:
-    safe = re.sub(r"[^A-Za-z0-9_-]+", "_", normalize_text(company_name)).strip("_") or "cliente"
-    return f"Proposta_{safe}.pdf"
+    from app.services.proposal_commercial_pdf import proposal_pdf_filename as commercial_filename
+
+    return commercial_filename(company_name)

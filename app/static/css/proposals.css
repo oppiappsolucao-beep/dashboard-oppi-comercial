@@ -534,3 +534,80 @@
     max-height: 280px;
   }
 }
+
+.proposals-plan-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 10px 0 12px;
+}
+
+.proposals-plan-actions .btn {
+  width: 100%;
+  justify-content: center;
+}
+
+.proposals-manual-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 10px 0;
+}
+
+.proposals-quick-field-full {
+  grid-column: 1 / -1;
+}
+
+.proposals-inline-form {
+  display: inline;
+  margin: 0;
+}
+
+.proposals-history-panel,
+.proposals-generated-empty {
+  padding: 16px 18px 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.proposals-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.proposals-history-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fafafa;
+}
+
+.proposals-history-meta {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.proposals-history-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.proposals-generated-empty p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+@media (max-width: 900px) {
+  .proposals-manual-grid {
+    grid-template-columns: 1fr;
+  }
+}

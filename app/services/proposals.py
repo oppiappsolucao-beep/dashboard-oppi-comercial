@@ -348,10 +348,10 @@ def build_generated_proposal(
     colaboradores: str | None = None,
     services_description: str | None = None,
     plans_text: str | None = None,
+    proposal_snapshot: dict | None = None,
 ) -> dict:
     company = resolve_company_name(company, df)
     encoded_company = quote(company)
-    # PDF usa sessão + cache; evita URL gigante com a descrição dos serviços
     query = _proposal_pdf_query(value, servico, colaboradores, None)
     preview_query = f"{query}&inline=1" if query else "?inline=1"
     value_label = ""
@@ -370,6 +370,7 @@ def build_generated_proposal(
         colaboradores=colaboradores,
         services_description=services_description,
         plans_text=plans_text,
+        proposal_snapshot=proposal_snapshot,
     )
     subject = quote(f"Proposta comercial - {company}")
     body = quote(
@@ -391,6 +392,7 @@ def build_generated_proposal(
         "colaboradores": colaboradores or "",
         "services_description": services_description or "",
         "plans_text": plans_text or "",
+        "proposal_snapshot": proposal_snapshot or {},
         "value_label": value_label,
         "servico_label": normalize_text(servico) or "",
         "colaboradores_label": normalize_text(colaboradores) or "",
@@ -490,20 +492,77 @@ def _extract_money_value(text: str) -> float | None:
     return None
 
 
-def _draft_pricing_message(pricing, company: str) -> str:
-    from app.services.proposal_pricing import format_money_br, per_employee_rate
+def _draft_pricing_message(planos, company: str) -> str:
+    from app.services.proposal_pricing import PLAN_LABELS, format_money_br, plans_cards_payload
 
-    n = pricing.cadastro_collaborators or pricing.included_collaborators
-    per = per_employee_rate(pricing)
-    return (
-        f"Para **{company}** com **{n} colaboradores**, a sugestão é:\n\n"
-        f"• Faixa do plano: até **{pricing.included_collaborators}** colaboradores\n"
-        f"• Valor sugerido (boleto): **{format_money_br(pricing.boleto_monthly)}/mês**\n"
-        f"• Equivalente a **{format_money_br(per)} por colaborador/mês**\n"
-        f"• Recorrente: **{format_money_br(pricing.recorrente_monthly)}/mês**\n"
-        f"• Anual: **{format_money_br(pricing.anual_upfront)}** à vista\n\n"
-        "Posso gerar a proposta com esse valor ou deseja alterar?"
+    cards = plans_cards_payload(planos)
+    lines = [
+        f"Para **{company}** com **{planos.quantidade_total} colaboradores**, estas são as formas de pagamento:",
+        "",
+    ]
+    for card in cards:
+        mark = " ★ recomendado" if card["recommended"] else ""
+        lines.append(f"**{card['title']}**{mark}")
+        lines.append(f"• Incluídos: {card['quantidade_incluida']} · Adicionais: {card['quantidade_adicional']}")
+        lines.append(f"• Base: {card['valor_base']} · Adicionais: {card['valor_adicionais']}")
+        lines.append(f"• Final: **{card['valor_final']}** ({card['payment']})")
+        if card["valor_mensal_equivalente"]:
+            lines.append(f"• Mensal equivalente: **{card['valor_mensal_equivalente']}**")
+        lines.append("")
+
+    lines.append("**Sugestão da Oppi**")
+    lines.append(
+        f"Para uma empresa com {planos.quantidade_total} colaboradores, recomendamos o pagamento "
+        f"anual à vista no valor de {format_money_br(planos.total_anual)}, equivalente a "
+        f"{format_money_br(planos.mensal_equivalente_anual)} por mês. "
+        "Essa é a opção com o melhor custo-benefício entre as formas de pagamento disponíveis."
     )
+    lines.append("")
+    lines.append("Posso gerar a proposta com esse valor ou deseja alterar?")
+    lines.append("")
+    lines.append(
+        "Responda: **sugerido** · **boleto** · **cartão** · **anual** · **alterar** "
+        "(ou use os botões do formulário)."
+    )
+    return "\n".join(lines)
+
+
+def _summary_message(client: dict, selected, planos) -> str:
+    from app.services.proposal_pricing import format_money_br
+
+    lines = [
+        "**Resumo para conferência**",
+        "",
+        f"• Razão social: {client.get('razao_social') or client.get('empresa') or '—'}",
+    ]
+    if client.get("nome_fantasia"):
+        lines.append(f"• Nome fantasia: {client['nome_fantasia']}")
+    if client.get("documento"):
+        lines.append(f"• CNPJ/CPF: {client['documento']}")
+    if client.get("responsavel"):
+        lines.append(f"• Responsável: {client['responsavel']}")
+    lines.extend(
+        [
+            f"• Colaboradores: {planos.quantidade_total}",
+            f"• Adicionais: {planos.quantidade_adicional}",
+            f"• Plano: {selected.plan_label}",
+            f"• Forma de pagamento: {selected.payment_label}",
+            f"• Valor mensal: {format_money_br(selected.valor_mensal)}",
+        ]
+    )
+    if selected.valor_anual is not None:
+        lines.append(f"• Valor anual: {format_money_br(selected.valor_anual)}")
+    if selected.valor_mensal_equivalente is not None:
+        lines.append(f"• Mensal equivalente: {format_money_br(selected.valor_mensal_equivalente)}")
+    if selected.desconto_valor and selected.desconto_valor > 0:
+        lines.append(f"• Desconto: {format_money_br(selected.desconto_valor)}")
+    lines.append(f"• Valor final: **{format_money_br(selected.valor_final)}**")
+    lines.append(f"• Validade: {selected.validade_dias} dias corridos")
+    if selected.observacao:
+        lines.append(f"• Observação: {selected.observacao}")
+    lines.append("")
+    lines.append("Confirme com **gerar** ou diga **voltar** para editar.")
+    return "\n".join(lines)
 
 
 def _finalize_proposal(
@@ -511,27 +570,72 @@ def _finalize_proposal(
     company: str,
     df: pd.DataFrame,
     columns: dict,
-    pricing,
+    selected,
     chat_messages: list[dict],
+    usuario: str = "",
 ) -> tuple[list[dict], dict | None, str | None, dict | None]:
-    from app.services.proposal_pricing import format_money_br
+    from app.services.proposal_commercial_pdf import collect_client_data
+    from app.services.proposal_history import save_proposal_history_entry
+    from app.services.proposal_pricing import PlanPricing, format_money_br
 
-    n = pricing.cadastro_collaborators or pricing.included_collaborators
+    planos = selected.planos
+    n = planos.quantidade_total
+    adapter = PlanPricing(planos)
     description = (
-        f"Ponto Eletrônico Oppi — plano até {pricing.included_collaborators} colaboradores "
-        f"({n} informados). Boleto: R$ {pricing.boleto_monthly:.2f}/mês."
+        f"Ponto Eletrônico Oppi — {selected.plan_label} — {n} colaboradores — "
+        f"{selected.payment_label}."
     )
-    value = str(pricing.boleto_monthly)
+    value = str(selected.valor_final)
+    snapshot = {
+        "colaboradores": n,
+        "selected": selected.to_dict(),
+        "plan_key": selected.plan_key,
+        "validade_dias": selected.validade_dias,
+        "observacao": selected.observacao,
+        "manual": selected.manual,
+        "valor_mensal": str(selected.valor_mensal),
+        "valor_anual": str(selected.valor_anual) if selected.valor_anual is not None else "",
+        "valor_mensal_equivalente": (
+            str(selected.valor_mensal_equivalente) if selected.valor_mensal_equivalente is not None else ""
+        ),
+        "desconto_valor": str(selected.desconto_valor),
+        "desconto_percentual": str(selected.desconto_percentual),
+        "valor_final": str(selected.valor_final),
+    }
     generated = build_generated_proposal(
         company,
         value,
         df,
         columns,
-        servico=pricing.product_label,
+        servico=adapter.product_label,
         colaboradores=str(n),
         services_description=description,
-        plans_text=pricing.plans_block,
+        plans_text=adapter.plans_block,
+        proposal_snapshot=snapshot,
     )
+    client = collect_client_data(company, df, columns)
+    if generated.get("pdf_ready"):
+        save_proposal_history_entry(
+            {
+                "cliente": company,
+                "cnpj_cpf": client.get("documento") or "",
+                "colaboradores": n,
+                "quantidade_adicional": planos.quantidade_adicional,
+                "plano": selected.plan_label,
+                "forma_pagamento": selected.payment_label,
+                "valor_mensal": format_money_br(selected.valor_mensal),
+                "valor_anual": format_money_br(selected.valor_anual) if selected.valor_anual else "",
+                "valor_final": format_money_br(selected.valor_final),
+                "validade": f"{selected.validade_dias} dias",
+                "usuario": usuario,
+                "filename": generated.get("filename"),
+                "pdf_cache_key": generated.get("pdf_cache_key"),
+                "preview_url": generated.get("preview_url"),
+                "download_url": generated.get("download_url"),
+                "snapshot": snapshot,
+            }
+        )
+
     if generated.get("pdf_error"):
         footer = f"\n\nNão foi possível gerar o PDF.\n{generated['pdf_error']}"
     else:
@@ -541,7 +645,8 @@ def _finalize_proposal(
         "content": (
             f"Proposta gerada para **{company}**.\n\n"
             f"Colaboradores: **{n}**\n"
-            f"Valor (boleto): **{format_money_br(pricing.boleto_monthly)}/mês**"
+            f"Plano: **{selected.plan_label}**\n"
+            f"Valor final: **{format_money_br(selected.valor_final)}**"
             f"{footer}"
         ),
         "time": _now_time(),
@@ -571,36 +676,46 @@ def handle_proposal_chat_message(
     pending_company: str | None = None,
     services_description: str | None = None,
     draft: dict | None = None,
+    action: str | None = None,
+    plan_key: str | None = None,
+    manual_fields: dict | None = None,
+    usuario: str = "",
 ) -> tuple[list[dict], dict | None, str | None, dict | None]:
     """
-    Retorna (mensagens, proposta_gerada|None, pending_company|None, draft|None).
-
-    Fluxo:
-    1) Seleciona empresa
-    2) Pergunta quantidade de colaboradores
-    3) Calcula valor por funcionário e sugere
-    4) Confirma ou altera o valor → gera PDF local
+    Fluxo: empresa → colaboradores → planos/sugestão → resumo → PDF.
     """
-    from app.services.proposal_pricing import (
-        parse_collaborators_count,
-        pricing_with_boleto_override,
-        suggest_pricing_for_collaborators,
-    )
     from app.services.proposal_commercial_pdf import collect_client_data
+    from app.services.proposal_pricing import (
+        PLAN_ANUAL,
+        PLAN_BOLETO,
+        PLAN_CARTAO,
+        apply_manual_override,
+        calcular_planos_ponto,
+        parse_collaborators_count,
+        select_plan,
+    )
 
     clean_message = normalize_text(message)
+    action = normalize_text(action or "").lower()
     company_pick = normalize_text(company_override) or None
     draft = dict(draft or {})
     step = normalize_text(draft.get("step")) or ""
+    manual_fields = dict(manual_fields or {})
 
     if columns is None:
         columns = identify_columns(df)
 
     # —— Etapa 1: escolher empresa ——
-    if company_pick and (not step or step == "pick_company") and (
-        not clean_message
-        or clean_message.lower().startswith("selecionei a empresa")
-        or clean_message.lower().startswith("empresa selecionada")
+    if (
+        company_pick
+        and (not step or step == "pick_company")
+        and not parse_collaborators_count(colaboradores)
+        and (
+            not clean_message
+            or clean_message.lower().startswith("selecionei a empresa")
+            or clean_message.lower().startswith("empresa selecionada")
+            or action in ("", "continuar")
+        )
     ):
         company = resolve_company_name(company_pick, df)
         if not company:
@@ -612,33 +727,37 @@ def handle_proposal_chat_message(
             return chat_messages, None, None, None
 
         client = collect_client_data(company, df, columns)
-        known = parse_collaborators_count(client.get("colaboradores") or colaboradores)
         chat_messages.append({
             "role": "user",
             "content": f"Empresa selecionada: {company}",
             "time": _now_time(),
         })
-        hint = ""
-        if known:
-            hint = f"\nNo cadastro constam **{known}** colaboradores — confirme ou informe outro número."
         chat_messages.append({
             "role": "assistant",
             "content": (
-                f"Perfeito. Vou usar o cadastro de **{company}**.\n\n"
-                f"**Quantos colaboradores a empresa tem?**{hint}"
+                f"Cadastro de **{company}** carregado.\n\n"
+                "**Quantos colaboradores a empresa possui?**\n"
+                "Informe a quantidade exata (número inteiro maior que zero)."
             ),
             "time": _now_time(),
         })
         return chat_messages, None, company, {
             "company": company,
             "step": "ask_collaborators",
-            "known_collaborators": known,
+            "client": {
+                "razao_social": client.get("razao_social"),
+                "nome_fantasia": client.get("nome_fantasia"),
+                "documento": client.get("documento"),
+                "responsavel": client.get("responsavel"),
+            },
         }
 
-    if not clean_message and not draft:
+    if not clean_message and not draft and not action:
         return chat_messages, None, pending_company, draft or None
 
-    if clean_message:
+    if clean_message and action not in (
+        "sugerido", "boleto", "cartao", "anual", "alterar", "gerar", "voltar", "resumo", "salvar_manual"
+    ):
         chat_messages.append({"role": "user", "content": clean_message, "time": _now_time()})
 
     company = resolve_company_name(draft.get("company") or pending_company or company_pick or "", df)
@@ -649,138 +768,215 @@ def handle_proposal_chat_message(
     if not company:
         chat_messages.append({
             "role": "assistant",
-            "content": "Selecione a empresa do cadastro no formulário ao lado para começarmos.",
+            "content": "Selecione a empresa do cadastro no formulário para começarmos.",
             "time": _now_time(),
         })
         return chat_messages, None, pending_company, None
 
     # —— Etapa 2: quantidade de colaboradores ——
-    if step in ("", "ask_collaborators", "pick_company") or not step:
-        count = parse_collaborators_count(clean_message) or parse_collaborators_count(colaboradores)
-        if not count and draft.get("known_collaborators") and _is_affirmative(clean_message):
-            count = int(draft["known_collaborators"])
+    if step in ("", "ask_collaborators", "pick_company") or step == "ask_collaborators":
+        count = parse_collaborators_count(colaboradores) or parse_collaborators_count(clean_message)
         if not count:
             chat_messages.append({
                 "role": "assistant",
                 "content": (
-                    f"Para **{company}**, me diga só o número de colaboradores "
-                    "(ex.: **25**)."
+                    f"**Quantos colaboradores a empresa possui?**\n"
+                    f"Informe um número inteiro maior que zero para **{company}**."
                 ),
                 "time": _now_time(),
             })
             return chat_messages, None, company, {
                 "company": company,
                 "step": "ask_collaborators",
-                "known_collaborators": draft.get("known_collaborators"),
+                "client": draft.get("client") or {},
             }
 
-        pricing = suggest_pricing_for_collaborators(count)
+        planos = calcular_planos_ponto(count)
         chat_messages.append({
             "role": "assistant",
-            "content": _draft_pricing_message(pricing, company),
+            "content": _draft_pricing_message(planos, company),
             "time": _now_time(),
         })
         return chat_messages, None, company, {
             "company": company,
-            "step": "confirm_value",
+            "step": "choose_plan",
             "collaborators": count,
-            "suggested_boleto": pricing.boleto_monthly,
-            "included": pricing.included_collaborators,
+            "planos": planos.to_dict(),
+            "client": draft.get("client") or {},
         }
 
-    # —— Etapa 3: confirmar ou alterar valor ——
-    if step == "confirm_value":
-        count = int(draft.get("collaborators") or 0) or 10
-        suggested = float(draft.get("suggested_boleto") or 0)
+    # —— Etapa 3: escolher plano / sugerido / alterar ——
+    if step == "choose_plan":
+        count = int(draft.get("collaborators") or 0)
+        if count <= 0:
+            return chat_messages, None, company, {"company": company, "step": "ask_collaborators"}
 
-        if _wants_change(clean_message):
-            money = _extract_money_value(clean_message)
-            if money:
-                pricing = pricing_with_boleto_override(count, money)
-                return _finalize_proposal(
-                    company=company,
-                    df=df,
-                    columns=columns,
-                    pricing=pricing,
-                    chat_messages=chat_messages,
-                )
+        planos = calcular_planos_ponto(count)
+        chosen = normalize_text(plan_key or action or clean_message).lower()
+
+        if chosen in ("alterar", "manual", "alterar o valor manualmente") or _wants_change(clean_message):
             chat_messages.append({
                 "role": "assistant",
                 "content": (
-                    "Sem problema. Qual valor mensal (boleto) deseja usar?\n"
-                    "Ex.: **199,90**"
+                    "Certo. Preencha os campos de alteração manual no formulário "
+                    "(forma de pagamento, valores, desconto, validade e observação) e clique em **Continuar**."
                 ),
                 "time": _now_time(),
             })
             return chat_messages, None, company, {
                 **draft,
-                "step": "await_custom_value",
+                "step": "manual_edit",
+                "planos": planos.to_dict(),
+                "plan_key": planos.plano_recomendado,
             }
 
-        if _is_affirmative(clean_message):
-            pricing = suggest_pricing_for_collaborators(count)
-            if suggested > 0:
-                pricing = pricing_with_boleto_override(count, suggested)
+        plan_map = {
+            "sugerido": planos.plano_recomendado,
+            "sugerida": planos.plano_recomendado,
+            "gerar proposta com o valor sugerido": planos.plano_recomendado,
+            "boleto": PLAN_BOLETO,
+            "boleto mensal": PLAN_BOLETO,
+            "escolher boleto mensal": PLAN_BOLETO,
+            "cartao": PLAN_CARTAO,
+            "cartão": PLAN_CARTAO,
+            "cartao recorrente": PLAN_CARTAO,
+            "escolher cartão recorrente": PLAN_CARTAO,
+            "anual": PLAN_ANUAL,
+            "anual a vista": PLAN_ANUAL,
+            "anual à vista": PLAN_ANUAL,
+            "escolher pagamento anual à vista": PLAN_ANUAL,
+            "sim": planos.plano_recomendado,
+        }
+        if _is_affirmative(clean_message) and chosen not in plan_map:
+            chosen = "sugerido"
+        selected_key = plan_map.get(chosen) or (chosen if chosen in (PLAN_BOLETO, PLAN_CARTAO, PLAN_ANUAL) else None)
+        if not selected_key:
+            chat_messages.append({
+                "role": "assistant",
+                "content": (
+                    "Escolha uma opção: **sugerido**, **boleto**, **cartão**, **anual** ou **alterar**."
+                ),
+                "time": _now_time(),
+            })
+            return chat_messages, None, company, {**draft, "step": "choose_plan", "planos": planos.to_dict()}
+
+        selected = select_plan(planos, selected_key)
+        client = collect_client_data(company, df, columns)
+        chat_messages.append({
+            "role": "assistant",
+            "content": _summary_message(client, selected, planos),
+            "time": _now_time(),
+        })
+        return chat_messages, None, company, {
+            **draft,
+            "step": "confirm_summary",
+            "plan_key": selected.plan_key,
+            "selected": selected.to_dict(),
+            "planos": planos.to_dict(),
+            "client": {
+                "razao_social": client.get("razao_social"),
+                "nome_fantasia": client.get("nome_fantasia"),
+                "documento": client.get("documento"),
+                "responsavel": client.get("responsavel"),
+            },
+        }
+
+    if step == "manual_edit":
+        count = int(draft.get("collaborators") or 0)
+        planos = calcular_planos_ponto(count)
+        key = normalize_text(plan_key or manual_fields.get("plan_key") or draft.get("plan_key") or PLAN_ANUAL)
+        selected = apply_manual_override(
+            planos,
+            plan_key=key,
+            valor_mensal=manual_fields.get("valor_mensal"),
+            valor_anual=manual_fields.get("valor_anual"),
+            valor_mensal_equivalente=manual_fields.get("valor_mensal_equivalente"),
+            desconto_valor=manual_fields.get("desconto_valor"),
+            desconto_percentual=manual_fields.get("desconto_percentual"),
+            valor_final=manual_fields.get("valor_final"),
+            parcelas=manual_fields.get("parcelas"),
+            valor_parcela=manual_fields.get("valor_parcela"),
+            observacao=manual_fields.get("observacao") or "",
+            validade_dias=manual_fields.get("validade_dias") or 10,
+        )
+        client = collect_client_data(company, df, columns)
+        chat_messages.append({
+            "role": "assistant",
+            "content": _summary_message(client, selected, planos),
+            "time": _now_time(),
+        })
+        return chat_messages, None, company, {
+            **draft,
+            "step": "confirm_summary",
+            "plan_key": selected.plan_key,
+            "selected": selected.to_dict(),
+            "planos": planos.to_dict(),
+            "manual": True,
+        }
+
+    if step == "confirm_summary":
+        if action == "voltar" or clean_message.lower() in ("voltar", "editar", "voltar e editar"):
+            chat_messages.append({
+                "role": "assistant",
+                "content": _draft_pricing_message(
+                    calcular_planos_ponto(int(draft.get("collaborators") or 1)),
+                    company,
+                ),
+                "time": _now_time(),
+            })
+            return chat_messages, None, company, {
+                **draft,
+                "step": "choose_plan",
+            }
+
+        if action in ("gerar", "gerar_pdf") or _is_affirmative(clean_message) or clean_message.lower() in (
+            "gerar", "gerar proposta", "gerar proposta em pdf", "confirmar"
+        ):
+            count = int(draft.get("collaborators") or 0)
+            planos = calcular_planos_ponto(count)
+            selected_data = draft.get("selected") or {}
+            if draft.get("manual"):
+                selected = apply_manual_override(
+                    planos,
+                    plan_key=selected_data.get("plan_key") or draft.get("plan_key") or PLAN_ANUAL,
+                    valor_mensal=selected_data.get("valor_mensal"),
+                    valor_anual=selected_data.get("valor_anual"),
+                    valor_mensal_equivalente=selected_data.get("valor_mensal_equivalente"),
+                    desconto_valor=selected_data.get("desconto_valor"),
+                    desconto_percentual=selected_data.get("desconto_percentual"),
+                    valor_final=selected_data.get("valor_final"),
+                    parcelas=selected_data.get("parcelas"),
+                    valor_parcela=selected_data.get("valor_parcela"),
+                    observacao=selected_data.get("observacao") or "",
+                    validade_dias=selected_data.get("validade_dias") or 10,
+                )
+            else:
+                selected = select_plan(
+                    planos,
+                    selected_data.get("plan_key") or draft.get("plan_key") or planos.plano_recomendado,
+                    validade_dias=int(selected_data.get("validade_dias") or 10),
+                    observacao=normalize_text(selected_data.get("observacao") or ""),
+                )
             return _finalize_proposal(
                 company=company,
                 df=df,
                 columns=columns,
-                pricing=pricing,
+                selected=selected,
                 chat_messages=chat_messages,
+                usuario=usuario,
             )
-
-        money = _extract_money_value(clean_message)
-        if money:
-            pricing = pricing_with_boleto_override(count, money)
-            from app.services.proposal_pricing import format_money_br
-
-            chat_messages.append({
-                "role": "assistant",
-                "content": (
-                    f"Valor atualizado para **{format_money_br(money)}/mês**. "
-                    "Posso gerar a proposta com esse valor?"
-                ),
-                "time": _now_time(),
-            })
-            return chat_messages, None, company, {
-                **draft,
-                "step": "confirm_value",
-                "suggested_boleto": money,
-            }
 
         chat_messages.append({
             "role": "assistant",
-            "content": (
-                "Responda **sim** para gerar com o valor sugerido, "
-                "ou **alterar** / informe o novo valor (ex.: 189,90)."
-            ),
+            "content": "Responda **gerar** para criar o PDF ou **voltar** para editar.",
             "time": _now_time(),
         })
         return chat_messages, None, company, draft
 
-    if step == "await_custom_value":
-        count = int(draft.get("collaborators") or 0) or 10
-        money = _extract_money_value(clean_message)
-        if not money:
-            chat_messages.append({
-                "role": "assistant",
-                "content": "Informe o valor mensal desejado, por exemplo **209,90**.",
-                "time": _now_time(),
-            })
-            return chat_messages, None, company, draft
-        pricing = pricing_with_boleto_override(count, money)
-        return _finalize_proposal(
-            company=company,
-            df=df,
-            columns=columns,
-            pricing=pricing,
-            chat_messages=chat_messages,
-        )
-
-    # fallback: reinicia pergunta de colaboradores
+    # fallback
     chat_messages.append({
         "role": "assistant",
-        "content": f"**Quantos colaboradores a empresa {company} tem?**",
+        "content": f"**Quantos colaboradores a empresa {company} possui?**",
         "time": _now_time(),
     })
     return chat_messages, None, company, {
@@ -887,11 +1083,11 @@ def default_proposal_chat_messages() -> list[dict]:
     return [{
         "role": "assistant",
         "content": (
-            "Olá! Vou montar a proposta comercial com você.\n\n"
-            "1) Selecione a empresa cadastrada.\n"
-            "2) Eu pergunto quantos colaboradores a empresa tem.\n"
-            "3) Calculo o valor por funcionário e sugiro o preço.\n"
-            "4) Você confirma ou altera — e o PDF aparece ao lado."
+            "Olá! Vamos montar a proposta do **Ponto Eletrônico Oppi**.\n\n"
+            "1) Selecione o cliente cadastrado.\n"
+            "2) Informe a quantidade de colaboradores.\n"
+            "3) Veja as três formas de pagamento e a sugestão da Oppi.\n"
+            "4) Confirme o resumo — o PDF só é gerado depois da confirmação."
         ),
         "time": _now_time(),
     }]

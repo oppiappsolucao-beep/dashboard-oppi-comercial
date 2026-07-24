@@ -13,7 +13,7 @@
         {% endif %}
       </div>
       {% if generated_proposal.colaboradores_label %}
-      <div class="proposals-generated-colaboradores">{{ generated_proposal.colaboradores_label }}</div>
+      <div class="proposals-generated-colaboradores">{{ generated_proposal.colaboradores_label }} colaboradores</div>
       {% endif %}
       <div class="proposals-generated-email">E-mail do cliente: {{ generated_proposal.client_email }}</div>
     </div>
@@ -37,21 +37,63 @@
   <div class="proposals-generated-actions">
     {% if generated_proposal.pdf_ready %}
     <a href="{{ generated_proposal.download_url }}" class="btn" download>Baixar PDF</a>
-    <a href="{{ generated_proposal.email_href }}" class="btn btn-secondary">Enviar por e-mail</a>
-    <a href="{{ generated_proposal.preview_url }}" class="btn btn-secondary" target="_blank" rel="noopener">Abrir em nova aba</a>
+    <form method="post" action="/propostas/chat/reset" class="proposals-inline-form">
+      <button type="submit" class="btn btn-secondary">Editar / Nova proposta</button>
+    </form>
+    <form
+      class="proposals-inline-form"
+      hx-post="/propostas/chat"
+      hx-target="#proposals-chat-panel"
+      hx-swap="innerHTML"
+    >
+      <input type="hidden" name="empresa" value="{{ generated_proposal.company }}">
+      <input type="hidden" name="colaboradores" value="{{ generated_proposal.colaboradores }}">
+      <input type="hidden" name="action" value="">
+      <button type="submit" class="btn btn-secondary">Gerar novamente</button>
+    </form>
     {% else %}
     <button type="button" class="btn" disabled>Baixar PDF</button>
-    <button type="button" class="btn btn-secondary" disabled>Enviar por e-mail</button>
     {% endif %}
     <form
       class="proposals-delete-form"
       hx-post="/propostas/gerada/excluir"
       hx-target="#proposals-chat-panel"
       hx-swap="innerHTML"
-      hx-confirm="Excluir esta proposta gerada? O PDF sairá da tela, mas você poderá gerar outro pelo chat."
+      hx-confirm="Excluir esta proposta da tela? O histórico salvo não será apagado automaticamente."
     >
       <button type="submit" class="btn btn-danger">Excluir proposta</button>
     </form>
   </div>
+</div>
+{% elif proposal_history %}
+<div class="proposals-history-panel">
+  <div class="section-heading">Histórico de propostas</div>
+  <div class="proposals-history-list">
+    {% for item in proposal_history[:8] %}
+    <div class="proposals-history-item">
+      <div>
+        <strong>{{ item.cliente }}</strong>
+        <div class="proposals-history-meta">{{ item.date }} {{ item.time }} · {{ item.plano }} · {{ item.valor_final }}</div>
+      </div>
+      <div class="proposals-history-actions">
+        {% if item.download_url %}
+        <a href="{{ item.download_url }}" class="settings-action-btn">Baixar</a>
+        {% endif %}
+        {% if item.preview_url %}
+        <a href="{{ item.preview_url }}" class="settings-action-btn" target="_blank" rel="noopener">Ver</a>
+        {% endif %}
+        <form method="post" action="/propostas/historico/excluir" onsubmit="return confirm('Excluir este registro do histórico?');">
+          <input type="hidden" name="entry_id" value="{{ item.id }}">
+          <button type="submit" class="settings-action-btn danger">Excluir</button>
+        </form>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% else %}
+<div class="proposals-generated-empty">
+  <div class="section-heading">Pré-visualização do PDF</div>
+  <p>O PDF aparece aqui ao lado após a confirmação do resumo. Não geramos automaticamente.</p>
 </div>
 {% endif %}

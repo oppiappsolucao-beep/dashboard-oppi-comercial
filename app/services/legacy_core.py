@@ -2127,7 +2127,9 @@ def delete_company_from_sheet(sheet_row: int) -> None:
 # =========================================================
 def identify_columns(df: pd.DataFrame) -> dict:
     return {
-        "empresa": first_existing_column(df, ["Nome Empresas", "Nome da empresa", "Empresa", "Nome Empresa", "Nome empresas", "Nome Empresa(s)"]),
+        "empresa": first_existing_column(df, ["Nome Empresas", "Nome da empresa", "Empresa", "Nome Empresa", "Nome empresas", "Nome Empresa(s)", "Razão Social", "Razao Social"]),
+        "nome_fantasia": first_existing_column(df, ["Nome Fantasia", "Nome fantasia", "Fantasia"]),
+        "cargo_responsavel": first_existing_column(df, ["Cargo", "Cargo do responsável", "Cargo responsavel"]),
         "data_abertura": first_existing_column(df, ["Data de abertura", "Data abertura"]),
         "capital": first_existing_column(df, ["Capital", "Capital social"]),
         "cnpj": first_existing_column(df, ["CNPJ"]),
