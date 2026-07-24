@@ -264,7 +264,7 @@ def load_monthly_goals(force_refresh: bool = False) -> dict[str, dict]:
             merged = file_store
 
         _file_cache = merged
-        return {key: dict(value) for key, value in merged}
+        return {key: dict(value) for key, value in merged.items()}
 
 
 def invalidate_monthly_goals_cache() -> None:

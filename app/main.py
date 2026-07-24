@@ -101,29 +101,11 @@ app.add_api_route("/configuracoes/servicos/remover", settings_remove_service, me
 @app.on_event("startup")
 async def startup_maintenance() -> None:
     import logging
+    import time
 
     log = logging.getLogger(__name__)
 
-    # Banco DATABASE_URL (Postgres em produção) + migração de conversas do SQLite local
-    try:
-        from database.connection import Base, engine
-        from database import models  # noqa: F401 — registra tabelas (incl. attendance_*)
-        from app.services.attendance_db_migrate import (
-            ensure_attendance_schema_columns,
-            migrate_attendance_from_sqlite_if_needed,
-        )
-        from app.services.niches import ensure_default_niches
-
-        Base.metadata.create_all(bind=engine)
-        ensure_attendance_schema_columns()
-        ensure_default_niches()
-        migrate_info = migrate_attendance_from_sqlite_if_needed()
-        log.info("Attendance DB migrate: %s", migrate_info)
-    except Exception as error:
-        log.error("Startup DATABASE_URL / attendance migrate: %s", error)
-
-    # Só o SQLite local no startup — planilha/API ficam em background
-    # para o /health responder rápido e o Easypanel não derrubar o serviço.
+    # SQLite local rápido — não depende da API Google
     try:
         from app.services.crm_local_db import init_crm_local_db
         from app.services.legacy_core import hydrate_sheet_cache_from_disk
@@ -134,47 +116,74 @@ async def startup_maintenance() -> None:
         log.error("Startup SQLite/cache local: %s", error)
 
     def _run_background() -> None:
+        # Banco + nichos (pode demorar se o Postgres estiver lento)
         try:
-            from app.services.activities_storage import reload_activities_store
-            from app.services.lead_actions_storage import reload_lead_actions_store
-            from app.services.sheet_crm_storage import ensure_crm_storage_tabs
-            from app.services.app_settings import load_app_settings
-            from app.services.account_users import load_account_users
-            from app.services.monthly_goals import load_monthly_goals
-            from app.services.proposal_pdf import cleanup_service_account_proposal_files
-            from app.services.legacy_core import load_sheet_data
-            from app.services.seed_fake_company import ensure_fake_test_company_on_startup
+            from database.connection import Base, engine
+            from database import models  # noqa: F401
+            from app.services.attendance_db_migrate import (
+                ensure_attendance_schema_columns,
+                migrate_attendance_from_sqlite_if_needed,
+            )
+            from app.services.niches import ensure_default_niches
 
-            reload_activities_store(force_refresh=False)
-            reload_lead_actions_store(force_refresh=False)
-            ensure_crm_storage_tabs()
-            load_account_users()
-            load_app_settings()
-            load_monthly_goals()
-            try:
-                load_sheet_data()
-            except Exception:
-                pass
-            try:
-                from app.services.pending_companies import (
-                    recover_pending_from_sheet_tab,
-                    sync_pending_companies_to_sheet,
-                )
-
-                recover_pending_from_sheet_tab()
-                sync_pending_companies_to_sheet()
-            except Exception as sync_error:
-                log.warning("Sync cadastros pendentes: %s", sync_error)
-            cleanup_service_account_proposal_files()
-            ensure_fake_test_company_on_startup()
-            try:
-                from app.services.pending_companies import sync_pending_companies_to_sheet
-
-                sync_pending_companies_to_sheet()
-            except Exception:
-                pass
+            Base.metadata.create_all(bind=engine)
+            ensure_attendance_schema_columns()
+            ensure_default_niches()
+            migrate_info = migrate_attendance_from_sqlite_if_needed()
+            log.info("Attendance DB migrate: %s", migrate_info)
         except Exception as error:
-            log.error("Startup background (planilha): %s", error)
+            log.error("Startup DATABASE_URL / attendance migrate: %s", error)
+
+        # Evita rajada de leituras na Sheets API no boot (erro 429).
+        time.sleep(3)
+
+        steps = [
+            ("activities", lambda: __import__("app.services.activities_storage", fromlist=["reload_activities_store"]).reload_activities_store(force_refresh=False)),
+            ("lead_actions", lambda: __import__("app.services.lead_actions_storage", fromlist=["reload_lead_actions_store"]).reload_lead_actions_store(force_refresh=False)),
+            ("crm_tabs", lambda: __import__("app.services.sheet_crm_storage", fromlist=["ensure_crm_storage_tabs"]).ensure_crm_storage_tabs()),
+            ("account_users", lambda: __import__("app.services.account_users", fromlist=["load_account_users"]).load_account_users()),
+            ("app_settings", lambda: __import__("app.services.app_settings", fromlist=["load_app_settings"]).load_app_settings()),
+            ("monthly_goals", lambda: __import__("app.services.monthly_goals", fromlist=["load_monthly_goals"]).load_monthly_goals()),
+            ("sheet_data", lambda: __import__("app.services.legacy_core", fromlist=["load_sheet_data"]).load_sheet_data()),
+            (
+                "pending_recover",
+                lambda: __import__(
+                    "app.services.pending_companies",
+                    fromlist=["recover_pending_from_sheet_tab"],
+                ).recover_pending_from_sheet_tab(),
+            ),
+            (
+                "pending_sync",
+                lambda: __import__(
+                    "app.services.pending_companies",
+                    fromlist=["sync_pending_companies_to_sheet"],
+                ).sync_pending_companies_to_sheet(),
+            ),
+            (
+                "proposal_cleanup",
+                lambda: __import__(
+                    "app.services.proposal_pdf",
+                    fromlist=["cleanup_service_account_proposal_files"],
+                ).cleanup_service_account_proposal_files(),
+            ),
+            (
+                "fake_company",
+                lambda: __import__(
+                    "app.services.seed_fake_company",
+                    fromlist=["ensure_fake_test_company_on_startup"],
+                ).ensure_fake_test_company_on_startup(),
+            ),
+        ]
+        for name, step in steps:
+            try:
+                step()
+            except Exception as error:
+                message = str(error)
+                if "429" in message or "Quota exceeded" in message:
+                    log.warning("Startup background (%s): cota Google Sheets — usando cache local.", name)
+                else:
+                    log.error("Startup background (%s): %s", name, error)
+                time.sleep(1)
 
     threading.Thread(target=_run_background, daemon=True).start()
 

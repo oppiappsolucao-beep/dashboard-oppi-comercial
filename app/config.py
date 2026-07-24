@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-APP_BUILD = os.getenv("APP_BUILD", "20260723-propostas-v16").strip() or "20260723-propostas-v16"
+APP_BUILD = os.getenv("APP_BUILD", "20260724-startup-v17").strip() or "20260724-startup-v17"
 
 
 class Settings:
