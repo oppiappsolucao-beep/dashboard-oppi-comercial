@@ -177,7 +177,7 @@ async def new_registration_submit(request: Request):
 
         create_activity = normalize_text(form_dict.get("create_first_activity")) in {"1", "on", "true", "yes"}
         activity_warning = ""
-        if create_activity and int(sheet_row or 0) > 0:
+        if create_activity and int(sheet_row or 0) != 0:
             stage = normalize_legacy_stage(form_dict.get("status")) or "Novo Lead"
             scheduled_date = normalize_text(form_dict.get("activity_date")) or date.today().isoformat()
             scheduled_time = normalize_text(form_dict.get("activity_time")) or "09:00"

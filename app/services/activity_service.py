@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta
 from urllib.parse import urlencode
 from zoneinfo import ZoneInfo
@@ -479,6 +479,16 @@ def _serialize_activity(record: dict, tenant_id: str | None = None) -> dict:
         proxima_acao = display_stage or NEXT_ACTION_BY_STAGE.get(stage, process_action)
         proxima_acao_value = display_stage or next_action_display_stage(process_action, stage)
 
+    sheet_row = int(record.get("sheet_row") or 0)
+    cadastro_tipo = "lead"
+    if sheet_row:
+        try:
+            from app.services.registration import resolve_cadastro_tipo
+
+            cadastro_tipo = resolve_cadastro_tipo(tenant_id, sheet_row) or "lead"
+        except Exception:
+            cadastro_tipo = "lead"
+
     return {
         "id": record["id"],
         "title": process_action or record.get("title", "—"),
@@ -486,6 +496,8 @@ def _serialize_activity(record: dict, tenant_id: str | None = None) -> dict:
         "icon": "💬" if channel == "WhatsApp" else "☎" if channel == "Ligação" else "📅" if "Reunião" in channel else "✉" if channel == "E-mail" else "📋",
         "empresa": record.get("empresa", "—"),
         "contato": record.get("contato", "—"),
+        "cadastro_tipo": cadastro_tipo,
+        "tipo_label": "Empresa" if cadastro_tipo == "empresa" else "Lead",
         "stage": stage,
         "stage_legacy": stage_legacy,
         "channel": channel,
@@ -515,7 +527,7 @@ def _serialize_activity(record: dict, tenant_id: str | None = None) -> dict:
         "next_action_channel": normalize_legacy_channel(record.get("next_action_channel")) or channel,
         "note": record.get("note") or "",
         "move_stage": normalize_legacy_stage(record.get("move_stage")) or "",
-        "sheet_row": int(record.get("sheet_row") or 0),
+        "sheet_row": sheet_row,
         "priority": int(record.get("priority") or 20),
         "updated_at": record.get("updated_at") or record.get("created_at") or "",
         "show_extra": status == "concluida" or normalize_text(record.get("result")),
@@ -528,15 +540,37 @@ def buscar_atividades(
     columns: dict,
     tenant_id: str | None = None,
     search: str = "",
+    period_start: date | None = None,
+    period_end: date | None = None,
 ) -> list[dict]:
+    """Lista atividades de leads e empresas no escopo do vendedor.
+
+    O DataFrame deve incluir ambos os tipos de cadastro (sem filtro de aba
+    leads/empresas). O período filtra pela data da atividade, não pela data
+    do chamado do cadastro — assim empresas convertidas fora do período
+    continuam aparecendo quando têm atividade no intervalo.
+    """
     sync_auto_activities(filtered_df, columns, tenant_id)
     rows = []
     allowed_rows = set(filtered_df["_sheet_row"].astype(int).tolist()) if not filtered_df.empty else set()
 
     for record in list_activities(tenant_id):
         sheet_row = int(record.get("sheet_row") or 0)
-        if allowed_rows and sheet_row not in allowed_rows:
+        # Mantém atividades sem vínculo; só restringe quando há sheet_row conhecido
+        if sheet_row and allowed_rows and sheet_row not in allowed_rows:
             continue
+        if period_start and period_end:
+            activity_dt = _parse_datetime(
+                record.get("scheduled_at") or record.get("created_at") or record.get("updated_at")
+            )
+            if activity_dt:
+                activity_day = activity_dt.date()
+                today = date.today()
+                if activity_day < period_start:
+                    continue
+                # Janela aberta até hoje (ou depois): mantém atividades futuras agendadas.
+                if activity_day > period_end and not (period_end >= today and activity_day > today):
+                    continue
         serialized = _serialize_activity(record, tenant_id)
         if search:
             blob = " | ".join([
@@ -545,6 +579,7 @@ def buscar_atividades(
                 serialized["contato"],
                 serialized["description"],
                 serialized["vendedor"],
+                serialized.get("tipo_label", ""),
             ]).lower()
             if normalize_text(search).lower() not in blob and search.lower() not in blob:
                 continue
@@ -1552,8 +1587,18 @@ def build_activity_page_context(
     params: ActivitiesViewParams,
     tenant_id: str | None = None,
 ) -> dict:
-    filtered_df = apply_dashboard_filters(df, columns, filters)
-    activities = buscar_atividades(filtered_df, columns, tenant_id, search=filters.search)
+    # Escopo de cadastros (leads + empresas): vendedor/status/nicho/UF, sem período.
+    # Período é aplicado na data da atividade em buscar_atividades.
+    scope_filters = replace(filters, period_start=None, period_end=None, search="")
+    scope_df = apply_dashboard_filters(df, columns, scope_filters)
+    activities = buscar_atividades(
+        scope_df,
+        columns,
+        tenant_id,
+        search=filters.search,
+        period_start=filters.period_start,
+        period_end=filters.period_end,
+    )
     table = build_activities_table(activities, params)
     kanban = build_activities_kanban(activities, params, tenant_id)
     stage_options = ["Todas as etapas"] + PIPELINE_STAGE_OPTIONS
@@ -1668,7 +1713,15 @@ def _lead_result_item(row, columns: dict, lead: dict, tenant_id: str | None) -> 
     }
 
 
-def _lead_row_is_active(row, lead: dict) -> bool:
+def _lead_row_is_active(row, lead: dict, tenant_id: str | None = None) -> bool:
+    """Empresas convertidas permanecem elegíveis para atividades; leads fechados/perdidos não."""
+    from app.services.registration import resolve_cadastro_tipo
+
+    sheet_row = int(lead.get("sheet_row") or 0)
+    cnpj = normalize_text(row.get("_cnpj", ""))
+    if resolve_cadastro_tipo(tenant_id, sheet_row, cnpj=cnpj) == "empresa":
+        return True
+
     if lead.get("opportunity_status") in {"Fechada ganha", "Fechada perdida", "Encerrada"}:
         grouped = status_group(row.get("_status_grupo") or row.get("_status_original", ""))
         if grouped in {"Fechado", "Sem interesse"}:
@@ -1711,7 +1764,7 @@ def buscar_leads_para_atividade(
         lead = _lead_record(row, columns, tenant_id)
         if not normalize_text(lead.get("empresa")):
             return []
-        if not _lead_row_is_active(row, lead):
+        if not _lead_row_is_active(row, lead, tenant_id):
             return []
         return [_lead_result_item(row, columns, lead, tenant_id)]
 
@@ -1723,7 +1776,7 @@ def buscar_leads_para_atividade(
         lead = _lead_record(row, columns, tenant_id)
         if not normalize_text(lead.get("empresa")):
             continue
-        if not _lead_row_is_active(row, lead):
+        if not _lead_row_is_active(row, lead, tenant_id):
             continue
         if term:
             blob = _lead_search_blob(row, columns, lead)

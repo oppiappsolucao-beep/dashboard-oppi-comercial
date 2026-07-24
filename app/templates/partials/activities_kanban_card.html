@@ -8,6 +8,9 @@
   aria-grabbed="false">
   <span class="activities-kanban-card-grip" aria-hidden="true" title="Arrastar para mover de coluna">⋮⋮</span>
   <div class="activities-kanban-card-title">{{ card.empresa }}</div>
+  <div class="activities-kanban-card-meta">
+    <span class="activity-lead-result-type">{{ card.tipo_label or "Lead" }}</span>
+  </div>
   <div class="activities-kanban-card-when">
     <span class="activities-kanban-card-when-icon" aria-hidden="true">📅</span>
     {% if card.when_date != '—' %}
