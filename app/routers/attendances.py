@@ -46,6 +46,8 @@ def _filters(request: Request, form: dict | None = None) -> tuple[str, str, str,
     search = normalize_text(data.get("search") or request.query_params.get("search", ""))
     # Padrão: só abertos (finalizados saem da fila)
     status = normalize_text(data.get("status") or request.query_params.get("status", "abertos")) or "abertos"
+    if status.lower() in ("todos", "all"):
+        status = "abertos"
     selected = normalize_text(
         data.get("conversation_id") or request.query_params.get("c", "")
     )

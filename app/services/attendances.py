@@ -140,8 +140,10 @@ def page_context(
         "status_filter": status or "abertos",
         "status_options": [
             ("abertos", "Em aberto"),
-            ("todos", "Todos"),
-        ] + store.STATUS_OPTIONS,
+            (store.STATUS_NOVO_LEAD, "Novo Lead"),
+            (store.STATUS_EM_ATENDIMENTO, "Em Atendimento"),
+            (store.STATUS_FINALIZADO, "Finalizado"),
+        ],
         "sector_filter": ui_sector_filter,
         "sector_filter_locked": bool(scope.get("locked")),
         "user_sector_name": scope.get("sector_name") or "",

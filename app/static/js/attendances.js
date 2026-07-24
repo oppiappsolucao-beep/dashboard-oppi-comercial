@@ -100,7 +100,7 @@
       source: form,
       values: {
         search: ($("#att-search") || {}).value || "",
-        status: ($("#att-status") || {}).value || "todos",
+        status: ($("#att-status") || {}).value || "abertos",
         conversation_id: selectedId(),
       },
     });
@@ -117,7 +117,7 @@
     var id = selectedId();
     if (!id || !window.htmx) return;
     var search = ($("#att-search") || {}).value || "";
-    var status = ($("#att-status") || {}).value || "todos";
+    var status = ($("#att-status") || {}).value || "abertos";
     window.htmx.ajax(
       "GET",
       "/atendimentos/conversa/" + encodeURIComponent(id) +

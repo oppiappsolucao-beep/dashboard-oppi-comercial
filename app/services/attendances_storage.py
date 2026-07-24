@@ -378,6 +378,10 @@ def list_conversations(
                 q = q.filter(AttendanceConversation.status != STATUS_FINALIZADO)
             else:
                 q = q.filter(AttendanceConversation.status == status)
+        else:
+            # Padrão / "todos": só fila ativa (Novo Lead + Em Atendimento).
+            # Finalizados só aparecem quando o filtro "Finalizado" é selecionado.
+            q = q.filter(AttendanceConversation.status != STATUS_FINALIZADO)
         if sector_id not in (None, "", "todos", "all"):
             try:
                 sid = int(sector_id)
