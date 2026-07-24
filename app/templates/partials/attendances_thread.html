@@ -50,25 +50,20 @@
       ＋
       <input type="file" id="att-media-input" accept="image/*,audio/*,.pdf,.doc,.docx" hidden>
     </label>
-    {# Hidden = valor enviado. Div contenteditable: Windows não "corrige" como no textarea. #}
+    {# Campo NÃO editável pelo SO: digitação 100% via JS (mata corretor Windows). #}
     <input type="hidden" name="text" class="att-text-snap" value="" autocomplete="off">
     <div class="att-composer-input"
-         contenteditable="plaintext-only"
          role="textbox"
          aria-multiline="true"
          aria-label="Mensagem"
+         aria-placeholder="Digite uma mensagem…"
          tabindex="0"
          spellcheck="false"
-         autocapitalize="off"
-         autocomplete="off"
-         autocorrect="off"
          lang="zxx"
-         data-lpignore="true"
-         data-gramm="false"
-         data-enable-grammarly="false"
+         data-synthetic="1"
          data-placeholder="Digite uma mensagem…"
          {% if not evolution_configured %}aria-disabled="true"{% endif %}></div>
-    {# Texto do botão só no CSS (::before) — o corretor do Windows alterava "Enviar" → "estampar" #}
+    {# Texto do botão só no CSS — imuniza contra corretor (Enviar → estampar) #}
     <button type="button"
             class="btn att-send-btn"
             aria-label="Enviar mensagem"
