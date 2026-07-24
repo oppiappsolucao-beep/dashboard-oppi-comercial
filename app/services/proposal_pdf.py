@@ -857,34 +857,21 @@ def generate_proposal_pdf(
         if cached:
             return cached
 
-    if normalize_text(services_description):
-        from app.services.proposal_commercial_pdf import generate_commercial_proposal_pdf
+    # Sempre gera o PDF comercial local (sem Google Docs / Drive)
+    from app.services.proposal_commercial_pdf import generate_commercial_proposal_pdf
 
-        pdf_bytes = generate_commercial_proposal_pdf(
-            resolved_company,
-            df,
-            columns,
-            services_description=services_description,
-            plans_text=plans_text,
-        )
-        store_proposal_pdf_cache(cache_key, pdf_bytes)
-        return pdf_bytes
-
-    template_id = get_proposal_template_doc_id()
-    if not template_id:
-        raise RuntimeError(
-            "Modelo de proposta não configurado. Informe o link do Google Docs em Configurações → Geral."
-        )
-
-    pdf_bytes = generate_proposal_pdf_from_template(
-        company_name,
+    description = normalize_text(services_description) or normalize_text(plans_text) or (
+        f"Proposta comercial Oppi — {normalize_text(servico) or 'Ponto Eletrônico Oppi'}"
+        + (f" — {normalize_text(colaboradores)} colaboradores" if normalize_text(colaboradores) else "")
+        + (f" — valor {normalize_text(value)}" if normalize_text(value) else "")
+    )
+    pdf_bytes = generate_commercial_proposal_pdf(
+        resolved_company,
         df,
         columns,
-        value=value,
-        servico=servico,
-        colaboradores=colaboradores,
+        services_description=description,
+        plans_text=plans_text,
     )
-
     store_proposal_pdf_cache(cache_key, pdf_bytes)
     return pdf_bytes
 

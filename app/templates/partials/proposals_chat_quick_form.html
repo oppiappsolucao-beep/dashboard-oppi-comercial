@@ -39,21 +39,11 @@
     {% endif %}
   </label>
 
-  {% if pending_company %}
-  <label class="proposals-quick-field">
-    <span>Quais os serviços que deseja incluir para esse cliente?</span>
-    <textarea
-      name="services_description"
-      rows="4"
-      placeholder="Ex.: Plano até 25 colaboradores — ponto eletrônico Oppi"
-      required
-      autocomplete="off"
-    ></textarea>
-  </label>
-  <button type="submit" class="btn proposals-quick-form-btn">Gerar proposta</button>
-  {% else %}
+  {% if not pending_company %}
   <button type="submit" class="btn proposals-quick-form-btn">Continuar</button>
-  <small class="proposals-quick-hint">Selecione a empresa na lista (use a busca acima).</small>
+  <small class="proposals-quick-hint">Em seguida eu pergunto a quantidade de colaboradores e sugiro o valor.</small>
+  {% else %}
+  <small class="proposals-quick-hint">Responda no chat: colaboradores → valor sugerido → confirmar ou alterar.</small>
   {% endif %}
 </form>
 

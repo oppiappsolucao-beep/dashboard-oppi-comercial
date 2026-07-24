@@ -452,158 +452,96 @@ def _now_time() -> str:
     return datetime.now().strftime("%H:%M")
 
 
-def handle_proposal_chat_message(
-    message: str,
-    df: pd.DataFrame,
-    chat_messages: list[dict],
-    columns: dict | None = None,
-    *,
-    servico: str | None = None,
-    colaboradores: str | None = None,
-    company_override: str | None = None,
-    pending_company: str | None = None,
-    services_description: str | None = None,
-) -> tuple[list[dict], dict | None, str | None]:
-    """
-    Retorna (mensagens, proposta_gerada|None, pending_company|None).
-    Fluxo: escolhe empresa → pergunta serviços → gera PDF comercial.
-    """
-    clean_message = normalize_text(message)
-    services_description = normalize_text(services_description) or None
-    company_pick = normalize_text(company_override) or None
-
-    # Formulário só com empresa (sem descrição ainda)
-    if company_pick and not services_description and (
-        not clean_message
-        or clean_message.lower().startswith("selecionei a empresa")
-        or clean_message.lower().startswith("empresa selecionada")
-    ):
-        company = resolve_company_name(company_pick, df)
-        if not company:
-            chat_messages.append({
-                "role": "assistant",
-                "content": "Não encontrei essa empresa no cadastro. Selecione um cliente da lista.",
-                "time": _now_time(),
-            })
-            return chat_messages, None, None
-        chat_messages.append({
-            "role": "user",
-            "content": f"Empresa selecionada: {company}",
-            "time": _now_time(),
-        })
-        chat_messages.append({
-            "role": "assistant",
-            "content": (
-                f"Perfeito. Vou usar o cadastro de **{company}**.\n\n"
-                "Quais os serviços que deseja incluir para esse cliente?\n"
-                "(Descreva o plano — ex.: plano até 25 colaboradores, ponto eletrônico…)"
-            ),
-            "time": _now_time(),
-        })
-        return chat_messages, None, company
-
-    if not clean_message and not services_description:
-        return chat_messages, None, pending_company
-
-    if clean_message:
-        chat_messages.append({"role": "user", "content": clean_message, "time": _now_time()})
-
-    company = None
-    if company_pick:
-        company = resolve_company_name(company_pick, df)
-    if not company and pending_company:
-        company = resolve_company_name(pending_company, df)
-    if not company:
-        extracted = _extract_company(clean_message, df)
-        company = resolve_company_name(extracted, df) if extracted else None
-
-    description = services_description or clean_message
-    # Se só escolheu empresa no texto sem descrição útil
-    if company and description and description.lower() in {
-        f"empresa selecionada: {company.lower()}",
-        f"selecionei a empresa {company.lower()}",
-        company.lower(),
-    }:
-        chat_messages.append({
-            "role": "assistant",
-            "content": (
-                f"Quais os serviços que deseja incluir para **{company}**?\n"
-                "Descreva o plano desejado (ex.: plano até 10 colaboradores)."
-            ),
-            "time": _now_time(),
-        })
-        return chat_messages, None, company
-
-    if not company:
-        chat_messages.append({
-            "role": "assistant",
-            "content": (
-                "Selecione a empresa do cadastro no formulário ao lado "
-                "(ou digite o nome exato). Depois descreva os serviços."
-            ),
-            "time": _now_time(),
-        })
-        return chat_messages, None, pending_company
-
-    if not description or len(description) < 3:
-        chat_messages.append({
-            "role": "assistant",
-            "content": (
-                f"Quais os serviços que deseja incluir para **{company}**?\n"
-                "Descreva livremente o que deve entrar na proposta."
-            ),
-            "time": _now_time(),
-        })
-        return chat_messages, None, company
-
-    if columns is None:
-        columns = identify_columns(df)
-
-    from app.services.proposal_ai import interpret_services_description
-    from app.services.proposal_commercial_pdf import collect_client_data
-
-    client = collect_client_data(company, df, columns)
-    ai_result = interpret_services_description(
-        description,
-        cadastro_collaborators=client.get("colaboradores") or "",
+def _is_affirmative(text: str) -> bool:
+    clean = normalize_text(text).lower()
+    keys = (
+        "sim", "pode", "gerar", "confirmo", "confirma", "ok", "okay", "fechado",
+        "pode gerar", "gerar proposta", "pode gerar a proposta", "isso", "perfeito",
+        "pode sim", "vamos", "segue",
     )
-    pricing = ai_result.get("pricing")
-    value = str(getattr(pricing, "boleto_monthly", "") or "")
+    return any(clean == key or clean.startswith(key + " ") or clean.endswith(" " + key) for key in keys) or clean in keys
+
+
+def _wants_change(text: str) -> bool:
+    clean = normalize_text(text).lower()
+    return any(
+        token in clean
+        for token in ("alterar", "mudar", "trocar", "outro valor", "quero mudar", "desejo alterar")
+    )
+
+
+def _extract_money_value(text: str) -> float | None:
+    from app.services.legacy_core import parse_money
+
+    clean = normalize_text(text)
+    match = re.search(r"R\$\s*([\d.]+,?\d*)", clean, flags=re.IGNORECASE)
+    if match:
+        amount = parse_money(match.group(1))
+        return amount if amount > 0 else None
+    # número puro (ex.: 199,90 ou 200)
+    match = re.search(r"^\s*([\d.]+,?\d*)\s*$", clean.replace(" ", ""))
+    if match and ("," in match.group(1) or "." in match.group(1) or len(match.group(1)) >= 2):
+        amount = parse_money(match.group(1))
+        # evita confundir "25" colaboradores com valor — só se tiver vírgula/ponto ou for claramente valor
+        if "," in match.group(1) or "." in match.group(1):
+            return amount if amount > 0 else None
+        if amount >= 40:  # valores de plano costumam ser >= 40
+            return amount
+    return None
+
+
+def _draft_pricing_message(pricing, company: str) -> str:
+    from app.services.proposal_pricing import format_money_br, per_employee_rate
+
+    n = pricing.cadastro_collaborators or pricing.included_collaborators
+    per = per_employee_rate(pricing)
+    return (
+        f"Para **{company}** com **{n} colaboradores**, a sugestão é:\n\n"
+        f"• Faixa do plano: até **{pricing.included_collaborators}** colaboradores\n"
+        f"• Valor sugerido (boleto): **{format_money_br(pricing.boleto_monthly)}/mês**\n"
+        f"• Equivalente a **{format_money_br(per)} por colaborador/mês**\n"
+        f"• Recorrente: **{format_money_br(pricing.recorrente_monthly)}/mês**\n"
+        f"• Anual: **{format_money_br(pricing.anual_upfront)}** à vista\n\n"
+        "Posso gerar a proposta com esse valor ou deseja alterar?"
+    )
+
+
+def _finalize_proposal(
+    *,
+    company: str,
+    df: pd.DataFrame,
+    columns: dict,
+    pricing,
+    chat_messages: list[dict],
+) -> tuple[list[dict], dict | None, str | None, dict | None]:
+    from app.services.proposal_pricing import format_money_br
+
+    n = pricing.cadastro_collaborators or pricing.included_collaborators
+    description = (
+        f"Ponto Eletrônico Oppi — plano até {pricing.included_collaborators} colaboradores "
+        f"({n} informados). Boleto: R$ {pricing.boleto_monthly:.2f}/mês."
+    )
+    value = str(pricing.boleto_monthly)
     generated = build_generated_proposal(
         company,
         value,
         df,
         columns,
-        servico=ai_result.get("product_label") or servico,
-        colaboradores=client.get("colaboradores") or colaboradores,
+        servico=pricing.product_label,
+        colaboradores=str(n),
         services_description=description,
-        plans_text=ai_result.get("plans_text"),
+        plans_text=pricing.plans_block,
     )
-    details = [
-        f"Faixa: até {ai_result.get('included_collaborators')} colaboradores",
-    ]
-    if pricing:
-        from app.services.proposal_pricing import _fmt
-
-        details.extend(
-            [
-                f"Boleto: R$ {_fmt(pricing.boleto_monthly)}/mês",
-                f"Recorrente: R$ {_fmt(pricing.recorrente_monthly)}/mês",
-                f"Anual: R$ {_fmt(pricing.anual_upfront)} à vista",
-            ]
-        )
-    if ai_result.get("ai_used"):
-        details.append("Texto dos planos enriquecido com IA.")
-    details_text = "\n".join(details)
     if generated.get("pdf_error"):
         footer = f"\n\nNão foi possível gerar o PDF.\n{generated['pdf_error']}"
     else:
-        footer = "\n\nO PDF comercial já está disponível ao lado (modelo Oppi)."
+        footer = "\n\nO PDF já está disponível ao lado."
     chat_messages.append({
         "role": "assistant",
         "content": (
-            f"Proposta gerada para **{company}** com base no cadastro e na descrição dos serviços.\n\n"
-            f"{details_text}"
+            f"Proposta gerada para **{company}**.\n\n"
+            f"Colaboradores: **{n}**\n"
+            f"Valor (boleto): **{format_money_br(pricing.boleto_monthly)}/mês**"
             f"{footer}"
         ),
         "time": _now_time(),
@@ -618,7 +556,237 @@ def handle_proposal_chat_message(
             "generated": generated,
             "time": _now_time(),
         })
-    return chat_messages, generated, None
+    return chat_messages, generated, None, None
+
+
+def handle_proposal_chat_message(
+    message: str,
+    df: pd.DataFrame,
+    chat_messages: list[dict],
+    columns: dict | None = None,
+    *,
+    servico: str | None = None,
+    colaboradores: str | None = None,
+    company_override: str | None = None,
+    pending_company: str | None = None,
+    services_description: str | None = None,
+    draft: dict | None = None,
+) -> tuple[list[dict], dict | None, str | None, dict | None]:
+    """
+    Retorna (mensagens, proposta_gerada|None, pending_company|None, draft|None).
+
+    Fluxo:
+    1) Seleciona empresa
+    2) Pergunta quantidade de colaboradores
+    3) Calcula valor por funcionário e sugere
+    4) Confirma ou altera o valor → gera PDF local
+    """
+    from app.services.proposal_pricing import (
+        parse_collaborators_count,
+        pricing_with_boleto_override,
+        suggest_pricing_for_collaborators,
+    )
+    from app.services.proposal_commercial_pdf import collect_client_data
+
+    clean_message = normalize_text(message)
+    company_pick = normalize_text(company_override) or None
+    draft = dict(draft or {})
+    step = normalize_text(draft.get("step")) or ""
+
+    if columns is None:
+        columns = identify_columns(df)
+
+    # —— Etapa 1: escolher empresa ——
+    if company_pick and (not step or step == "pick_company") and (
+        not clean_message
+        or clean_message.lower().startswith("selecionei a empresa")
+        or clean_message.lower().startswith("empresa selecionada")
+    ):
+        company = resolve_company_name(company_pick, df)
+        if not company:
+            chat_messages.append({
+                "role": "assistant",
+                "content": "Não encontrei essa empresa no cadastro. Selecione um cliente da lista.",
+                "time": _now_time(),
+            })
+            return chat_messages, None, None, None
+
+        client = collect_client_data(company, df, columns)
+        known = parse_collaborators_count(client.get("colaboradores") or colaboradores)
+        chat_messages.append({
+            "role": "user",
+            "content": f"Empresa selecionada: {company}",
+            "time": _now_time(),
+        })
+        hint = ""
+        if known:
+            hint = f"\nNo cadastro constam **{known}** colaboradores — confirme ou informe outro número."
+        chat_messages.append({
+            "role": "assistant",
+            "content": (
+                f"Perfeito. Vou usar o cadastro de **{company}**.\n\n"
+                f"**Quantos colaboradores a empresa tem?**{hint}"
+            ),
+            "time": _now_time(),
+        })
+        return chat_messages, None, company, {
+            "company": company,
+            "step": "ask_collaborators",
+            "known_collaborators": known,
+        }
+
+    if not clean_message and not draft:
+        return chat_messages, None, pending_company, draft or None
+
+    if clean_message:
+        chat_messages.append({"role": "user", "content": clean_message, "time": _now_time()})
+
+    company = resolve_company_name(draft.get("company") or pending_company or company_pick or "", df)
+    if not company and clean_message:
+        extracted = _extract_company(clean_message, df)
+        company = resolve_company_name(extracted, df) if extracted else None
+
+    if not company:
+        chat_messages.append({
+            "role": "assistant",
+            "content": "Selecione a empresa do cadastro no formulário ao lado para começarmos.",
+            "time": _now_time(),
+        })
+        return chat_messages, None, pending_company, None
+
+    # —— Etapa 2: quantidade de colaboradores ——
+    if step in ("", "ask_collaborators", "pick_company") or not step:
+        count = parse_collaborators_count(clean_message) or parse_collaborators_count(colaboradores)
+        if not count and draft.get("known_collaborators") and _is_affirmative(clean_message):
+            count = int(draft["known_collaborators"])
+        if not count:
+            chat_messages.append({
+                "role": "assistant",
+                "content": (
+                    f"Para **{company}**, me diga só o número de colaboradores "
+                    "(ex.: **25**)."
+                ),
+                "time": _now_time(),
+            })
+            return chat_messages, None, company, {
+                "company": company,
+                "step": "ask_collaborators",
+                "known_collaborators": draft.get("known_collaborators"),
+            }
+
+        pricing = suggest_pricing_for_collaborators(count)
+        chat_messages.append({
+            "role": "assistant",
+            "content": _draft_pricing_message(pricing, company),
+            "time": _now_time(),
+        })
+        return chat_messages, None, company, {
+            "company": company,
+            "step": "confirm_value",
+            "collaborators": count,
+            "suggested_boleto": pricing.boleto_monthly,
+            "included": pricing.included_collaborators,
+        }
+
+    # —— Etapa 3: confirmar ou alterar valor ——
+    if step == "confirm_value":
+        count = int(draft.get("collaborators") or 0) or 10
+        suggested = float(draft.get("suggested_boleto") or 0)
+
+        if _wants_change(clean_message):
+            money = _extract_money_value(clean_message)
+            if money:
+                pricing = pricing_with_boleto_override(count, money)
+                return _finalize_proposal(
+                    company=company,
+                    df=df,
+                    columns=columns,
+                    pricing=pricing,
+                    chat_messages=chat_messages,
+                )
+            chat_messages.append({
+                "role": "assistant",
+                "content": (
+                    "Sem problema. Qual valor mensal (boleto) deseja usar?\n"
+                    "Ex.: **199,90**"
+                ),
+                "time": _now_time(),
+            })
+            return chat_messages, None, company, {
+                **draft,
+                "step": "await_custom_value",
+            }
+
+        if _is_affirmative(clean_message):
+            pricing = suggest_pricing_for_collaborators(count)
+            if suggested > 0:
+                pricing = pricing_with_boleto_override(count, suggested)
+            return _finalize_proposal(
+                company=company,
+                df=df,
+                columns=columns,
+                pricing=pricing,
+                chat_messages=chat_messages,
+            )
+
+        money = _extract_money_value(clean_message)
+        if money:
+            pricing = pricing_with_boleto_override(count, money)
+            from app.services.proposal_pricing import format_money_br
+
+            chat_messages.append({
+                "role": "assistant",
+                "content": (
+                    f"Valor atualizado para **{format_money_br(money)}/mês**. "
+                    "Posso gerar a proposta com esse valor?"
+                ),
+                "time": _now_time(),
+            })
+            return chat_messages, None, company, {
+                **draft,
+                "step": "confirm_value",
+                "suggested_boleto": money,
+            }
+
+        chat_messages.append({
+            "role": "assistant",
+            "content": (
+                "Responda **sim** para gerar com o valor sugerido, "
+                "ou **alterar** / informe o novo valor (ex.: 189,90)."
+            ),
+            "time": _now_time(),
+        })
+        return chat_messages, None, company, draft
+
+    if step == "await_custom_value":
+        count = int(draft.get("collaborators") or 0) or 10
+        money = _extract_money_value(clean_message)
+        if not money:
+            chat_messages.append({
+                "role": "assistant",
+                "content": "Informe o valor mensal desejado, por exemplo **209,90**.",
+                "time": _now_time(),
+            })
+            return chat_messages, None, company, draft
+        pricing = pricing_with_boleto_override(count, money)
+        return _finalize_proposal(
+            company=company,
+            df=df,
+            columns=columns,
+            pricing=pricing,
+            chat_messages=chat_messages,
+        )
+
+    # fallback: reinicia pergunta de colaboradores
+    chat_messages.append({
+        "role": "assistant",
+        "content": f"**Quantos colaboradores a empresa {company} tem?**",
+        "time": _now_time(),
+    })
+    return chat_messages, None, company, {
+        "company": company,
+        "step": "ask_collaborators",
+    }
 
 
 def render_proposal_chat_messages(messages: list[dict]) -> str:
@@ -719,11 +887,11 @@ def default_proposal_chat_messages() -> list[dict]:
     return [{
         "role": "assistant",
         "content": (
-            "Olá! Sou o agente de IA para propostas Oppi.\n\n"
-            "1) Selecione a empresa do cadastro no formulário.\n"
-            "2) Eu pergunto quais serviços incluir.\n"
-            "3) Você descreve o plano e eu monto o PDF comercial completo "
-            "(com boleto, recorrente e anual)."
+            "Olá! Vou montar a proposta comercial com você.\n\n"
+            "1) Selecione a empresa cadastrada.\n"
+            "2) Eu pergunto quantos colaboradores a empresa tem.\n"
+            "3) Calculo o valor por funcionário e sugiro o preço.\n"
+            "4) Você confirma ou altera — e o PDF aparece ao lado."
         ),
         "time": _now_time(),
     }]

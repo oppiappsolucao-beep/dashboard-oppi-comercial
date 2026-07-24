@@ -165,7 +165,7 @@ async def proposals_chat(
         if not empresa.strip() and pending:
             empresa = pending
 
-    chat_messages, generated, new_pending = handle_proposal_chat_message(
+    chat_messages, generated, new_pending, new_draft = handle_proposal_chat_message(
         message,
         df,
         chat_messages,
@@ -175,12 +175,17 @@ async def proposals_chat(
         company_override=empresa.strip() or None,
         pending_company=pending or None,
         services_description=services_description.strip() or None,
+        draft=request.session.get("proposals_draft") or {},
     )
     request.session["proposals_chat"] = chat_messages
     if new_pending:
         request.session["proposals_pending_company"] = new_pending
     elif generated:
         request.session.pop("proposals_pending_company", None)
+    if new_draft:
+        request.session["proposals_draft"] = new_draft
+    else:
+        request.session.pop("proposals_draft", None)
     if generated:
         request.session["proposals_generated"] = generated
 
@@ -212,6 +217,7 @@ async def proposals_delete_generated(request: Request):
     clear_generated_proposal(request)
     chat_messages = strip_proposal_pdf_cards(_get_chat_messages(request))
     request.session["proposals_chat"] = chat_messages
+    request.session.pop("proposals_draft", None)
 
     df, _columns = get_prepared_data()
     return render(
@@ -229,6 +235,7 @@ async def proposals_chat_reset(request: Request):
     request.session["proposals_chat"] = default_proposal_chat_messages()
     request.session.pop("proposals_generated", None)
     request.session.pop("proposals_pending_company", None)
+    request.session.pop("proposals_draft", None)
     return RedirectResponse(url="/propostas", status_code=303)
 
 

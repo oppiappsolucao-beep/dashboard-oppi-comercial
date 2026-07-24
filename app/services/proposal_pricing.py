@@ -144,6 +144,62 @@ def extract_explicit_boleto(description: str) -> float | None:
     return amount if amount > 0 else None
 
 
+def suggest_pricing_for_collaborators(collaborators: int) -> PlanPricing:
+    """Sugere preço a partir da quantidade de colaboradores (cálculo por faixa/funcionário)."""
+    n = max(1, int(collaborators))
+    # Faixa comercial alinhada às âncoras
+    if n <= 10:
+        included = 10
+    elif n <= 25:
+        included = 25
+    else:
+        included = int(math.ceil(n / 5) * 5)
+    boleto = interpolate_boleto(included)
+    recorrente = _round_money(max(boleto - RECURRING_DISCOUNT, 0))
+    anual_monthly = _round_money(max(boleto - ANNUAL_MONTHLY_DISCOUNT, 0))
+    anual_upfront = _round_money(anual_monthly * 12)
+    return PlanPricing(
+        included_collaborators=included,
+        boleto_monthly=boleto,
+        recorrente_monthly=recorrente,
+        anual_monthly_equiv=anual_monthly,
+        anual_upfront=anual_upfront,
+        extra_per_collaborator=EXTRA_COLLABORATOR,
+        cadastro_collaborators=n,
+        source_description=f"Plano até {included} colaboradores ({n} informados)",
+        product_label="Ponto Eletrônico Oppi",
+    )
+
+
+def pricing_with_boleto_override(collaborators: int, boleto_monthly: float) -> PlanPricing:
+    n = max(1, int(collaborators))
+    boleto = _round_money(max(float(boleto_monthly), 0))
+    recorrente = _round_money(max(boleto - RECURRING_DISCOUNT, 0))
+    anual_monthly = _round_money(max(boleto - ANNUAL_MONTHLY_DISCOUNT, 0))
+    anual_upfront = _round_money(anual_monthly * 12)
+    included = n if n > 25 else (10 if n <= 10 else 25)
+    return PlanPricing(
+        included_collaborators=included,
+        boleto_monthly=boleto,
+        recorrente_monthly=recorrente,
+        anual_monthly_equiv=anual_monthly,
+        anual_upfront=anual_upfront,
+        extra_per_collaborator=EXTRA_COLLABORATOR,
+        cadastro_collaborators=n,
+        source_description=f"Valor personalizado para {n} colaboradores",
+        product_label="Ponto Eletrônico Oppi",
+    )
+
+
+def per_employee_rate(pricing: PlanPricing) -> float:
+    base = max(1, int(pricing.cadastro_collaborators or pricing.included_collaborators or 1))
+    return _round_money(pricing.boleto_monthly / base)
+
+
+def format_money_br(value: float) -> str:
+    return f"R$ {_fmt(value)}"
+
+
 def compute_plan_pricing(
     services_description: str,
     *,
