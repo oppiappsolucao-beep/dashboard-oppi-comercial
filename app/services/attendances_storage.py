@@ -176,6 +176,30 @@ def get_conversation_by_phone(phone_e164: str) -> dict | None:
         return _conversation_to_dict(row) if row else None
 
 
+def purge_group_conversations() -> dict:
+    """Apaga do banco conversas de grupo WhatsApp (@g.us / broadcast / id de grupo)."""
+    from app.services.evolution_client import is_whatsapp_group_jid
+
+    removed_ids: list[str] = []
+    with _lock, _session() as db:
+        rows = db.query(AttendanceConversation).all()
+        for row in rows:
+            if not (
+                is_whatsapp_group_jid(row.remote_jid or "")
+                or is_whatsapp_group_jid(row.phone_e164 or "")
+            ):
+                continue
+            removed_ids.append(row.id)
+            db.query(AttendanceMessage).filter(
+                AttendanceMessage.conversation_id == row.id
+            ).delete(synchronize_session=False)
+            db.delete(row)
+    if removed_ids:
+        logger.info("Removidas %s conversas de grupo: %s", len(removed_ids), removed_ids)
+        _notify({"type": "groups_purged", "count": len(removed_ids), "ids": removed_ids})
+    return {"removed": len(removed_ids), "ids": removed_ids}
+
+
 def list_conversations(
     *,
     search: str = "",

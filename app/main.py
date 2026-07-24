@@ -131,6 +131,13 @@ async def startup_maintenance() -> None:
             ensure_default_niches()
             migrate_info = migrate_attendance_from_sqlite_if_needed()
             log.info("Attendance DB migrate: %s", migrate_info)
+            try:
+                from app.services.attendances_storage import purge_group_conversations
+
+                purged = purge_group_conversations()
+                log.info("Attendance group purge: %s", purged)
+            except Exception as purge_error:
+                log.error("Attendance group purge: %s", purge_error)
         except Exception as error:
             log.error("Startup DATABASE_URL / attendance migrate: %s", error)
 

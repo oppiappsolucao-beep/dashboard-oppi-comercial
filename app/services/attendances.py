@@ -20,6 +20,12 @@ def page_context(
     flash: str = "",
     error: str = "",
 ) -> dict:
+    # Remove do banco qualquer grupo que ainda exista (não só esconde da lista)
+    try:
+        store.purge_group_conversations()
+    except Exception:
+        logger.exception("Falha ao limpar conversas de grupo")
+
     conversations = store.list_conversations(search=search, status=status)
     selected = None
     messages: list[dict] = []
