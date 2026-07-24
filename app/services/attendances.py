@@ -20,11 +20,12 @@ def page_context(
     flash: str = "",
     error: str = "",
 ) -> dict:
-    # Remove do banco qualquer grupo que ainda exista (não só esconde da lista)
+    # Remove grupos reais (@g.us) e as conversas pedidas (Luiz / Skoob)
     try:
         store.purge_group_conversations()
+        store.delete_conversations_by_contact_names()
     except Exception:
-        logger.exception("Falha ao limpar conversas de grupo")
+        logger.exception("Falha ao limpar conversas indesejadas da inbox")
 
     conversations = store.list_conversations(search=search, status=status)
     selected = None
@@ -42,12 +43,13 @@ def page_context(
     if selected_id:
         selected = store.get_conversation(selected_id)
         if selected:
-            from app.services.evolution_client import conversation_looks_like_group
+            from app.services.evolution_client import is_whatsapp_group_jid
 
-            if conversation_looks_like_group(
-                remote_jid=selected.get("remote_jid") or "",
-                phone_e164=selected.get("phone_e164") or "",
-                contact_name=selected.get("contact_name") or "",
+            name_key = store._normalize_contact_key(selected.get("contact_name") or "")
+            if (
+                is_whatsapp_group_jid(selected.get("remote_jid") or "")
+                or is_whatsapp_group_jid(selected.get("phone_e164") or "")
+                or name_key in store.UNWANTED_INBOX_CONTACT_KEYS
             ):
                 store.delete_conversation(selected_id)
                 selected = None

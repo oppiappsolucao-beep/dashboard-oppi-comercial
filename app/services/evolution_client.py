@@ -229,32 +229,15 @@ def is_whatsapp_group_jid(value: str) -> bool:
     return False
 
 
-def contact_name_looks_like_group(name: str) -> bool:
-    """Nomes típicos de grupo interno (ex.: 'Oppi Equipe') — não são lead."""
-    import re
-
-    text = normalize_text(name).lower()
-    if not text:
-        return False
-    return bool(
-        re.search(
-            r"(^|[\s\-_/])(equipe|grupo|group|team|broadcast)([\s\-_/]|$)",
-            text,
-        )
-    )
-
-
 def conversation_looks_like_group(
     *,
     remote_jid: str = "",
     phone_e164: str = "",
     contact_name: str = "",
 ) -> bool:
-    if is_whatsapp_group_jid(remote_jid) or is_whatsapp_group_jid(phone_e164):
-        return True
-    if contact_name_looks_like_group(contact_name):
-        return True
-    return False
+    # NÃO usar heurística de nome (apagava "Oppi Equipe" por engano).
+    _ = contact_name
+    return is_whatsapp_group_jid(remote_jid) or is_whatsapp_group_jid(phone_e164)
 
 
 def message_looks_like_group(key: dict | None = None, item: dict | None = None) -> bool:

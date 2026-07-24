@@ -177,18 +177,17 @@ def get_conversation_by_phone(phone_e164: str) -> dict | None:
 
 
 def purge_group_conversations() -> dict:
-    """Apaga do banco conversas de grupo (@g.us, id de grupo, nomes tipo 'Equipe')."""
-    from app.services.evolution_client import conversation_looks_like_group
+    """Apaga do banco só conversas de grupo WhatsApp reais (@g.us / broadcast / id)."""
+    from app.services.evolution_client import is_whatsapp_group_jid
 
     removed_ids: list[str] = []
     removed_names: list[str] = []
     with _lock, _session() as db:
         rows = db.query(AttendanceConversation).all()
         for row in rows:
-            if not conversation_looks_like_group(
-                remote_jid=row.remote_jid or "",
-                phone_e164=row.phone_e164 or "",
-                contact_name=row.contact_name or "",
+            if not (
+                is_whatsapp_group_jid(row.remote_jid or "")
+                or is_whatsapp_group_jid(row.phone_e164 or "")
             ):
                 continue
             removed_ids.append(row.id)
@@ -205,6 +204,56 @@ def purge_group_conversations() -> dict:
             removed_names,
         )
         _notify({"type": "groups_purged", "count": len(removed_ids), "ids": removed_ids})
+    return {"removed": len(removed_ids), "ids": removed_ids, "names": removed_names}
+
+
+def _normalize_contact_key(value: str) -> str:
+    import re
+    import unicodedata
+
+    text = normalize_text(value).lower()
+    text = unicodedata.normalize("NFKD", text)
+    text = "".join(ch for ch in text if not unicodedata.combining(ch))
+    return re.sub(r"[^a-z0-9]+", "", text)
+
+
+# Conversas pedidas para remoção explícita (não são filtro genérico de grupo).
+UNWANTED_INBOX_CONTACT_KEYS = {
+    _normalize_contact_key("Luiz Carlos Zanini"),
+    _normalize_contact_key("Skoob Pet Indaiatuba"),
+    _normalize_contact_key("SkoobPet Indaiatuba"),
+}
+
+
+def delete_conversations_by_contact_names(names: list[str] | None = None) -> dict:
+    """Apaga conversas cujo nome bate com a lista (ex.: Luiz / Skoob)."""
+    if names:
+        keys = {_normalize_contact_key(n) for n in names if _normalize_contact_key(n)}
+    else:
+        keys = set(UNWANTED_INBOX_CONTACT_KEYS)
+
+    removed_ids: list[str] = []
+    removed_names: list[str] = []
+    with _lock, _session() as db:
+        rows = db.query(AttendanceConversation).all()
+        for row in rows:
+            name_key = _normalize_contact_key(row.contact_name or "")
+            if not name_key or name_key not in keys:
+                continue
+            removed_ids.append(row.id)
+            removed_names.append(row.contact_name or row.phone_e164 or row.id)
+            db.query(AttendanceMessage).filter(
+                AttendanceMessage.conversation_id == row.id
+            ).delete(synchronize_session=False)
+            db.delete(row)
+    if removed_ids:
+        logger.info(
+            "Removidas %s conversas pedidas: %s (%s)",
+            len(removed_ids),
+            removed_ids,
+            removed_names,
+        )
+        _notify({"type": "named_conversations_deleted", "count": len(removed_ids), "ids": removed_ids})
     return {"removed": len(removed_ids), "ids": removed_ids, "names": removed_names}
 
 
@@ -231,7 +280,7 @@ def list_conversations(
     status: str = "",
     limit: int = 100,
 ) -> list[dict]:
-    from app.services.evolution_client import conversation_looks_like_group
+    from app.services.evolution_client import is_whatsapp_group_jid
 
     with _session(commit=False) as db:
         q = db.query(AttendanceConversation)
@@ -262,11 +311,10 @@ def list_conversations(
         )
         conversations = []
         for row in rows:
-            if conversation_looks_like_group(
-                remote_jid=row.remote_jid or "",
-                phone_e164=row.phone_e164 or "",
-                contact_name=row.contact_name or "",
-            ):
+            if is_whatsapp_group_jid(row.remote_jid or "") or is_whatsapp_group_jid(row.phone_e164 or ""):
+                continue
+            name_key = _normalize_contact_key(row.contact_name or "")
+            if name_key in UNWANTED_INBOX_CONTACT_KEYS:
                 continue
             conversations.append(_conversation_to_dict(row))
         return conversations
@@ -281,16 +329,14 @@ def upsert_conversation_by_phone(
     status: str | None = None,
     remote_jid: str = "",
 ) -> dict:
-    from app.services.evolution_client import conversation_looks_like_group, is_whatsapp_group_jid
+    from app.services.evolution_client import is_whatsapp_group_jid
 
     phone = normalize_text(phone_e164)
     remote_jid = normalize_text(remote_jid)
     contact_name = normalize_text(contact_name)
-    if conversation_looks_like_group(
-        remote_jid=remote_jid,
-        phone_e164=phone,
-        contact_name=contact_name,
-    ) or is_whatsapp_group_jid(phone) or is_whatsapp_group_jid(remote_jid):
+    if is_whatsapp_group_jid(phone) or is_whatsapp_group_jid(remote_jid):
+        return {}
+    if _normalize_contact_key(contact_name) in UNWANTED_INBOX_CONTACT_KEYS:
         return {}
     if not phone:
         raise ValueError("Telefone obrigatório")

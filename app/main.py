@@ -136,6 +136,10 @@ async def startup_maintenance() -> None:
 
                 purged = purge_group_conversations()
                 log.info("Attendance group purge: %s", purged)
+                from app.services.attendances_storage import delete_conversations_by_contact_names
+
+                named = delete_conversations_by_contact_names()
+                log.info("Attendance named delete: %s", named)
             except Exception as purge_error:
                 log.error("Attendance group purge: %s", purge_error)
         except Exception as error:
