@@ -70,11 +70,6 @@
   }
 
   function openActivityPanel(card) {
-    var href = card.getAttribute("data-cadastro-href") || "";
-    if (href) {
-      window.location.href = href;
-      return;
-    }
     if (typeof window.activitySelectCard === "function") {
       window.activitySelectCard(card);
     }

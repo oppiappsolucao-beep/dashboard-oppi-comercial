@@ -1,6 +1,6 @@
 <article
   class="activities-kanban-card sla-{{ card.sla_class }}"
-  title="{{ card.title }} · {{ card.vendedor }} · Arraste para mover · Clique para abrir o cadastro"
+  title="{{ card.title }} · {{ card.vendedor }} · Arraste para mover · Clique para abrir o histórico"
   data-activity-id="{{ card.id }}"
   data-current-stage="{{ card.stage }}"
   data-cadastro-href="{% if card.sheet_row %}/cadastro/todos/{{ card.sheet_row }}/editar?from=activities{% endif %}"
