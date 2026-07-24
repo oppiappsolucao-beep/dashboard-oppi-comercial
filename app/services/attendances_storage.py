@@ -285,7 +285,10 @@ def list_conversations(
     with _session(commit=False) as db:
         q = db.query(AttendanceConversation)
         if status and status != "todos":
-            q = q.filter(AttendanceConversation.status == status)
+            if status == "abertos":
+                q = q.filter(AttendanceConversation.status != STATUS_FINALIZADO)
+            else:
+                q = q.filter(AttendanceConversation.status == status)
         search_norm = normalize_text(search).lower()
         if search_norm:
             like = f"%{search_norm}%"

@@ -113,6 +113,8 @@ def _serialize_user(raw: dict) -> dict:
     role = _normalize_role(raw.get("role", "Vendedor"))
     active = bool(raw.get("active", True))
     last_access = normalize_text(raw.get("last_access", ""))
+    department_id = normalize_text(raw.get("department_id", raw.get("sector_id", "")))
+    department_name = normalize_text(raw.get("department_name", raw.get("sector_name", "")))
     return {
         "id": normalize_text(raw.get("id", "")) or str(uuid.uuid4()),
         "name": _normalize_name(raw.get("name", "")),
@@ -124,6 +126,8 @@ def _serialize_user(raw: dict) -> dict:
         "active": active,
         "status_label": "Ativo" if active else "Inativo",
         "status_class": "active" if active else "blocked",
+        "department_id": department_id,
+        "department_name": department_name,
         "last_access": last_access,
         "created_at": normalize_text(raw.get("created_at", "")) or _now_iso(),
         "updated_at": normalize_text(raw.get("updated_at", "")) or _now_iso(),
@@ -165,6 +169,8 @@ def _save_to_file(users: list[dict]) -> None:
             "password_hash": user["password_hash"],
             "role": user["role"],
             "active": user["active"],
+            "department_id": user.get("department_id", ""),
+            "department_name": user.get("department_name", ""),
             "last_access": user.get("last_access", ""),
             "created_at": user.get("created_at", _now_iso()),
             "updated_at": user.get("updated_at", _now_iso()),
@@ -421,12 +427,14 @@ def create_account_user(
     password: str,
     role: str,
     active: bool = True,
+    department_id: str | int | None = None,
 ) -> dict:
     users = load_account_users()
     clean_name = _normalize_name(name)
     clean_email = _normalize_email(email)
     clean_username = _normalize_username(username)
     clean_role = _normalize_role(role)
+    dept_id, dept_name = _resolve_department(department_id)
 
     if clean_email and any(user["email"] == clean_email for user in users):
         raise ValueError("Já existe um usuário com este e-mail.")
@@ -441,6 +449,8 @@ def create_account_user(
         "password_hash": _hash_password(password),
         "role": clean_role,
         "active": active,
+        "department_id": dept_id,
+        "department_name": dept_name,
         "last_access": "",
         "created_at": _now_iso(),
         "updated_at": _now_iso(),
@@ -453,10 +463,31 @@ def create_account_user(
         except Exception as error:
             if not _save_to_sheet(users):
                 raise RuntimeError(f"Não foi possível salvar o usuário na planilha: {error}") from error
+    try:
+        from app.services.sectors import assign_user_to_sector
+
+        assign_user_to_sector(user["id"], dept_id or None)
+    except Exception:
+        logger.exception("Falha ao vincular usuário ao setor")
     with _lock:
         global _cache
         _cache = users
     return dict(user)
+
+
+def _resolve_department(department_id: str | int | None) -> tuple[str, str]:
+    raw = normalize_text(department_id)
+    if not raw:
+        return "", ""
+    try:
+        from app.services.sectors import get_sector
+
+        sector = get_sector(raw)
+    except Exception:
+        sector = None
+    if not sector:
+        raise ValueError("Selecione um departamento válido.")
+    return str(sector["id"]), normalize_text(sector.get("name"))
 
 
 def update_account_user(
@@ -468,12 +499,14 @@ def update_account_user(
     role: str,
     active: bool,
     password: str | None = None,
+    department_id: str | int | None = None,
 ) -> dict:
     users = load_account_users()
     clean_name = _normalize_name(name)
     clean_email = _normalize_email(email)
     clean_username = _normalize_username(username)
     clean_role = _normalize_role(role)
+    dept_id, dept_name = _resolve_department(department_id)
 
     index = next((idx for idx, user in enumerate(users) if user["id"] == user_id), None)
     if index is None:
@@ -494,6 +527,8 @@ def update_account_user(
         "active": bool(active),
         "status_label": "Ativo" if active else "Inativo",
         "status_class": "active" if active else "blocked",
+        "department_id": dept_id,
+        "department_name": dept_name,
         "updated_at": _now_iso(),
     })
     if password and password.strip():
@@ -501,6 +536,12 @@ def update_account_user(
 
     users[index] = current
     _persist_users(users)
+    try:
+        from app.services.sectors import assign_user_to_sector
+
+        assign_user_to_sector(current["id"], dept_id or None)
+    except Exception:
+        logger.exception("Falha ao vincular usuário ao setor")
     with _lock:
         global _cache
         _cache = users

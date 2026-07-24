@@ -31,7 +31,8 @@ def _username(request: Request) -> str:
 def _filters(request: Request, form: dict | None = None) -> tuple[str, str, str]:
     data = form or {}
     search = normalize_text(data.get("search") or request.query_params.get("search", ""))
-    status = normalize_text(data.get("status") or request.query_params.get("status", "todos")) or "todos"
+    # Padrão: só abertos (finalizados saem da fila)
+    status = normalize_text(data.get("status") or request.query_params.get("status", "abertos")) or "abertos"
     selected = normalize_text(
         data.get("conversation_id") or request.query_params.get("c", "")
     )

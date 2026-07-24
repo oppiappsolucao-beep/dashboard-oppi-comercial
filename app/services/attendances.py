@@ -83,8 +83,11 @@ def page_context(
         "messages": messages,
         "crm": crm,
         "search": search,
-        "status_filter": status or "todos",
-        "status_options": [("todos", "Todos")] + store.STATUS_OPTIONS,
+        "status_filter": status or "abertos",
+        "status_options": [
+            ("abertos", "Em aberto"),
+            ("todos", "Todos"),
+        ] + store.STATUS_OPTIONS,
         "evolution_configured": settings.evolution_configured,
         "unread_total": store.count_unread(),
         "flash": flash,

@@ -7,16 +7,36 @@
   <div class="proposals-quick-form-title">Montar proposta</div>
 
   <label class="proposals-quick-field">
-    <span>Empresa (cadastro)</span>
+    <span>Buscar empresa cadastrada</span>
     <input
-      type="text"
-      name="empresa"
-      list="proposals-company-options"
-      placeholder="Nome da empresa"
-      value="{{ pending_company or '' }}"
-      required
+      type="search"
+      id="proposals-company-search"
+      class="proposals-company-search"
+      placeholder="Digite para filtrar…"
       autocomplete="off"
+      {% if pending_company %}disabled{% endif %}
     >
+  </label>
+
+  <label class="proposals-quick-field">
+    <span>Empresa (cadastro)</span>
+    <select
+      name="empresa"
+      id="proposals-company-select"
+      class="proposals-company-select"
+      required
+      size="8"
+      {% if pending_company %}disabled{% endif %}
+    >
+      <option value="" disabled {% if not pending_company %}selected{% endif %}>Selecione a empresa…</option>
+      {% for company in company_options %}
+      <option value="{{ company }}" {% if pending_company == company %}selected{% endif %}>{{ company }}</option>
+      {% endfor %}
+    </select>
+    {% if pending_company %}
+    <input type="hidden" name="empresa" value="{{ pending_company }}">
+    <small class="proposals-quick-hint">Empresa selecionada: <strong>{{ pending_company }}</strong></small>
+    {% endif %}
   </label>
 
   {% if pending_company %}
@@ -33,12 +53,25 @@
   <button type="submit" class="btn proposals-quick-form-btn">Gerar proposta</button>
   {% else %}
   <button type="submit" class="btn proposals-quick-form-btn">Continuar</button>
-  <small class="proposals-quick-hint">Depois eu peço a descrição dos serviços.</small>
+  <small class="proposals-quick-hint">Selecione a empresa na lista (use a busca acima).</small>
   {% endif %}
 </form>
 
-<datalist id="proposals-company-options">
-  {% for company in company_options %}
-  <option value="{{ company }}"></option>
-  {% endfor %}
-</datalist>
+<script>
+(function () {
+  var search = document.getElementById("proposals-company-search");
+  var select = document.getElementById("proposals-company-select");
+  if (!search || !select || search.disabled) return;
+  search.addEventListener("input", function () {
+    var q = (search.value || "").trim().toLowerCase();
+    Array.prototype.forEach.call(select.options, function (opt, idx) {
+      if (idx === 0 && !opt.value) {
+        opt.hidden = false;
+        return;
+      }
+      var label = (opt.textContent || "").toLowerCase();
+      opt.hidden = q ? label.indexOf(q) === -1 : false;
+    });
+  });
+})();
+</script>

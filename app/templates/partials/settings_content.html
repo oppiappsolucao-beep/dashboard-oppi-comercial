@@ -85,6 +85,18 @@
         </select>
       </div>
       <div class="settings-goals-field">
+        <label for="user-department">Departamento</label>
+        <select id="user-department" name="department_id">
+          <option value="">Selecione</option>
+          {% for sector in sector_options or [] %}
+          <option value="{{ sector.id }}"
+            {% if users_table.edit_user and users_table.edit_user.department_id == sector.id|string %}selected{% endif %}>
+            {{ sector.name }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="settings-goals-field">
         <label for="user-password">
           Senha
           {% if users_table.edit_user and not users_table.edit_user.is_new_access %}
@@ -222,7 +234,7 @@
 <div class="settings-goals-layout settings-services-tab">
   <div class="panel settings-single-card">
     <div class="section-heading">Setores</div>
-    <div class="section-subtitle">Vincule usuários responsáveis a cada setor. Usado em Atendimentos e cadastro.</div>
+    <div class="section-subtitle">Setores padrão: Suporte, Comercial, Financeiro e Todos. Cadastre outros abaixo e vincule usuários. Usado em Atendimentos e no departamento do usuário.</div>
     {% if sector_success %}<div class="settings-alert success">{{ sector_success }}</div>{% endif %}
     {% if sector_error %}<div class="settings-alert error">{{ sector_error }}</div>{% endif %}
     {% if is_admin %}
@@ -230,7 +242,7 @@
       <input type="hidden" name="tab" value="setores">
       <label>
         <span class="settings-company-label">Nome do setor</span>
-        <input type="text" name="sector_name" placeholder="Ex.: Comercial" required maxlength="120">
+        <input type="text" name="sector_name" placeholder="Ex.: Operações" required maxlength="120">
       </label>
       <label>
         <span class="settings-company-label">Responsáveis (usuários)</span>
@@ -258,7 +270,7 @@
       {% if is_admin %}
       <form method="post" action="/configuracoes/setores/editar" class="settings-goals-form" style="flex:2;min-width:220px">
         <input type="hidden" name="sector_id" value="{{ sector.id }}">
-        <input type="text" name="sector_name" value="{{ sector.name }}" required>
+        <input type="text" name="sector_name" value="{{ sector.name }}" required {% if sector.is_system %}readonly title="Setor padrão — nome fixo"{% endif %}>
         <select name="user_ids" multiple size="4" style="width:100%;margin-top:6px">
           {% for user in account_users_options %}
           <option value="{{ user.id }}" {% if user.id in sector.user_ids %}selected{% endif %}>{{ user.name }}</option>
@@ -268,7 +280,7 @@
       </form>
       <form method="post" action="/configuracoes/setores/remover" onsubmit="return confirm('Remover este setor?');">
         <input type="hidden" name="sector_id" value="{{ sector.id }}">
-        <button type="submit" class="settings-link-btn danger">Remover</button>
+        <button type="submit" class="settings-link-btn danger" {% if sector.is_system %}disabled title="Setor padrão — não pode remover"{% endif %}>Remover</button>
       </form>
       {% endif %}
     </div>
@@ -318,6 +330,7 @@
                 <th>Nome</th>
                 <th>E-mail</th>
                 <th>Perfil</th>
+                <th>Departamento</th>
                 <th>Status</th>
                 <th>Último acesso</th>
                 <th>Origem</th>
@@ -335,6 +348,7 @@
                 </td>
                 <td>{{ row.email }}</td>
                 <td><span class="settings-role-badge {{ row.role_class }}">{{ row.role }}</span></td>
+                <td>{{ row.department_name or '—' }}</td>
                 <td><span class="settings-status-badge {{ row.status_class }}">{{ row.status_label }}</span></td>
                 <td>{{ row.last_access }}</td>
                 <td>{{ row.source_label }}</td>

@@ -103,6 +103,7 @@ def _settings_context(request: Request, settings_params: dict):
         "services": build_services_list(),
         "niches": niches_rows,
         "sectors": sectors_rows,
+        "sector_options": [{"id": s["id"], "name": s["name"]} for s in sectors_rows if s.get("active", True)],
         "account_users_options": account_users_options,
         "permissions": build_permissions(_get_permissions(request)),
         "integrations": integrations,
@@ -442,6 +443,7 @@ async def settings_add_user(
     password: str = Form(...),
     role: str = Form("Vendedor"),
     active: str = Form("1"),
+    department_id: str = Form(""),
     tab: str = Form("usuarios"),
 ):
     redirect = require_auth(request)
@@ -462,6 +464,7 @@ async def settings_add_user(
             password=password,
             role=role,
             active=active == "1",
+            department_id=department_id,
         )
         request.session["settings_user_success"] = "Usuário cadastrado com sucesso."
     except ValueError as error:
@@ -482,6 +485,7 @@ async def settings_edit_user(
     password: str = Form(""),
     role: str = Form("Vendedor"),
     active: str = Form("1"),
+    department_id: str = Form(""),
     tab: str = Form("usuarios"),
 ):
     redirect = require_auth(request)
@@ -505,6 +509,7 @@ async def settings_edit_user(
                 password=password,
                 role=role,
                 active=active == "1",
+                department_id=department_id,
             )
             request.session["settings_user_success"] = "Acesso cadastrado com sucesso."
         else:
@@ -516,6 +521,7 @@ async def settings_edit_user(
                 role=role,
                 active=active == "1",
                 password=password or None,
+                department_id=department_id,
             )
             request.session["settings_user_success"] = "Usuário atualizado com sucesso."
     except ValueError as error:

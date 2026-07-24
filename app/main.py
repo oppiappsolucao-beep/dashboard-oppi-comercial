@@ -125,10 +125,12 @@ async def startup_maintenance() -> None:
                 migrate_attendance_from_sqlite_if_needed,
             )
             from app.services.niches import ensure_default_niches
+            from app.services.sectors import ensure_default_sectors
 
             Base.metadata.create_all(bind=engine)
             ensure_attendance_schema_columns()
             ensure_default_niches()
+            ensure_default_sectors()
             migrate_info = migrate_attendance_from_sqlite_if_needed()
             log.info("Attendance DB migrate: %s", migrate_info)
             try:

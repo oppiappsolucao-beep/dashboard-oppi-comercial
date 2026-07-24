@@ -269,8 +269,18 @@
 }
 
 .proposals-quick-field input,
-.proposals-quick-field select {
+.proposals-quick-field select:not([size]) {
   height: 36px;
+}
+
+.proposals-quick-field select[size] {
+  height: auto;
+  min-height: 160px;
+  padding: 6px 4px;
+}
+
+.proposals-company-search {
+  margin-bottom: 0;
 }
 
 .proposals-quick-field textarea {

@@ -159,6 +159,8 @@ def _build_users_from_sheet(df: pd.DataFrame, app_username: str) -> list[dict]:
             "can_delete": True,
             "active": stored["active"],
             "source_label": "Conta",
+            "department_id": str(stored.get("department_id") or ""),
+            "department_name": stored.get("department_name") or "—",
         })
         seen_emails.add(stored["email"].lower())
         seen_names.add(stored["name"].lower())
@@ -404,6 +406,19 @@ def build_users_table(
                 **edit_user,
                 "is_new_access": not edit_user["id"].startswith("__"),
             }
+        if edit_user and edit_user.get("managed"):
+            try:
+                from app.services.account_users import get_account_user_by_id
+
+                managed = get_account_user_by_id(edit_user["id"])
+                if managed:
+                    edit_user = {
+                        **edit_user,
+                        "department_id": str(managed.get("department_id") or ""),
+                        "department_name": managed.get("department_name") or "",
+                    }
+            except Exception:
+                pass
 
     return {
         "rows": rows,

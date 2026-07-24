@@ -12,6 +12,15 @@ from app.services.legacy_core import normalize_text
 from database.connection import SessionLocal
 from database.models import CrmSector
 
+DEFAULT_SECTORS = [
+    "Suporte",
+    "Comercial",
+    "Financeiro",
+    "Todos",
+]
+
+SYSTEM_SECTOR_NAMES = {name.strip().lower() for name in DEFAULT_SECTORS}
+
 
 def _now_iso() -> str:
     return datetime.now(ZoneInfo("America/Sao_Paulo")).replace(tzinfo=None).isoformat(timespec="seconds")
@@ -64,6 +73,7 @@ def _sector_to_dict(row: CrmSector, users_map: dict[str, dict] | None = None) ->
         "id": row.id,
         "name": row.name,
         "active": bool(row.active),
+        "is_system": normalize_text(row.name).lower() in SYSTEM_SECTOR_NAMES,
         "user_ids": user_ids,
         "users": users,
         "users_label": ", ".join(u["name"] for u in users) or "—",
@@ -73,7 +83,39 @@ def _sector_to_dict(row: CrmSector, users_map: dict[str, dict] | None = None) ->
     }
 
 
+def ensure_default_sectors() -> None:
+    """Garante setores padrão no Postgres (Suporte, Comercial, Financeiro, Todos)."""
+    db = SessionLocal()
+    try:
+        existing = {
+            normalize_text(row.name).lower()
+            for row in db.query(CrmSector).all()
+            if normalize_text(row.name)
+        }
+        now = _now_iso()
+        created = False
+        for name in DEFAULT_SECTORS:
+            key = name.lower()
+            if key in existing:
+                continue
+            db.add(
+                CrmSector(
+                    name=name,
+                    active=True,
+                    user_ids_json="[]",
+                    created_at=now,
+                    updated_at=now,
+                )
+            )
+            created = True
+        if created:
+            db.commit()
+    finally:
+        db.close()
+
+
 def list_sectors(*, active_only: bool = True) -> list[dict]:
+    ensure_default_sectors()
     db = SessionLocal()
     try:
         q = db.query(CrmSector)
@@ -178,6 +220,11 @@ def update_sector(
             clean = normalize_text(name)
             if not clean:
                 raise ValueError("Informe o nome do setor.")
+            if (
+                normalize_text(row.name).lower() in SYSTEM_SECTOR_NAMES
+                and clean.lower() != normalize_text(row.name).lower()
+            ):
+                raise ValueError("O nome dos setores padrão não pode ser alterado.")
             row.name = clean
         if user_ids is not None:
             row.user_ids_json = json.dumps(_parse_user_ids(user_ids), ensure_ascii=False)
@@ -205,7 +252,53 @@ def delete_sector(sector_id: int | str) -> None:
         row = db.get(CrmSector, sid)
         if not row:
             raise ValueError("Setor não encontrado.")
+        if normalize_text(row.name).lower() in SYSTEM_SECTOR_NAMES:
+            raise ValueError("Este setor padrão não pode ser removido.")
         db.delete(row)
         db.commit()
     finally:
         db.close()
+
+
+def assign_user_to_sector(user_id: str, sector_id: int | str | None) -> None:
+    """Atualiza o vínculo usuário↔setor (um departamento principal por usuário)."""
+    uid = normalize_text(user_id)
+    if not uid:
+        return
+    ensure_default_sectors()
+    db = SessionLocal()
+    try:
+        target_id = None
+        if sector_id not in (None, ""):
+            try:
+                target_id = int(sector_id)
+            except (TypeError, ValueError) as error:
+                raise ValueError("Departamento inválido.") from error
+
+        rows = db.query(CrmSector).all()
+        now = _now_iso()
+        for row in rows:
+            ids = _parse_user_ids(row.user_ids_json)
+            if target_id is not None and row.id == target_id:
+                if uid not in ids:
+                    ids.append(uid)
+                    row.user_ids_json = json.dumps(ids, ensure_ascii=False)
+                    row.updated_at = now
+                continue
+            if uid in ids:
+                ids = [item for item in ids if item != uid]
+                row.user_ids_json = json.dumps(ids, ensure_ascii=False)
+                row.updated_at = now
+        db.commit()
+    finally:
+        db.close()
+
+
+def sector_id_for_user(user_id: str) -> int | None:
+    uid = normalize_text(user_id)
+    if not uid:
+        return None
+    for sector in list_sectors(active_only=False):
+        if uid in (sector.get("user_ids") or []):
+            return int(sector["id"])
+    return None
