@@ -239,6 +239,8 @@ def is_whatsapp_group_jid(value: str) -> bool:
         return False
     if "@lid" in text:
         return False
+    if text.startswith("wa:"):
+        return False
     if "@g.us" in text or text.endswith("@broadcast") or "status@broadcast" in text:
         return True
     # ID numérico típico de grupo (ex.: 1203630...), sem ser celular BR (55…)
@@ -311,6 +313,10 @@ def resolve_contact_identity(key: dict | None, item: dict | None = None) -> tupl
         key.get("senderPn")
         or item.get("senderPn")
         or item.get("sender")
+        or key.get("participantPn")
+        or item.get("participantPn")
+        or item.get("cleanedNumber")
+        or key.get("cleanedNumber")
         or ""
     )
 
@@ -473,6 +479,71 @@ def _dig_chat_jid(chat: dict) -> str:
     last = chat.get("lastMessage") if isinstance(chat.get("lastMessage"), dict) else {}
     key = last.get("key") if isinstance(last.get("key"), dict) else {}
     return normalize_text(key.get("remoteJid") or "")
+
+
+def fetch_recent_chats(*, limit: int = 40) -> list[dict]:
+    """Lista chats 1:1 recentes da Evolution (para puxar conversas que o webhook perdeu)."""
+    if not is_configured():
+        return []
+    limit = max(1, min(int(limit or 40), 80))
+    last_error = ""
+    for url in _instance_urls("/chat/findChats"):
+        try:
+            response = requests.get(url, headers=_headers(), timeout=12)
+        except requests.RequestException as error:
+            last_error = str(error)
+            continue
+        data = _parse_json(response)
+        if response.status_code >= 400:
+            last_error = _response_looks_like_error(data) or response.text[:200]
+            continue
+        chats = data if isinstance(data, list) else (
+            data.get("data") or data.get("chats") or data.get("response") or []
+        )
+        if not isinstance(chats, list):
+            continue
+        out: list[dict] = []
+        for chat in chats:
+            if not isinstance(chat, dict):
+                continue
+            cid = normalize_text(
+                chat.get("id")
+                or chat.get("remoteJid")
+                or _dig_chat_jid(chat)
+                or ""
+            )
+            if not cid or is_whatsapp_group_jid(cid):
+                continue
+            name = normalize_text(
+                chat.get("pushName")
+                or chat.get("name")
+                or chat.get("notify")
+                or ""
+            )
+            alt = normalize_text(
+                chat.get("remoteJidAlt")
+                or chat.get("owner")
+                or ""
+            )
+            phone = ""
+            for candidate in (alt, cid):
+                if not candidate or "@lid" in candidate.lower():
+                    continue
+                digits = normalize_phone_from_jid(candidate)
+                if digits and len(digits) >= 10 and not is_whatsapp_group_jid(digits):
+                    phone = digits
+                    break
+            out.append({
+                "remote_jid": cid,
+                "phone_e164": phone,
+                "contact_name": name,
+            })
+            if len(out) >= limit:
+                break
+        return out
+    if last_error:
+        logger.warning("findChats falhou: %s", last_error)
+    return []
 
 
 def get_connection_state() -> str:

@@ -46,6 +46,12 @@ def page_context(
     except Exception:
         logger.exception("Falha ao limpar conversas indesejadas da inbox")
 
+    # Compensa webhook perdido: puxa chats recentes sem bloquear a tela
+    try:
+        schedule_sync_inbox_from_evolution(force=False)
+    except Exception:
+        logger.exception("Falha ao agendar sync inbox Evolution")
+
     effective_sector, scope = _resolve_sector_filter(session_user, sector_filter)
     conversations = store.list_conversations(
         search=search,
@@ -406,6 +412,72 @@ _SYNC_LAST_AT: dict[str, float] = {}
 _SYNC_MIN_INTERVAL_SEC = 30.0
 _SYNC_IN_FLIGHT: set[str] = set()
 _SYNC_GUARD = threading.Lock()
+
+
+_INBOX_SYNC_LAST = 0.0
+_INBOX_SYNC_MIN_INTERVAL_SEC = 45.0
+_INBOX_SYNC_LOCK = threading.Lock()
+
+
+def schedule_sync_inbox_from_evolution(*, force: bool = False) -> None:
+    """Importa chats recentes da Evolution em background (contatos que o webhook perdeu)."""
+
+    def _run() -> None:
+        try:
+            sync_inbox_from_evolution(force=force)
+        except Exception:
+            logger.exception("Sync inbox Evolution falhou")
+
+    threading.Thread(target=_run, daemon=True, name="evo-inbox-sync").start()
+
+
+def sync_inbox_from_evolution(*, force: bool = False, limit: int = 40) -> int:
+    import time
+
+    global _INBOX_SYNC_LAST
+    with _INBOX_SYNC_LOCK:
+        now = time.monotonic()
+        if not force and (now - _INBOX_SYNC_LAST) < _INBOX_SYNC_MIN_INTERVAL_SEC:
+            return 0
+        _INBOX_SYNC_LAST = now
+
+    if not settings.evolution_configured:
+        return 0
+
+    try:
+        chats = evolution_client.fetch_recent_chats(limit=limit)
+    except Exception:
+        logger.exception("fetch_recent_chats falhou")
+        return 0
+
+    imported = 0
+    for chat in chats:
+        remote_jid = normalize_text(chat.get("remote_jid") or "")
+        phone = normalize_text(chat.get("phone_e164") or "")
+        name = normalize_text(chat.get("contact_name") or "")
+        if not remote_jid:
+            continue
+        try:
+            if phone:
+                conversation = store.upsert_conversation_by_phone(
+                    phone,
+                    contact_name=name,
+                    remote_jid=remote_jid,
+                )
+            else:
+                conversation = store.upsert_conversation_by_remote_jid(
+                    remote_jid,
+                    contact_name=name,
+                    phone_e164=phone,
+                )
+            if not conversation:
+                continue
+            # Puxa mensagens recentes desse chat (já tem throttle por conversa)
+            sync_messages_from_evolution(conversation["id"], limit=15, force=False)
+            imported += 1
+        except Exception:
+            logger.exception("Falha ao importar chat %s", remote_jid)
+    return imported
 
 
 def schedule_sync_messages_from_evolution(

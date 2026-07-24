@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-APP_BUILD = os.getenv("APP_BUILD", "20260724-webhook-nonblock-v42").strip() or "20260724-webhook-nonblock-v42"
+APP_BUILD = os.getenv("APP_BUILD", "20260724-inbox-lid-create-v43").strip() or "20260724-inbox-lid-create-v43"
 
 
 class Settings:

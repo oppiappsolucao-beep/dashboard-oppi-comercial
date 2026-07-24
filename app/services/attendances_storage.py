@@ -12,7 +12,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
 
-from app.services.legacy_core import normalize_text
+from app.services.legacy_core import normalize_digits, normalize_text
 from database.connection import SessionLocal
 from database.models import AttendanceConversation, AttendanceMessage
 
@@ -194,6 +194,76 @@ def get_conversation_by_remote_jid(remote_jid: str) -> dict | None:
         return _conversation_to_dict(row) if row else None
 
 
+def upsert_conversation_by_remote_jid(
+    remote_jid: str,
+    *,
+    contact_name: str = "",
+    phone_e164: str = "",
+) -> dict:
+    """Cria/atualiza conversa a partir do JID — cobre contato novo que só chega como @lid."""
+    from app.services.evolution_client import is_whatsapp_group_jid, normalize_phone_from_jid
+
+    remote_jid = normalize_text(remote_jid)
+    contact_name = normalize_text(contact_name)
+    phone = normalize_text(phone_e164)
+    # Nunca derive telefone a partir de @lid (vira número inventado enorme)
+    if not phone and remote_jid and "@lid" not in remote_jid.lower():
+        phone = normalize_phone_from_jid(remote_jid)
+    if not remote_jid or is_whatsapp_group_jid(remote_jid):
+        return {}
+    if phone and is_whatsapp_group_jid(phone):
+        phone = ""
+    if _normalize_contact_key(contact_name) in UNWANTED_INBOX_CONTACT_KEYS:
+        return {}
+
+    if phone and len(normalize_digits(phone)) >= 10 and len(normalize_digits(phone)) <= 15:
+        return upsert_conversation_by_phone(
+            phone,
+            contact_name=contact_name,
+            remote_jid=remote_jid,
+        )
+
+    existing = get_conversation_by_remote_jid(remote_jid)
+    if existing:
+        updates: dict = {}
+        if contact_name and not normalize_text(existing.get("contact_name") or ""):
+            updates["contact_name"] = contact_name
+        if updates:
+            return update_conversation(existing["id"], **updates) or existing
+        return existing
+
+    # Placeholder estável (não parece id de grupo) para satisfazer NOT NULL
+    placeholder = f"wa:{normalize_digits(remote_jid.split('@', 1)[0])[-16:]}" or f"wa:{_new_id('p')}"
+    now = _now_iso()
+    with _lock, _session() as db:
+        conversation_id = _new_id("c_")
+        row = AttendanceConversation(
+            id=conversation_id,
+            phone_e164=placeholder,
+            contact_name=contact_name or "WhatsApp",
+            profile_pic_url="",
+            sheet_row=None,
+            status=STATUS_NOVO_LEAD,
+            assignee="",
+            ai_mode=AI_MODE_ON,
+            tags_json="[]",
+            notes="",
+            last_message_at="",
+            last_message_preview="",
+            unread_count=0,
+            typing=False,
+            remote_jid=remote_jid,
+            sector_id=None,
+            sector_name="",
+            created_at=now,
+            updated_at=now,
+        )
+        db.add(row)
+        result = _conversation_to_dict(row)
+    _notify({"type": "conversation_upsert", "conversation_id": conversation_id})
+    return result
+
+
 def purge_group_conversations() -> dict:
     """Apaga do banco só conversas de grupo WhatsApp reais (@g.us / broadcast / id)."""
     from app.services.evolution_client import is_whatsapp_group_jid
@@ -314,7 +384,13 @@ def list_conversations(
             except (TypeError, ValueError):
                 sid = None
             if sid is not None:
-                q = q.filter(AttendanceConversation.sector_id == sid)
+                # Inclui sem setor (chegou pelo WhatsApp e ainda não foi direcionado)
+                q = q.filter(
+                    or_(
+                        AttendanceConversation.sector_id == sid,
+                        AttendanceConversation.sector_id.is_(None),
+                    )
+                )
         search_norm = normalize_text(search).lower()
         if search_norm:
             like = f"%{search_norm}%"

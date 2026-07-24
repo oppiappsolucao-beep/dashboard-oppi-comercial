@@ -170,7 +170,11 @@ def ingest_evolution_message_item(item: dict, *, push_name: str = "") -> bool:
             remote_jid=remote_jid,
         )
     if not conversation and remote_jid:
-        conversation = store.get_conversation_by_remote_jid(remote_jid)
+        conversation = store.upsert_conversation_by_remote_jid(
+            remote_jid,
+            contact_name=name,
+            phone_e164=phone,
+        )
     if not conversation:
         return False
 
@@ -233,13 +237,11 @@ def _handle_messages_upsert(payload: dict) -> int:
                 remote_jid=remote_jid,
             )
         if not conversation and remote_jid:
-            conversation = store.get_conversation_by_remote_jid(remote_jid)
-            if conversation and phone and conversation.get("phone_e164") != phone:
-                conversation = store.upsert_conversation_by_phone(
-                    phone,
-                    contact_name=push_name or conversation.get("contact_name", ""),
-                    remote_jid=remote_jid,
-                )
+            conversation = store.upsert_conversation_by_remote_jid(
+                remote_jid,
+                contact_name=push_name,
+                phone_e164=phone,
+            )
         if not conversation:
             logger.info(
                 "webhook drop no_conversation phone=%s jid=%s from_me=%s",
