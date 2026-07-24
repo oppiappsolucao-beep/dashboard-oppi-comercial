@@ -714,6 +714,22 @@ a { color: inherit; text-decoration: none; }
   margin-bottom: 14px;
 }
 
+.funnel-leads-filters {
+  margin: 0 0 14px;
+  box-shadow: none;
+}
+
+.funnel-leads-filters .filters-row-main {
+  overflow-x: auto;
+  flex-wrap: nowrap;
+  padding-bottom: 2px;
+}
+
+.funnel-leads-filters .filter-field-sm {
+  min-width: 140px;
+  flex: 0 0 auto;
+}
+
 .funnel-leads-toolbar {
   display: flex;
   align-items: center;

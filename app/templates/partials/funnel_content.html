@@ -5,77 +5,6 @@
 >
   <input type="hidden" name="page" value="{{ leads_table.page }}" id="funnel-page-input">
 
-  <div class="toolbar-card">
-    <div class="filters-row filters-row-main">
-      <div class="filter-field filter-field-sm">
-        <label>Vendedor</label>
-        <select name="seller" onchange="document.getElementById('funnel-page-input').value='1'; document.getElementById('funnel-filters').requestSubmit()">
-          <option value="Todos os vendedores">Todos os vendedores</option>
-          {% for seller in options.seller_options %}
-          <option value="{{ seller }}" {% if filters.seller == seller %}selected{% endif %}>{{ seller }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="filter-field filter-field-sm">
-        <label>Status</label>
-        <select name="status" onchange="document.getElementById('funnel-page-input').value='1'; document.getElementById('funnel-filters').requestSubmit()">
-          <option value="Todos os status">Todos os status</option>
-          {% for status in options.status_options %}
-          <option value="{{ status }}" {% if filters.status == status %}selected{% endif %}>{{ status }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="filter-field filter-field-sm">
-        <label>Etapa</label>
-        <select name="stage" onchange="document.getElementById('funnel-page-input').value='1'; document.getElementById('funnel-filters').requestSubmit()">
-          {% for stage in stage_options %}
-          <option value="{{ stage }}" {% if funnel_params.stage == stage %}selected{% endif %}>{{ stage }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="filter-field filter-field-sm">
-        <label>Período início</label>
-        <input type="date" name="period_start" value="{{ filters.period_start.isoformat() if filters.period_start else '' }}" onchange="document.getElementById('funnel-page-input').value='1'; document.getElementById('funnel-filters').requestSubmit()">
-      </div>
-      <div class="filter-field filter-field-sm">
-        <label>Período fim</label>
-        <input type="date" name="period_end" value="{{ filters.period_end.isoformat() if filters.period_end else '' }}" onchange="document.getElementById('funnel-page-input').value='1'; document.getElementById('funnel-filters').requestSubmit()">
-      </div>
-      <div class="filter-field filter-field-sm">
-        <label>Nichos</label>
-        <select name="niche" onchange="document.getElementById('funnel-page-input').value='1'; document.getElementById('funnel-filters').requestSubmit()">
-          <option value="Todos os nichos">Todos os nichos</option>
-          {% for niche in options.niche_options %}
-          <option value="{{ niche }}" {% if filters.niche == niche %}selected{% endif %}>{{ niche }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="filter-field filter-field-sm">
-        <label>Estados</label>
-        <select name="state" onchange="document.getElementById('funnel-page-input').value='1'; document.getElementById('funnel-filters').requestSubmit()">
-          <option value="Todos os estados">Todos os estados</option>
-          {% for state in options.state_options %}
-          <option value="{{ state }}" {% if filters.state == state %}selected{% endif %}>{{ state }}</option>
-          {% endfor %}
-        </select>
-      </div>
-    </div>
-    <div class="filters-row filters-row-search">
-      <div class="filter-field filter-field-search">
-        <label>Buscar</label>
-        <div class="search-wrap">
-          <span class="search-icon">⌕</span>
-          <input type="text" name="search" value="{{ filters.search }}" placeholder="Buscar leads..."
-            hx-trigger="keyup changed delay:400ms"
-            hx-post="/funil-de-vendas/filtros"
-            hx-target="#funnel-root"
-            hx-swap="innerHTML"
-            hx-include="#funnel-filters">
-        </div>
-      </div>
-    </div>
-  </div>
-
   <div class="funnel-kpi-grid">
     {% for card in kpi_cards %}
     <div class="funnel-kpi-card panel">
@@ -181,6 +110,77 @@
           <option value="name" {% if funnel_params.sort == 'name' %}selected{% endif %}>Nome</option>
           <option value="value" {% if funnel_params.sort == 'value' %}selected{% endif %}>Maior valor</option>
         </select>
+      </div>
+    </div>
+
+    <div class="toolbar-card funnel-leads-filters">
+      <div class="filters-row filters-row-main">
+        <div class="filter-field filter-field-sm">
+          <label>Vendedor</label>
+          <select name="seller" onchange="document.getElementById('funnel-page-input').value='1'; document.getElementById('funnel-filters').requestSubmit()">
+            <option value="Todos os vendedores">Todos os vendedores</option>
+            {% for seller in options.seller_options %}
+            <option value="{{ seller }}" {% if filters.seller == seller %}selected{% endif %}>{{ seller }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="filter-field filter-field-sm">
+          <label>Status</label>
+          <select name="status" onchange="document.getElementById('funnel-page-input').value='1'; document.getElementById('funnel-filters').requestSubmit()">
+            <option value="Todos os status">Todos os status</option>
+            {% for status in options.status_options %}
+            <option value="{{ status }}" {% if filters.status == status %}selected{% endif %}>{{ status }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="filter-field filter-field-sm">
+          <label>Etapa</label>
+          <select name="stage" onchange="document.getElementById('funnel-page-input').value='1'; document.getElementById('funnel-filters').requestSubmit()">
+            {% for stage in stage_options %}
+            <option value="{{ stage }}" {% if funnel_params.stage == stage %}selected{% endif %}>{{ stage }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="filter-field filter-field-sm">
+          <label>Período início</label>
+          <input type="date" name="period_start" value="{{ filters.period_start.isoformat() if filters.period_start else '' }}" onchange="document.getElementById('funnel-page-input').value='1'; document.getElementById('funnel-filters').requestSubmit()">
+        </div>
+        <div class="filter-field filter-field-sm">
+          <label>Período fim</label>
+          <input type="date" name="period_end" value="{{ filters.period_end.isoformat() if filters.period_end else '' }}" onchange="document.getElementById('funnel-page-input').value='1'; document.getElementById('funnel-filters').requestSubmit()">
+        </div>
+        <div class="filter-field filter-field-sm">
+          <label>Nichos</label>
+          <select name="niche" onchange="document.getElementById('funnel-page-input').value='1'; document.getElementById('funnel-filters').requestSubmit()">
+            <option value="Todos os nichos">Todos os nichos</option>
+            {% for niche in options.niche_options %}
+            <option value="{{ niche }}" {% if filters.niche == niche %}selected{% endif %}>{{ niche }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="filter-field filter-field-sm">
+          <label>Estados</label>
+          <select name="state" onchange="document.getElementById('funnel-page-input').value='1'; document.getElementById('funnel-filters').requestSubmit()">
+            <option value="Todos os estados">Todos os estados</option>
+            {% for state in options.state_options %}
+            <option value="{{ state }}" {% if filters.state == state %}selected{% endif %}>{{ state }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <div class="filters-row filters-row-search">
+        <div class="filter-field filter-field-search">
+          <label>Buscar</label>
+          <div class="search-wrap">
+            <span class="search-icon">⌕</span>
+            <input type="text" name="search" value="{{ filters.search }}" placeholder="Buscar leads..."
+              hx-trigger="keyup changed delay:400ms"
+              hx-post="/funil-de-vendas/filtros"
+              hx-target="#funnel-root"
+              hx-swap="innerHTML"
+              hx-include="#funnel-filters">
+          </div>
+        </div>
       </div>
     </div>
 
