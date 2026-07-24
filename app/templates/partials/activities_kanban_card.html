@@ -34,12 +34,4 @@
     {% endif %}
     <span>{{ card.sla_label }}</span>
   </div>
-  {% if card.sheet_row %}
-  <div class="activities-kanban-card-actions">
-    <a href="/cadastro/todos/{{ card.sheet_row }}/editar?from=activities"
-      class="btn btn-small btn-secondary activities-kanban-card-ver"
-      draggable="false"
-      onclick="event.stopPropagation()">Ver</a>
-  </div>
-  {% endif %}
 </article>
