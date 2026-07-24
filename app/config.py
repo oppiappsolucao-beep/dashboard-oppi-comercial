@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-APP_BUILD = os.getenv("APP_BUILD", "20260724-nicho-select-only-v46").strip() or "20260724-nicho-select-only-v46"
+APP_BUILD = os.getenv("APP_BUILD", "20260724-activity-link-fix-v47").strip() or "20260724-activity-link-fix-v47"
 
 
 class Settings:

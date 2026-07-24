@@ -112,43 +112,30 @@ def _empresa_match_key(value: str) -> str:
 
 
 def _resolve_sheet_row_for_activity(activity: dict, df: pd.DataFrame) -> int:
-    """Resolve o cadastro da atividade priorizando o nome da empresa.
+    """Resolve o cadastro da atividade.
 
-    Se o sheet_row gravado aponta para outro cliente, corrige pelo nome
-    para o botão Abrir cadastro não abrir o registro errado.
+    O sheet_row gravado na atividade é a fonte da verdade do clique/Ver.
+    Só tenta casar por nome quando não há vínculo — e só se o nome for único,
+    para não abrir o cadastro de outra empresa.
     """
     stored = int(activity.get("sheet_row") or 0)
-    empresa = normalize_text(activity.get("empresa"))
-    empresa_key = _empresa_match_key(empresa)
-
-    if df.empty or "_sheet_row" not in df.columns:
+    if stored:
+        # Mantém o vínculo mesmo se o cadastro estiver fora do DataFrame filtrado
+        # (ex.: filtro de vendedor). Nunca remapeia por nome: isso abria outra empresa.
         return stored
 
-    def _match_by_empresa() -> int:
-        if not empresa_key or "_empresa" not in df.columns:
-            return 0
-        keys = df["_empresa"].map(lambda value: _empresa_match_key(str(value)))
-        matches = df[keys == empresa_key]
-        if matches.empty:
-            return 0
-        matches = matches.sort_values("_sheet_row", ascending=False)
-        return int(matches.iloc[0]["_sheet_row"] or 0)
+    if df.empty or "_sheet_row" not in df.columns or "_empresa" not in df.columns:
+        return 0
 
-    if stored:
-        row_match = df[df["_sheet_row"].astype(int) == int(stored)]
-        if not row_match.empty:
-            row_empresa = normalize_text(row_match.iloc[0].get("_empresa", ""))
-            if not empresa_key or _empresa_match_key(row_empresa) == empresa_key:
-                return stored
-            # sheet_row gravado pertence a outro cliente — resolve pelo nome
-            resolved = _match_by_empresa()
-            return resolved or stored
-        # sheet_row fora do dataframe: tenta pelo nome antes de confiar no valor
-        resolved = _match_by_empresa()
-        return resolved or stored
+    empresa_key = _empresa_match_key(activity.get("empresa"))
+    if not empresa_key:
+        return 0
 
-    return _match_by_empresa()
-
+    keys = df["_empresa"].map(lambda value: _empresa_match_key(str(value)))
+    matches = df[keys == empresa_key]
+    if len(matches) != 1:
+        return 0
+    return int(matches.iloc[0]["_sheet_row"] or 0)
 
 def _status_for_pipeline_stage(stage: str) -> str:
     normalized_stage = normalize_legacy_stage(stage) or normalize_text(stage) or "Novo Lead"
@@ -607,9 +594,10 @@ def buscar_atividades(
                 if activity_day > period_end and not (period_end >= today and activity_day > today):
                     continue
         serialized = _serialize_activity(record, tenant_id)
-        resolved_row = _resolve_sheet_row_for_activity(serialized, filtered_df)
         stored_row = int(serialized.get("sheet_row") or 0)
-        if resolved_row and resolved_row != stored_row:
+        resolved_row = _resolve_sheet_row_for_activity(serialized, filtered_df)
+        # Só grava vínculo novo quando a atividade ainda não tinha sheet_row
+        if resolved_row and not stored_row:
             save_activity(
                 tenant_id,
                 record.get("id"),
@@ -621,7 +609,6 @@ def buscar_atividades(
                 sync_pipeline=False,
             )
             serialized["sheet_row"] = resolved_row
-            # Recalcula tipo após corrigir o vínculo
             try:
                 from app.services.registration import resolve_cadastro_tipo
 
@@ -632,6 +619,13 @@ def buscar_atividades(
                 pass
         elif resolved_row:
             serialized["sheet_row"] = resolved_row
+        # Exibe o nome do cadastro vinculado (o que o clique abre), não um nome antigo/errado
+        if resolved_row and not filtered_df.empty and "_sheet_row" in filtered_df.columns:
+            row_match = filtered_df[filtered_df["_sheet_row"].astype(int) == int(resolved_row)]
+            if not row_match.empty:
+                cadastro_empresa = normalize_text(row_match.iloc[0].get("_empresa", ""))
+                if cadastro_empresa:
+                    serialized["empresa"] = cadastro_empresa
         if search:
             blob = " | ".join([
                 serialized["title"],
@@ -1513,8 +1507,8 @@ def build_activity_detail_panel(
     stored_sheet_row = int(activity.get("sheet_row") or 0)
     sheet_row = _resolve_sheet_row_for_activity(activity, df)
     activity["sheet_row"] = sheet_row
-    # Corrige vínculo persistido quando o sheet_row aponta para outro cliente
-    if sheet_row and sheet_row != stored_sheet_row:
+    # Só vincula automaticamente quando a atividade ainda não tinha sheet_row
+    if sheet_row and not stored_sheet_row:
         save_activity(
             tenant_id,
             activity_id,
@@ -1531,7 +1525,6 @@ def build_activity_detail_panel(
         if not row_match.empty:
             lead = _lead_record(row_match.iloc[0], columns, tenant_id)
             lead_created_at = lead.get("created_at")
-            # Garante que o nome exibido no painel bate com o cadastro aberto
             lead_empresa = normalize_text(lead.get("empresa"))
             if lead_empresa:
                 activity["empresa"] = lead_empresa
