@@ -250,8 +250,7 @@
     }
   });
 
-  // Fonte da verdade do texto digitado (NÃO usar ta.value no envio —
-  // Windows/Chrome troca "olá"→"óleo" no blur e no insertReplacementText).
+  // Fonte da verdade do texto digitado (Windows/Chrome: "olá"→"óleo").
   var composerRaw = new WeakMap();
 
   function composerForm(el) {
@@ -274,8 +273,16 @@
     return text;
   }
 
-  function syncSnapFromRaw(form) {
-    return setComposerRaw(form, getComposerRaw(form));
+  function textForSend(form) {
+    if (!form) return "";
+    var raw = getComposerRaw(form);
+    var ta = form.querySelector(".att-composer-input");
+    var visible = (ta && ta.value) || "";
+    // Se o buffer ficou vazio por algum motivo, usa o que está na tela
+    var value = String(raw).length ? raw : visible;
+    setComposerRaw(form, value);
+    if (ta && ta.value !== value) ta.value = value;
+    return value;
   }
 
   function bindComposerGuards(root) {
@@ -288,16 +295,15 @@
       ta.setAttribute("autocapitalize", "off");
       ta.setAttribute("autocomplete", "off");
       ta.setAttribute("lang", "zxx");
+      ta.readOnly = false;
 
       var form = composerForm(ta);
       if (form && !composerRaw.has(form)) {
         setComposerRaw(form, ta.value || "");
       }
 
-      // Bloqueia autocorreção do SO/navegador (olá → óleo)
       ta.addEventListener("beforeinput", function (ev) {
-        var type = ev.inputType || "";
-        if (type === "insertReplacementText") {
+        if ((ev.inputType || "") === "insertReplacementText") {
           ev.preventDefault();
         }
       });
@@ -306,12 +312,10 @@
         autoGrow(ta);
         var f = composerForm(ta);
         if (!f) return;
-        var type = (ev && ev.inputType) || "";
-        if (type === "insertReplacementText") {
+        if ((ev.inputType || "") === "insertReplacementText") {
           ta.value = getComposerRaw(f);
           return;
         }
-        // Correção do Windows no blur: o campo já perdeu o foco — ignora e reverte
         if (document.activeElement !== ta) {
           ta.value = getComposerRaw(f);
           return;
@@ -319,29 +323,43 @@
         setComposerRaw(f, ta.value || "");
       });
 
-      // Se o SO corrigir no blur, reverte para o que foi digitado
       ta.addEventListener("blur", function () {
         var f = composerForm(ta);
         if (!f) return;
         var raw = getComposerRaw(f);
-        if (ta.value !== raw) {
-          ta.value = raw;
-        }
+        if (ta.value !== raw) ta.value = raw;
+        ta.readOnly = false;
       });
     });
   }
 
   bindComposerGuards(document);
 
-  // Evita blur no textarea ao clicar Enviar (blur dispara autocorrect do Windows)
+  // No mousedown: congela o texto e evita autocorrect no blur.
+  // NÃO usar preventDefault aqui — no Chrome isso cancela o click/submit.
   document.addEventListener(
     "mousedown",
     function (ev) {
       var btn = ev.target && ev.target.closest ? ev.target.closest(".att-send-btn") : null;
-      if (!btn) return;
-      ev.preventDefault();
+      if (!btn || btn.disabled) return;
       var form = btn.closest("form");
-      syncSnapFromRaw(form);
+      if (!form) return;
+      var value = textForSend(form);
+      var ta = form.querySelector(".att-composer-input");
+      if (ta) {
+        ta.value = value;
+        ta.readOnly = true;
+      }
+    },
+    true
+  );
+
+  document.addEventListener(
+    "mouseup",
+    function () {
+      document.querySelectorAll(".att-composer-input").forEach(function (ta) {
+        if (ta.readOnly) ta.readOnly = false;
+      });
     },
     true
   );
@@ -354,7 +372,7 @@
       if (ev.key !== "Enter" || ev.shiftKey) return;
       ev.preventDefault();
       var form = ta.closest("form");
-      var value = syncSnapFromRaw(form);
+      var value = textForSend(form);
       if (!String(value).trim()) return;
       if (form && window.htmx) {
         window.htmx.trigger(form, "submit");
@@ -370,7 +388,7 @@
     if (!form) return;
     var path = (ev.detail && ev.detail.path) || "";
     if (path.indexOf("/enviar") === -1) return;
-    var value = syncSnapFromRaw(form);
+    var value = textForSend(form);
     if (ev.detail && ev.detail.parameters) {
       ev.detail.parameters.text = value;
     }
@@ -384,7 +402,7 @@
     var fd = new FormData();
     fd.append("file", input.files[0]);
     var form = $(".att-composer");
-    var caption = form ? getComposerRaw(form) : "";
+    var caption = form ? textForSend(form) : "";
     if (caption) fd.append("caption", caption);
     fetch("/atendimentos/conversa/" + encodeURIComponent(id) + "/midia", {
       method: "POST",
