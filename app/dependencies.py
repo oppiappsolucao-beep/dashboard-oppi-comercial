@@ -5,11 +5,14 @@ import pandas as pd
 from app.config import settings
 from app.services.legacy_core import (
     PricingSessionStore,
+    ensure_sheet_refresh_if_stale,
+    get_cached_prepared_data,
     identify_columns,
     invalidate_sheet_cache,
     load_sheet_data,
     normalize_text,
     prepare_data,
+    set_cached_prepared_data,
     set_pricing_store,
 )
 
@@ -26,9 +29,15 @@ def get_prepared_data(refresh: bool = False):
     """Carrega a planilha com cache. Nunca derruba a tela por limite 429."""
     if refresh:
         invalidate_sheet_cache()
+    else:
+        cached = get_cached_prepared_data()
+        if cached is not None:
+            # Navegação rápida: serve memória e atualiza planilha em background se TTL caiu.
+            ensure_sheet_refresh_if_stale()
+            return cached
 
     try:
-        df = load_sheet_data()
+        df = load_sheet_data(force_refresh=refresh)
     except Exception:
         return pd.DataFrame(), {}
 
@@ -49,15 +58,20 @@ def get_prepared_data(refresh: bool = False):
         except Exception:
             pass
         if prepared.empty:
+            set_cached_prepared_data(pd.DataFrame(), columns)
             return pd.DataFrame(), columns
-        return prepared, columns or identify_columns(prepared)
+        columns = columns or identify_columns(prepared)
+        set_cached_prepared_data(prepared, columns)
+        return prepared, columns
     except Exception:
         try:
             from app.services.pending_companies import merge_pending_companies_into_df
 
             pending_only = merge_pending_companies_into_df(pd.DataFrame())
             if not pending_only.empty:
-                return pending_only, identify_columns(pending_only)
+                columns = identify_columns(pending_only)
+                set_cached_prepared_data(pending_only, columns)
+                return pending_only, columns
         except Exception:
             pass
         return pd.DataFrame(), {}

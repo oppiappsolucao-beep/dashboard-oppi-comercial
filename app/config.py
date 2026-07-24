@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-APP_BUILD = os.getenv("APP_BUILD", "20260724-startup-v17").strip() or "20260724-startup-v17"
+APP_BUILD = os.getenv("APP_BUILD", "20260724-nav-cache-v18").strip() or "20260724-nav-cache-v18"
 
 
 class Settings:

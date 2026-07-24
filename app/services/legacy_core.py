@@ -3,8 +3,10 @@ import base64
 import html
 import io
 import json
+import logging
 import os
 import re
+import threading
 import unicodedata
 import uuid
 from datetime import date, datetime, timedelta
@@ -23,6 +25,32 @@ _sheet_cache: TTLCache = TTLCache(maxsize=1, ttl=max(60, settings.cache_ttl_seco
 _sheet_last_good = None
 _sheet_last_good_values: list[list[str]] | None = None
 _gsheet_client = None
+_prepared_cache_df = None
+_prepared_cache_columns: dict | None = None
+_sheet_refresh_lock = threading.Lock()
+_sheet_refresh_running = False
+_log = logging.getLogger(__name__)
+
+
+def invalidate_prepared_cache() -> None:
+    """Descarta o dataframe já preparado (força reprocessamento no próximo request)."""
+    global _prepared_cache_df, _prepared_cache_columns
+    _prepared_cache_df = None
+    _prepared_cache_columns = None
+
+
+def get_cached_prepared_data():
+    """Retorna cópia do dataframe preparado em memória, se existir."""
+    if _prepared_cache_df is None:
+        return None
+    return _prepared_cache_df.copy(), dict(_prepared_cache_columns or {})
+
+
+def set_cached_prepared_data(df: pd.DataFrame, columns: dict) -> None:
+    """Guarda o dataframe preparado para navegação rápida entre abas."""
+    global _prepared_cache_df, _prepared_cache_columns
+    _prepared_cache_df = df.copy() if df is not None else pd.DataFrame()
+    _prepared_cache_columns = dict(columns or {})
 
 
 def invalidate_sheet_cache() -> None:
@@ -30,6 +58,7 @@ def invalidate_sheet_cache() -> None:
     global _gsheet_client
     _sheet_cache.clear()
     _gsheet_client = None
+    invalidate_prepared_cache()
     try:
         from app.services.sheet_read_cache import invalidate_worksheet_cache
 
@@ -1104,6 +1133,16 @@ def _dataframe_from_sheet_values(values: list[list[str]]) -> pd.DataFrame:
     return df.reset_index(drop=True)
 
 
+def ensure_sheet_refresh_if_stale() -> None:
+    """Se o TTL da planilha expirou, dispara refresh em background (não bloqueia)."""
+    if "sheet_data" in _sheet_cache:
+        return
+    if _sheet_last_good is None:
+        hydrate_sheet_cache_from_disk()
+    if _sheet_last_good is not None:
+        _schedule_sheet_refresh()
+
+
 def hydrate_sheet_cache_from_disk() -> bool:
     """Recarrega a última Folha1 salva em disco (sobrevive a rebuild)."""
     global _sheet_last_good, _sheet_last_good_values
@@ -1123,50 +1162,115 @@ def hydrate_sheet_cache_from_disk() -> bool:
     return not result.empty
 
 
-def load_sheet_data() -> pd.DataFrame:
+def _fetch_sheet_from_api() -> pd.DataFrame:
+    """Busca a planilha na API Google e atualiza caches/snapshot."""
     global _sheet_last_good, _sheet_last_good_values
     cache_key = "sheet_data"
-    if cache_key in _sheet_cache:
+    client = get_gsheet_client()
+    try:
+        spreadsheet = client.open_by_key(settings.sheet_id)
+    except SpreadsheetNotFound as error:
+        raise RuntimeError(
+            f"Planilha não encontrada (ID: {settings.sheet_id}). "
+            "Verifique se a conta de serviço tem acesso à planilha."
+        ) from error
+
+    worksheet = _open_worksheet(spreadsheet, settings.worksheet_name)
+    values = worksheet.get_all_values()
+
+    if not values:
+        if _sheet_last_good is not None:
+            _sheet_cache[cache_key] = _sheet_last_good.copy()
+            return _sheet_last_good.copy()
+        empty = pd.DataFrame()
+        _sheet_cache[cache_key] = empty.copy()
+        return empty
+
+    result = _dataframe_from_sheet_values(values)
+    _sheet_cache[cache_key] = result.copy()
+    _sheet_last_good = result.copy()
+    _sheet_last_good_values = [row[:] for row in values]
+    _save_folha1_snapshot(values)
+    invalidate_prepared_cache()
+    try:
+        from app.services.pending_companies import remember_sheet_headers
+
+        remember_sheet_headers(list(values[0]))
+    except Exception:
+        pass
+    return result
+
+
+def _warm_prepared_cache(df: pd.DataFrame) -> None:
+    """Reprocessa e guarda o dataframe preparado após refresh da planilha."""
+    try:
+        if df is None or df.empty:
+            set_cached_prepared_data(pd.DataFrame(), {})
+            return
+        columns = identify_columns(df)
+        prepared = prepare_data(df, columns)
+        if not prepared.empty and "_empresa" in prepared.columns:
+            prepared = prepared[
+                prepared["_empresa"].apply(lambda value: normalize_text(value) != "")
+            ].copy()
+        try:
+            from app.services.pending_companies import merge_pending_companies_into_df
+
+            prepared = merge_pending_companies_into_df(prepared)
+        except Exception:
+            pass
+        if prepared.empty:
+            set_cached_prepared_data(pd.DataFrame(), columns)
+            return
+        set_cached_prepared_data(prepared, columns or identify_columns(prepared))
+    except Exception as error:
+        _log.warning("Falha ao aquecer cache preparado: %s", error)
+
+
+def _schedule_sheet_refresh() -> None:
+    """Atualiza a planilha em background sem bloquear a navegação."""
+    global _sheet_refresh_running
+    with _sheet_refresh_lock:
+        if _sheet_refresh_running:
+            return
+        _sheet_refresh_running = True
+
+    def _worker() -> None:
+        global _sheet_refresh_running
+        try:
+            df = _fetch_sheet_from_api()
+            _warm_prepared_cache(df)
+        except Exception as error:
+            _log.warning("Refresh assíncrono da planilha falhou: %s", error)
+        finally:
+            with _sheet_refresh_lock:
+                _sheet_refresh_running = False
+
+    threading.Thread(target=_worker, name="sheet-refresh", daemon=True).start()
+
+
+def load_sheet_data(*, force_refresh: bool = False) -> pd.DataFrame:
+    """Carrega a planilha. Em navegação normal usa cache e atualiza em background."""
+    global _sheet_last_good, _sheet_last_good_values
+    cache_key = "sheet_data"
+    if not force_refresh and cache_key in _sheet_cache:
         return _sheet_cache[cache_key].copy()
 
     # Após rebuild, a memória vem vazia — recupera snapshot do disco antes da API.
     if _sheet_last_good is None:
         hydrate_sheet_cache_from_disk()
-        if cache_key in _sheet_cache:
+        if not force_refresh and cache_key in _sheet_cache:
+            _schedule_sheet_refresh()
             return _sheet_cache[cache_key].copy()
 
+    # Stale-while-revalidate: não espera Google ao trocar de aba.
+    if not force_refresh and _sheet_last_good is not None:
+        _sheet_cache[cache_key] = _sheet_last_good.copy()
+        _schedule_sheet_refresh()
+        return _sheet_last_good.copy()
+
     try:
-        client = get_gsheet_client()
-        try:
-            spreadsheet = client.open_by_key(settings.sheet_id)
-        except SpreadsheetNotFound as error:
-            raise RuntimeError(
-                f"Planilha não encontrada (ID: {settings.sheet_id}). "
-                "Verifique se a conta de serviço tem acesso à planilha."
-            ) from error
-
-        worksheet = _open_worksheet(spreadsheet, settings.worksheet_name)
-        values = worksheet.get_all_values()
-
-        if not values:
-            if _sheet_last_good is not None:
-                return _sheet_last_good.copy()
-            empty = pd.DataFrame()
-            _sheet_cache[cache_key] = empty.copy()
-            return empty
-
-        result = _dataframe_from_sheet_values(values)
-        _sheet_cache[cache_key] = result.copy()
-        _sheet_last_good = result.copy()
-        _sheet_last_good_values = [row[:] for row in values]
-        _save_folha1_snapshot(values)
-        try:
-            from app.services.pending_companies import remember_sheet_headers
-
-            remember_sheet_headers(list(values[0]))
-        except Exception:
-            pass
-        return result
+        return _fetch_sheet_from_api()
     except Exception as error:
         message = str(error)
         if _sheet_last_good is not None:
