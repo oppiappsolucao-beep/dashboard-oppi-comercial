@@ -122,6 +122,10 @@ async def attendances_filters(request: Request):
 @router.get("/atendimentos/conversa/{conversation_id}", response_class=HTMLResponse)
 def attendances_conversation(request: Request, conversation_id: str):
     require_auth(request)
+    try:
+        attendances_service.sync_messages_from_evolution(conversation_id, limit=40, force=True)
+    except Exception:
+        pass
     ctx = _page_ctx(request, selected_id=conversation_id)
     if not ctx.get("selected"):
         return HTMLResponse("<div class='att-empty'>Conversa não encontrada.</div>", status_code=404)
@@ -287,6 +291,12 @@ def attendances_sync(request: Request, conversation_id: str = ""):
     """Poll leve baseado no SQLite — mensagens novas aparecem sem F5."""
     require_auth(request)
     try:
+        # Compensa webhook perdido: a cada poll da conversa aberta, tenta puxar do Evolution
+        if conversation_id:
+            try:
+                attendances_service.sync_messages_from_evolution(conversation_id, limit=20)
+            except Exception:
+                pass
         return JSONResponse(store.get_sync_snapshot(conversation_id))
     except Exception:
         return JSONResponse(

@@ -199,6 +199,21 @@ def extract_message_id(response: dict | None) -> str:
     return ""
 
 
+def phone_match_variants(phone: str) -> list[str]:
+    """Variantes BR com/sem o 9º dígito — evita conversa duplicada e miss de match."""
+    digits = normalize_digits(phone)
+    if not digits:
+        return []
+    if not digits.startswith("55") and len(digits) >= 10:
+        digits = f"55{digits}"
+    variants = [digits]
+    if digits.startswith("55") and len(digits) == 13 and digits[4] == "9":
+        variants.append(digits[:4] + digits[5:])
+    elif digits.startswith("55") and len(digits) == 12:
+        variants.append(digits[:4] + "9" + digits[4:])
+    return list(dict.fromkeys(v for v in variants if v))
+
+
 def normalize_phone_from_jid(jid: str) -> str:
     raw = normalize_text(jid)
     if "@" in raw:
@@ -480,6 +495,43 @@ def get_connection_state() -> str:
     if last_error:
         logger.warning("connectionState falhou: %s", last_error)
     return ""
+
+
+def find_messages(remote_jid: str, *, limit: int = 30) -> list[dict]:
+    """Busca mensagens recentes no Evolution (fallback quando o webhook falha)."""
+    jid = normalize_text(remote_jid)
+    if not jid or not is_configured():
+        return []
+    payload = {
+        "where": {"key": {"remoteJid": jid}},
+        "page": 1,
+        "offset": max(1, min(int(limit or 30), 80)),
+    }
+    last_error = ""
+    for url in _instance_urls("/chat/findMessages"):
+        try:
+            response = requests.post(url, headers=_headers(), json=payload, timeout=20)
+        except requests.RequestException as error:
+            last_error = str(error)
+            continue
+        data = _parse_json(response)
+        if response.status_code >= 400:
+            last_error = _response_looks_like_error(data) or response.text[:200]
+            continue
+        records: list = []
+        if isinstance(data.get("messages"), dict):
+            records = data["messages"].get("records") or []
+        elif isinstance(data.get("messages"), list):
+            records = data["messages"]
+        elif isinstance(data.get("data"), list):
+            records = data["data"]
+        elif isinstance(data, list):
+            records = data
+        if isinstance(records, list):
+            return [item for item in records if isinstance(item, dict)]
+    if last_error:
+        logger.warning("findMessages falhou para %s: %s", jid, last_error)
+    return []
 
 
 def assert_instance_ready() -> None:

@@ -2,13 +2,14 @@
 from __future__ import annotations
 
 import logging
+import threading
 from typing import Any
 
 from fastapi import APIRouter, Header, Query, Request
 from fastapi.responses import JSONResponse
 
 from app.config import settings
-from app.services import attendance_crm, attendances, attendances_storage as store
+from app.services import attendances, attendances_storage as store
 from app.services.evolution_client import (
     is_whatsapp_group_jid,
     message_looks_like_group,
@@ -123,14 +124,69 @@ def _iter_upsert_messages(payload: dict) -> list[dict]:
     if isinstance(data, dict):
         if "messages" in data:
             return [m for m in _as_list(data.get("messages")) if isinstance(m, dict)]
+        # Alguns payloads aninham em data.message / data.key
         if "key" in data or "message" in data:
             return [data]
+        nested = data.get("message")
+        if isinstance(nested, dict) and (nested.get("key") or nested.get("message")):
+            return [nested]
     if isinstance(data, list):
         return [m for m in data if isinstance(m, dict)]
     # formato plano
     if payload.get("key") or payload.get("message"):
         return [payload]
     return []
+
+
+def ingest_evolution_message_item(item: dict, *, push_name: str = "") -> bool:
+    """Persiste um item no formato Evolution (webhook ou findMessages). Retorna True se salvou."""
+    if not isinstance(item, dict):
+        return False
+    key = item.get("key") if isinstance(item.get("key"), dict) else {}
+    if message_looks_like_group(key, item):
+        return False
+    phone, remote_jid = resolve_contact_identity(key, item)
+    if not remote_jid:
+        return False
+    if is_whatsapp_group_jid(remote_jid) or (phone and is_whatsapp_group_jid(phone)):
+        return False
+
+    from_me = bool(key.get("fromMe") or item.get("fromMe"))
+    name = normalize_text(
+        push_name
+        or item.get("pushName")
+        or ""
+    )
+    msg_type, body, media_url, media_mime, media_filename = _message_type_and_body(item)
+    if not body and not media_url and msg_type == "text":
+        return False
+
+    evolution_id = normalize_text(key.get("id") or item.get("id") or "")
+    conversation = None
+    if phone:
+        conversation = store.upsert_conversation_by_phone(
+            phone,
+            contact_name=name,
+            remote_jid=remote_jid,
+        )
+    if not conversation and remote_jid:
+        conversation = store.get_conversation_by_remote_jid(remote_jid)
+    if not conversation:
+        return False
+
+    store.add_message(
+        conversation["id"],
+        direction="out" if from_me else "in",
+        body=body or (f"[{msg_type}]" if msg_type != "text" else ""),
+        msg_type=msg_type,
+        media_url=media_url,
+        media_mime=media_mime,
+        media_filename=media_filename,
+        evolution_id=evolution_id,
+        sender="agent" if from_me else "contact",
+        bump_unread=not from_me,
+    )
+    return True
 
 
 def _handle_messages_upsert(payload: dict) -> int:
@@ -193,11 +249,9 @@ def _handle_messages_upsert(payload: dict) -> int:
             )
             continue
 
-        # CRM bridge
-        conversation = attendances.ensure_crm_link(conversation, contact_name=push_name)
-
         direction = "out" if from_me else "in"
         sender = "agent" if from_me else "contact"
+        # Grava a mensagem ANTES de CRM/IA — webhook não pode travar na planilha Google
         store.add_message(
             conversation["id"],
             direction=direction,
@@ -212,11 +266,24 @@ def _handle_messages_upsert(payload: dict) -> int:
         )
         count += 1
 
-        if not from_me and body:
+        conversation_id = conversation["id"]
+        inbound_body = body if (not from_me and body) else ""
+
+        def _post_save(
+            conv_id: str = conversation_id,
+            name: str = push_name,
+            reply_text: str = inbound_body,
+        ) -> None:
             try:
-                attendances.maybe_ai_reply(conversation["id"], body)
+                current = store.get_conversation(conv_id)
+                if current:
+                    attendances.ensure_crm_link(current, contact_name=name)
+                if reply_text:
+                    attendances.maybe_ai_reply(conv_id, reply_text)
             except Exception:
-                logger.exception("Falha ao processar IA para conversa %s", conversation["id"])
+                logger.exception("Falha pós-save webhook conversa %s", conv_id)
+
+        threading.Thread(target=_post_save, daemon=True, name=f"wh-post-{conversation_id[:8]}").start()
     return count
 
 

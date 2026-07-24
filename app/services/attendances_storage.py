@@ -163,13 +163,16 @@ def get_conversation(conversation_id: str) -> dict | None:
 
 
 def get_conversation_by_phone(phone_e164: str) -> dict | None:
+    from app.services.evolution_client import phone_match_variants
+
     phone = normalize_text(phone_e164)
     if not phone:
         return None
+    variants = phone_match_variants(phone) or [phone]
     with _session(commit=False) as db:
         row = (
             db.query(AttendanceConversation)
-            .filter(AttendanceConversation.phone_e164 == phone)
+            .filter(AttendanceConversation.phone_e164.in_(variants))
             .order_by(AttendanceConversation.updated_at.desc())
             .first()
         )
@@ -355,7 +358,7 @@ def upsert_conversation_by_phone(
     status: str | None = None,
     remote_jid: str = "",
 ) -> dict:
-    from app.services.evolution_client import is_whatsapp_group_jid
+    from app.services.evolution_client import is_whatsapp_group_jid, phone_match_variants
 
     phone = normalize_text(phone_e164)
     remote_jid = normalize_text(remote_jid)
@@ -368,11 +371,12 @@ def upsert_conversation_by_phone(
         raise ValueError("Telefone obrigatório")
     now = _now_iso()
     remote_jid = normalize_text(remote_jid)
+    phone_variants = phone_match_variants(phone) or [phone]
 
     with _lock, _session() as db:
         existing = (
             db.query(AttendanceConversation)
-            .filter(AttendanceConversation.phone_e164 == phone)
+            .filter(AttendanceConversation.phone_e164.in_(phone_variants))
             .order_by(AttendanceConversation.updated_at.desc())
             .first()
         )

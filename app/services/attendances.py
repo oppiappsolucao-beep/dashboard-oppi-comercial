@@ -401,6 +401,73 @@ def maybe_ai_reply(conversation_id: str, inbound_text: str) -> None:
         logger.info("IA respondeu na conversa %s", conversation_id)
 
 
+_SYNC_LAST_AT: dict[str, float] = {}
+_SYNC_MIN_INTERVAL_SEC = 12.0
+
+
+def sync_messages_from_evolution(
+    conversation_id: str,
+    *,
+    limit: int = 30,
+    force: bool = False,
+) -> int:
+    """Puxa mensagens do Evolution para a conversa (compensa webhook perdido/travado)."""
+    import time
+
+    conversation_id = normalize_text(conversation_id)
+    if not conversation_id:
+        return 0
+    now = time.monotonic()
+    last = _SYNC_LAST_AT.get(conversation_id, 0.0)
+    if not force and (now - last) < _SYNC_MIN_INTERVAL_SEC:
+        return 0
+    _SYNC_LAST_AT[conversation_id] = now
+
+    conversation = store.get_conversation(conversation_id)
+    if not conversation or not settings.evolution_configured:
+        return 0
+
+    targets: list[str] = []
+    remote = normalize_text(conversation.get("remote_jid") or "")
+    phone = normalize_text(conversation.get("phone_e164") or "")
+    if remote:
+        targets.append(remote)
+    if phone:
+        targets.append(f"{phone}@s.whatsapp.net")
+        try:
+            from app.services.evolution_client import phone_match_variants
+
+            for variant in phone_match_variants(phone):
+                targets.append(f"{variant}@s.whatsapp.net")
+        except Exception:
+            pass
+    targets = list(dict.fromkeys(t for t in targets if t))
+    if not targets:
+        return 0
+
+    from app.routers.evolution_webhook import ingest_evolution_message_item
+
+    imported = 0
+    for jid in targets:
+        try:
+            records = evolution_client.find_messages(jid, limit=limit)
+        except Exception:
+            logger.exception("findMessages falhou para %s", jid)
+            continue
+        for item in records:
+            try:
+                if ingest_evolution_message_item(
+                    item,
+                    push_name=conversation.get("contact_name") or "",
+                ):
+                    imported += 1
+            except Exception:
+                logger.exception("Falha ao importar mensagem Evolution")
+        if imported:
+            break
+    return imported
+
+
 def update_notes_tags(
     conversation_id: str,
     *,
