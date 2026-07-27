@@ -774,7 +774,7 @@ def handle_proposal_chat_message(
         })
         return chat_messages, None, pending_company, None
 
-    // —— Etapa 2: serviços / quantidade de colaboradores ——
+    # Etapa 2: servicos / quantidade de colaboradores
     if step in ("", "ask_collaborators", "pick_company") or step == "ask_collaborators":
         count = (
             parse_collaborators_count(colaboradores)
