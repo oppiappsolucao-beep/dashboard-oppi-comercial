@@ -1,5 +1,6 @@
 """Propostas — KPIs, tabela e chat derivados da planilha comercial."""
 import html
+import json
 import re
 from dataclasses import replace
 from datetime import date, datetime, timedelta
@@ -1079,6 +1080,7 @@ def build_proposal_company_contacts(
         contacts.append(
             {
                 "name": company,
+                "name_json": json.dumps(company, ensure_ascii=False),
                 "initials": _company_initials(company),
                 "snippet": "Cliente do cadastro",
                 "active": company.casefold() == selected.casefold() if selected else False,
@@ -1153,10 +1155,10 @@ def default_proposal_chat_messages() -> list[dict]:
         "role": "assistant",
         "content": (
             "Olá! Vamos montar a proposta do **Ponto Eletrônico Oppi**.\n\n"
-            "1) Selecione o cliente na lista ao lado (só cadastros).\n"
+            "1) Clique no cliente na lista de **Empresas**.\n"
             "2) Me diga **quais serviços deseja incluir** — ou a quantidade de colaboradores.\n"
             "3) Mostro boleto, recorrente e anual (com a sugestão da Oppi).\n"
-            "4) Confirme o resumo — o PDF só é gerado depois."
+            "4) Confirme o resumo e clique em **Gerar proposta em PDF** — o preview aparece ao lado."
         ),
         "time": _now_time(),
     }]
