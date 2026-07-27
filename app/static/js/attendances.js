@@ -277,6 +277,7 @@
       unlockComposer($(".att-composer"));
       autoGrow($(".att-composer-input"));
       syncComposerActions($(".att-composer"));
+      loadQuickRepliesFromDom();
       var thread = $("[data-conversation-id]", $("#att-chat-root"));
       var shell = $("#att-shell");
       if (shell && thread) {
@@ -294,6 +295,7 @@
       path.indexOf("/enviar") === -1
       && path.indexOf("/midia") === -1
       && path.indexOf("/voz") === -1
+      && path.indexOf("/atalho") === -1
       && path.indexOf("/excluir") === -1
       && path.indexOf("/finalizar") === -1
     ) {
@@ -700,12 +702,6 @@
     });
   }
 
-  document.body.addEventListener("input", function (ev) {
-    var el = ev.target;
-    if (!el || !el.classList || !el.classList.contains("att-composer-input")) return;
-    syncComposerActions(composerForm(el));
-  });
-
   document.addEventListener(
     "click",
     function (ev) {
@@ -731,5 +727,213 @@
     true
   );
 
+  /* —— Mensagens rápidas (/atalho) —— */
+  var quickReplies = [];
+  var slashActiveIndex = 0;
+
+  function loadQuickRepliesFromDom() {
+    var el = $("#att-quick-replies-data");
+    if (!el) return;
+    try {
+      var parsed = JSON.parse(el.textContent || "[]");
+      quickReplies = Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+      quickReplies = [];
+    }
+  }
+
+  function slashQuery(text) {
+    var value = String(text || "");
+    var match = value.match(/(?:^|\s)\/([a-zA-Z0-9_-]*)$/);
+    if (!match) return null;
+    return String(match[1] || "").toLowerCase();
+  }
+
+  function filterQuickReplies(query) {
+    var q = String(query || "").toLowerCase();
+    return quickReplies.filter(function (item) {
+      var shortcut = String(item.shortcut || "").toLowerCase();
+      var title = String(item.title || "").toLowerCase();
+      if (!q) return true;
+      return shortcut.indexOf(q) === 0 || title.indexOf(q) !== -1;
+    }).slice(0, 8);
+  }
+
+  function hideSlashMenu(form) {
+    var menu = (form && form.querySelector("#att-slash-menu")) || $("#att-slash-menu");
+    if (menu) {
+      menu.innerHTML = "";
+      menu.setAttribute("hidden", "hidden");
+    }
+    slashActiveIndex = 0;
+  }
+
+  function renderSlashMenu(form, items) {
+    var menu = form.querySelector("#att-slash-menu") || form.querySelector(".att-slash-menu");
+    if (!menu) return;
+    if (!items || !items.length) {
+      hideSlashMenu(form);
+      return;
+    }
+    menu.innerHTML = items.map(function (item, index) {
+      var cmd = item.command || ("/" + item.shortcut);
+      var meta = (item.media_type_label || item.media_type || "") + (item.preview ? " · " + item.preview : "");
+      return (
+        '<button type="button" class="att-slash-item' + (index === slashActiveIndex ? " is-active" : "") + '" data-shortcut="' +
+        String(item.shortcut || "").replace(/"/g, "") +
+        '"><span class="att-slash-cmd">' + cmd +
+        (item.title && item.title !== item.shortcut ? " — " + item.title : "") +
+        '</span><span class="att-slash-meta">' + meta + "</span></button>"
+      );
+    }).join("");
+    menu.removeAttribute("hidden");
+  }
+
+  function updateSlashMenu(form) {
+    if (!form) return;
+    var query = slashQuery(textForSend(form));
+    if (query === null) {
+      hideSlashMenu(form);
+      return;
+    }
+    var items = filterQuickReplies(query);
+    if (slashActiveIndex >= items.length) slashActiveIndex = Math.max(0, items.length - 1);
+    renderSlashMenu(form, items);
+  }
+
+  function applyChatHtml(html, id) {
+    var root = $("#att-chat-root");
+    if (root) {
+      root.innerHTML = html;
+      if (window.htmx) window.htmx.process(root);
+    }
+    scrollMessages();
+    bindComposer(root || document);
+    bindCrmSheet(root || document);
+    setCrmSheetOpen(false);
+    syncComposerActions($(".att-composer"));
+    loadQuickRepliesFromDom();
+    if (id) {
+      refreshList({ bumpId: id });
+      lastInboxToken = "";
+      lastConversationToken = "";
+    }
+  }
+
+  function sendQuickReply(shortcut) {
+    var id = selectedId();
+    var key = String(shortcut || "").replace(/^\//, "").trim().toLowerCase();
+    if (!id || !key) return;
+    var form = $(".att-composer");
+    if (form) {
+      clearComposer(form);
+      hideSlashMenu(form);
+      syncComposerActions(form);
+    }
+    var fd = new FormData();
+    fd.append("shortcut", key);
+    fetch("/atendimentos/conversa/" + encodeURIComponent(id) + "/atalho", {
+      method: "POST",
+      body: fd,
+      credentials: "same-origin",
+      headers: { "HX-Request": "true" },
+    })
+      .then(function (r) { return r.text(); })
+      .then(function (html) { applyChatHtml(html, id); })
+      .catch(function () {});
+  }
+
+  function exactQuickReply(text) {
+    var value = String(text || "").trim();
+    var match = value.match(/^\/([a-zA-Z0-9_-]+)$/);
+    if (!match) return null;
+    var key = String(match[1] || "").toLowerCase();
+    for (var i = 0; i < quickReplies.length; i++) {
+      if (String(quickReplies[i].shortcut || "").toLowerCase() === key) return quickReplies[i];
+    }
+    return null;
+  }
+
+  document.body.addEventListener("input", function (ev) {
+    var el = ev.target;
+    if (!el || !el.classList || !el.classList.contains("att-composer-input")) return;
+    var form = composerForm(el);
+    syncComposerActions(form);
+    updateSlashMenu(form);
+  });
+
+  document.addEventListener(
+    "keydown",
+    function (ev) {
+      var el = ev.target;
+      if (!el || !el.classList || !el.classList.contains("att-composer-input")) return;
+      var form = composerForm(el);
+      if (!form) return;
+      var menu = form.querySelector("#att-slash-menu");
+      var menuOpen = menu && !menu.hasAttribute("hidden");
+      var items = menuOpen ? menu.querySelectorAll(".att-slash-item") : [];
+
+      if (menuOpen && items.length) {
+        if (ev.key === "ArrowDown") {
+          ev.preventDefault();
+          ev.stopPropagation();
+          slashActiveIndex = (slashActiveIndex + 1) % items.length;
+          updateSlashMenu(form);
+          return;
+        }
+        if (ev.key === "ArrowUp") {
+          ev.preventDefault();
+          ev.stopPropagation();
+          slashActiveIndex = (slashActiveIndex - 1 + items.length) % items.length;
+          updateSlashMenu(form);
+          return;
+        }
+        if (ev.key === "Escape") {
+          ev.preventDefault();
+          ev.stopPropagation();
+          hideSlashMenu(form);
+          return;
+        }
+        if (ev.key === "Tab" || (ev.key === "Enter" && !ev.shiftKey)) {
+          var active = items[slashActiveIndex] || items[0];
+          if (active) {
+            ev.preventDefault();
+            ev.stopImmediatePropagation();
+            sendQuickReply(active.getAttribute("data-shortcut") || "");
+            return;
+          }
+        }
+      }
+
+      if (ev.key === "Enter" && !ev.shiftKey) {
+        var hit = exactQuickReply(textForSend(form));
+        if (hit) {
+          ev.preventDefault();
+          ev.stopImmediatePropagation();
+          sendQuickReply(hit.shortcut);
+        }
+      }
+    },
+    true
+  );
+
+  document.addEventListener(
+    "click",
+    function (ev) {
+      var item = ev.target && ev.target.closest ? ev.target.closest(".att-slash-item") : null;
+      if (item) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        sendQuickReply(item.getAttribute("data-shortcut") || "");
+        return;
+      }
+      if (!ev.target || !ev.target.closest || !ev.target.closest(".att-composer-main")) {
+        hideSlashMenu($(".att-composer"));
+      }
+    },
+    true
+  );
+
+  loadQuickRepliesFromDom();
   syncComposerActions($(".att-composer"));
 })();

@@ -286,6 +286,94 @@
     </div>
   </div>
 </div>
+
+<div class="settings-goals-layout settings-services-tab" style="margin-top:16px">
+  <div class="panel settings-single-card">
+    <div class="section-heading">Mensagens rápidas</div>
+    <div class="section-subtitle">Cadastre atalhos como <strong>/posvenda</strong>. Na conversa, digite <strong>/</strong> e o nome para enviar texto, imagem, áudio ou vídeo.</div>
+    {% if quick_reply_success %}<div class="settings-alert success">{{ quick_reply_success }}</div>{% endif %}
+    {% if quick_reply_error %}<div class="settings-alert error">{{ quick_reply_error }}</div>{% endif %}
+    {% if is_admin %}
+    <form method="post"
+          action="/configuracoes/atalhos/adicionar"
+          enctype="multipart/form-data"
+          class="settings-goals-form settings-service-form settings-quick-reply-form"
+          id="settings-quick-reply-form">
+      <input type="hidden" name="tab" value="atendimentos">
+      <label>
+        <span class="settings-company-label">Atalho</span>
+        <input type="text" name="shortcut" placeholder="Ex.: posvenda" required maxlength="40" autocomplete="off" pattern="[A-Za-z0-9_-]+" title="Somente letras, números, _ ou -">
+      </label>
+      <label>
+        <span class="settings-company-label">Título (opcional)</span>
+        <input type="text" name="title" placeholder="Ex.: Pós-venda" maxlength="120" autocomplete="off">
+      </label>
+      <label>
+        <span class="settings-company-label">Tipo</span>
+        <select name="media_type" id="settings-qr-type">
+          <option value="text">Texto</option>
+          <option value="image">Imagem</option>
+          <option value="audio">Áudio</option>
+          <option value="video">Vídeo</option>
+        </select>
+      </label>
+      <label>
+        <span class="settings-company-label">Texto / legenda</span>
+        <textarea name="body" rows="3" placeholder="Mensagem ou legenda da mídia…" maxlength="4000"></textarea>
+      </label>
+      <label id="settings-qr-file-wrap" hidden>
+        <span class="settings-company-label">Arquivo</span>
+        <input type="file" name="file" id="settings-qr-file" accept="image/*,audio/*,video/*">
+      </label>
+      <button type="submit" class="btn">Salvar atalho</button>
+    </form>
+    <script>
+      (function () {
+        var typeEl = document.getElementById("settings-qr-type");
+        var wrap = document.getElementById("settings-qr-file-wrap");
+        var fileEl = document.getElementById("settings-qr-file");
+        if (!typeEl || !wrap) return;
+        function sync() {
+          var media = typeEl.value !== "text";
+          wrap.hidden = !media;
+          if (fileEl) fileEl.required = media;
+        }
+        typeEl.addEventListener("change", sync);
+        sync();
+      })();
+    </script>
+    {% else %}
+    <div class="settings-empty">Somente administradores podem cadastrar mensagens rápidas.</div>
+    {% endif %}
+  </div>
+  <div class="panel settings-single-card">
+    <div class="section-heading">Atalhos cadastrados</div>
+    <div class="settings-service-list settings-service-list-full">
+      {% for item in quick_replies or [] %}
+      <div class="settings-service-row">
+        <span>
+          <strong>{{ item.command }}</strong>
+          <small class="settings-field-hint">· {{ item.media_type_label }}{% if item.title and item.title != item.shortcut %} · {{ item.title }}{% endif %}</small>
+          {% if item.preview %}<div class="settings-field-hint">{{ item.preview }}</div>{% endif %}
+        </span>
+        <div class="settings-service-actions">
+          <span class="settings-service-badge {{ item.status_class }}">{{ item.status_label }}</span>
+          {% if is_admin %}
+          <form method="post" action="/configuracoes/atalhos/remover" class="settings-inline-form"
+            onsubmit="return confirm('Remover o atalho {{ item.command }}?');">
+            <input type="hidden" name="tab" value="atendimentos">
+            <input type="hidden" name="shortcut" value="{{ item.shortcut }}">
+            <button type="submit" class="settings-link-btn danger">Remover</button>
+          </form>
+          {% endif %}
+        </div>
+      </div>
+      {% else %}
+      <div class="settings-empty">Nenhuma mensagem rápida cadastrada.</div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
 {% endif %}
 
 

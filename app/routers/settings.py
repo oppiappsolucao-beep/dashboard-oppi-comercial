@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Form, Request
+from fastapi import APIRouter, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from app.config import settings
@@ -83,17 +83,20 @@ def _settings_context(request: Request, settings_params: dict):
     niches_rows: list[dict] = []
     sectors_rows: list[dict] = []
     attendance_tags_rows: list[dict] = []
+    quick_replies_rows: list[dict] = []
     account_users_options: list[dict] = []
     try:
         from app.services.niches import list_niches_rows
         from app.services.sectors import enrich_sectors_for_settings, list_sectors
         from app.services.attendance_tags import list_attendance_tags
+        from app.services.attendance_quick_replies import list_quick_replies
         from app.services.account_users import ensure_default_account_users, load_account_users
 
         ensure_default_account_users()
         niches_rows = list_niches_rows()
         sectors_rows = enrich_sectors_for_settings(list_sectors(active_only=False))
         attendance_tags_rows = list_attendance_tags(active_only=False)
+        quick_replies_rows = list_quick_replies(active_only=False)
         account_users_options = [
             {
                 "id": u.get("id"),
@@ -107,6 +110,7 @@ def _settings_context(request: Request, settings_params: dict):
         niches_rows = []
         sectors_rows = []
         attendance_tags_rows = []
+        quick_replies_rows = []
         account_users_options = []
 
     return {
@@ -129,6 +133,7 @@ def _settings_context(request: Request, settings_params: dict):
         "niches": niches_rows,
         "sectors": sectors_rows,
         "attendance_tags": attendance_tags_rows,
+        "quick_replies": quick_replies_rows,
         "sector_options": [{"id": s["id"], "name": s["name"]} for s in sectors_rows if s.get("active", True)],
         "account_users_options": account_users_options,
         "permissions": build_permissions(_get_permissions(request)),
@@ -149,6 +154,8 @@ def _settings_context(request: Request, settings_params: dict):
         "sector_error": request.session.pop("settings_sector_error", ""),
         "tag_success": request.session.pop("settings_tag_success", ""),
         "tag_error": request.session.pop("settings_tag_error", ""),
+        "quick_reply_success": request.session.pop("settings_quick_reply_success", ""),
+        "quick_reply_error": request.session.pop("settings_quick_reply_error", ""),
         "user_success": request.session.pop("settings_user_success", ""),
         "user_error": request.session.pop("settings_user_error", ""),
         "sheet_sync_success": request.session.pop("settings_sheet_sync_success", ""),
@@ -505,6 +512,73 @@ async def settings_remove_tag(
         request.session["settings_tag_error"] = str(error)
     except Exception as error:
         request.session["settings_tag_error"] = f"Não consegui remover a tag: {error}"
+    return RedirectResponse(url="/configuracoes?tab=atendimentos", status_code=303)
+
+
+@router.post("/configuracoes/atalhos/adicionar")
+async def settings_add_quick_reply(
+    request: Request,
+    shortcut: str = Form(...),
+    title: str = Form(""),
+    body: str = Form(""),
+    media_type: str = Form("text"),
+    tab: str = Form("atendimentos"),
+    file: UploadFile | None = File(None),
+):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+    if not is_admin(request):
+        request.session["settings_quick_reply_error"] = "Apenas o administrador pode cadastrar atalhos."
+        return RedirectResponse(url="/configuracoes?tab=atendimentos", status_code=303)
+    from app.services.attendance_quick_replies import add_quick_reply
+
+    media_bytes = None
+    media_filename = ""
+    media_mime = ""
+    if file is not None and file.filename:
+        media_bytes = await file.read()
+        media_filename = file.filename or ""
+        media_mime = file.content_type or ""
+    try:
+        item = add_quick_reply(
+            shortcut=shortcut,
+            title=title,
+            body=body,
+            media_type=media_type,
+            media_bytes=media_bytes,
+            media_filename=media_filename,
+            media_mime=media_mime,
+        )
+        request.session["settings_quick_reply_success"] = f"Atalho {item['command']} salvo."
+    except ValueError as error:
+        request.session["settings_quick_reply_error"] = str(error)
+    except Exception as error:
+        request.session["settings_quick_reply_error"] = f"Não consegui salvar o atalho: {error}"
+    return RedirectResponse(url="/configuracoes?tab=atendimentos", status_code=303)
+
+
+@router.post("/configuracoes/atalhos/remover")
+async def settings_remove_quick_reply(
+    request: Request,
+    shortcut: str = Form(...),
+    tab: str = Form("atendimentos"),
+):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+    if not is_admin(request):
+        request.session["settings_quick_reply_error"] = "Apenas o administrador pode remover atalhos."
+        return RedirectResponse(url="/configuracoes?tab=atendimentos", status_code=303)
+    from app.services.attendance_quick_replies import remove_quick_reply
+
+    try:
+        remove_quick_reply(shortcut)
+        request.session["settings_quick_reply_success"] = "Atalho removido."
+    except ValueError as error:
+        request.session["settings_quick_reply_error"] = str(error)
+    except Exception as error:
+        request.session["settings_quick_reply_error"] = f"Não consegui remover o atalho: {error}"
     return RedirectResponse(url="/configuracoes?tab=atendimentos", status_code=303)
 
 

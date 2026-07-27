@@ -250,6 +250,29 @@ async def attendances_send_voice(
     return render(request, "partials/attendances_send_response.html", ctx)
 
 
+@router.post("/atendimentos/conversa/{conversation_id}/atalho", response_class=HTMLResponse)
+async def attendances_send_quick_reply(
+    request: Request,
+    conversation_id: str,
+    shortcut: str = Form(""),
+):
+    require_auth(request)
+    message, notice = attendances_service.send_quick_reply(
+        conversation_id,
+        shortcut,
+        sender="agent",
+        assignee=_username(request),
+    )
+    error = ""
+    flash = ""
+    if not message and notice:
+        error = notice
+    elif notice:
+        flash = notice
+    ctx = _page_ctx(request, selected_id=conversation_id, error=error, flash=flash)
+    return render(request, "partials/attendances_send_response.html", ctx)
+
+
 @router.get("/atendimentos/media/{filename}")
 def attendances_media_file(request: Request, filename: str):
     require_auth(request)

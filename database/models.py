@@ -439,3 +439,21 @@ class CrmAttendanceTag(Base):
     active = Column(Boolean, nullable=False, default=True)
     sort_order = Column(Integer, nullable=False, default=0)
     created_at = Column(String(40), nullable=False, default="")
+
+
+class CrmQuickReply(Base):
+    """Mensagens rápidas / atalhos (ex.: /posvenda) em Atendimentos."""
+
+    __tablename__ = "crm_quick_replies"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    shortcut = Column(String(80), unique=True, nullable=False, index=True)
+    title = Column(String(150), nullable=False, default="")
+    body = Column(Text, nullable=False, default="")
+    media_type = Column(String(20), nullable=False, default="text")  # text|image|audio|video
+    media_filename = Column(String(255), nullable=False, default="")
+    media_mime = Column(String(120), nullable=False, default="")
+    media_stored_name = Column(String(255), nullable=False, default="")
+    active = Column(Boolean, nullable=False, default=True)
+    sort_order = Column(Integer, nullable=False, default=0)
+    created_at = Column(String(40), nullable=False, default="")

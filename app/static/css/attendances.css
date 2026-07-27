@@ -360,8 +360,64 @@
   border-top: 1px solid var(--border);
 }
 
+.att-composer-main {
+  flex: 1;
+  position: relative;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.att-slash-menu {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 6px);
+  z-index: 30;
+  max-height: 220px;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+  padding: 6px;
+}
+
+.att-slash-menu[hidden] {
+  display: none !important;
+}
+
+.att-slash-item {
+  width: 100%;
+  border: none;
+  background: transparent;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: grid;
+  gap: 2px;
+}
+
+.att-slash-item:hover,
+.att-slash-item.is-active {
+  background: #f3f4f6;
+}
+
+.att-slash-cmd {
+  font-weight: 700;
+  color: #111827;
+  font-size: 13px;
+}
+
+.att-slash-meta {
+  font-size: 12px;
+  color: #6b7280;
+}
+
 .att-composer-input {
   flex: 1;
+  width: 100%;
   min-height: 40px;
   max-height: 120px;
   overflow-y: auto;
@@ -381,6 +437,7 @@
   color: #111;
   -webkit-appearance: none;
   appearance: none;
+  box-sizing: border-box;
 }
 
 .att-composer-input:focus {
@@ -437,8 +494,10 @@
 
 .att-composer.is-recording .att-attach-btn,
 .att-composer.is-recording .att-composer-input,
+.att-composer.is-recording .att-composer-main > .att-composer-input,
 .att-composer.is-recording .att-mic-btn,
-.att-composer.is-recording .att-send-btn {
+.att-composer.is-recording .att-send-btn,
+.att-composer.is-recording .att-slash-menu {
   display: none;
 }
 

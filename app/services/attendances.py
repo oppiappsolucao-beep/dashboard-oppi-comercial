@@ -64,6 +64,7 @@ def page_context(
     sector_options: list[dict] = []
     responsible_options: list[str] = []
     tag_options: list[str] = []
+    quick_replies: list[dict] = []
     try:
         from app.services.sectors import list_sectors, responsible_options_for_sector
 
@@ -79,6 +80,13 @@ def page_context(
         tag_options = list_attendance_tag_options()
     except Exception:
         tag_options = []
+
+    try:
+        from app.services.attendance_quick_replies import list_quick_reply_options
+
+        quick_replies = list_quick_reply_options()
+    except Exception:
+        quick_replies = []
 
     if selected_id:
         selected = store.get_conversation(selected_id)
@@ -156,6 +164,7 @@ def page_context(
         "sector_options": sector_options,
         "responsible_options": responsible_options,
         "tag_options": tag_options,
+        "quick_replies": quick_replies,
     }
 
 
@@ -369,6 +378,77 @@ def send_voice_message(
         sender=sender,
     )
     return message, ""
+
+
+def send_quick_reply(
+    conversation_id: str,
+    shortcut: str,
+    *,
+    sender: str = "agent",
+    assignee: str = "",
+) -> tuple[dict | None, str]:
+    """Dispara mensagem rápida cadastrada (texto/imagem/áudio/vídeo)."""
+    from app.services import attendance_quick_replies as quick_replies
+    import base64
+    import shutil
+    import uuid
+    from pathlib import Path
+
+    from app.services.storage_paths import get_storage_dir
+
+    item = quick_replies.get_by_shortcut(shortcut)
+    if not item:
+        return None, "Atalho não encontrado. Cadastre em Configurações → Atendimentos."
+
+    kind = item.get("media_type") or "text"
+    body = str(item.get("body") or "").strip()
+
+    if kind == "text":
+        return send_text_message(
+            conversation_id,
+            body,
+            sender=sender,
+            assignee=assignee,
+        )
+
+    path = quick_replies.media_abs_path(item)
+    if not path:
+        return None, "Arquivo do atalho não encontrado. Cadastre novamente."
+
+    raw = path.read_bytes()
+    if not raw:
+        return None, "Arquivo do atalho está vazio."
+
+    mime = item.get("media_mime") or ""
+    filename = item.get("media_filename") or path.name
+    media_dir = get_storage_dir() / "attendance_media"
+    media_dir.mkdir(parents=True, exist_ok=True)
+    safe_name = f"{uuid.uuid4().hex}_{Path(filename).name}"
+    dest = media_dir / safe_name
+    shutil.copyfile(path, dest)
+    local_url = f"/atendimentos/media/{safe_name}"
+    media_payload = base64.b64encode(raw).decode("ascii")
+
+    if kind == "audio":
+        return send_voice_message(
+            conversation_id,
+            audio_base64=media_payload,
+            mimetype=mime or "audio/ogg",
+            filename=filename,
+            sender=sender,
+            store_media_url=local_url,
+        )
+
+    return send_media_message(
+        conversation_id,
+        media_url=media_payload,
+        media_type=kind if kind in ("image", "video", "audio", "document") else "document",
+        caption=body,
+        filename=filename,
+        mimetype=mime,
+        sender=sender,
+        store_media_url=local_url,
+    )
 
 
 def assume_conversation(

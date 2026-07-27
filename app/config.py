@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-APP_BUILD = os.getenv("APP_BUILD", "20260727-voice-rec-v70").strip() or "20260727-voice-rec-v70"
+APP_BUILD = os.getenv("APP_BUILD", "20260727-quick-replies-v71").strip() or "20260727-quick-replies-v71"
 
 
 class Settings:

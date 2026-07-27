@@ -57,25 +57,28 @@
       ＋
       <input type="file" id="att-media-input" accept="image/*,audio/*,.pdf,.doc,.docx" hidden>
     </label>
-    <div class="att-voice-bar" id="att-voice-bar" hidden>
-      <button type="button" class="att-voice-cancel" id="att-voice-cancel" title="Cancelar gravação" aria-label="Cancelar gravação">✕</button>
-      <span class="att-voice-dot" aria-hidden="true"></span>
-      <span class="att-voice-timer" id="att-voice-timer">0:00</span>
-      <button type="button" class="btn att-voice-send" id="att-voice-send" aria-label="Enviar áudio">Enviar áudio</button>
+    <div class="att-composer-main">
+      <div class="att-slash-menu" id="att-slash-menu" hidden></div>
+      <div class="att-voice-bar" id="att-voice-bar" hidden>
+        <button type="button" class="att-voice-cancel" id="att-voice-cancel" title="Cancelar gravação" aria-label="Cancelar gravação">✕</button>
+        <span class="att-voice-dot" aria-hidden="true"></span>
+        <span class="att-voice-timer" id="att-voice-timer">0:00</span>
+        <button type="button" class="btn att-voice-send" id="att-voice-send" aria-label="Enviar áudio">Enviar áudio</button>
+      </div>
+      <textarea
+        name="text"
+        class="att-composer-input"
+        rows="1"
+        placeholder="Digite uma mensagem… ou /atalho"
+        autocomplete="off"
+        autocorrect="off"
+        autocapitalize="off"
+        spellcheck="false"
+        lang="pt"
+        enterkeyhint="send"
+        data-form-type="other"
+        {% if not evolution_configured %}disabled{% endif %}></textarea>
     </div>
-    <textarea
-      name="text"
-      class="att-composer-input"
-      rows="1"
-      placeholder="Digite uma mensagem…"
-      autocomplete="off"
-      autocorrect="off"
-      autocapitalize="off"
-      spellcheck="false"
-      lang="pt"
-      enterkeyhint="send"
-      data-form-type="other"
-      {% if not evolution_configured %}disabled{% endif %}></textarea>
     <button type="button"
             class="att-mic-btn"
             id="att-mic-btn"
@@ -102,6 +105,7 @@
   {% include "partials/attendances_crm_panel.html" %}
 </aside>
 <div class="att-crm-backdrop" id="att-crm-backdrop" hidden></div>
+<script type="application/json" id="att-quick-replies-data">{{ quick_replies|default([], true)|tojson }}</script>
 {% else %}
 <div class="att-empty-state">
   <div class="att-empty-icon">💬</div>
