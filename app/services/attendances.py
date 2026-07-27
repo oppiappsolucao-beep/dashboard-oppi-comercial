@@ -193,6 +193,28 @@ def send_text_message(
     if not settings.evolution_configured:
         return None, "Evolution API não configurada. Defina as variáveis no Easypanel."
 
+    # Anti-duplicata: mesmo texto enviado há menos de 4s (Enter + botão / corretor)
+    try:
+        recent = store.list_messages(conversation_id, limit=12)
+        last_out = next(
+            (item for item in reversed(recent or []) if item.get("direction") == "out"),
+            None,
+        )
+        if last_out and normalize_text(last_out.get("body") or "") == body:
+            created = normalize_text(last_out.get("created_at") or "")
+            if created:
+                from datetime import datetime, timezone
+
+                try:
+                    ts = datetime.fromisoformat(created.replace("Z", "+00:00"))
+                    now = datetime.now(tz=ts.tzinfo or timezone.utc)
+                    if abs((now - ts).total_seconds()) < 4:
+                        return last_out, ""
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
     if evolution_client.is_self_chat(
         conversation.get("phone_e164") or "",
         conversation.get("remote_jid") or "",

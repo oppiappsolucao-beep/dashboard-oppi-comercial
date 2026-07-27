@@ -316,8 +316,15 @@
 
   function submitComposer(form) {
     if (!form) return;
-    var value = textForSend(form);
-    if (!String(value).trim()) return;
+    if (form.dataset.attSending === "1") return;
+    var value = String(textForSend(form) || "").trim();
+    if (!value) return;
+    form.dataset.attSending = "1";
+    form.dataset.attPendingText = value;
+    // Limpa na hora: evita corretor do celular alterar/reenviar o texto
+    clearComposer(form);
+    var btn = form.querySelector(".att-send-btn");
+    if (btn) btn.disabled = true;
     if (window.htmx) {
       window.htmx.trigger(form, "submit");
     }
@@ -329,6 +336,7 @@
       var btn = ev.target && ev.target.closest ? ev.target.closest(".att-send-btn") : null;
       if (!btn || btn.disabled) return;
       ev.preventDefault();
+      ev.stopPropagation();
       submitComposer(btn.closest("form"));
     },
     true
@@ -339,9 +347,19 @@
     if (!form) return;
     var path = (ev.detail && ev.detail.path) || "";
     if (path.indexOf("/enviar") === -1) return;
-    var value = textForSend(form);
+    var value = form.dataset.attPendingText || textForSend(form);
     if (ev.detail && ev.detail.parameters) {
       ev.detail.parameters.text = value;
+    }
+  });
+
+  document.body.addEventListener("htmx:afterRequest", function (ev) {
+    var form = ev.target && ev.target.closest ? ev.target.closest(".att-composer") : null;
+    if (form) {
+      form.dataset.attSending = "";
+      form.dataset.attPendingText = "";
+      var btn = form.querySelector(".att-send-btn");
+      if (btn) btn.disabled = false;
     }
   });
 

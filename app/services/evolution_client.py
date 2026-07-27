@@ -918,29 +918,51 @@ def send_typing_presence(number: str, *, delay_ms: int = 1200) -> None:
             continue
 
 
+def normalize_send_number(number: str) -> str:
+    """
+    Alvo de envio no formato que entrega.
+    - @lid: mantém
+    - @s.whatsapp.net / @c.us: vira só o número (Manager faz assim; JID PN fica PENDING)
+    """
+    text = normalize_text(number)
+    if not text:
+        return ""
+    lower = text.lower()
+    if "@lid" in lower:
+        return text
+    if "@g.us" in lower or "broadcast" in lower:
+        return ""
+    if "@" in text:
+        return normalize_phone_from_jid(text) or normalize_digits(text.split("@", 1)[0])
+    return _plain_phone(text) or text
+
+
 def _send_target_candidates(phone: str, jid: str = "") -> list[str]:
-    """Ordem do Manager: chat id Evolution → @lid → whatsappNumbers → número."""
+    """Ordem: @lid → número puro. Nunca envia @s.whatsapp.net (fica PENDING)."""
     digits = _plain_phone(phone)
     ordered: list[str] = []
 
+    def add(item: str) -> None:
+        value = normalize_send_number(item)
+        if value and value not in ordered:
+            ordered.append(value)
+
     exact = find_exact_chat_target(phone, jid)
-    if exact:
-        ordered.append(exact)
+    if exact and "@lid" in exact.lower():
+        add(exact)
 
     discovered = discover_lid_for_phone(phone, exact or jid)
-    if discovered and discovered not in ordered:
-        ordered.append(discovered)
-
-    checked = resolve_number_via_whatsapp_check(phone)
-    if checked and checked not in ordered:
-        ordered.append(checked)
+    add(discovered)
 
     stored = normalize_text(jid)
-    if stored and stored not in ordered and not is_whatsapp_group_jid(stored):
-        ordered.append(stored)
+    if stored and "@lid" in stored.lower():
+        add(stored)
 
-    if digits and digits not in ordered:
-        ordered.append(digits)
+    # Número puro (não JID PN)
+    add(digits)
+    add(resolve_number_via_whatsapp_check(phone))
+    if exact:
+        add(exact)
 
     return ordered[:3]
 
@@ -992,8 +1014,11 @@ def send_text(phone: str, text: str, *, jid: str = "") -> dict[str, Any]:
     errors: list[str] = []
 
     for number in candidates:
+        number = normalize_send_number(number)
+        if not number:
+            continue
         send_typing_presence(number, delay_ms=1200)
-        # Payload idêntico ao Manager/docs v2
+        # Número puro + delay — igual ao Manager (JID @s.whatsapp.net fica PENDING)
         payload = {"number": number, "text": body, "delay": 1200}
         for url in urls:
             try:
