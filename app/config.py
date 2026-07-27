@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-APP_BUILD = os.getenv("APP_BUILD", "20260727-slash-menu-v77").strip() or "20260727-slash-menu-v77"
+APP_BUILD = os.getenv("APP_BUILD", "20260727-audio-play-v78").strip() or "20260727-audio-play-v78"
 
 
 class Settings:

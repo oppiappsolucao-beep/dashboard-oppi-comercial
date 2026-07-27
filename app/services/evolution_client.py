@@ -1129,6 +1129,7 @@ def send_whatsapp_audio(
     *,
     audio_base64: str,
     jid: str = "",
+    mimetype: str = "audio/ogg",
 ) -> dict[str, Any]:
     """Envia áudio como nota de voz (PTT) via Evolution sendWhatsAppAudio."""
     if not is_configured():
@@ -1140,6 +1141,10 @@ def send_whatsapp_audio(
     audio = str(audio_base64 or "").strip()
     if not audio:
         raise EvolutionClientError("Áudio vazio.")
+    # Evolution recomenda data URI para converter/reproduzir corretamente no WhatsApp
+    if not audio.startswith("data:"):
+        mime = (mimetype or "audio/ogg").split(";")[0].strip() or "audio/ogg"
+        audio = f"data:{mime};base64,{audio}"
     errors: list[str] = []
     payload = {
         "number": number,

@@ -29,7 +29,12 @@
         <a class="att-media-link" href="{{ m.media_url }}" target="_blank" rel="noopener">🖼 Imagem</a>
         {% if m.body %}<div class="att-bubble-text">{{ m.body }}</div>{% endif %}
       {% elif m.type == 'audio' and m.media_url %}
-        <audio controls preload="none" src="{{ m.media_url }}" class="att-audio"></audio>
+        <audio controls preload="metadata" class="att-audio">
+          <source src="{{ m.media_url }}" {% if m.media_mime %}type="{{ m.media_mime.split(';')[0] }}"{% endif %}>
+        </audio>
+        <a class="att-media-link att-audio-fallback" href="{{ m.media_url }}" target="_blank" rel="noopener">Abrir áudio</a>
+      {% elif m.type == 'audio' %}
+        <div class="att-bubble-text">Áudio indisponível</div>
       {% elif m.type in ('document', 'video') %}
         <a class="att-media-link" href="{{ m.media_url or '#' }}" target="_blank" rel="noopener">📎 {{ m.media_filename or m.type|capitalize }}</a>
         {% if m.body %}<div class="att-bubble-text">{{ m.body }}</div>{% endif %}

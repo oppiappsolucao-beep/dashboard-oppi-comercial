@@ -81,6 +81,38 @@ def _media_dir() -> Path:
     return path
 
 
+def _media_mime_for_filename(filename: str, fallback: str = "") -> str:
+    """MIME confiável para <audio>/<img> — evita application/octet-stream (player fica 0:00)."""
+    name = (filename or "").lower()
+    explicit = {
+        ".webm": "audio/webm",
+        ".ogg": "audio/ogg",
+        ".opus": "audio/ogg",
+        ".mp3": "audio/mpeg",
+        ".mpeg": "audio/mpeg",
+        ".wav": "audio/wav",
+        ".m4a": "audio/mp4",
+        ".mp4": "audio/mp4",
+        ".aac": "audio/aac",
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".gif": "image/gif",
+        ".webp": "image/webp",
+        ".pdf": "application/pdf",
+    }
+    for ext, mime in explicit.items():
+        if name.endswith(ext):
+            # .mp4/.webm podem ser vídeo; se o fallback já disser video/, respeita
+            if fallback.startswith("video/") and ext in (".mp4", ".webm"):
+                return fallback
+            return mime
+    guessed = mimetypes.guess_type(filename or "")[0] or ""
+    if guessed and guessed != "application/octet-stream":
+        return guessed
+    return fallback or "application/octet-stream"
+
+
 def _guess_media_type(mime: str, filename: str) -> str:
     mime = (mime or "").lower()
     name = (filename or "").lower()
@@ -233,7 +265,9 @@ async def attendances_send_voice(
 
     mime = file.content_type or mimetypes.guess_type(filename)[0] or "audio/ogg"
     if not mime.startswith("audio/"):
-        mime = "audio/ogg"
+        mime = _media_mime_for_filename(filename, "audio/ogg")
+    else:
+        mime = mime.split(";")[0].strip() or "audio/ogg"
     media_payload = base64.b64encode(raw).decode("ascii")
     local_url = f"/atendimentos/media/{safe_name}"
 
@@ -280,8 +314,14 @@ def attendances_media_file(request: Request, filename: str):
     path = _media_dir() / safe
     if not path.is_file():
         return JSONResponse({"error": "not_found"}, status_code=404)
-    mime = mimetypes.guess_type(str(path))[0] or "application/octet-stream"
-    return FileResponse(path, media_type=mime, filename=safe)
+    mime = _media_mime_for_filename(safe)
+    # inline: <audio src> quebra com Content-Disposition: attachment (player fica 0:00)
+    return FileResponse(
+        path,
+        media_type=mime,
+        filename=safe,
+        content_disposition_type="inline",
+    )
 
 
 @router.post("/atendimentos/conversa/{conversation_id}/assumir", response_class=HTMLResponse)

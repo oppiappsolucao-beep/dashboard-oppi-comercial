@@ -361,6 +361,7 @@ def send_voice_message(
             conversation["phone_e164"],
             audio_base64=audio_base64,
             jid=conversation.get("remote_jid") or "",
+            mimetype=mimetype or "audio/ogg",
         )
     except EvolutionClientError as error:
         return None, str(error)

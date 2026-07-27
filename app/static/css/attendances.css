@@ -357,6 +357,12 @@
   height: 32px;
 }
 
+.att-audio-fallback {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+}
+
 .att-composer {
   display: flex;
   align-items: flex-end;
