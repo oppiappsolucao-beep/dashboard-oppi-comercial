@@ -10,7 +10,6 @@ from config.crm_options import (
     PROCESS_ACTION_OPTIONS,
 )
 from fastapi import APIRouter, Form, Request
-from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from app.dependencies import get_prepared_data, is_admin, require_auth
@@ -222,6 +221,10 @@ async def overview_complete_action_submit(
         return RedirectResponse(url=f"/visao-geral/acoes/{sheet_row}/concluir", status_code=303)
 
     if lead_closed and not lost_reason and result == "Sem interesse":
+        request.session["overview_error"] = "Informe o motivo da perda."
+        return RedirectResponse(url=f"/visao-geral/acoes/{sheet_row}/concluir", status_code=303)
+
+    if normalize_legacy_stage(move_stage) == "Perdido" and not lost_reason:
         request.session["overview_error"] = "Informe o motivo da perda."
         return RedirectResponse(url=f"/visao-geral/acoes/{sheet_row}/concluir", status_code=303)
 
