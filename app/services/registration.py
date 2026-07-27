@@ -43,6 +43,7 @@ STAGE_SUMMARY_HINTS = {
     "Retorno": "Aguardando retorno do cliente",
     "Negociação": "Negociação comercial ativa",
     "Fechado": "Negócio concluído",
+    "Perdido": "Oportunidade perdida",
 }
 
 REGISTRATION_FIELDS = [
@@ -426,7 +427,7 @@ def _format_registered_at(data_chamado: str, *, cadastro_tipo: str) -> str:
 def _resolve_pipeline_display_key(etapa: str, status: str) -> str:
     grouped = status_group(status)
     lost_statuses = {"Sem interesse", "Fechada perdida", "Encerrada", "Perdido"}
-    if grouped in lost_statuses or "perd" in grouped.lower():
+    if etapa == "Perdido" or grouped in lost_statuses or "perd" in grouped.lower():
         return "perdido"
     if etapa == "Fechado" or grouped in {"Fechado", "Fechada ganha"}:
         return "ganho"

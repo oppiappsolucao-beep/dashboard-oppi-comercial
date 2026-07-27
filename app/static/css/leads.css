@@ -333,6 +333,7 @@ a.table-company-link:hover {
 .stage-badge.contato { background: #EDE9FE; color: #6D28D9; }
 .stage-badge.retorno { background: #FCE7F3; color: #DB2777; }
 .stage-badge.negociacao { background: #FEF3C7; color: #B45309; }
+.stage-badge.perdido { background: #FEE2E2; color: #B91C1C; }
 
 .owner-avatar {
   width: 28px;

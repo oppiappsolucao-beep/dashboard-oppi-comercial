@@ -105,5 +105,17 @@ document.querySelector('select[name="result"]')?.addEventListener('change', func
     closed.dispatchEvent(new Event('change'));
   }
 });
+document.querySelector('select[name="move_stage"]')?.addEventListener('change', function () {
+  const group = document.getElementById('lost-reason-group');
+  const closed = document.querySelector('select[name="lead_closed"]');
+  if (this.value === 'Perdido') {
+    if (closed) {
+      closed.value = '1';
+      closed.dispatchEvent(new Event('change'));
+    } else if (group) {
+      group.style.display = 'block';
+    }
+  }
+});
 </script>
 {% endblock %}

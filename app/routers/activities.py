@@ -175,6 +175,7 @@ async def activities_move_stage(
     request: Request,
     activity_id: str,
     stage_target: str = Form(...),
+    lost_reason: str = Form(""),
     seller: str = Form("Todos os vendedores"),
     status: str = Form("Todos os status"),
     period_start: str = Form(""),
@@ -193,7 +194,13 @@ async def activities_move_stage(
         return redirect
 
     user = normalize_text(request.session.get("username", "")) or "Usuário"
-    _, error = mover_atividade_kanban(DEFAULT_TENANT_ID, activity_id, stage_target, user)
+    _, error = mover_atividade_kanban(
+        DEFAULT_TENANT_ID,
+        activity_id,
+        stage_target,
+        user,
+        lost_reason=lost_reason,
+    )
 
     filters = parse_dashboard_filters(request, {
         "seller": seller,
@@ -449,6 +456,7 @@ async def activities_save_inline(
     note: str = Form(""),
     result_notes: str = Form(""),
     move_stage: str = Form(""),
+    lost_reason: str = Form(""),
     scheduled_date: str = Form(""),
     scheduled_time: str = Form(""),
     tab: str = Form("todas"),
@@ -486,6 +494,7 @@ async def activities_save_inline(
             "note": note,
             "result_notes": result_notes,
             "move_stage": move_stage,
+            "lost_reason": lost_reason,
             "scheduled_date": scheduled_date,
             "scheduled_time": scheduled_time,
         },

@@ -9,6 +9,7 @@ PIPELINE_STAGE_OPTIONS = [
     "Retorno",
     "Negociação",
     "Fechado",
+    "Perdido",
 ]
 
 PIPELINE_STAGE_SLA = {
@@ -20,6 +21,7 @@ PIPELINE_STAGE_SLA = {
     "Retorno": {"label": "2 dias", "max_days": 2},
     "Negociação": {"label": "3 a 7 dias", "min_days": 3, "max_days": 7},
     "Fechado": {"label": "Processo concluído", "completed": True},
+    "Perdido": {"label": "Oportunidade perdida", "completed": True},
 }
 
 PROCESS_GUIDE = [(stage, PIPELINE_STAGE_SLA[stage]["label"]) for stage in PIPELINE_STAGE_OPTIONS]
@@ -80,6 +82,7 @@ NEXT_ACTION_BY_STAGE = {
     "Retorno": "Negociar condições",
     "Negociação": "Confirmar fechamento",
     "Fechado": "Confirmar fechamento",
+    "Perdido": "Encerrar processo comercial",
 }
 
 PROCESS_ACTIONS_BY_STAGE = {
@@ -141,6 +144,9 @@ PROCESS_ACTIONS_BY_STAGE = {
         "Confirmar pagamento",
         "Confirmar fechamento",
         "Iniciar implantação",
+        "Encerrar processo comercial",
+    ],
+    "Perdido": [
         "Encerrar processo comercial",
     ],
 }
@@ -274,16 +280,11 @@ OPPORTUNITY_STATUS_OPTIONS = [
 ]
 
 LOST_REASON_OPTIONS = [
-    "Sem orçamento",
-    "Preço elevado",
-    "Escolheu concorrente",
-    "Projeto adiado",
-    "Sem urgência",
-    "Não é o decisor",
-    "Serviço fora do perfil",
-    "Não respondeu",
-    "Dados de contato inválidos",
-    "Outro",
+    "Não responde",
+    "Já contratou",
+    "Achou caro",
+    "Falta função",
+    "Outros!",
 ]
 
 CLOSED_RESULTS = {"Sem interesse", "Contato inválido"}
@@ -298,6 +299,7 @@ PIPELINE_STAGE_COLORS = {
     "Retorno": "#A855F7",
     "Negociação": "#EA580C",
     "Fechado": "#22C55E",
+    "Perdido": "#EF4444",
 }
 
 PIPELINE_STAGE_BADGE = {
@@ -309,6 +311,7 @@ PIPELINE_STAGE_BADGE = {
     "Retorno": "retorno",
     "Negociação": "negociacao",
     "Fechado": "fechado",
+    "Perdido": "perdido",
 }
 
 PIPELINE_STAGE_SHEET_STATUSES = {
@@ -320,6 +323,7 @@ PIPELINE_STAGE_SHEET_STATUSES = {
     "Retorno": ["Retornar", "Ligação retornar", "Sem Resposta", "Não responde"],
     "Negociação": [],
     "Fechado": ["Fechado"],
+    "Perdido": ["Sem interesse"],
 }
 
 SHEET_STATUS_TO_PIPELINE_STAGE = {
@@ -336,7 +340,8 @@ SHEET_STATUS_TO_PIPELINE_STAGE = {
     "Sem Resposta": "Retorno",
     "Não responde": "Retorno",
     "Fechado": "Fechado",
-    "Sem interesse": "Negociação",
+    "Sem interesse": "Perdido",
+    "Perdido": "Perdido",
 }
 
 OPEN_OPPORTUNITY_STATUSES = {"Aberta"}
@@ -476,7 +481,7 @@ RESULT_SUGGESTIONS = {
         "channel": "WhatsApp",
     },
     "Sem interesse": {
-        "stage": "",
+        "stage": "Perdido",
         "next_action": "Encerrar processo comercial",
         "days": 0,
         "channel": "Mensagem interna",

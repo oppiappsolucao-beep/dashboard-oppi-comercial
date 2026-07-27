@@ -569,6 +569,7 @@ def _serialize_activity(record: dict, tenant_id: str | None = None) -> dict:
         "result": result_display,
         "result_value": result,
         "result_notes": record.get("result_notes") or "",
+        "lost_reason": normalize_text(record.get("lost_reason") or record.get("result_notes") or ""),
         "proxima_acao": proxima_acao,
         "proxima_acao_value": proxima_acao_value,
         "allowed_next_actions": allowed_next_actions,
@@ -1124,6 +1125,7 @@ def atualizar_atividade_inline(
     next_action_channel = normalize_legacy_channel(payload.get("next_action_channel") or current.get("channel"))
     note = normalize_text(payload.get("note"))
     result_notes = normalize_text(payload.get("result_notes"))
+    lost_reason = normalize_text(payload.get("lost_reason") or result_notes)
     assigned_user = normalize_text(payload.get("assigned_user_id")) or current.get("assigned_user_id")
     move_stage = normalize_legacy_stage(payload.get("move_stage"))
     channel = normalize_legacy_channel(payload.get("channel") or current.get("channel"))
@@ -1138,6 +1140,8 @@ def atualizar_atividade_inline(
         "next_action_channel": next_action_channel,
         "next_action": next_action,
         "process_action": current.get("process_action"),
+        "lost_reason": lost_reason,
+        "move_stage_confirm": "1" if move_stage else "",
     }
     validation_error = validate_activity_payload(validation_payload)
     if validation_error:
@@ -1146,6 +1150,14 @@ def atualizar_atividade_inline(
     if status == "cancelada" and not note and not result_notes:
         return None, "Informe o motivo do cancelamento."
 
+    if move_stage == "Perdido" and not lost_reason:
+        return None, "Informe o motivo da perda."
+    if result == "Sem interesse" and not lost_reason:
+        return None, "Informe o motivo da perda."
+    if move_stage == "Perdido" and lost_reason and lost_reason not in LOST_REASON_OPTIONS:
+        return None, "Motivo da perda inválido."
+    if result == "Sem interesse" and lost_reason and lost_reason not in LOST_REASON_OPTIONS:
+        return None, "Motivo da perda inválido."
     if status == "reagendada":
         scheduled_date = normalize_text(payload.get("scheduled_date")) or next_action_date
         scheduled_time = normalize_text(payload.get("scheduled_time")) or next_action_time
@@ -1188,7 +1200,8 @@ def atualizar_atividade_inline(
     updates = {
         "status": status,
         "result": result,
-        "result_notes": result_notes,
+        "result_notes": result_notes or lost_reason,
+        "lost_reason": lost_reason,
         "note": note,
         "channel": channel,
         "assigned_user_id": assigned_user,
@@ -1283,6 +1296,7 @@ def atualizar_atividade_inline(
                 from_stage=current_stage,
                 to_stage=effective_move,
                 user=user,
+                lost_reason=lost_reason if effective_move == "Perdido" else "",
             )
         atualizar_lead_pela_atividade(
             tenant_id,
@@ -1293,8 +1307,8 @@ def atualizar_atividade_inline(
             channel=next_action_channel,
             move_stage=effective_move,
             user=user,
-            opportunity_status=opportunity_status,
-            lost_reason=result_notes if result == "Sem interesse" else "",
+            opportunity_status=opportunity_status or ("Fechada perdida" if effective_move == "Perdido" or result == "Sem interesse" else ""),
+            lost_reason=lost_reason if (effective_move == "Perdido" or result == "Sem interesse") else "",
         )
         if new_activity and sheet_row:
             _consolidate_lead_pipeline_activity(
@@ -1305,6 +1319,15 @@ def atualizar_atividade_inline(
                 user=user,
             )
     elif status == "concluida" and result in NO_NEXT_ACTION_RESULTS:
+        if sheet_row and move_stage and move_stage != current_stage:
+            movimentar_etapa_lead(
+                tenant_id,
+                sheet_row,
+                from_stage=current_stage,
+                to_stage=move_stage,
+                user=user,
+                lost_reason=lost_reason if move_stage == "Perdido" else "",
+            )
         atualizar_lead_pela_atividade(
             tenant_id,
             sheet_row,
@@ -1314,8 +1337,8 @@ def atualizar_atividade_inline(
             channel=next_action_channel,
             move_stage=move_stage,
             user=user,
-            opportunity_status=opportunity_status or ("Fechada perdida" if result == "Sem interesse" else "Encerrada"),
-            lost_reason=result_notes or result,
+            opportunity_status=opportunity_status or ("Fechada perdida" if result == "Sem interesse" or move_stage == "Perdido" else "Encerrada"),
+            lost_reason=lost_reason or result_notes or result,
         )
 
     return _serialize_activity({"id": activity_id, **saved}, tenant_id), None
@@ -1846,6 +1869,7 @@ def build_activity_page_context(
         "pipeline_stage_options": PIPELINE_STAGE_OPTIONS,
         "type_options": ["Todos os tipos"] + PROCESS_ACTION_OPTIONS,
         "channel_options": ["Todos os canais"] + CHANNEL_OPTIONS,
+        "lost_reason_options": LOST_REASON_OPTIONS,
     }
 
 
@@ -2112,6 +2136,12 @@ def validar_nova_atividade(payload: dict, *, is_admin_user: bool = False, allow_
             return completion_error
         if result == "Sem interesse" and not normalize_text(payload.get("lost_reason")):
             return "Informe o motivo da perda."
+        if normalize_legacy_stage(payload.get("move_stage")) == "Perdido" and not normalize_text(payload.get("lost_reason")):
+            return "Informe o motivo da perda."
+
+    if normalize_legacy_stage(payload.get("move_stage")) == "Perdido" and not normalize_text(payload.get("lost_reason")):
+        if str(payload.get("move_stage_confirm", "")).lower() in {"1", "true", "on", "yes"}:
+            return "Informe o motivo da perda."
 
     if channel == "Outro" and not normalize_text(payload.get("channel_other")):
         return "Descreva o canal selecionado como Outro."
@@ -2130,25 +2160,37 @@ def movimentar_etapa_lead(
     to_stage: str,
     user: str,
     sync_pipeline: bool = True,
+    lost_reason: str = "",
 ) -> None:
     to_stage = normalize_legacy_stage(to_stage)
     if not to_stage:
         return
+    payload = {
+        "stage_override": to_stage,
+        "stage_entered_at": _now().isoformat(timespec="seconds"),
+        "previous_stage": normalize_legacy_stage(from_stage),
+    }
+    if to_stage == "Perdido":
+        payload["opportunity_status"] = "Fechada perdida"
+        if lost_reason:
+            payload["lost_reason"] = lost_reason
+            payload["result_notes"] = lost_reason
+    elif to_stage == "Fechado":
+        payload["opportunity_status"] = "Fechada ganha"
     save_lead_action(
         tenant_id,
         sheet_row,
-        {
-            "stage_override": to_stage,
-            "stage_entered_at": _now().isoformat(timespec="seconds"),
-            "previous_stage": normalize_legacy_stage(from_stage),
-        },
+        payload,
         sync_pipeline=sync_pipeline,
     )
     append_interaction(
         tenant_id,
         sheet_row,
         interaction_type="etapa_alterada",
-        description=f"Lead movido de {from_stage} para {to_stage}",
+        description=(
+            f"Lead movido de {from_stage} para {to_stage}"
+            + (f" · Motivo: {lost_reason}" if lost_reason else "")
+        ),
         user=user,
         previous_stage=from_stage,
         new_stage=to_stage,
@@ -2160,6 +2202,8 @@ def mover_atividade_kanban(
     activity_id: str,
     new_stage: str,
     user: str,
+    *,
+    lost_reason: str = "",
 ) -> tuple[dict | None, str | None]:
     current = get_activity(tenant_id, activity_id)
     if not current:
@@ -2169,18 +2213,31 @@ def mover_atividade_kanban(
     if not new_stage or new_stage not in PIPELINE_STAGE_OPTIONS:
         return None, "Etapa inválida."
 
+    reason = normalize_text(lost_reason)
+    if new_stage == "Perdido":
+        if not reason:
+            return None, "Informe o motivo da perda."
+        if reason not in LOST_REASON_OPTIONS:
+            return None, "Motivo da perda inválido."
+
     old_stage = _resolve_effective_stage(current, tenant_id)
     if old_stage == new_stage:
         return _serialize_activity({"id": activity_id, **current}, tenant_id), None
 
+    updates = _stamp_stage_entered({
+        "stage": new_stage,
+        "move_stage": new_stage,
+        "updated_by": user,
+    }, new_stage, old_stage)
+    if new_stage == "Perdido":
+        updates["lost_reason"] = reason
+        updates["result_notes"] = reason
+        updates["result"] = "Sem interesse"
+
     saved = save_activity(
         tenant_id,
         activity_id,
-        _stamp_stage_entered({
-            "stage": new_stage,
-            "move_stage": new_stage,
-            "updated_by": user,
-        }, new_stage, old_stage),
+        updates,
         sync_pipeline=False,
     )
 
@@ -2193,16 +2250,21 @@ def mover_atividade_kanban(
             to_stage=new_stage,
             user=user,
             sync_pipeline=False,
+            lost_reason=reason,
         )
         registrar_historico(
             tenant_id,
             sheet_row,
             user=user,
-            description=f"Atividade movida para {new_stage}",
+            description=(
+                f"Atividade movida para {new_stage}"
+                + (f" · Motivo: {reason}" if reason else "")
+            ),
             previous_status=current.get("status", ""),
             new_status=current.get("status", ""),
             move_stage=new_stage,
             interaction_type="atividade_movida",
+            note=reason,
         )
 
     _consolidate_lead_pipeline_activity(
@@ -2216,7 +2278,10 @@ def mover_atividade_kanban(
     _append_activity_timeline(
         tenant_id,
         activity_id,
-        label=f"Atividade movida para {new_stage}",
+        label=(
+            f"Atividade movida para {new_stage}"
+            + (f" · Motivo: {reason}" if reason else "")
+        ),
         user=user,
     )
 
@@ -2383,7 +2448,16 @@ def criar_atividade(
 
     if status == "concluida":
         if move_stage_confirm and move_stage:
-            movimentar_etapa_lead(tenant_id, sheet_row, from_stage=stage, to_stage=move_stage, user=user)
+            movimentar_etapa_lead(
+                tenant_id,
+                sheet_row,
+                from_stage=stage,
+                to_stage=move_stage,
+                user=user,
+                lost_reason=lost_reason if move_stage == "Perdido" else "",
+            )
+            if move_stage == "Perdido" and not opportunity_status:
+                opportunity_status = "Fechada perdida"
 
         if _should_create_next_activity(
             result=result,

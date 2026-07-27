@@ -53,10 +53,11 @@
     updateColumnCounts(getRoot() || document);
   }
 
-  function moveActivity(activityId, newStage) {
+  function moveActivity(activityId, newStage, lostReason) {
     var filtersForm = document.getElementById("activities-filters");
     var formData = filtersForm ? new FormData(filtersForm) : new FormData();
     formData.set("stage_target", newStage);
+    if (lostReason) formData.set("lost_reason", lostReason);
     return fetch("/atividades/" + encodeURIComponent(activityId) + "/mover-etapa", {
       method: "POST",
       body: formData,
@@ -67,6 +68,32 @@
       }
       return response.text();
     });
+  }
+
+  function askLostReason() {
+    var options = window.LOST_REASON_OPTIONS || [
+      "Não responde",
+      "Já contratou",
+      "Achou caro",
+      "Falta função",
+      "Outros!",
+    ];
+    var lines = ["Motivo da perda (digite o número):"];
+    options.forEach(function (opt, index) {
+      lines.push((index + 1) + " - " + opt);
+    });
+    var answer = window.prompt(lines.join("\n"), "1");
+    if (answer === null) return null;
+    var n = parseInt(String(answer).trim(), 10);
+    if (!isNaN(n) && n >= 1 && n <= options.length) {
+      return options[n - 1];
+    }
+    var typed = String(answer).trim();
+    for (var i = 0; i < options.length; i++) {
+      if (options[i].toLowerCase() === typed.toLowerCase()) return options[i];
+    }
+    window.alert("Motivo inválido. Selecione um dos motivos da lista.");
+    return null;
   }
 
   function openActivityPanel(card) {
@@ -153,9 +180,21 @@
       if (!activityId || !newStage || newStage === currentStage) return;
 
       suppressClickUntil = Date.now() + 250;
+      var lostReason = "";
+      if (newStage === "Perdido") {
+        lostReason = askLostReason();
+        if (!lostReason) {
+          // cancelou: volta o card para a coluna original
+          if (card && currentStage) {
+            var origin = root.querySelector('.activities-kanban-column-body[data-drop-stage="' + currentStage + '"]');
+            if (origin) moveCardOptimistically(card, origin, currentStage);
+          }
+          return;
+        }
+      }
       // Feedback imediato: card já muda de coluna enquanto o servidor salva.
       moveCardOptimistically(card, column, newStage);
-      moveActivity(activityId, newStage).then(refreshBoard).catch(function () {
+      moveActivity(activityId, newStage, lostReason).then(refreshBoard).catch(function () {
         window.alert("Não foi possível mover a atividade. Tente novamente.");
         moveActivity(activityId, currentStage).then(refreshBoard).catch(function () {
           window.location.reload();

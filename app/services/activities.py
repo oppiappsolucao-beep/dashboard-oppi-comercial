@@ -52,7 +52,7 @@ NEXT_ACTION_MAP = {
     "Sem interesse": "—",
 }
 
-COMPLETED_STATUSES = {"Fechado", "Sem interesse"}
+COMPLETED_STATUSES = {"Fechado", "Sem interesse", "Perdido"}
 
 
 def _initials(name: str) -> str:

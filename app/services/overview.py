@@ -45,7 +45,7 @@ FUNNEL_PAGE_ACTIONS = [
 OVERVIEW_FUNNEL_STAGES = CRM_FUNNEL_STAGES
 
 OPPORTUNITY_STATUSES = {"Conversando", "Reunião", "Proposta", "Retornar", "Ligação - Conversando Whats", "Ligação retornar", "Negociação"}
-COMPLETED_STATUSES = {"Fechado", "Sem interesse"}
+COMPLETED_STATUSES = {"Fechado", "Sem interesse", "Perdido"}
 
 DAILY_ACTION_SLOTS = ["09:00", "10:30", "14:00", "16:00", "18:30"]
 DAILY_ACTION_DEFS = [

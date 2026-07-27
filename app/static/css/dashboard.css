@@ -988,6 +988,7 @@ a { color: inherit; text-decoration: none; }
 
 .stage-badge.proposta { background: #FCE7F3; color: #DB2777; }
 .stage-badge.fechado { background: #DCFCE7; color: #16A34A; }
+.stage-badge.perdido { background: #FEE2E2; color: #B91C1C; }
 .stage-badge.reuniao { background: #EDE9FE; color: #6D28D9; }
 .stage-badge.qualificacao { background: #DBEAFE; color: #2563EB; }
 .stage-badge.novo-lead { background: #F3E8FF; color: #7C3AED; }

@@ -125,12 +125,22 @@
             {% endfor %}
           </select>
         </label>
+  <div class="activity-extra-grid">
         <label>
           <span>Mover etapa do funil?</span>
-          <select class="activity-inline-select" name="move_stage" data-activity-form="{{ row.id }}" data-activity-field>
+          <select class="activity-inline-select" name="move_stage" data-activity-form="{{ row.id }}" data-activity-field data-activity-move-stage>
             <option value="">Manter etapa atual</option>
             {% for option in pipeline_stage_options %}
             <option value="{{ option }}" {% if row.move_stage == option %}selected{% endif %}>{{ option }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="activity-lost-reason-field {% if row.move_stage != 'Perdido' %}is-hidden{% endif %}" data-activity-lost-wrap="{{ row.id }}">
+          <span>Motivo da perda</span>
+          <select class="activity-inline-select" name="lost_reason" data-activity-form="{{ row.id }}" data-activity-field>
+            <option value="">Selecione</option>
+            {% for option in lost_reason_options %}
+            <option value="{{ option }}" {% if row.lost_reason == option %}selected{% endif %}>{{ option }}</option>
             {% endfor %}
           </select>
         </label>

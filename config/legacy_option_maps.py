@@ -15,7 +15,7 @@ LEGACY_STAGE_MAP = {
     "Sem resposta": "Retorno",
     "Fechamento": "Negociação",
     "Ganho": "Fechado",
-    "Perdido": "Negociação",
+    "Perdido": "Perdido",
     "Chamado Whats": "Contato",
     "Conversando": "Qualificação",
     "Retornar": "Retorno",

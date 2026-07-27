@@ -128,6 +128,8 @@ def resolve_pipeline_stage(grouped_status: str, stored: dict | None = None) -> s
     opportunity_status = normalize_opportunity_status(stored.get("opportunity_status"))
     if opportunity_status == "Fechada ganha":
         return "Fechado"
+    if opportunity_status == "Fechada perdida":
+        return "Perdido"
 
     mapped = normalize_legacy_stage(grouped_status)
     if mapped:

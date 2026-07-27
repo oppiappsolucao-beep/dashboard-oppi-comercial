@@ -34,6 +34,7 @@ DEFAULT_PIPELINE_STAGES = [
     ("Retorno", 6, "#A855F7", 75),
     ("Negociação", 7, "#EA580C", 85),
     ("Fechado", 8, "#22C55E", 100),
+    ("Perdido", 9, "#EF4444", 0),
 ]
 
 ROLES = ["Administrador", "Gestor", "Vendedor", "Financeiro", "Analista"]

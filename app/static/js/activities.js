@@ -40,6 +40,24 @@
         if (select.value === "Sem interesse" || select.value === "Contato inválido") {
           extra.classList.add("is-open");
         }
+        const wrap = scope.querySelector('[data-activity-lost-wrap="' + formId + '"]');
+        if (wrap) {
+          wrap.classList.toggle("is-hidden", select.value !== "Sem interesse");
+        }
+      });
+    });
+
+    scope.querySelectorAll("[data-activity-move-stage]").forEach(function (select) {
+      select.addEventListener("change", function () {
+        const formId = select.getAttribute("data-activity-form");
+        const wrap = scope.querySelector('[data-activity-lost-wrap="' + formId + '"]');
+        if (wrap) {
+          wrap.classList.toggle("is-hidden", select.value !== "Perdido");
+        }
+        if (select.value === "Perdido") {
+          const extra = scope.querySelector("#activity-extra-" + formId);
+          if (extra) extra.classList.add("is-open");
+        }
       });
     });
   }
@@ -304,8 +322,21 @@
           moveHint.textContent = suggestion.move_text || "";
         }
         toggleHidden(moveConfirmWrap, Boolean(suggestion.move_text));
-        toggleHidden(lostReasonWrap, resultSelect.value === "Sem interesse");
+        toggleHidden(
+          lostReasonWrap,
+          resultSelect.value === "Sem interesse" || (moveStage && moveStage.value === "Perdido")
+        );
         if (complement) complement.open = true;
+      });
+    }
+
+    if (moveStage) {
+      moveStage.addEventListener("change", function () {
+        toggleHidden(
+          lostReasonWrap,
+          moveStage.value === "Perdido" || (resultSelect && resultSelect.value === "Sem interesse")
+        );
+        if (moveStage.value === "Perdido" && complement) complement.open = true;
       });
     }
 
