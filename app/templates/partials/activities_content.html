@@ -1,7 +1,8 @@
 <form id="activities-filters"
   hx-post="/atividades/filtros"
-  hx-target="#activities-root"
-  hx-swap="innerHTML"
+  hx-target="#activities-results"
+  hx-select="#activities-results"
+  hx-swap="outerHTML"
 >
   <input type="hidden" name="tab" value="{{ activities_params.tab }}" id="activities-tab-input">
   <input type="hidden" name="page" value="1" id="activities-page-input">
@@ -55,17 +56,25 @@
     <div class="activities-filter-search">
       <div class="search-wrap activities-search-wrap">
         <span class="search-icon">⌕</span>
-        <input type="text" name="search" value="{{ filters.search }}"
+        <input type="search"
+          id="activities-search-input"
+          name="search"
+          value="{{ filters.search }}"
           placeholder="Buscar atividade, lead, empresa ou telefone..."
-          hx-trigger="keyup changed delay:400ms"
+          autocomplete="off"
+          inputmode="search"
+          hx-trigger="input changed delay:500ms, search"
           hx-post="/atividades/filtros"
-          hx-target="#activities-root"
+          hx-target="#activities-results"
+          hx-select="#activities-results"
           hx-swap="innerHTML"
-          hx-include="#activities-filters">
+          hx-include="#activities-filters"
+          hx-sync="#activities-search-input:replace">
       </div>
     </div>
   </div>
 
+  <div id="activities-results">
   <div class="activities-sla-legend panel">
     <div class="activities-sla-legend-item">
       <span class="activities-sla-dot green" aria-hidden="true"></span>
@@ -110,5 +119,6 @@
       </div>
     </section>
     {% endfor %}
+  </div>
   </div>
 </form>

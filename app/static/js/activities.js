@@ -429,7 +429,7 @@
   });
 
   document.body.addEventListener("htmx:afterSwap", function (event) {
-    if (event.target && event.target.id === "activities-root") {
+    if (event.target && (event.target.id === "activities-root" || event.target.id === "activities-results")) {
       initActivitiesInline();
       refreshActivityDrawer();
     }
