@@ -15,7 +15,7 @@
 </div>
 
 <div class="proposals-layout">
-  <aside class="proposals-assistant panel-card panel">
+    <aside class="proposals-assistant panel-card panel" data-proposal-active="{{ '1' if (pending_company or (proposal_draft and proposal_draft.step and proposal_draft.step != 'pick_company')) else '0' }}">
     <div class="proposals-assistant-layout">
       <div class="proposals-contacts">
         <div class="proposals-contacts-header">
@@ -234,6 +234,10 @@
       btn.classList.remove("active");
     });
     target.classList.add("active");
+    var assistant = document.querySelector(".proposals-assistant");
+    if (assistant) assistant.setAttribute("data-proposal-active", "1");
+    var chat = document.getElementById("proposals-chat-panel");
+    if (chat) chat.scrollIntoView({ behavior: "smooth", block: "start" });
   });
 })();
 </script>

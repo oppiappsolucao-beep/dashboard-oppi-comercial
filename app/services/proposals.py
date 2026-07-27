@@ -407,6 +407,108 @@ def build_generated_proposal(
     }
 
 
+def compact_proposal_chat_messages(messages: list[dict], *, limit: int = 16) -> list[dict]:
+    """Evita estourar o cookie de sessão (causa perda do passo e falha ao gerar PDF)."""
+    compact: list[dict] = []
+    for message in messages[-limit:]:
+        item = {
+            "role": message.get("role") or "assistant",
+            "content": normalize_text(message.get("content"))[:2500],
+            "time": normalize_text(message.get("time")) or _now_time(),
+        }
+        if message.get("type") == "pdf_card":
+            generated = message.get("generated") or {}
+            item.update(
+                {
+                    "type": "pdf_card",
+                    "company": normalize_text(message.get("company")),
+                    "filename": normalize_text(message.get("filename")),
+                    "value": normalize_text(message.get("value")),
+                    "generated": {
+                        "pdf_ready": bool(generated.get("pdf_ready")),
+                        "download_url": generated.get("download_url") or "",
+                        "preview_url": generated.get("preview_url") or "",
+                        "email_href": generated.get("email_href") or "",
+                        "filename": generated.get("filename") or item["filename"],
+                    },
+                }
+            )
+        compact.append(item)
+    return compact
+
+
+def compact_proposal_draft(draft: dict | None) -> dict | None:
+    if not isinstance(draft, dict) or not draft:
+        return None
+    selected = draft.get("selected") if isinstance(draft.get("selected"), dict) else {}
+    slim_selected = {
+        "plan_key": selected.get("plan_key") or draft.get("plan_key") or "",
+        "plan_label": selected.get("plan_label") or "",
+        "payment_label": selected.get("payment_label") or "",
+        "valor_mensal": selected.get("valor_mensal") or "",
+        "valor_anual": selected.get("valor_anual") or "",
+        "valor_mensal_equivalente": selected.get("valor_mensal_equivalente") or "",
+        "desconto_valor": selected.get("desconto_valor") or "0",
+        "desconto_percentual": selected.get("desconto_percentual") or "0",
+        "valor_final": selected.get("valor_final") or "",
+        "parcelas": selected.get("parcelas") or 1,
+        "valor_parcela": selected.get("valor_parcela") or "",
+        "observacao": selected.get("observacao") or "",
+        "validade_dias": selected.get("validade_dias") or 10,
+        "manual": bool(selected.get("manual") or draft.get("manual")),
+    }
+    client = draft.get("client") if isinstance(draft.get("client"), dict) else {}
+    return {
+        "company": normalize_text(draft.get("company")),
+        "step": normalize_text(draft.get("step")) or "pick_company",
+        "collaborators": int(draft.get("collaborators") or 0) or None,
+        "plan_key": slim_selected["plan_key"],
+        "selected": slim_selected,
+        "manual": slim_selected["manual"],
+        "client": {
+            "razao_social": client.get("razao_social") or "",
+            "nome_fantasia": client.get("nome_fantasia") or "",
+            "documento": client.get("documento") or "",
+            "responsavel": client.get("responsavel") or "",
+        },
+    }
+
+
+def compact_generated_proposal(generated: dict | None) -> dict | None:
+    if not isinstance(generated, dict) or not generated:
+        return None
+    snapshot = generated.get("proposal_snapshot") if isinstance(generated.get("proposal_snapshot"), dict) else {}
+    # Mantém snapshot mínimo para o PDF; remove blocos enormes.
+    slim_snapshot = {
+        "colaboradores": snapshot.get("colaboradores"),
+        "plan_key": snapshot.get("plan_key") or "",
+        "validade_dias": snapshot.get("validade_dias") or 10,
+        "observacao": snapshot.get("observacao") or "",
+        "manual": bool(snapshot.get("manual")),
+        "selected": snapshot.get("selected") if isinstance(snapshot.get("selected"), dict) else {},
+    }
+    return {
+        "company": generated.get("company") or "",
+        "filename": generated.get("filename") or "",
+        "value": generated.get("value") or "",
+        "servico": generated.get("servico") or "",
+        "colaboradores": generated.get("colaboradores") or "",
+        "services_description": (generated.get("services_description") or "")[:500],
+        "plans_text": (generated.get("plans_text") or "")[:1200],
+        "proposal_snapshot": slim_snapshot,
+        "value_label": generated.get("value_label") or "",
+        "servico_label": generated.get("servico_label") or "",
+        "colaboradores_label": generated.get("colaboradores_label") or "",
+        "client_email": generated.get("client_email") or "",
+        "pdf_cache_key": generated.get("pdf_cache_key") or "",
+        "pdf_error": generated.get("pdf_error") or "",
+        "pdf_ready": bool(generated.get("pdf_ready")),
+        "preview_url": generated.get("preview_url") or "",
+        "download_url": generated.get("download_url") or "",
+        "email_href": generated.get("email_href") or "",
+    }
+
+
 def get_generated_proposal(request) -> dict | None:
     data = request.session.get("proposals_generated")
     return data if isinstance(data, dict) else None
@@ -659,10 +761,10 @@ def _finalize_proposal(
             "company": company,
             "filename": generated["filename"],
             "value": value,
-            "generated": generated,
+            "generated": compact_generated_proposal(generated) or generated,
             "time": _now_time(),
         })
-    return chat_messages, generated, None, None
+    return chat_messages, compact_generated_proposal(generated) or generated, None, None
 
 
 def handle_proposal_chat_message(
@@ -807,7 +909,6 @@ def handle_proposal_chat_message(
             "company": company,
             "step": "choose_plan",
             "collaborators": count,
-            "planos": planos.to_dict(),
             "client": draft.get("client") or {},
         }
 
@@ -819,6 +920,18 @@ def handle_proposal_chat_message(
 
         planos = calcular_planos_ponto(count)
         chosen = normalize_text(plan_key or action or clean_message).lower()
+
+        # Atalho: se a sessão perdeu o passo de confirmação, "gerar" fecha com o sugerido.
+        if action in ("gerar", "gerar_pdf") or chosen in ("gerar", "gerar proposta", "gerar proposta em pdf"):
+            selected = select_plan(planos, planos.plano_recomendado)
+            return _finalize_proposal(
+                company=company,
+                df=df,
+                columns=columns,
+                selected=selected,
+                chat_messages=chat_messages,
+                usuario=usuario,
+            )
 
         if chosen in ("alterar", "manual", "alterar o valor manualmente") or _wants_change(clean_message):
             chat_messages.append({
@@ -832,7 +945,6 @@ def handle_proposal_chat_message(
             return chat_messages, None, company, {
                 **draft,
                 "step": "manual_edit",
-                "planos": planos.to_dict(),
                 "plan_key": planos.plano_recomendado,
             }
 
@@ -864,7 +976,7 @@ def handle_proposal_chat_message(
                 ),
                 "time": _now_time(),
             })
-            return chat_messages, None, company, {**draft, "step": "choose_plan", "planos": planos.to_dict()}
+            return chat_messages, None, company, {**draft, "step": "choose_plan"}
 
         selected = select_plan(planos, selected_key)
         client = collect_client_data(company, df, columns)
@@ -878,7 +990,6 @@ def handle_proposal_chat_message(
             "step": "confirm_summary",
             "plan_key": selected.plan_key,
             "selected": selected.to_dict(),
-            "planos": planos.to_dict(),
             "client": {
                 "razao_social": client.get("razao_social"),
                 "nome_fantasia": client.get("nome_fantasia"),
@@ -916,7 +1027,6 @@ def handle_proposal_chat_message(
             "step": "confirm_summary",
             "plan_key": selected.plan_key,
             "selected": selected.to_dict(),
-            "planos": planos.to_dict(),
             "manual": True,
         }
 
@@ -939,6 +1049,13 @@ def handle_proposal_chat_message(
             "gerar", "gerar proposta", "gerar proposta em pdf", "confirmar"
         ):
             count = int(draft.get("collaborators") or 0)
+            if count <= 0:
+                chat_messages.append({
+                    "role": "assistant",
+                    "content": "Não encontrei a quantidade de colaboradores. Informe o número novamente.",
+                    "time": _now_time(),
+                })
+                return chat_messages, None, company, {"company": company, "step": "ask_collaborators"}
             planos = calcular_planos_ponto(count)
             selected_data = draft.get("selected") or {}
             if draft.get("manual"):

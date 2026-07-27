@@ -13,6 +13,9 @@ from app.services.proposals import (
     build_proposal_form_message,
     build_proposals_kpi_cards,
     build_proposals_table,
+    compact_generated_proposal,
+    compact_proposal_chat_messages,
+    compact_proposal_draft,
     default_proposal_chat_messages,
     get_generated_proposal,
     handle_proposal_chat_message,
@@ -248,24 +251,25 @@ async def proposals_chat(
         },
         usuario=usuario,
     )
-    request.session["proposals_chat"] = chat_messages
+    request.session["proposals_chat"] = compact_proposal_chat_messages(chat_messages)
     if new_pending:
         request.session["proposals_pending_company"] = new_pending
     elif generated:
         request.session.pop("proposals_pending_company", None)
-    if new_draft:
-        request.session["proposals_draft"] = new_draft
+    compacted_draft = compact_proposal_draft(new_draft)
+    if compacted_draft:
+        request.session["proposals_draft"] = compacted_draft
     else:
         request.session.pop("proposals_draft", None)
     if generated:
-        request.session["proposals_generated"] = generated
+        request.session["proposals_generated"] = compact_generated_proposal(generated) or generated
 
     return render(
         request,
         "partials/proposals_chat_response.html",
         {
             "generated_proposal": generated or request.session.get("proposals_generated"),
-            **_proposals_chat_context(request, chat_messages, df),
+            **_proposals_chat_context(request, compact_proposal_chat_messages(chat_messages), df),
         },
     )
 

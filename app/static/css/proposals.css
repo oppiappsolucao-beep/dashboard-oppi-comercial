@@ -666,6 +666,19 @@
     max-height: 220px;
   }
 
+  /* Com cliente selecionado: prioriza o chat (lista vira compacta) */
+  .proposals-assistant[data-proposal-active="1"] .proposals-contacts-list {
+    max-height: 120px;
+  }
+
+  .proposals-assistant[data-proposal-active="1"] .proposals-chat-panel {
+    min-height: 70dvh;
+  }
+
+  .proposals-assistant[data-proposal-active="1"] .proposals-chat-body {
+    min-height: 42dvh;
+  }
+
   .proposals-workflow-steps {
     grid-template-columns: 1fr;
   }
