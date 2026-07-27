@@ -272,11 +272,14 @@
     if (ev.target.id === "att-chat-root" || ev.target.id === "att-messages") {
       scrollMessages();
       bindComposer(ev.target);
+      bindCrmSheet(ev.target);
+      setCrmSheetOpen(false);
       autoGrow($(".att-composer-input"));
       var thread = $("[data-conversation-id]", $("#att-chat-root"));
       var shell = $("#att-shell");
       if (shell && thread) {
         shell.setAttribute("data-selected", thread.getAttribute("data-conversation-id") || "");
+        shell.classList.add("att-shell--chat-open");
       }
       lastConversationToken = "";
     }
@@ -367,6 +370,8 @@
         }
         scrollMessages();
         bindComposer(root || document);
+        bindCrmSheet(root || document);
+        setCrmSheetOpen(false);
         refreshList({ bumpId: id });
         lastInboxToken = "";
         lastConversationToken = "";
@@ -374,6 +379,46 @@
       .catch(function () {});
     input.value = "";
   });
+  function setCrmSheetOpen(open) {
+    var panel = $("#att-crm-panel");
+    var backdrop = $("#att-crm-backdrop");
+    var toggle = $("#att-crm-toggle");
+    if (panel) panel.classList.toggle("is-open", !!open);
+    if (backdrop) {
+      backdrop.classList.toggle("is-open", !!open);
+      if (open) backdrop.removeAttribute("hidden");
+      else backdrop.setAttribute("hidden", "hidden");
+    }
+    if (toggle) toggle.setAttribute("aria-expanded", open ? "true" : "false");
+    document.body.classList.toggle("att-crm-sheet-open", !!open);
+  }
+
+  function bindCrmSheet(root) {
+    var scope = root || document;
+    var toggle = $("#att-crm-toggle", scope) || $("#att-crm-toggle");
+    var closeBtn = $("#att-crm-close", scope) || $("#att-crm-close");
+    var backdrop = $("#att-crm-backdrop", scope) || $("#att-crm-backdrop");
+    if (toggle && toggle.dataset.attCrmBound !== "1") {
+      toggle.dataset.attCrmBound = "1";
+      toggle.addEventListener("click", function () {
+        var panel = $("#att-crm-panel");
+        setCrmSheetOpen(!(panel && panel.classList.contains("is-open")));
+      });
+    }
+    if (closeBtn && closeBtn.dataset.attCrmBound !== "1") {
+      closeBtn.dataset.attCrmBound = "1";
+      closeBtn.addEventListener("click", function () {
+        setCrmSheetOpen(false);
+      });
+    }
+    if (backdrop && backdrop.dataset.attCrmBound !== "1") {
+      backdrop.dataset.attCrmBound = "1";
+      backdrop.addEventListener("click", function () {
+        setCrmSheetOpen(false);
+      });
+    }
+  }
+
   document.addEventListener(
     "click",
     function () {
@@ -397,6 +442,7 @@
     var pill = $("#att-unread-pill");
     lastUnread = pill ? Number(pill.getAttribute("data-count") || 0) : 0;
     scrollMessages();
+    bindCrmSheet(document);
     startPoll();
   }
 

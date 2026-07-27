@@ -14,6 +14,12 @@
         <span class="att-typing-indicator" id="att-typing-{{ selected.id }}" {% if not selected.typing %}hidden{% endif %}>digitando…</span>
       </div>
     </div>
+    <button type="button"
+            class="att-crm-toggle"
+            id="att-crm-toggle"
+            aria-expanded="false"
+            aria-controls="att-crm-panel"
+            title="CRM e ações">CRM</button>
   </header>
 
   <div class="att-messages" id="att-messages" data-conversation-id="{{ selected.id }}">
@@ -70,8 +76,13 @@
 </div>
 
 <aside class="att-crm" id="att-crm-panel">
+  <div class="att-crm-sheet-head">
+    <strong>CRM</strong>
+    <button type="button" class="att-crm-close" id="att-crm-close" aria-label="Fechar CRM">×</button>
+  </div>
   {% include "partials/attendances_crm_panel.html" %}
 </aside>
+<div class="att-crm-backdrop" id="att-crm-backdrop" hidden></div>
 {% else %}
 <div class="att-empty-state">
   <div class="att-empty-icon">💬</div>

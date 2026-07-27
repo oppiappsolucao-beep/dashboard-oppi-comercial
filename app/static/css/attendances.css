@@ -422,6 +422,18 @@
   padding: 14px;
 }
 
+.att-crm-sheet-head {
+  display: none;
+}
+
+.att-crm-toggle {
+  display: none;
+}
+
+.att-crm-backdrop {
+  display: none;
+}
+
 .att-crm-title {
   margin: 0 0 12px;
   font-size: 14px;
@@ -617,6 +629,7 @@
 }
 
 @media (max-width: 800px) {
+  /* Lista: header compacto */
   .att-page-header {
     margin-bottom: 8px;
   }
@@ -625,10 +638,15 @@
     display: none;
   }
 
+  .att-page-actions .att-config-badge {
+    font-size: 11px;
+    padding: 3px 8px;
+  }
+
   .att-shell {
     grid-template-columns: 1fr;
-    height: calc(100dvh - 120px);
-    min-height: 420px;
+    height: calc(100dvh - 148px);
+    min-height: 360px;
     border-radius: 10px;
   }
 
@@ -641,8 +659,10 @@
 
   .att-col-chat {
     display: none;
+    grid-template-columns: 1fr;
     min-height: 0;
     height: 100%;
+    position: relative;
   }
 
   .att-shell--chat-open .att-col-list {
@@ -651,6 +671,35 @@
 
   .att-shell--chat-open .att-col-chat {
     display: flex;
+    flex-direction: column;
+  }
+
+  /* Conversa aberta: some o header da página e o FAB — chat estilo WhatsApp */
+  body:has(.att-shell--chat-open) .att-page-header,
+  body:has(.att-shell--chat-open) .att-new-call-panel,
+  body:has(.att-shell--chat-open) .att-page-flash {
+    display: none !important;
+  }
+
+  body:has(.att-shell--chat-open) .whatsapp-fab {
+    display: none !important;
+  }
+
+  body:has(.att-shell--chat-open) .att-shell {
+    height: calc(100dvh - 64px);
+    min-height: 0;
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+    margin: 0 -12px;
+    width: calc(100% + 24px);
+  }
+
+  .att-thread {
+    border-right: none;
+    flex: 1;
+    min-height: 0;
+    height: 100%;
   }
 
   .att-back-btn {
@@ -659,7 +708,45 @@
 
   .att-chat-header {
     gap: 8px;
-    padding: 10px 12px;
+    padding: 8px 10px;
+    flex-shrink: 0;
+  }
+
+  .att-chat-header-text {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .att-chat-title {
+    font-size: 15px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .att-chat-sub {
+    font-size: 11px;
+  }
+
+  .att-crm-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    height: 34px;
+    padding: 0 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: #fff;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    color: #374151;
+    cursor: pointer;
+  }
+
+  .att-messages {
+    padding: 12px;
   }
 
   .att-filters {
@@ -677,17 +764,79 @@
   .att-composer {
     padding: 8px 10px;
     gap: 8px;
+    flex-shrink: 0;
+    padding-bottom: max(8px, env(safe-area-inset-bottom));
   }
 
-  .att-attach-btn,
+  .att-attach-btn {
+    width: 42px;
+    height: 42px;
+  }
+
   .att-send-btn {
-    width: 44px;
-    height: 44px;
-    min-width: 44px;
+    width: auto;
+    min-width: 72px;
+    height: 42px;
+    padding: 0 14px;
   }
 
+  /* CRM vira bottom sheet no mobile */
   .att-crm {
-    max-height: 38%;
+    display: none;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 140;
+    max-height: min(78dvh, 640px);
+    padding: 0 14px 16px;
+    border-radius: 16px 16px 0 0;
+    box-shadow: 0 -8px 28px rgba(15, 23, 42, 0.18);
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .att-crm.is-open {
+    display: block;
+  }
+
+  .att-crm-sheet-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: #fff;
+    padding: 12px 0 10px;
+    margin-bottom: 4px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .att-crm-close {
+    width: 36px;
+    height: 36px;
+    border: none;
+    border-radius: 8px;
+    background: #f3f4f6;
+    font-size: 22px;
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  .att-crm .att-crm-title {
+    display: none;
+  }
+
+  .att-crm-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 135;
+    background: rgba(15, 23, 42, 0.45);
+  }
+
+  .att-crm-backdrop.is-open {
+    display: block;
   }
 
   .att-crm-actions {
@@ -698,7 +847,11 @@
 
   .att-crm-actions .btn {
     width: 100%;
-    min-height: 40px;
+    min-height: 42px;
+  }
+
+  .att-crm-actions .btn:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
   }
 }
 

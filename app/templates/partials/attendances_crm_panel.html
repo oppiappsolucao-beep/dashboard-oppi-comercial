@@ -1,5 +1,5 @@
 {% if selected %}
-<div class="att-crm-inner">
+<div class="att-crm-inner" id="att-crm-inner">
   <h3 class="att-crm-title">CRM</h3>
   {% if flash %}<div class="att-flash sm">{{ flash }}</div>{% endif %}
   {% if error %}<div class="att-flash sm" style="background:#fde8e8;color:#9b1c1c">{{ error }}</div>{% endif %}
@@ -59,7 +59,7 @@
 
   <form class="att-notes-form"
         hx-post="/atendimentos/conversa/{{ selected.id }}/notas"
-        hx-target="#att-crm-panel"
+        hx-target="#att-crm-inner"
         hx-swap="innerHTML">
     <label class="att-label">Tags</label>
     <div class="att-tags-list">
