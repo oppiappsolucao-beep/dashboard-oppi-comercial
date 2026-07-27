@@ -487,8 +487,13 @@ def upsert_conversation_by_phone(
                 existing.status = status
                 changed = True
             if remote_jid and remote_jid != (existing.remote_jid or ""):
-                existing.remote_jid = remote_jid
-                changed = True
+                current = normalize_text(existing.remote_jid or "")
+                # Nunca trocar @lid por número/@s.whatsapp.net — PN costuma ficar PENDING no Baileys.
+                if "@lid" in current.lower() and "@lid" not in remote_jid.lower():
+                    pass
+                else:
+                    existing.remote_jid = remote_jid
+                    changed = True
             if changed:
                 existing.updated_at = now
             conversation_id = existing.id

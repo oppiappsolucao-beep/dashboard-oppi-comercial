@@ -272,6 +272,47 @@ def attendances_return_ai(request: Request, conversation_id: str):
     return render(request, "partials/attendances_thread.html", ctx)
 
 
+@router.post("/atendimentos/conversa/{conversation_id}/atualizar-lid", response_class=HTMLResponse)
+def attendances_refresh_lid(request: Request, conversation_id: str):
+    """Busca @lid na Evolution e grava na conversa (necessário para sair de PENDING)."""
+    require_auth(request)
+    from app.services import evolution_client
+
+    conversation = store.get_conversation(conversation_id)
+    if not conversation:
+        ctx = _page_ctx(request, selected_id=conversation_id, error="Conversa não encontrada.")
+        return render(request, "partials/attendances_send_response.html", ctx)
+
+    lid = evolution_client.discover_lid_for_phone(
+        conversation.get("phone_e164") or "",
+        conversation.get("remote_jid") or "",
+    )
+    if lid and "@lid" in lid.lower():
+        store.update_conversation(conversation_id, remote_jid=lid)
+        # força sync de mensagens para casar histórico
+        try:
+            attendances_service.schedule_sync_messages_from_evolution(
+                conversation_id, limit=40, force=True
+            )
+        except Exception:
+            pass
+        ctx = _page_ctx(
+            request,
+            selected_id=conversation_id,
+            flash=f"@lid atualizado: {lid}. Pode enviar de novo.",
+        )
+    else:
+        ctx = _page_ctx(
+            request,
+            selected_id=conversation_id,
+            error=(
+                "Não achei @lid na Evolution para este número. "
+                "Peça uma mensagem nova do cliente no WhatsApp e tente de novo."
+            ),
+        )
+    return render(request, "partials/attendances_send_response.html", ctx)
+
+
 @router.post("/atendimentos/conversa/{conversation_id}/finalizar", response_class=HTMLResponse)
 def attendances_finalize(request: Request, conversation_id: str):
     require_auth(request)
@@ -440,6 +481,15 @@ def attendances_evolution_diag(request: Request, conversation_id: str = ""):
         state_error = str(error)
 
     conversation = store.get_conversation(conversation_id) if conversation_id else None
+    discovered_lid = ""
+    if conversation:
+        try:
+            discovered_lid = evolution_client.discover_lid_for_phone(
+                conversation.get("phone_e164") or "",
+                conversation.get("remote_jid") or "",
+            )
+        except Exception:
+            discovered_lid = ""
     return JSONResponse(
         {
             "configured": settings.evolution_configured,
@@ -455,14 +505,23 @@ def attendances_evolution_diag(request: Request, conversation_id: str = ""):
                 "phone_e164": (conversation or {}).get("phone_e164"),
                 "remote_jid": (conversation or {}).get("remote_jid"),
                 "contact_name": (conversation or {}).get("contact_name"),
+                "discovered_lid": discovered_lid or None,
+                "has_lid": bool(
+                    discovered_lid
+                    or (
+                        conversation
+                        and "@lid" in normalize_text((conversation or {}).get("remote_jid") or "").lower()
+                    )
+                ),
             }
             if conversation
             else None,
             "hint": (
                 "1) EVOLUTION_INSTANCE deve bater com instances_available. "
-                "2) Peça uma msg nova do cliente para gravar remote_jid com @lid. "
-                "3) Teste enviar pelo Chat do Manager Evolution; se lá também ficar PENDING, "
-                "é bug Baileys (erro 463) — atualize baileys@7.0.0-rc13 no container Evolution."
+                "2) Envio 1:1 precisa de remote_jid @lid (não só @s.whatsapp.net). "
+                "3) Peça msg nova do cliente → CRM → Atualizar @lid. "
+                "4) Se já tem @lid e ainda PENDING: atualize Baileys no Evolution "
+                "(baileys@7.0.0-rc13) e reconecte o QR."
             ),
             "evolution_fix": (
                 "No Easypanel (serviço Evolution), sobrescreva o entrypoint/command para: "

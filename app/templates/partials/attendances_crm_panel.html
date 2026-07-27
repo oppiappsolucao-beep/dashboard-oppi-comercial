@@ -8,7 +8,6 @@
     <div><dt>Empresa</dt><dd>{% if crm.edit_href %}<a href="{{ crm.edit_href }}">{{ crm.empresa }}</a>{% else %}{{ crm.empresa }}{% endif %}</dd></div>
     <div><dt>Contato</dt><dd>{{ crm.contato }}</dd></div>
     <div><dt>WhatsApp</dt><dd>{{ selected.phone_e164 }}</dd></div>
-    <div><dt>JID Evolution</dt><dd style="word-break:break-all;font-size:12px">{{ selected.remote_jid or '—' }}</dd></div>
     <div><dt>Setor</dt><dd>{{ selected.sector_name or '—' }}</dd></div>
     <div><dt>Responsável</dt><dd>{{ selected.assignee or crm.vendedor or '—' }}</dd></div>
     <div><dt>Status CRM</dt><dd>{{ crm.etapa }}</dd></div>
@@ -17,6 +16,19 @@
 
   <div class="att-evo-tools">
     <div class="att-label">Diagnóstico WhatsApp</div>
+    <div style="font-size:12px;color:#64748B;word-break:break-all">
+      JID atual: {{ selected.remote_jid or '—' }}
+      {% if selected.remote_jid and '@lid' in (selected.remote_jid|lower) %}
+      <span style="color:#166534;font-weight:700"> · @lid ok</span>
+      {% else %}
+      <span style="color:#92400E;font-weight:700"> · sem @lid (risco PENDING)</span>
+      {% endif %}
+    </div>
+    <button type="button"
+            class="btn btn-secondary"
+            hx-post="/atendimentos/conversa/{{ selected.id }}/atualizar-lid"
+            hx-target="#att-chat-root"
+            hx-swap="innerHTML">Atualizar @lid</button>
     <a class="btn btn-secondary att-evo-link"
        href="/atendimentos/diagnostico-evolution?conversation_id={{ selected.id }}"
        target="_blank" rel="noopener">Ver status Evolution</a>

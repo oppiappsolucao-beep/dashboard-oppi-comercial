@@ -221,7 +221,10 @@ def send_text_message(
     if sender == "agent":
         updates["ai_mode"] = store.AI_MODE_PAUSED
     used_number = normalize_text(response.get("_oppi_send_number") or "")
-    if used_number and "@lid" in used_number.lower() and used_number != normalize_text(
+    resolved_lid = normalize_text(response.get("_oppi_resolved_lid") or "")
+    if resolved_lid and "@lid" in resolved_lid.lower():
+        updates["remote_jid"] = resolved_lid
+    elif used_number and "@lid" in used_number.lower() and used_number != normalize_text(
         conversation.get("remote_jid") or ""
     ):
         updates["remote_jid"] = used_number
@@ -230,15 +233,23 @@ def send_text_message(
 
     warning = ""
     status = normalize_text(response.get("_oppi_send_status") or "") or "UNKNOWN"
-    used = normalize_text(response.get("_oppi_send_number") or "") or (
+    used = used_number or (
         conversation.get("remote_jid") or conversation.get("phone_e164") or ""
     )
     if response.get("_oppi_delivery_pending"):
-        warning = (
-            f"⚠ Entrega PENDING na Evolution · destino {used}. "
-            "A mensagem pode não chegar no WhatsApp. "
-            "Abra CRM → Testar envio ou /atendimentos/diagnostico-evolution"
-        )
+        has_lid = "@lid" in used.lower() or "@lid" in (resolved_lid or "").lower()
+        if has_lid:
+            warning = (
+                f"⚠ Entrega PENDING mesmo com @lid · destino {used}. "
+                "Provável Baileys desatualizado no servidor Evolution — "
+                "atualize baileys@7.0.0-rc13 no Easypanel e reconecte o QR."
+            )
+        else:
+            warning = (
+                f"⚠ Entrega PENDING · destino {used} (sem @lid). "
+                "Peça uma mensagem nova do cliente no WhatsApp e clique "
+                "em CRM → Atualizar @lid, depois envie de novo."
+            )
     else:
         warning = f"Enviado à Evolution · status {status} · destino {used}"
     return message, warning

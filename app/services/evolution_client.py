@@ -618,8 +618,13 @@ def assert_instance_ready() -> None:
 
 
 def _text_payload(number: str, body: str) -> dict[str, Any]:
-    # Um único formato por tentativa — múltiplos payloads no mesmo alvo geravam duplicatas.
-    return {"number": number, "text": body}
+    # delay/presence ajudam em algumas versões Baileys a sair de PENDING.
+    return {
+        "number": number,
+        "text": body,
+        "delay": 1200,
+        "linkPreview": False,
+    }
 
 
 def _plain_phone(phone: str) -> str:
@@ -631,27 +636,156 @@ def _plain_phone(phone: str) -> str:
     return digits
 
 
+def _phone_tail_match(a: str, b: str) -> bool:
+    da = normalize_digits(a)
+    db = normalize_digits(b)
+    if not da or not db:
+        return False
+    return da[-8:] == db[-8:] or da == db
+
+
+def discover_lid_for_phone(phone: str, jid: str = "") -> str:
+    """
+    Tenta achar o @lid do contato.
+
+    No Baileys atual, envio 1:1 via @lid costuma entregar; número puro/@s.whatsapp.net
+    fica PENDING (erro 463 / tctoken).
+    """
+    jid = normalize_text(jid)
+    if jid and "@lid" in jid.lower():
+        return jid
+
+    digits = _plain_phone(phone)
+    if not digits and not jid:
+        return ""
+
+    # 1) Chats recentes da Evolution
+    try:
+        for chat in fetch_recent_chats(limit=80):
+            cid = normalize_text(chat.get("remote_jid") or "")
+            if not cid or "@lid" not in cid.lower():
+                continue
+            chat_phone = normalize_text(chat.get("phone_e164") or "")
+            if digits and chat_phone and _phone_tail_match(digits, chat_phone):
+                return cid
+            # alguns chats só trazem alt no id — confere enrich
+    except Exception as error:
+        logger.warning("discover_lid findChats: %s", error)
+
+    # 2) findChats bruto (casa remoteJidAlt com o telefone)
+    try:
+        for url in _instance_urls("/chat/findChats"):
+            response = requests.get(url, headers=_headers(), timeout=20)
+            if response.status_code >= 400:
+                continue
+            data = _parse_json(response)
+            chats = data if isinstance(data, list) else (
+                data.get("data") or data.get("chats") or data.get("response") or []
+            )
+            if not isinstance(chats, list):
+                continue
+            for chat in chats:
+                if not isinstance(chat, dict):
+                    continue
+                cid = normalize_text(
+                    chat.get("id") or chat.get("remoteJid") or _dig_chat_jid(chat) or ""
+                )
+                if not cid or "@lid" not in cid.lower():
+                    continue
+                alt = normalize_text(
+                    chat.get("remoteJidAlt")
+                    or chat.get("owner")
+                    or chat.get("pn")
+                    or ""
+                )
+                alt_digits = normalize_phone_from_jid(alt) if alt else ""
+                if digits and alt_digits and _phone_tail_match(digits, alt_digits):
+                    return cid
+                if digits and _phone_tail_match(digits, cid.split("@", 1)[0]):
+                    # raro, mas cobre lid numérico coincidente
+                    continue
+            break
+    except Exception as error:
+        logger.warning("discover_lid findChats raw: %s", error)
+
+    # 3) Histórico de mensagens no JID de telefone — às vezes traz remoteJid=@lid
+    probe_jids = []
+    if jid:
+        probe_jids.append(jid)
+    if digits:
+        probe_jids.append(f"{digits}@s.whatsapp.net")
+    for probe in probe_jids:
+        try:
+            for item in find_messages(probe, limit=25):
+                key = item.get("key") if isinstance(item.get("key"), dict) else {}
+                for candidate in (
+                    key.get("remoteJid"),
+                    key.get("remoteJidAlt"),
+                    key.get("participant"),
+                    item.get("senderLid"),
+                    item.get("remoteJid"),
+                ):
+                    text = normalize_text(candidate or "")
+                    if text and "@lid" in text.lower():
+                        return text
+        except Exception as error:
+            logger.warning("discover_lid findMessages %s: %s", probe, error)
+
+    # 4) Endpoint de contatos (nem toda versão tem)
+    try:
+        for url in _instance_urls("/chat/findContacts"):
+            response = requests.post(
+                url,
+                headers=_headers(),
+                json={"where": {}},
+                timeout=20,
+            )
+            if response.status_code >= 400:
+                continue
+            data = _parse_json(response)
+            rows = data if isinstance(data, list) else (
+                data.get("data") or data.get("contacts") or data.get("response") or []
+            )
+            if not isinstance(rows, list):
+                continue
+            for row in rows:
+                if not isinstance(row, dict):
+                    continue
+                cid = normalize_text(row.get("id") or row.get("remoteJid") or "")
+                if not cid or "@lid" not in cid.lower():
+                    continue
+                alt = normalize_text(row.get("remoteJidAlt") or row.get("pn") or "")
+                if digits and alt and _phone_tail_match(digits, normalize_phone_from_jid(alt)):
+                    return cid
+            break
+    except Exception as error:
+        logger.warning("discover_lid findContacts: %s", error)
+
+    return ""
+
+
 def _send_target_candidates(phone: str, jid: str = "") -> list[str]:
     """
     Destinos de envio em ordem.
 
-    Número puro costuma entregar quando o JID só fica PENDING.
-    @lid é necessário em algumas versões Baileys — fica como 2ª opção.
-    No máximo 3 alvos distintos para não spammar o WhatsApp.
+    Preferência: @lid (entrega no Baileys atual) → número puro → variantes.
     """
-    targets = enrich_targets_from_chats(phone, jid)
     digits = _plain_phone(phone)
+    discovered = discover_lid_for_phone(phone, jid)
+    targets = enrich_targets_from_chats(phone, discovered or jid)
     ordered: list[str] = []
 
-    if digits:
+    # 1) @lid primeiro
+    for item in [discovered, jid, *targets]:
+        text = normalize_text(item or "")
+        if text and "@lid" in text.lower() and text not in ordered:
+            ordered.append(text)
+
+    # 2) número puro
+    if digits and digits not in ordered:
         ordered.append(digits)
 
-    for item in targets:
-        if "@lid" in item.lower() and item not in ordered:
-            ordered.append(item)
-            break
-
-    # Variantes BR com/sem 9º dígito (só número puro)
+    # 3) Variantes BR com/sem 9º dígito
     if digits.startswith("55") and len(digits) == 13 and digits[4] == "9":
         alt = digits[:4] + digits[5:]
         if alt not in ordered:
@@ -663,12 +797,11 @@ def _send_target_candidates(phone: str, jid: str = "") -> list[str]:
 
     for item in targets:
         if item and item not in ordered and "@g.us" not in item.lower():
-            # Evita @s.whatsapp.net cedo — costuma aceitar sem entregar
             if item.endswith("@s.whatsapp.net") or item.endswith("@c.us"):
                 continue
             ordered.append(item)
 
-    return ordered[:3]
+    return ordered[:4]
 
 
 def _pick_send_target(phone: str, jid: str = "") -> str:
@@ -701,7 +834,9 @@ def send_text(phone: str, text: str, *, jid: str = "") -> dict[str, Any]:
 
     assert_instance_ready()
 
-    candidates = _send_target_candidates(phone, jid)
+    # Resolve @lid antes — crítico para sair de PENDING no Baileys atual.
+    resolved_jid = discover_lid_for_phone(phone, jid) or normalize_text(jid)
+    candidates = _send_target_candidates(phone, resolved_jid)
     if not candidates:
         raise EvolutionClientError("Telefone/JID da conversa inválido para envio.")
 
@@ -744,15 +879,13 @@ def send_text(phone: str, text: str, *, jid: str = "") -> dict[str, Any]:
             )
             data["_oppi_send_number"] = number
             data["_oppi_send_status"] = status
-            # Só considera "pendente de verdade" quando a API diz PENDING/ERROR.
-            # Status vazio/UNKNOWN = aceito (comportamento antigo) — não dispara retry (evita duplicata).
+            data["_oppi_resolved_lid"] = resolved_jid if "@lid" in (resolved_jid or "").lower() else ""
             explicitly_pending = status in {"PENDING", "ERROR", "0"}
             data["_oppi_delivery_pending"] = explicitly_pending
 
             if not explicitly_pending or _status_looks_delivered(status):
                 return data
 
-            # PENDING explícito: guarda e tenta o próximo formato (número ↔ @lid).
             if pending_ok is None:
                 pending_ok = data
             accepted_pending_for_number = True
@@ -762,7 +895,6 @@ def send_text(phone: str, text: str, *, jid: str = "") -> dict[str, Any]:
             continue
 
     if pending_ok is not None:
-        # Evolution aceitou, mas ficou PENDING em todos os alvos testados.
         return pending_ok
 
     detail = " | ".join(errors[-4:]) if errors else "sem detalhes"
