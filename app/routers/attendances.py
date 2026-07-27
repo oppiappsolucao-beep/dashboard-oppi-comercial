@@ -297,13 +297,9 @@ async def attendances_send_quick_reply(
         sender="agent",
         assignee=_username(request),
     )
-    error = ""
-    flash = ""
-    if not message and notice:
-        error = notice
-    elif notice:
-        flash = notice
-    ctx = _page_ctx(request, selected_id=conversation_id, error=error, flash=flash)
+    # Sucesso: sem banner no topo (aviso técnico PENDING só atrapalha no atalho)
+    error = notice if (not message and notice) else ""
+    ctx = _page_ctx(request, selected_id=conversation_id, error=error)
     return render(request, "partials/attendances_send_response.html", ctx)
 
 
