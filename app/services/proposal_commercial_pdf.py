@@ -138,7 +138,7 @@ def _field_line(label: str, value: str | None) -> str | None:
     clean = normalize_text(value)
     if not clean or clean.lower() in {"não informado", "nao informado", "—", "-"}:
         return None
-    return f"{label}: {clean}"
+    return f"<b>{_escape(label)}:</b> {_escape(clean)}"
 
 
 def collect_client_data(company: str, df, columns: dict) -> dict:
@@ -278,29 +278,64 @@ def generate_commercial_proposal_pdf(
     )
     styles = getSampleStyleSheet()
     title = ParagraphStyle(
-        "OppiTitle", parent=styles["Heading1"], fontSize=14, leading=18, alignment=TA_CENTER, spaceAfter=2
+        "OppiTitle",
+        parent=styles["Heading1"],
+        fontName="Helvetica-Bold",
+        fontSize=15,
+        leading=19,
+        alignment=TA_CENTER,
+        spaceAfter=2,
+        textColor="#111111",
     )
     subtitle = ParagraphStyle(
-        "OppiSubtitle", parent=styles["Normal"], fontSize=10, leading=13, alignment=TA_CENTER, spaceAfter=10
+        "OppiSubtitle",
+        parent=styles["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=11,
+        leading=14,
+        alignment=TA_CENTER,
+        spaceAfter=12,
+        textColor="#111111",
     )
     heading = ParagraphStyle(
-        "OppiH", parent=styles["Heading2"], fontSize=11, leading=14, spaceBefore=10, spaceAfter=4
+        "OppiH",
+        parent=styles["Heading2"],
+        fontName="Helvetica-Bold",
+        fontSize=11,
+        leading=14,
+        spaceBefore=12,
+        spaceAfter=2,
+        textColor="#111111",
     )
     body = ParagraphStyle(
-        "OppiBody", parent=styles["Normal"], fontSize=9.5, leading=13, alignment=TA_JUSTIFY, spaceAfter=3
+        "OppiBody",
+        parent=styles["Normal"],
+        fontName="Helvetica",
+        fontSize=9.5,
+        leading=13,
+        alignment=TA_JUSTIFY,
+        spaceAfter=4,
+        textColor="#111111",
     )
-    body_left = ParagraphStyle("OppiBodyLeft", parent=body, alignment=TA_LEFT)
+    body_left = ParagraphStyle("OppiBodyLeft", parent=body, alignment=TA_LEFT, spaceAfter=2)
     highlight = ParagraphStyle(
         "OppiHighlight", parent=body_left, backColor="#F3F4F6", borderPadding=4, spaceBefore=2, spaceAfter=2
     )
     small = ParagraphStyle(
-        "OppiSmall", parent=styles["Normal"], fontSize=9, leading=12, alignment=TA_CENTER, spaceBefore=8
+        "OppiSmall",
+        parent=styles["Normal"],
+        fontName="Helvetica",
+        fontSize=9,
+        leading=12,
+        alignment=TA_CENTER,
+        spaceBefore=8,
+        textColor="#111111",
     )
     story: list = []
 
     def add_heading(text: str) -> None:
         story.append(Paragraph(_escape(text), heading))
-        story.append(HRFlowable(width="100%", thickness=0.6, color="#333333", spaceAfter=4))
+        story.append(HRFlowable(width="100%", thickness=0.7, color="#111111", spaceBefore=1, spaceAfter=6))
 
     def add_text(text: str, style=body) -> None:
         for line in _paragraphs(text):
@@ -309,34 +344,38 @@ def generate_commercial_proposal_pdf(
     def add_labeled_block(lines: list[str | None], style=body_left) -> None:
         for line in lines:
             if line:
-                story.append(Paragraph(_escape(line), style))
+                # linhas já vêm com <b>label:</b> value ou texto puro escapado
+                story.append(Paragraph(line if "<b>" in line else _escape(line), style))
+
+    def add_feature(name: str, desc: str) -> None:
+        story.append(Paragraph(f"<b>{_escape(name)}</b>", body_left))
+        story.append(Paragraph(_escape(desc), body_left))
+        story.append(Spacer(1, 3))
 
     story.append(Paragraph("PROPOSTA COMERCIAL", title))
     story.append(Paragraph("PONTO ELETRÔNICO OPPI", subtitle))
-    story.append(Spacer(1, 4))
+    story.append(Spacer(1, 6))
 
+    # Modelo visual enviado: campos do contratante nesta ordem
     add_heading("Contratante")
     add_labeled_block(
         [
             _field_line("CONTRATANTE", client.get("razao_social") or client.get("empresa")),
-            _field_line("NOME FANTASIA", client.get("nome_fantasia")),
             _field_line("CNPJ/CPF", client.get("documento")),
             _field_line("ENDEREÇO", client.get("endereco")),
             _field_line("E-MAIL", client.get("email")),
             _field_line("TELEFONE", client.get("telefone")),
-            _field_line("WHATSAPP", client.get("whatsapp") if client.get("whatsapp") != client.get("telefone") else ""),
             _field_line("RESPONSÁVEL", client.get("responsavel")),
-            _field_line("CARGO", client.get("cargo")),
         ]
     )
 
     add_heading("Contratada")
     add_labeled_block(
         [
-            f"CONTRATADA: {OPPI_CONTRATADA['nome']}",
-            f"CNPJ: {OPPI_CONTRATADA['cnpj']}",
-            OPPI_CONTRATADA["endereco"],
-            OPPI_CONTRATADA["cidade"],
+            f"<b>CONTRATADA:</b> {_escape(OPPI_CONTRATADA['nome'])}",
+            f"<b>CNPJ:</b> {_escape(OPPI_CONTRATADA['cnpj'])}",
+            _escape(OPPI_CONTRATADA["endereco"]),
+            _escape(OPPI_CONTRATADA["cidade"]),
         ]
     )
 
@@ -345,7 +384,7 @@ def generate_commercial_proposal_pdf(
 
     add_heading("Funcionalidades inclusas")
     for name, desc in FUNCIONALIDADES:
-        story.append(Paragraph(f"<b>{_escape(name)}</b><br/>{_escape(desc)}", body_left))
+        add_feature(name, desc)
 
     add_heading("Proposta de valor")
     add_text(PROPOSTA_VALOR)
@@ -466,7 +505,7 @@ def generate_commercial_proposal_pdf(
     story.append(Spacer(1, 18))
     story.append(HRFlowable(width="100%", thickness=0.5, color="#999999", spaceBefore=8, spaceAfter=12))
 
-    add_text("______________________________", body_left)
+    story.append(Paragraph("______________________________", body_left))
     add_labeled_block(
         [
             _field_line("CONTRATANTE", client.get("razao_social") or client.get("empresa")),
@@ -475,11 +514,11 @@ def generate_commercial_proposal_pdf(
         ]
     )
     story.append(Spacer(1, 16))
-    add_text("______________________________", body_left)
+    story.append(Paragraph("______________________________", body_left))
     add_labeled_block(
         [
-            OPPI_CONTRATADA["nome"],
-            f"CNPJ: {OPPI_CONTRATADA['cnpj']}",
+            f"<b>{_escape(OPPI_CONTRATADA['nome'])}</b>",
+            f"<b>CNPJ:</b> {_escape(OPPI_CONTRATADA['cnpj'])}",
         ]
     )
 

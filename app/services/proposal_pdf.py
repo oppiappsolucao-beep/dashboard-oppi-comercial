@@ -186,7 +186,7 @@ def _proposal_cache_key(
         normalize_text(colaboradores),
         normalize_text(services_description),
         normalize_text(plans_text),
-        "commercial-v1" if normalize_text(services_description) else normalize_text(get_proposal_template_doc_id()),
+        "commercial-v2" if normalize_text(services_description) else normalize_text(get_proposal_template_doc_id()),
         normalize_text(os.environ.get("APP_BUILD", "")),
     ])
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
