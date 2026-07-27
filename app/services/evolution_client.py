@@ -77,6 +77,70 @@ def fetch_instance_names() -> list[str]:
     return names
 
 
+def _iter_instance_rows() -> list[dict]:
+    try:
+        response = requests.get(_url("/instance/fetchInstances"), headers=_headers(), timeout=20)
+    except requests.RequestException:
+        return []
+    if response.status_code >= 400:
+        return []
+    data = _parse_json(response)
+    rows = data if isinstance(data, list) else data.get("data") or data.get("instances") or []
+    if isinstance(data, dict) and not rows and (data.get("name") or data.get("instanceName")):
+        rows = [data]
+    if not isinstance(rows, list):
+        return []
+    return [item for item in rows if isinstance(item, dict)]
+
+
+def get_instance_owner_phone() -> str:
+    """Número do WhatsApp conectado na instância atual (ownerJid/number)."""
+    try:
+        wanted = resolved_instance_name().lower()
+    except Exception:
+        wanted = normalize_text(settings.evolution_instance).lower()
+    for item in _iter_instance_rows():
+        nested = item.get("instance") if isinstance(item.get("instance"), dict) else {}
+        name = normalize_text(
+            item.get("name")
+            or item.get("instanceName")
+            or nested.get("instanceName")
+            or nested.get("name")
+            or ""
+        ).lower()
+        if wanted and name and name != wanted and wanted not in name and name not in wanted:
+            continue
+        for candidate in (
+            item.get("ownerJid"),
+            item.get("owner"),
+            item.get("number"),
+            nested.get("ownerJid"),
+            nested.get("owner"),
+            nested.get("number"),
+            item.get("ownerJid") if not nested else None,
+        ):
+            text = normalize_text(candidate or "")
+            if not text:
+                continue
+            digits = normalize_phone_from_jid(text) if "@" in text else normalize_digits(text)
+            if digits and len(digits) >= 10:
+                if not digits.startswith("55") and len(digits) >= 10:
+                    digits = f"55{digits}"
+                return digits
+        if wanted and name == wanted:
+            break
+    return ""
+
+
+def is_self_chat(phone: str, jid: str = "") -> bool:
+    """True se o destino é o mesmo WhatsApp conectado na Evolution."""
+    owner = get_instance_owner_phone()
+    if not owner:
+        return False
+    target = _plain_phone(phone) or normalize_phone_from_jid(jid)
+    return bool(target and _phone_tail_match(owner, target))
+
+
 def resolved_instance_name() -> str:
     configured = _instance_name()
     names = fetch_instance_names()
@@ -618,13 +682,8 @@ def assert_instance_ready() -> None:
 
 
 def _text_payload(number: str, body: str) -> dict[str, Any]:
-    # delay/presence ajudam em algumas versões Baileys a sair de PENDING.
-    return {
-        "number": number,
-        "text": body,
-        "delay": 1200,
-        "linkPreview": False,
-    }
+    # Formato igual ao Manager Evolution (evita payloads extras que geravam duplicata).
+    return {"number": number, "text": body}
 
 
 def _plain_phone(phone: str) -> str:
@@ -834,6 +893,14 @@ def send_text(phone: str, text: str, *, jid: str = "") -> dict[str, Any]:
 
     assert_instance_ready()
 
+    if is_self_chat(phone, jid):
+        owner = get_instance_owner_phone()
+        raise EvolutionClientError(
+            "Destino é o mesmo WhatsApp conectado na Evolution "
+            f"({owner}). O WhatsApp não entrega mensagem para o próprio número. "
+            "Teste enviando para outro celular (cliente real)."
+        )
+
     # Resolve @lid antes — crítico para sair de PENDING no Baileys atual.
     resolved_jid = discover_lid_for_phone(phone, jid) or normalize_text(jid)
     candidates = _send_target_candidates(phone, resolved_jid)
@@ -895,7 +962,15 @@ def send_text(phone: str, text: str, *, jid: str = "") -> dict[str, Any]:
             continue
 
     if pending_ok is not None:
-        return pending_ok
+        # Não fingir sucesso: PENDING = não chegou. Sobe erro com o destino testado.
+        used = normalize_text(pending_ok.get("_oppi_send_number") or "")
+        raise EvolutionClientError(
+            "Evolution aceitou a mensagem, mas a entrega ficou PENDING "
+            f"(destino {used or 'desconhecido'}). "
+            "1) Teste com outro celular (não o da instância). "
+            "2) No Manager Evolution, tente o mesmo chat — se também falhar, "
+            "atualize Baileys no Easypanel: baileys@7.0.0-rc13 e reconecte o QR."
+        )
 
     detail = " | ".join(errors[-4:]) if errors else "sem detalhes"
     raise EvolutionClientError(

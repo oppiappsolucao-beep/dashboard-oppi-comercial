@@ -482,6 +482,11 @@ def attendances_evolution_diag(request: Request, conversation_id: str = ""):
 
     conversation = store.get_conversation(conversation_id) if conversation_id else None
     discovered_lid = ""
+    owner_phone = ""
+    try:
+        owner_phone = evolution_client.get_instance_owner_phone()
+    except Exception:
+        owner_phone = ""
     if conversation:
         try:
             discovered_lid = evolution_client.discover_lid_for_phone(
@@ -490,12 +495,22 @@ def attendances_evolution_diag(request: Request, conversation_id: str = ""):
             )
         except Exception:
             discovered_lid = ""
+    self_chat = False
+    if conversation:
+        try:
+            self_chat = evolution_client.is_self_chat(
+                conversation.get("phone_e164") or "",
+                conversation.get("remote_jid") or "",
+            )
+        except Exception:
+            self_chat = False
     return JSONResponse(
         {
             "configured": settings.evolution_configured,
             "api_url": settings.evolution_api_url,
             "instance_configured": settings.evolution_instance,
             "instance_resolved": resolved or None,
+            "instance_owner_phone": owner_phone or None,
             "instances_available": names,
             "api_key_masked": masked,
             "connection_state": state or None,
@@ -506,6 +521,7 @@ def attendances_evolution_diag(request: Request, conversation_id: str = ""):
                 "remote_jid": (conversation or {}).get("remote_jid"),
                 "contact_name": (conversation or {}).get("contact_name"),
                 "discovered_lid": discovered_lid or None,
+                "is_self_chat": self_chat,
                 "has_lid": bool(
                     discovered_lid
                     or (
@@ -517,18 +533,16 @@ def attendances_evolution_diag(request: Request, conversation_id: str = ""):
             if conversation
             else None,
             "hint": (
-                "1) EVOLUTION_INSTANCE deve bater com instances_available. "
-                "2) Envio 1:1 precisa de remote_jid @lid (não só @s.whatsapp.net). "
-                "3) Peça msg nova do cliente → CRM → Atualizar @lid. "
-                "4) Se já tem @lid e ainda PENDING: atualize Baileys no Evolution "
-                "(baileys@7.0.0-rc13) e reconecte o QR."
+                "Se is_self_chat=true, troque o teste para OUTRO celular. "
+                "Se PENDING em qualquer destino, atualize Baileys no Evolution "
+                "(baileys@7.0.0-rc13) e reconecte o QR da oppi-comercial."
             ),
             "evolution_fix": (
-                "No Easypanel (serviço Evolution), sobrescreva o entrypoint/command para: "
+                "No Easypanel → serviço Evolution → Command/Entrypoint:\n"
                 'sh -c "npm install baileys@7.0.0-rc13 && npm run db:deploy && '
-                'npm run db:generate && npm run start:prod" '
-                "(ou entrypoint com Docker/scripts/deploy_database.sh). "
-                "Depois reconecte o QR da instância oppi-comercial."
+                'npm run db:generate && npm run start:prod"\n'
+                "Depois Delete/Reconnect QR da instância oppi-comercial. "
+                "Enquanto o Baileys estiver antigo, NENHUM sistema (CRM ou Manager) entrega 1:1."
             ),
         }
     )

@@ -193,6 +193,18 @@ def send_text_message(
     if not settings.evolution_configured:
         return None, "Evolution API não configurada. Defina as variáveis no Easypanel."
 
+    if evolution_client.is_self_chat(
+        conversation.get("phone_e164") or "",
+        conversation.get("remote_jid") or "",
+    ):
+        owner = evolution_client.get_instance_owner_phone()
+        return None, (
+            "Este chat é o mesmo número conectado na Evolution"
+            + (f" ({owner})" if owner else "")
+            + ". WhatsApp não entrega mensagem para si mesmo. "
+            "Abra um chamado para outro celular e teste de novo."
+        )
+
     try:
         response = evolution_client.send_text(
             conversation["phone_e164"],

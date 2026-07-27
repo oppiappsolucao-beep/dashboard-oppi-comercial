@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-APP_BUILD = os.getenv("APP_BUILD", "20260727-whatsapp-prefer-lid-v63").strip() or "20260727-whatsapp-prefer-lid-v63"
+APP_BUILD = os.getenv("APP_BUILD", "20260727-whatsapp-self-block-v64").strip() or "20260727-whatsapp-self-block-v64"
 
 
 class Settings:
