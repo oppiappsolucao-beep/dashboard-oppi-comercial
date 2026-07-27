@@ -212,9 +212,6 @@
     el.style.height = Math.min(Math.max(el.scrollHeight, 40), 120) + "px";
   }
 
-  // Digitação sintética: div NÃO é contenteditable — Windows não tem corretor onde agir.
-  var composerRaw = new WeakMap();
-
   function composerForm(el) {
     return el && el.closest ? el.closest(".att-composer") : null;
   }
@@ -223,125 +220,44 @@
     return form ? form.querySelector(".att-composer-input") : null;
   }
 
-  function getComposerRaw(form) {
-    if (!form) return "";
-    return composerRaw.has(form) ? composerRaw.get(form) || "" : "";
-  }
-
-  function renderComposer(form) {
-    if (!form) return "";
-    var el = composerInput(form);
-    var text = getComposerRaw(form);
-    var snap = form.querySelector(".att-text-snap");
-    if (snap) snap.value = text;
-    if (!el) return text;
-
-    el.textContent = "";
-    if (text) {
-      el.appendChild(document.createTextNode(text));
-    }
-    if (document.activeElement === el) {
-      var caret = document.createElement("span");
-      caret.className = "att-caret";
-      caret.setAttribute("aria-hidden", "true");
-      el.appendChild(caret);
-    }
-    autoGrow(el);
-    return text;
-  }
-
-  function setComposerRaw(form, value) {
-    if (!form) return "";
-    var text = value == null ? "" : String(value);
-    // Limite defensivo
-    if (text.length > 4000) text = text.slice(0, 4000);
-    composerRaw.set(form, text);
-    return renderComposer(form);
-  }
-
   function textForSend(form) {
-    return setComposerRaw(form, getComposerRaw(form));
+    var el = composerInput(form);
+    return el ? String(el.value || "") : "";
   }
 
-  function insertComposerText(form, chunk) {
-    if (!form) return;
-    chunk = String(chunk || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-    if (!chunk) return;
-    setComposerRaw(form, getComposerRaw(form) + chunk);
+  function clearComposer(form) {
+    var el = composerInput(form);
+    if (!el) return;
+    el.value = "";
+    autoGrow(el);
   }
 
-  function bindSyntheticComposer(root) {
+  function bindComposer(root) {
     var scope = root || document;
-    scope.querySelectorAll(".att-composer-input[data-synthetic='1']").forEach(function (el) {
+    scope.querySelectorAll("textarea.att-composer-input").forEach(function (el) {
       if (el.dataset.attGuard === "1") return;
       el.dataset.attGuard = "1";
-      // Garante: nunca contenteditable (mata corretor)
-      el.removeAttribute("contenteditable");
-      el.setAttribute("contenteditable", "false");
-      el.setAttribute("spellcheck", "false");
-
-      var form = composerForm(el);
-      if (form && !composerRaw.has(form)) setComposerRaw(form, "");
-
-      el.addEventListener("focus", function () {
-        renderComposer(composerForm(el));
+      autoGrow(el);
+      el.addEventListener("input", function () {
+        autoGrow(el);
       });
-
-      el.addEventListener("blur", function () {
-        renderComposer(composerForm(el));
-      });
-
       el.addEventListener("keydown", function (ev) {
-        var f = composerForm(el);
-        if (!f || el.getAttribute("aria-disabled") === "true") return;
-
-        if (ev.key === "Enter" && !ev.shiftKey) {
+        if (ev.key !== "Enter" || ev.shiftKey) return;
+        // No mobile, Enter do teclado virtual costuma ser "enviar"
+        if (window.matchMedia && window.matchMedia("(pointer: coarse)").matches) {
           ev.preventDefault();
-          submitComposer(f);
+          submitComposer(composerForm(el));
           return;
         }
-        if (ev.key === "Enter" && ev.shiftKey) {
+        if (!ev.shiftKey) {
           ev.preventDefault();
-          insertComposerText(f, "\n");
-          return;
+          submitComposer(composerForm(el));
         }
-        if (ev.key === "Backspace") {
-          ev.preventDefault();
-          setComposerRaw(f, getComposerRaw(f).slice(0, -1));
-          return;
-        }
-        if (ev.key === "Delete") {
-          ev.preventDefault();
-          return;
-        }
-        if (ev.ctrlKey || ev.metaKey || ev.altKey) {
-          // Ctrl+V tratado no paste; Ctrl+A/C etc. ok
-          if (ev.key === "v" || ev.key === "V") return; // paste event
-          if (ev.key === "a" || ev.key === "A" || ev.key === "c" || ev.key === "C") return;
-          return;
-        }
-        if (ev.key === "Tab") return;
-        if (ev.key.length === 1) {
-          ev.preventDefault();
-          insertComposerText(f, ev.key);
-        }
-      });
-
-      el.addEventListener("paste", function (ev) {
-        ev.preventDefault();
-        var f = composerForm(el);
-        var clip = ev.clipboardData || window.clipboardData;
-        var text = clip ? clip.getData("text/plain") : "";
-        insertComposerText(f, text);
-      });
-
-      el.addEventListener("beforeinput", function (ev) {
-        ev.preventDefault();
       });
     });
   }
 
-  bindSyntheticComposer(document);
+  bindComposer(document);
 
   document.body.addEventListener("htmx:afterSwap", function (ev) {
     if (!ev || !ev.target) return;
@@ -355,7 +271,7 @@
     }
     if (ev.target.id === "att-chat-root" || ev.target.id === "att-messages") {
       scrollMessages();
-      bindSyntheticComposer(ev.target);
+      bindComposer(ev.target);
       autoGrow($(".att-composer-input"));
       var thread = $("[data-conversation-id]", $("#att-chat-root"));
       var shell = $("#att-shell");
@@ -450,7 +366,7 @@
           if (window.htmx) window.htmx.process(root);
         }
         scrollMessages();
-        bindSyntheticComposer(root || document);
+        bindComposer(root || document);
         refreshList({ bumpId: id });
         lastInboxToken = "";
         lastConversationToken = "";
@@ -458,7 +374,6 @@
       .catch(function () {});
     input.value = "";
   });
-
   document.addEventListener(
     "click",
     function () {

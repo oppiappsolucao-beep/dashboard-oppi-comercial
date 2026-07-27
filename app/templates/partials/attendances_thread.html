@@ -45,25 +45,22 @@
         hx-target="#att-chat-root"
         hx-swap="innerHTML"
         hx-disabled-elt=".att-send-btn"
-        autocomplete="off"
-        spellcheck="false">
+        autocomplete="off">
     <label class="att-attach-btn" title="Anexar arquivo">
       ＋
       <input type="file" id="att-media-input" accept="image/*,audio/*,.pdf,.doc,.docx" hidden>
     </label>
-    {# Campo NÃO editável pelo SO: digitação 100% via JS (mata corretor Windows). #}
-    <input type="hidden" name="text" class="att-text-snap" value="" autocomplete="off">
-    <div class="att-composer-input"
-         role="textbox"
-         aria-multiline="true"
-         aria-label="Mensagem"
-         aria-placeholder="Digite uma mensagem…"
-         tabindex="0"
-         spellcheck="false"
-         lang="zxx"
-         data-synthetic="1"
-         data-placeholder="Digite uma mensagem…"
-         {% if not evolution_configured %}aria-disabled="true"{% endif %}></div>
+    <textarea
+      name="text"
+      class="att-composer-input"
+      rows="1"
+      placeholder="Digite uma mensagem…"
+      autocomplete="off"
+      autocorrect="off"
+      autocapitalize="sentences"
+      spellcheck="true"
+      enterkeyhint="send"
+      {% if not evolution_configured %}disabled{% endif %}></textarea>
     {# Texto do botão só no CSS — imuniza contra corretor (Enviar → estampar) #}
     <button type="button"
             class="btn att-send-btn"

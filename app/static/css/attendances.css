@@ -365,10 +365,12 @@
   min-height: 40px;
   max-height: 120px;
   overflow-y: auto;
+  resize: none;
   border: none;
   border-radius: 10px;
   padding: 10px 12px;
   font: inherit;
+  font-size: 16px; /* evita zoom e teclado quebrado no iOS */
   line-height: 1.35;
   background: #fff;
   outline: none;
@@ -376,37 +378,17 @@
   word-break: break-word;
   cursor: text;
   caret-color: #111;
-  user-select: text;
-  -webkit-user-modify: read-only;
+  color: #111;
+  -webkit-appearance: none;
+  appearance: none;
 }
 
 .att-composer-input:focus {
   box-shadow: inset 0 0 0 2px rgba(236, 72, 153, 0.25);
 }
 
-.att-composer-input[aria-disabled="true"] {
+.att-composer-input:disabled {
   opacity: 0.55;
-  pointer-events: none;
-}
-
-.att-composer-input:empty::before {
-  content: attr(data-placeholder);
-  color: #9ca3af;
-  pointer-events: none;
-}
-
-.att-composer-input .att-caret {
-  display: inline-block;
-  width: 1px;
-  height: 1.1em;
-  margin-left: 1px;
-  background: #111;
-  vertical-align: text-bottom;
-  animation: att-caret-blink 1s step-end infinite;
-}
-
-@keyframes att-caret-blink {
-  50% { opacity: 0; }
 }
 
 .att-attach-btn {
@@ -686,7 +668,8 @@
   }
 
   .att-input,
-  .att-select {
+  .att-select,
+  .att-composer-input {
     min-height: 42px;
     font-size: 16px; /* evita zoom no iOS */
   }
