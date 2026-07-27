@@ -333,6 +333,44 @@ def send_media_message(
     return message, ""
 
 
+def send_voice_message(
+    conversation_id: str,
+    *,
+    audio_base64: str,
+    mimetype: str = "audio/ogg",
+    filename: str = "audio.ogg",
+    sender: str = "agent",
+    store_media_url: str = "",
+) -> tuple[dict | None, str]:
+    conversation = store.get_conversation(conversation_id)
+    if not conversation:
+        return None, "Conversa não encontrada."
+    if not settings.evolution_configured:
+        return None, "Evolution API não configurada."
+    try:
+        response = evolution_client.send_whatsapp_audio(
+            conversation["phone_e164"],
+            audio_base64=audio_base64,
+            jid=conversation.get("remote_jid") or "",
+        )
+    except EvolutionClientError as error:
+        return None, str(error)
+
+    evo_id = evolution_client.extract_message_id(response)
+    message = store.add_message(
+        conversation_id,
+        direction="out",
+        body="",
+        msg_type="audio",
+        media_url=store_media_url,
+        media_mime=mimetype,
+        media_filename=filename,
+        evolution_id=evo_id,
+        sender=sender,
+    )
+    return message, ""
+
+
 def assume_conversation(
     conversation_id: str,
     assignee: str,

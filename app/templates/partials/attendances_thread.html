@@ -57,6 +57,12 @@
       ＋
       <input type="file" id="att-media-input" accept="image/*,audio/*,.pdf,.doc,.docx" hidden>
     </label>
+    <div class="att-voice-bar" id="att-voice-bar" hidden>
+      <button type="button" class="att-voice-cancel" id="att-voice-cancel" title="Cancelar gravação" aria-label="Cancelar gravação">✕</button>
+      <span class="att-voice-dot" aria-hidden="true"></span>
+      <span class="att-voice-timer" id="att-voice-timer">0:00</span>
+      <button type="button" class="btn att-voice-send" id="att-voice-send" aria-label="Enviar áudio">Enviar áudio</button>
+    </div>
     <textarea
       name="text"
       class="att-composer-input"
@@ -70,6 +76,16 @@
       enterkeyhint="send"
       data-form-type="other"
       {% if not evolution_configured %}disabled{% endif %}></textarea>
+    <button type="button"
+            class="att-mic-btn"
+            id="att-mic-btn"
+            title="Gravar áudio"
+            aria-label="Gravar áudio"
+            {% if not evolution_configured %}disabled{% endif %}>
+      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="currentColor">
+        <path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z"/>
+      </svg>
+    </button>
     {# Texto do botão só no CSS — imuniza contra corretor (Enviar → estampar) #}
     <button type="button"
             class="btn att-send-btn"

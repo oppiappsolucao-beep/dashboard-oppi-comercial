@@ -211,6 +211,45 @@ async def attendances_send_media(
     return render(request, "partials/attendances_send_response.html", ctx)
 
 
+@router.post("/atendimentos/conversa/{conversation_id}/voz", response_class=HTMLResponse)
+async def attendances_send_voice(
+    request: Request,
+    conversation_id: str,
+    file: UploadFile = File(...),
+):
+    require_auth(request)
+    raw = await file.read()
+    if not raw:
+        ctx = _page_ctx(request, selected_id=conversation_id, error="Áudio vazio.")
+        return render(request, "partials/attendances_send_response.html", ctx)
+    if len(raw) > _MEDIA_MAX_BYTES:
+        ctx = _page_ctx(request, selected_id=conversation_id, error="Áudio maior que 15 MB.")
+        return render(request, "partials/attendances_send_response.html", ctx)
+
+    filename = normalize_text(file.filename) or "audio.ogg"
+    safe_name = f"{uuid.uuid4().hex}_{Path(filename).name}"
+    dest = _media_dir() / safe_name
+    dest.write_bytes(raw)
+
+    mime = file.content_type or mimetypes.guess_type(filename)[0] or "audio/ogg"
+    if not mime.startswith("audio/"):
+        mime = "audio/ogg"
+    media_payload = base64.b64encode(raw).decode("ascii")
+    local_url = f"/atendimentos/media/{safe_name}"
+
+    _, error = attendances_service.send_voice_message(
+        conversation_id,
+        audio_base64=media_payload,
+        mimetype=mime,
+        filename=filename,
+        sender="agent",
+        store_media_url=local_url,
+    )
+
+    ctx = _page_ctx(request, selected_id=conversation_id, error=error)
+    return render(request, "partials/attendances_send_response.html", ctx)
+
+
 @router.get("/atendimentos/media/{filename}")
 def attendances_media_file(request: Request, filename: str):
     require_auth(request)

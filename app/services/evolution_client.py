@@ -1122,3 +1122,44 @@ def send_media(
     raise EvolutionClientError(
         "Falha ao enviar mídia via Evolution. " + (" | ".join(errors[-3:]) if errors else "")
     )
+
+
+def send_whatsapp_audio(
+    phone: str,
+    *,
+    audio_base64: str,
+    jid: str = "",
+) -> dict[str, Any]:
+    """Envia áudio como nota de voz (PTT) via Evolution sendWhatsAppAudio."""
+    if not is_configured():
+        raise EvolutionClientError("Evolution API não configurada.")
+    assert_instance_ready()
+    number = _pick_send_target(phone, jid)
+    if not number:
+        raise EvolutionClientError("Telefone/JID da conversa inválido para envio.")
+    audio = str(audio_base64 or "").strip()
+    if not audio:
+        raise EvolutionClientError("Áudio vazio.")
+    errors: list[str] = []
+    payload = {
+        "number": number,
+        "audio": audio,
+        "encoding": True,
+    }
+    for url in _instance_urls("/message/sendWhatsAppAudio"):
+        try:
+            response = requests.post(url, json=payload, headers=_headers(), timeout=90)
+        except requests.RequestException as error:
+            errors.append(str(error))
+            continue
+        data = _parse_json(response)
+        err = _response_looks_like_error(data)
+        if response.status_code >= 400 or err:
+            errors.append(err or response.text[:180])
+            continue
+        if extract_message_id(data):
+            return data
+        errors.append(f"sem ID: {str(data)[:160]}")
+    raise EvolutionClientError(
+        "Falha ao enviar áudio via Evolution. " + (" | ".join(errors[-3:]) if errors else "")
+    )

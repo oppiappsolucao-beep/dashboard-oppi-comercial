@@ -276,6 +276,7 @@
       setCrmSheetOpen(false);
       unlockComposer($(".att-composer"));
       autoGrow($(".att-composer-input"));
+      syncComposerActions($(".att-composer"));
       var thread = $("[data-conversation-id]", $("#att-chat-root"));
       var shell = $("#att-shell");
       if (shell && thread) {
@@ -292,6 +293,7 @@
     if (
       path.indexOf("/enviar") === -1
       && path.indexOf("/midia") === -1
+      && path.indexOf("/voz") === -1
       && path.indexOf("/excluir") === -1
       && path.indexOf("/finalizar") === -1
     ) {
@@ -501,4 +503,233 @@
       newCallPanel.setAttribute("hidden", "hidden");
     });
   }
+
+  /* —— Gravação de voz (não altera o fluxo de texto) —— */
+  var voiceState = {
+    recorder: null,
+    chunks: [],
+    stream: null,
+    timer: null,
+    startedAt: 0,
+    sending: false,
+  };
+
+  function formatVoiceTime(ms) {
+    var total = Math.max(0, Math.floor(ms / 1000));
+    var m = Math.floor(total / 60);
+    var s = total % 60;
+    return m + ":" + (s < 10 ? "0" : "") + s;
+  }
+
+  function pickAudioMime() {
+    var types = [
+      "audio/ogg;codecs=opus",
+      "audio/webm;codecs=opus",
+      "audio/webm",
+      "audio/mp4",
+    ];
+    if (!window.MediaRecorder || !MediaRecorder.isTypeSupported) return "";
+    for (var i = 0; i < types.length; i++) {
+      if (MediaRecorder.isTypeSupported(types[i])) return types[i];
+    }
+    return "";
+  }
+
+  function voiceExt(mime) {
+    var m = String(mime || "").toLowerCase();
+    if (m.indexOf("ogg") !== -1) return "ogg";
+    if (m.indexOf("mp4") !== -1 || m.indexOf("m4a") !== -1 || m.indexOf("aac") !== -1) return "m4a";
+    if (m.indexOf("mpeg") !== -1 || m.indexOf("mp3") !== -1) return "mp3";
+    return "webm";
+  }
+
+  function syncComposerActions(form) {
+    if (!form) form = $(".att-composer");
+    if (!form) return;
+    var mic = form.querySelector(".att-mic-btn");
+    var send = form.querySelector(".att-send-btn");
+    var recording = form.classList.contains("is-recording");
+    var hasText = String(textForSend(form) || "").trim().length > 0;
+    if (mic) mic.classList.toggle("is-hidden", recording || hasText);
+    if (send) send.classList.toggle("is-hidden", recording || !hasText);
+  }
+
+  function setVoiceUi(form, recording) {
+    if (!form) return;
+    form.classList.toggle("is-recording", !!recording);
+    var bar = form.querySelector("#att-voice-bar") || form.querySelector(".att-voice-bar");
+    if (bar) {
+      if (recording) bar.removeAttribute("hidden");
+      else bar.setAttribute("hidden", "hidden");
+    }
+    syncComposerActions(form);
+  }
+
+  function stopVoiceTracks() {
+    if (voiceState.stream) {
+      voiceState.stream.getTracks().forEach(function (t) {
+        try { t.stop(); } catch (e) { /* ignore */ }
+      });
+    }
+    voiceState.stream = null;
+  }
+
+  function clearVoiceTimer() {
+    if (voiceState.timer) {
+      clearInterval(voiceState.timer);
+      voiceState.timer = null;
+    }
+  }
+
+  function abortVoice(form) {
+    clearVoiceTimer();
+    try {
+      if (voiceState.recorder && voiceState.recorder.state !== "inactive") {
+        voiceState.recorder.onstop = null;
+        voiceState.recorder.stop();
+      }
+    } catch (e) { /* ignore */ }
+    voiceState.recorder = null;
+    voiceState.chunks = [];
+    stopVoiceTracks();
+    setVoiceUi(form || $(".att-composer"), false);
+  }
+
+  function uploadVoiceBlob(blob, mime) {
+    var id = selectedId();
+    if (!id || !blob) return;
+    if (voiceState.sending) return;
+    voiceState.sending = true;
+    var fd = new FormData();
+    var name = "audio." + voiceExt(mime);
+    fd.append("file", blob, name);
+    fetch("/atendimentos/conversa/" + encodeURIComponent(id) + "/voz", {
+      method: "POST",
+      body: fd,
+      credentials: "same-origin",
+      headers: { "HX-Request": "true" },
+    })
+      .then(function (r) { return r.text(); })
+      .then(function (html) {
+        var root = $("#att-chat-root");
+        if (root) {
+          root.innerHTML = html;
+          if (window.htmx) window.htmx.process(root);
+        }
+        scrollMessages();
+        bindComposer(root || document);
+        bindCrmSheet(root || document);
+        setCrmSheetOpen(false);
+        syncComposerActions($(".att-composer"));
+        refreshList({ bumpId: id });
+        lastInboxToken = "";
+        lastConversationToken = "";
+      })
+      .catch(function () {})
+      .finally(function () {
+        voiceState.sending = false;
+      });
+  }
+
+  function finishVoiceAndSend(form) {
+    clearVoiceTimer();
+    var recorder = voiceState.recorder;
+    if (!recorder) {
+      setVoiceUi(form, false);
+      return;
+    }
+    recorder.onstop = function () {
+      var mime = recorder.mimeType || pickAudioMime() || "audio/webm";
+      var blob = new Blob(voiceState.chunks, { type: mime });
+      voiceState.chunks = [];
+      voiceState.recorder = null;
+      stopVoiceTracks();
+      setVoiceUi(form, false);
+      if (blob.size < 200) return;
+      uploadVoiceBlob(blob, mime);
+    };
+    try {
+      if (recorder.state !== "inactive") recorder.stop();
+      else recorder.onstop();
+    } catch (e) {
+      abortVoice(form);
+    }
+  }
+
+  function startVoice(form) {
+    if (!form || form.dataset.attSending === "1" || voiceState.sending) return;
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      window.alert("Seu navegador não permite gravação de áudio.");
+      return;
+    }
+    if (!window.MediaRecorder) {
+      window.alert("Seu navegador não suporta gravação de áudio.");
+      return;
+    }
+    abortVoice(form);
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
+      voiceState.stream = stream;
+      voiceState.chunks = [];
+      var mime = pickAudioMime();
+      var options = mime ? { mimeType: mime } : undefined;
+      var recorder;
+      try {
+        recorder = options ? new MediaRecorder(stream, options) : new MediaRecorder(stream);
+      } catch (e) {
+        stopVoiceTracks();
+        window.alert("Não foi possível iniciar a gravação.");
+        return;
+      }
+      voiceState.recorder = recorder;
+      recorder.ondataavailable = function (ev) {
+        if (ev.data && ev.data.size > 0) voiceState.chunks.push(ev.data);
+      };
+      recorder.start(250);
+      voiceState.startedAt = Date.now();
+      setVoiceUi(form, true);
+      var timerEl = form.querySelector("#att-voice-timer") || form.querySelector(".att-voice-timer");
+      if (timerEl) timerEl.textContent = "0:00";
+      clearVoiceTimer();
+      voiceState.timer = setInterval(function () {
+        var elapsed = Date.now() - voiceState.startedAt;
+        if (timerEl) timerEl.textContent = formatVoiceTime(elapsed);
+        if (elapsed >= 5 * 60 * 1000) finishVoiceAndSend(form);
+      }, 250);
+    }).catch(function () {
+      window.alert("Permita o acesso ao microfone para gravar áudio.");
+    });
+  }
+
+  document.body.addEventListener("input", function (ev) {
+    var el = ev.target;
+    if (!el || !el.classList || !el.classList.contains("att-composer-input")) return;
+    syncComposerActions(composerForm(el));
+  });
+
+  document.addEventListener(
+    "click",
+    function (ev) {
+      var target = ev.target && ev.target.closest ? ev.target.closest(".att-mic-btn, .att-voice-cancel, .att-voice-send") : null;
+      if (!target) return;
+      var form = target.closest(".att-composer");
+      if (!form) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      if (target.classList.contains("att-mic-btn")) {
+        if (target.disabled) return;
+        startVoice(form);
+        return;
+      }
+      if (target.classList.contains("att-voice-cancel")) {
+        abortVoice(form);
+        return;
+      }
+      if (target.classList.contains("att-voice-send")) {
+        finishVoiceAndSend(form);
+      }
+    },
+    true
+  );
+
+  syncComposerActions($(".att-composer"));
 })();

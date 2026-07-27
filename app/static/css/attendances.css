@@ -406,6 +406,95 @@
   margin: 0;
 }
 
+.att-mic-btn {
+  width: 42px;
+  height: 42px;
+  border: none;
+  border-radius: 50%;
+  background: #54656f;
+  color: #fff;
+  cursor: pointer;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.att-mic-btn:hover:not(:disabled) {
+  background: #3b4a54;
+}
+
+.att-mic-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.att-mic-btn.is-hidden,
+.att-send-btn.is-hidden {
+  display: none;
+}
+
+.att-composer.is-recording .att-attach-btn,
+.att-composer.is-recording .att-composer-input,
+.att-composer.is-recording .att-mic-btn,
+.att-composer.is-recording .att-send-btn {
+  display: none;
+}
+
+.att-voice-bar {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  padding: 0 4px;
+}
+
+.att-voice-bar[hidden] {
+  display: none !important;
+}
+
+.att-voice-cancel {
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 50%;
+  background: #fee2e2;
+  color: #b91c1c;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.att-voice-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #ef4444;
+  flex-shrink: 0;
+  animation: att-voice-pulse 1s ease-in-out infinite;
+}
+
+@keyframes att-voice-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(0.85); }
+}
+
+.att-voice-timer {
+  font-variant-numeric: tabular-nums;
+  font-size: 15px;
+  font-weight: 600;
+  color: #111827;
+  min-width: 3.2em;
+}
+
+.att-voice-send {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
 .att-send-btn {
   flex-shrink: 0;
   min-width: 88px;
@@ -546,44 +635,6 @@
   border: 1px solid #BBF7D0;
   border-radius: 6px;
   margin-bottom: 10px;
-}
-
-.att-evo-tools {
-  margin: 0 0 14px;
-  padding: 12px;
-  border: 1px solid #E5E7EB;
-  border-radius: 10px;
-  background: #F8FAFC;
-  display: grid;
-  gap: 8px;
-}
-
-.att-evo-tools .att-label {
-  margin: 0;
-}
-
-.att-evo-link {
-  text-align: center;
-}
-
-.att-evo-result,
-.att-evo-result-wrap .att-evo-result {
-  margin: 0;
-  padding: 10px;
-  max-height: 220px;
-  overflow: auto;
-  border-radius: 8px;
-  background: #111827;
-  color: #E5E7EB;
-  font-size: 11px;
-  line-height: 1.4;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.att-evo-result.err {
-  background: #7F1D1D;
-  color: #FEE2E2;
 }
 
 .att-error {
@@ -851,6 +902,11 @@
   .att-attach-btn {
     width: 42px;
     height: 42px;
+  }
+
+  .att-mic-btn {
+    width: 44px;
+    height: 44px;
   }
 
   .att-send-btn {
