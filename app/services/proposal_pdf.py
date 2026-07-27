@@ -53,6 +53,7 @@ PLACEHOLDER_ALIASES = {
     "{{VALOR_PROPOSTA}}": ["{{VALOR_PROPOSTA}}", "{{valor_proposta}}", "{{VALOR}}", "{{valor}}"],
     "{{SERVICO}}": ["{{SERVICO}}", "{{servico}}", "{{SOLUCAO}}", "{{solucao}}"],
     "{{VENDEDOR}}": ["{{VENDEDOR}}", "{{vendedor}}"],
+    "{{RESPONSAVEL}}": ["{{RESPONSAVEL}}", "{{responsavel}}", "{{RESPONSÁVEL}}"],
     "{{DATA}}": ["{{DATA}}", "{{data}}", "{{DATA_PROPOSTA}}", "{{data_proposta}}"],
     "{{NUMERO_PROPOSTA}}": ["{{NUMERO_PROPOSTA}}", "{{numero_proposta}}", "{{NUMERO}}", "{{numero}}"],
     "{{CNPJ}}": ["{{CNPJ}}", "{{cnpj}}"],
@@ -66,10 +67,15 @@ PLACEHOLDER_ALIASES = {
 
 CONTRATANTE_LABEL_FILLS = (
     ("CONTRATANTE", "{{EMPRESA}}"),
+    ("CNPJ/CPF", "{{CNPJ}}"),
     ("CNPJ", "{{CNPJ}}"),
+    ("ENDEREÇO", "{{ENDERECO}}"),
     ("Rua", "{{RUA}}"),
     ("Bairro: CEP", "{{BAIRRO_CEP}}"),
+    ("E-MAIL", "{{EMAIL}}"),
     ("E-mail", "{{EMAIL}}"),
+    ("TELEFONE", "{{TELEFONE}}"),
+    ("RESPONSÁVEL", "{{RESPONSAVEL}}"),
 )
 
 
@@ -345,6 +351,12 @@ def build_proposal_placeholder_values(
         "{{EMAIL}}": row_contact_email(row, columns) or "Não informado",
         "{{COLABORADORES}}": colaboradores_value,
         "{{ENDERECO}}": format_endereco_for_display(row, columns),
+        "{{RESPONSAVEL}}": (
+            row_field_value(row, columns, "socio_1")
+            or row_field_value(row, columns, "responsavel")
+            or normalize_text(row_get(row, "_socio_1", ""))
+            or "Não informado"
+        ),
     }
     return _values_from_canonical(canonical)
 
@@ -845,41 +857,90 @@ def generate_proposal_pdf(
         df = prepare_data(raw_df, columns)
 
     resolved_company = resolve_company_name(company_name, df)
+    snapshot = dict(proposal_snapshot or {})
+    selected = snapshot.get("selected") if isinstance(snapshot.get("selected"), dict) else {}
+
+    # Prioriza dados do chat/plano selecionado no placeholder do modelo
+    snapshot_value = (
+        normalize_text(value)
+        or normalize_text(selected.get("valor_final"))
+        or normalize_text(snapshot.get("valor_final"))
+        or normalize_text(snapshot.get("value"))
+    )
+    snapshot_servico = (
+        normalize_text(servico)
+        or normalize_text(snapshot.get("servico"))
+        or "Ponto Eletrônico Oppi"
+    )
+    snapshot_colaboradores = (
+        normalize_text(colaboradores)
+        or normalize_text(snapshot.get("colaboradores"))
+        or normalize_text(selected.get("colaboradores"))
+    )
+
     snapshot_key = ""
-    if isinstance(proposal_snapshot, dict) and proposal_snapshot:
+    if snapshot:
         try:
-            snapshot_key = json.dumps(proposal_snapshot, ensure_ascii=False, sort_keys=True, default=str)
+            snapshot_key = json.dumps(snapshot, ensure_ascii=False, sort_keys=True, default=str)
         except Exception:
-            snapshot_key = str(proposal_snapshot)
+            snapshot_key = str(snapshot)
     cache_key = _proposal_cache_key(
         resolved_company,
-        value,
-        servico,
-        colaboradores,
+        snapshot_value,
+        snapshot_servico,
+        snapshot_colaboradores,
         services_description,
-        (plans_text or "") + "|" + snapshot_key,
+        "docs-first-v3|" + (plans_text or "") + "|" + snapshot_key,
     )
     if use_cache:
         cached = get_cached_proposal_pdf(cache_key)
         if cached:
             return cached
 
-    # Sempre gera o PDF comercial local (sem Google Docs / Drive)
-    from app.services.proposal_commercial_pdf import generate_commercial_proposal_pdf
+    template_id = normalize_text(get_proposal_template_doc_id())
+    pdf_bytes: bytes | None = None
+    docs_error: Exception | None = None
 
-    description = normalize_text(services_description) or normalize_text(plans_text) or (
-        f"Proposta comercial Oppi — {normalize_text(servico) or 'Ponto Eletrônico Oppi'}"
-        + (f" — {normalize_text(colaboradores)} colaboradores" if normalize_text(colaboradores) else "")
-        + (f" — valor {normalize_text(value)}" if normalize_text(value) else "")
-    )
-    pdf_bytes = generate_commercial_proposal_pdf(
-        resolved_company,
-        df,
-        columns,
-        services_description=description,
-        plans_text=plans_text,
-        proposal_snapshot=proposal_snapshot,
-    )
+    # 1) Modelo Google Docs (layout que o usuário enviou)
+    if template_id:
+        try:
+            pdf_bytes = generate_proposal_pdf_from_template(
+                resolved_company,
+                df,
+                columns,
+                value=snapshot_value,
+                servico=snapshot_servico,
+                colaboradores=snapshot_colaboradores,
+            )
+        except Exception as error:
+            docs_error = error
+            import logging
+
+            logging.getLogger(__name__).warning(
+                "Falha ao gerar PDF pelo modelo Google Docs (%s). Usando PDF comercial local.",
+                error,
+            )
+
+    # 2) Fallback: PDF comercial ReportLab (conteúdo Ponto Eletrônico)
+    if pdf_bytes is None:
+        from app.services.proposal_commercial_pdf import generate_commercial_proposal_pdf
+
+        description = normalize_text(services_description) or normalize_text(plans_text) or (
+            f"Proposta comercial Oppi — {snapshot_servico}"
+            + (f" — {snapshot_colaboradores} colaboradores" if snapshot_colaboradores else "")
+            + (f" — valor {snapshot_value}" if snapshot_value else "")
+        )
+        pdf_bytes = generate_commercial_proposal_pdf(
+            resolved_company,
+            df,
+            columns,
+            services_description=description,
+            plans_text=plans_text,
+            proposal_snapshot=proposal_snapshot,
+        )
+        if docs_error and not template_id:
+            pass
+
     store_proposal_pdf_cache(cache_key, pdf_bytes)
     return pdf_bytes
 

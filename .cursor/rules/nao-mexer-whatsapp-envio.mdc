@@ -1,0 +1,34 @@
+---
+description: Nunca alterar a lógica de envio WhatsApp que já funciona; só mude o que foi pedido
+alwaysApply: true
+---
+
+# Escopo estrito + envio WhatsApp congelado
+
+## Regra geral (toda alteração)
+
+- Só altere o que o usuário pediu nesta mensagem.
+- Não “aproveite” para refatorar, limpar ou “melhorar” arquivos/áreas não pedidas.
+- Se a tarefa tocar um arquivo grande, mude só o trecho necessário — não reescreva fluxos vizinhos.
+
+## WhatsApp / Atendimentos — NÃO MEXER (congelado em 2026-07-27)
+
+A lógica de envio que **funcionou** está congelada. **Nunca altere** sem pedido **explícito** do usuário dizendo para mudar o envio WhatsApp/Evolution.
+
+Arquivos/trechos congelados:
+
+- `app/services/evolution_client.py` — especialmente `send_text`, `normalize_send_number`, `is_self_chat`, escolha de destino (`@lid` / número puro), payload simples `{"number", "text"}` **sem** presence/delay/findChats em todo envio
+- `app/services/attendances.py` — `send_text_message` (fluxo de envio)
+- `app/static/js/attendances.js` — `submitComposer` / unlock do composer / anti-duplicata de envio
+- `app/templates/partials/attendances_thread.html` — composer (`autocorrect`/`spellcheck` off, `hx-sync`)
+
+### O que NÃO fazer de novo
+
+- Não voltar a enviar `...@s.whatsapp.net` como destino principal
+- Não recolocar `sendPresence` + `delay` + `findChats`/`discover_lid` em **todo** envio
+- Não “otimizar” ou reordenar candidatos de envio
+- Não mexer no composer ao fazer outra feature (Funil, Propostas, CSS, etc.)
+
+### Se precisar mudar algo perto disso
+
+Pare e pergunte. Só edite se o usuário disser claramente que quer alterar o envio WhatsApp.

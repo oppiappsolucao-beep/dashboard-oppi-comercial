@@ -348,9 +348,10 @@ def generate_commercial_proposal_pdf(
                 story.append(Paragraph(line if "<b>" in line else _escape(line), style))
 
     def add_feature(name: str, desc: str) -> None:
-        story.append(Paragraph(f"<b>{_escape(name)}</b>", body_left))
+        # Modelo Word: título em negrito com ":" na própria linha + descrição abaixo
+        story.append(Paragraph(f"<b>{_escape(name)}:</b>", body_left))
         story.append(Paragraph(_escape(desc), body_left))
-        story.append(Spacer(1, 3))
+        story.append(Spacer(1, 4))
 
     story.append(Paragraph("PROPOSTA COMERCIAL", title))
     story.append(Paragraph("PONTO ELETRÔNICO OPPI", subtitle))
