@@ -65,8 +65,11 @@ from app.services.legacy_core import (
     STATUS_OPTIONS,
     as_python_datetime,
     normalize_digits,
+    normalize_phone_for_duplicate,
     normalize_search_text,
     normalize_text,
+    row_contact_phone,
+    row_field_value,
     safe_series,
     status_group,
 )
@@ -174,6 +177,88 @@ def _apply_cadastro_label_from_sheet(activity: dict, df: pd.DataFrame, sheet_row
     cadastro_empresa = _empresa_at_sheet_row(df, sheet_row)
     if cadastro_empresa:
         activity["empresa"] = cadastro_empresa
+
+
+def _phones_from_sheet_row(df: pd.DataFrame, columns: dict, sheet_row: int) -> list[str]:
+    match = _sheet_row_match(df, sheet_row)
+    if match.empty:
+        return []
+    row = match.iloc[0]
+    phones: list[str] = []
+    primary = row_contact_phone(row, columns) if columns else ""
+    if primary:
+        phones.append(primary)
+    telefone = normalize_text(row.get("_telefone", ""))
+    if telefone:
+        phones.append(telefone)
+    for key in (
+        "telefone_b2b",
+        "telefone_fixo",
+        "telefone_alternativo",
+        "telefone_socio_1",
+        "telefone_socio_2",
+        "telefone_socio_3",
+    ):
+        value = row_field_value(row, columns, key) if columns else ""
+        if normalize_text(value):
+            phones.append(value)
+    # únicos preservando ordem
+    seen: set[str] = set()
+    unique: list[str] = []
+    for phone in phones:
+        key = normalize_phone_for_duplicate(phone) or normalize_digits(phone) or normalize_text(phone).lower()
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        unique.append(phone)
+    return unique
+
+
+def _activity_matches_search(
+    activity: dict,
+    search: str,
+    *,
+    lookup_df: pd.DataFrame,
+    columns: dict,
+) -> bool:
+    term = normalize_text(search).lower()
+    raw = str(search or "").strip().lower()
+    if not term and not raw:
+        return True
+
+    sheet_row = int(activity.get("sheet_row") or 0)
+    phones = _phones_from_sheet_row(lookup_df, columns, sheet_row) if sheet_row else []
+    phone_digits = [
+        normalize_phone_for_duplicate(phone) or normalize_digits(phone)
+        for phone in phones
+        if normalize_digits(phone)
+    ]
+
+    blob = " | ".join(
+        [
+            activity.get("title", ""),
+            activity.get("empresa", ""),
+            activity.get("contato", ""),
+            activity.get("description", ""),
+            activity.get("vendedor", ""),
+            activity.get("tipo_label", ""),
+            *phones,
+            *phone_digits,
+        ]
+    ).lower()
+    if term and term in blob:
+        return True
+    if raw and raw in blob:
+        return True
+
+    search_digits = normalize_digits(search)
+    if len(search_digits) >= 4:
+        contato_digits = normalize_digits(activity.get("contato") or "")
+        candidates = phone_digits + ([contato_digits] if contato_digits else [])
+        for digits in candidates:
+            if search_digits in digits or digits.endswith(search_digits):
+                return True
+    return False
 
 
 def _status_for_pipeline_stage(stage: str) -> str:
@@ -666,17 +751,13 @@ def buscar_atividades(
             serialized["sheet_row"] = resolved_row
         # Nome na lista = cadastro que o clique abre (planilha completa, não só o filtro)
         _apply_cadastro_label_from_sheet(serialized, lookup_df, int(serialized.get("sheet_row") or 0))
-        if search:
-            blob = " | ".join([
-                serialized["title"],
-                serialized["empresa"],
-                serialized["contato"],
-                serialized["description"],
-                serialized["vendedor"],
-                serialized.get("tipo_label", ""),
-            ]).lower()
-            if normalize_text(search).lower() not in blob and search.lower() not in blob:
-                continue
+        if search and not _activity_matches_search(
+            serialized,
+            search,
+            lookup_df=lookup_df,
+            columns=columns,
+        ):
+            continue
         rows.append(serialized)
 
     rows.sort(key=lambda item: (item["status"] == "concluida", -item["priority"], item["activity_dt"]))
