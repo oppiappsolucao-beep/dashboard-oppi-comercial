@@ -1,6 +1,6 @@
 {% if selected %}
 <div class="att-thread" data-conversation-id="{{ selected.id }}">
-  {% if flash %}<div class="att-flash">{{ flash }}</div>{% endif %}
+  {% if flash %}<div class="att-flash {% if 'PENDING' in flash or '⚠' in flash %}warn{% endif %}">{{ flash }}</div>{% endif %}
   {% if error %}<div class="att-error">{{ error }}</div>{% endif %}
   <header class="att-chat-header">
     <a href="/atendimentos" class="att-back-btn" aria-label="Voltar para a lista">‹</a>

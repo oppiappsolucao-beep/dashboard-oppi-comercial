@@ -229,12 +229,18 @@ def send_text_message(
         store.update_conversation(conversation_id, **updates)
 
     warning = ""
+    status = normalize_text(response.get("_oppi_send_status") or "") or "UNKNOWN"
+    used = normalize_text(response.get("_oppi_send_number") or "") or (
+        conversation.get("remote_jid") or conversation.get("phone_e164") or ""
+    )
     if response.get("_oppi_delivery_pending"):
         warning = (
-            "Mensagem aceita pela Evolution, mas a entrega ficou PENDING. "
-            "Confira no WhatsApp do cliente; se não chegou, peça uma nova mensagem "
-            "dele para atualizar o contato e tente de novo."
+            f"⚠ Entrega PENDING na Evolution · destino {used}. "
+            "A mensagem pode não chegar no WhatsApp. "
+            "Abra CRM → Testar envio ou /atendimentos/diagnostico-evolution"
         )
+    else:
+        warning = f"Enviado à Evolution · status {status} · destino {used}"
     return message, warning
 
 

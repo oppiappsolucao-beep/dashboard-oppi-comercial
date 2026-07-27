@@ -535,10 +535,55 @@
   border-bottom: 1px solid #BBF7D0;
 }
 
+.att-flash.warn {
+  background: #FEF3C7;
+  color: #92400E;
+  border-bottom-color: #FCD34D;
+  font-weight: 600;
+}
+
 .att-flash.sm {
   border: 1px solid #BBF7D0;
   border-radius: 6px;
   margin-bottom: 10px;
+}
+
+.att-evo-tools {
+  margin: 0 0 14px;
+  padding: 12px;
+  border: 1px solid #E5E7EB;
+  border-radius: 10px;
+  background: #F8FAFC;
+  display: grid;
+  gap: 8px;
+}
+
+.att-evo-tools .att-label {
+  margin: 0;
+}
+
+.att-evo-link {
+  text-align: center;
+}
+
+.att-evo-result,
+.att-evo-result-wrap .att-evo-result {
+  margin: 0;
+  padding: 10px;
+  max-height: 220px;
+  overflow: auto;
+  border-radius: 8px;
+  background: #111827;
+  color: #E5E7EB;
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.att-evo-result.err {
+  background: #7F1D1D;
+  color: #FEE2E2;
 }
 
 .att-error {

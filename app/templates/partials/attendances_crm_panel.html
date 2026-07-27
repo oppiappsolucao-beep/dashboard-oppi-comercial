@@ -8,11 +8,25 @@
     <div><dt>Empresa</dt><dd>{% if crm.edit_href %}<a href="{{ crm.edit_href }}">{{ crm.empresa }}</a>{% else %}{{ crm.empresa }}{% endif %}</dd></div>
     <div><dt>Contato</dt><dd>{{ crm.contato }}</dd></div>
     <div><dt>WhatsApp</dt><dd>{{ selected.phone_e164 }}</dd></div>
+    <div><dt>JID Evolution</dt><dd style="word-break:break-all;font-size:12px">{{ selected.remote_jid or '—' }}</dd></div>
     <div><dt>Setor</dt><dd>{{ selected.sector_name or '—' }}</dd></div>
     <div><dt>Responsável</dt><dd>{{ selected.assignee or crm.vendedor or '—' }}</dd></div>
     <div><dt>Status CRM</dt><dd>{{ crm.etapa }}</dd></div>
     <div><dt>Status chat</dt><dd><span class="att-status-badge status-{{ selected.status }}">{{ selected.status_label }}</span></dd></div>
   </dl>
+
+  <div class="att-evo-tools">
+    <div class="att-label">Diagnóstico WhatsApp</div>
+    <a class="btn btn-secondary att-evo-link"
+       href="/atendimentos/diagnostico-evolution?conversation_id={{ selected.id }}"
+       target="_blank" rel="noopener">Ver status Evolution</a>
+    <button type="button"
+            class="btn btn-secondary"
+            hx-post="/atendimentos/conversa/{{ selected.id }}/teste-envio"
+            hx-target="#att-evo-test-result"
+            hx-swap="outerHTML">Testar envio agora</button>
+    <div id="att-evo-test-result" class="att-evo-result-wrap"></div>
+  </div>
 
   <form class="att-notes-form att-assign-form"
         hx-post="/atendimentos/conversa/{{ selected.id }}/direcionar"

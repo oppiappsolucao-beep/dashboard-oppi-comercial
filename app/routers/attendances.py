@@ -153,19 +153,18 @@ def attendances_conversation(request: Request, conversation_id: str):
 @router.post("/atendimentos/conversa/{conversation_id}/enviar", response_class=HTMLResponse)
 async def attendances_send(request: Request, conversation_id: str, text: str = Form("")):
     require_auth(request)
-    _, notice = attendances_service.send_text_message(
+    message, notice = attendances_service.send_text_message(
         conversation_id,
         text,
         sender="agent",
         assignee=_username(request),
     )
-    # notice pode ser erro duro (sem mensagem enviada) ou aviso PENDING (enviou)
     error = ""
     flash = ""
-    if notice and ("PENDING" in notice or "aceita pela Evolution" in notice):
-        flash = notice
-    else:
+    if not message and notice:
         error = notice
+    elif notice:
+        flash = notice
     ctx = _page_ctx(request, selected_id=conversation_id, error=error, flash=flash)
     return render(request, "partials/attendances_send_response.html", ctx)
 
@@ -339,13 +338,18 @@ def attendances_sync(request: Request, conversation_id: str = ""):
 
 @router.post("/atendimentos/conversa/{conversation_id}/teste-envio")
 def attendances_test_send(request: Request, conversation_id: str):
-    """Envia um ping real via Evolution e devolve a resposta crua."""
+    """Envia um ping real via Evolution e devolve a resposta (JSON ou HTML no HTMX)."""
     require_auth(request)
     from app.services import evolution_client
     from app.services.evolution_client import EvolutionClientError
 
     conversation = store.get_conversation(conversation_id)
     if not conversation:
+        if request.headers.get("HX-Request"):
+            return HTMLResponse(
+                '<pre class="att-evo-result">Erro: conversa não encontrada.</pre>',
+                status_code=404,
+            )
         return JSONResponse({"ok": False, "error": "conversa_nao_encontrada"}, status_code=404)
 
     body = "teste envio CRM Oppi"
@@ -356,8 +360,9 @@ def attendances_test_send(request: Request, conversation_id: str):
             jid=conversation.get("remote_jid") or "",
         )
         msg_id = evolution_client.extract_message_id(data)
-        status = evolution_client.extract_message_status(data)
-        pending = evolution_client.is_delivery_pending(data)
+        status = evolution_client.extract_message_status(data) or data.get("_oppi_send_status") or "UNKNOWN"
+        pending = bool(data.get("_oppi_delivery_pending")) or evolution_client.is_delivery_pending(data)
+        used = data.get("_oppi_send_number") or conversation.get("remote_jid") or conversation.get("phone_e164")
         # grava no inbox também, para conferência
         store.add_message(
             conversation_id,
@@ -367,28 +372,42 @@ def attendances_test_send(request: Request, conversation_id: str):
             evolution_id=msg_id,
             sender="agent",
         )
-        return JSONResponse(
-            {
-                "ok": True,
-                "pending": pending,
-                "status": status or None,
-                "message_id": msg_id,
-                "phone": conversation.get("phone_e164"),
-                "remote_jid": conversation.get("remote_jid"),
-                "targets_hint": evolution_client.enrich_targets_from_chats(
-                    conversation.get("phone_e164") or "",
-                    conversation.get("remote_jid") or "",
-                )[:8],
-                "evolution_response": data,
-                "check": (
-                    "Se status=PENDING e a msg não chega no WhatsApp, o problema é "
-                    "a Evolution/Baileys (não o CRM). Peça uma msg nova do cliente "
-                    "para gravar @lid, ou atualize Baileys no container Evolution "
-                    "(baileys@7.0.0-rc13). Confira no Manager Chat o mesmo sintoma."
-                ),
-            }
-        )
+        payload = {
+            "ok": True,
+            "pending": pending,
+            "status": status or None,
+            "message_id": msg_id,
+            "phone": conversation.get("phone_e164"),
+            "remote_jid": conversation.get("remote_jid"),
+            "used_number": used,
+            "targets_hint": evolution_client.enrich_targets_from_chats(
+                conversation.get("phone_e164") or "",
+                conversation.get("remote_jid") or "",
+            )[:8],
+            "evolution_response": data,
+            "check": (
+                "Se status=PENDING e a msg não chega no WhatsApp, o problema é "
+                "a Evolution/Baileys (não o CRM). Peça uma msg nova do cliente "
+                "para gravar @lid, ou atualize Baileys no container Evolution "
+                "(baileys@7.0.0-rc13). Confira no Manager Chat o mesmo sintoma."
+            ),
+        }
+        if request.headers.get("HX-Request"):
+            flag = "⚠ PENDING — pode não ter chegado" if pending else "✓ Aceito pela Evolution"
+            pretty = json.dumps(payload, ensure_ascii=False, indent=2, default=str)
+            return HTMLResponse(
+                '<div id="att-evo-test-result" class="att-evo-result-wrap">'
+                f'<pre class="att-evo-result">{flag}\n'
+                f"status={status} · destino={used}\n\n{pretty}</pre></div>"
+            )
+        return JSONResponse(payload)
     except EvolutionClientError as error:
+        if request.headers.get("HX-Request"):
+            return HTMLResponse(
+                '<div id="att-evo-test-result" class="att-evo-result-wrap">'
+                f'<pre class="att-evo-result err">Erro no envio:\n{error}</pre></div>',
+                status_code=400,
+            )
         return JSONResponse(
             {
                 "ok": False,
