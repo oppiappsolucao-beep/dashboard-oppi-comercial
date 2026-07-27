@@ -208,7 +208,7 @@ def send_text_message(
                 try:
                     ts = datetime.fromisoformat(created.replace("Z", "+00:00"))
                     now = datetime.now(tz=ts.tzinfo or timezone.utc)
-                    if abs((now - ts).total_seconds()) < 4:
+                    if abs((now - ts).total_seconds()) < 2:
                         return last_out, ""
                 except Exception:
                     pass

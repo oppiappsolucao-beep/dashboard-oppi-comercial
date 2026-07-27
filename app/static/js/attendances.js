@@ -274,6 +274,7 @@
       bindComposer(ev.target);
       bindCrmSheet(ev.target);
       setCrmSheetOpen(false);
+      unlockComposer($(".att-composer"));
       autoGrow($(".att-composer-input"));
       var thread = $("[data-conversation-id]", $("#att-chat-root"));
       var shell = $("#att-shell");
@@ -314,6 +315,17 @@
     }
   });
 
+  function unlockComposer(form) {
+    if (!form) {
+      form = $(".att-composer");
+    }
+    if (!form) return;
+    form.dataset.attSending = "";
+    form.dataset.attPendingText = "";
+    var btn = form.querySelector(".att-send-btn");
+    if (btn) btn.disabled = false;
+  }
+
   function submitComposer(form) {
     if (!form) return;
     if (form.dataset.attSending === "1") return;
@@ -321,12 +333,17 @@
     if (!value) return;
     form.dataset.attSending = "1";
     form.dataset.attPendingText = value;
-    // Limpa na hora: evita corretor do celular alterar/reenviar o texto
     clearComposer(form);
     var btn = form.querySelector(".att-send-btn");
     if (btn) btn.disabled = true;
+    // Trava no máx. 12s — se a resposta falhar, o chat não fica morto
+    window.setTimeout(function () {
+      unlockComposer(form);
+    }, 12000);
     if (window.htmx) {
       window.htmx.trigger(form, "submit");
+    } else {
+      unlockComposer(form);
     }
   }
 
@@ -354,13 +371,18 @@
   });
 
   document.body.addEventListener("htmx:afterRequest", function (ev) {
-    var form = ev.target && ev.target.closest ? ev.target.closest(".att-composer") : null;
-    if (form) {
-      form.dataset.attSending = "";
-      form.dataset.attPendingText = "";
-      var btn = form.querySelector(".att-send-btn");
-      if (btn) btn.disabled = false;
+    var path = (ev.detail && ev.detail.pathInfo && ev.detail.pathInfo.requestPath) || "";
+    if (path.indexOf("/enviar") !== -1) {
+      unlockComposer(ev.target && ev.target.closest ? ev.target.closest(".att-composer") : null);
     }
+  });
+
+  document.body.addEventListener("htmx:sendError", function () {
+    unlockComposer(null);
+  });
+
+  document.body.addEventListener("htmx:responseError", function () {
+    unlockComposer(null);
   });
 
   document.addEventListener("change", function (ev) {

@@ -1005,11 +1005,22 @@ def send_text(phone: str, text: str, *, jid: str = "") -> dict[str, Any]:
             "Teste enviando para outro celular (cliente real)."
         )
 
-    candidates = _send_target_candidates(phone, jid)
+    # Caminho rápido (igual ao que já entregou 1x): @lid salvo OU número puro.
+    # Evita findChats/presence/delay em todo envio — isso travava o chat após a 1ª msg.
+    stored = normalize_text(jid)
+    digits = _plain_phone(phone)
+    candidates: list[str] = []
+    if stored and "@lid" in stored.lower():
+        candidates.append(stored)
+    if digits:
+        candidates.append(digits)
+    if stored and "@lid" not in stored.lower():
+        normalized = normalize_send_number(stored)
+        if normalized and normalized not in candidates:
+            candidates.append(normalized)
     if not candidates:
         raise EvolutionClientError("Telefone/JID da conversa inválido para envio.")
 
-    # Uma URL só (como o Manager) — evita multi-post no mesmo texto.
     urls = _instance_urls("/message/sendText")[:1] or _instance_urls("/message/sendText")
     errors: list[str] = []
 
@@ -1017,12 +1028,10 @@ def send_text(phone: str, text: str, *, jid: str = "") -> dict[str, Any]:
         number = normalize_send_number(number)
         if not number:
             continue
-        send_typing_presence(number, delay_ms=1200)
-        # Número puro + delay — igual ao Manager (JID @s.whatsapp.net fica PENDING)
-        payload = {"number": number, "text": body, "delay": 1200}
+        payload = {"number": number, "text": body}
         for url in urls:
             try:
-                response = requests.post(url, json=payload, headers=_headers(), timeout=45)
+                response = requests.post(url, json=payload, headers=_headers(), timeout=30)
             except requests.RequestException as error:
                 errors.append(f"{number}: {error}")
                 continue
@@ -1053,7 +1062,6 @@ def send_text(phone: str, text: str, *, jid: str = "") -> dict[str, Any]:
             data["_oppi_send_number"] = number
             data["_oppi_send_status"] = status
             data["_oppi_resolved_lid"] = number if "@lid" in number.lower() else ""
-            # Manager também devolve PENDING e entrega — não bloquear o CRM.
             data["_oppi_delivery_pending"] = False
             return data
 
