@@ -4,7 +4,7 @@
 
 .activities-filter-bar {
   display: grid;
-  grid-template-columns: minmax(150px, 180px) minmax(140px, 170px) minmax(260px, 1fr) minmax(240px, 320px);
+  grid-template-columns: minmax(150px, 180px) minmax(140px, 170px) minmax(260px, 1fr) minmax(160px, 200px);
   gap: 16px;
   align-items: end;
   padding: 16px 18px;
@@ -40,7 +40,8 @@
 
 .activities-filter-search .activities-search-wrap input {
   width: 100%;
-  min-width: 240px;
+  min-width: 0;
+  max-width: 200px;
   height: 38px;
 }
 
@@ -744,7 +745,7 @@ body.activity-drawer-open {
 }
 
 .activities-search-wrap input {
-  width: 240px;
+  width: 180px;
   height: 38px;
 }
 
