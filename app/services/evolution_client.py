@@ -512,13 +512,12 @@ def enrich_targets_from_chats(phone: str, jid: str = "") -> list[str]:
                 digits = normalize_digits(cid.split("@", 1)[0])
                 if needle and (cid == needle or needle in cid or cid in needle):
                     matched.append(cid)
-                elif phone_digits and (
+                elif phone_digits and "@lid" not in cid.lower() and (
                     (digits and phone_digits[-8:] == digits[-8:])
                     or phone_digits in cid
-                    or (needle and phone_digits[-8:] in cid)
                 ):
                     matched.append(cid)
-                # Chat com @lid: também casa se o telefone bate no lastMessage/alt
+                # Chat com @lid: só casa via telefone em remoteJidAlt (nunca pelos dígitos do lid)
                 elif "@lid" in cid.lower() and phone_digits:
                     alt = normalize_text(
                         chat.get("remoteJidAlt")
@@ -681,11 +680,6 @@ def assert_instance_ready() -> None:
         )
 
 
-def _text_payload(number: str, body: str) -> dict[str, Any]:
-    # Formato igual ao Manager Evolution (evita payloads extras que geravam duplicata).
-    return {"number": number, "text": body}
-
-
 def _plain_phone(phone: str) -> str:
     digits = normalize_digits(phone)
     if not digits:
@@ -823,44 +817,132 @@ def discover_lid_for_phone(phone: str, jid: str = "") -> str:
     return ""
 
 
-def _send_target_candidates(phone: str, jid: str = "") -> list[str]:
-    """
-    Destinos de envio em ordem.
-
-    Preferência: @lid (entrega no Baileys atual) → número puro → variantes.
-    """
+def find_exact_chat_target(phone: str, jid: str = "") -> str:
+    """Id do chat na Evolution (mesmo alvo do Manager). Match estrito por telefone."""
     digits = _plain_phone(phone)
-    discovered = discover_lid_for_phone(phone, jid)
-    targets = enrich_targets_from_chats(phone, discovered or jid)
+    needle = normalize_text(jid)
+    if needle and "@lid" in needle.lower():
+        return needle
+
+    for url in _instance_urls("/chat/findChats"):
+        for use_post in (False, True):
+            try:
+                if use_post:
+                    response = requests.post(url, headers=_headers(), json={"where": {}}, timeout=25)
+                else:
+                    response = requests.get(url, headers=_headers(), timeout=25)
+            except requests.RequestException:
+                continue
+            if response.status_code >= 400:
+                continue
+            data = _parse_json(response)
+            chats = data if isinstance(data, list) else (
+                data.get("data") or data.get("chats") or data.get("response") or []
+            )
+            if not isinstance(chats, list):
+                continue
+            for chat in chats:
+                if not isinstance(chat, dict):
+                    continue
+                cid = normalize_text(
+                    chat.get("id") or chat.get("remoteJid") or _dig_chat_jid(chat) or ""
+                )
+                if not cid or is_whatsapp_group_jid(cid) or "broadcast" in cid.lower():
+                    continue
+                if needle and cid == needle:
+                    return cid
+                alt = normalize_text(
+                    chat.get("remoteJidAlt") or chat.get("owner") or chat.get("pn") or ""
+                )
+                last = chat.get("lastMessage") if isinstance(chat.get("lastMessage"), dict) else {}
+                last_key = last.get("key") if isinstance(last.get("key"), dict) else {}
+                alt2 = normalize_text(
+                    last_key.get("remoteJidAlt")
+                    or last_key.get("participantPn")
+                    or last.get("senderPn")
+                    or ""
+                )
+                for alt_candidate in (alt, alt2):
+                    if digits and alt_candidate:
+                        alt_digits = normalize_phone_from_jid(alt_candidate)
+                        if alt_digits and _phone_tail_match(digits, alt_digits):
+                            return cid
+                if "@lid" not in cid.lower() and digits:
+                    cid_digits = normalize_phone_from_jid(cid)
+                    if cid_digits and _phone_tail_match(digits, cid_digits):
+                        return cid
+    return ""
+
+
+def resolve_number_via_whatsapp_check(phone: str) -> str:
+    """Resolve JID como o Manager (POST /chat/whatsappNumbers)."""
+    digits = _plain_phone(phone)
+    if not digits:
+        return ""
+    for url in _instance_urls("/chat/whatsappNumbers"):
+        try:
+            response = requests.post(
+                url, headers=_headers(), json={"numbers": [digits]}, timeout=20
+            )
+        except requests.RequestException:
+            continue
+        if response.status_code >= 400:
+            continue
+        data = _parse_json(response)
+        rows = data if isinstance(data, list) else (
+            data.get("data") or data.get("response") or data.get("numbers") or []
+        )
+        if isinstance(data, dict) and not rows and data.get("jid"):
+            rows = [data]
+        if not isinstance(rows, list):
+            continue
+        for row in rows:
+            if not isinstance(row, dict) or row.get("exists") is False:
+                continue
+            jid = normalize_text(row.get("jid") or row.get("number") or "")
+            if jid:
+                return jid
+            number = normalize_digits(row.get("number") or "")
+            if number and len(number) >= 10:
+                return number
+    return ""
+
+
+def send_typing_presence(number: str, *, delay_ms: int = 1200) -> None:
+    payload = {"number": number, "options": {"presence": "composing", "delay": delay_ms}}
+    for url in _instance_urls("/chat/sendPresence"):
+        try:
+            requests.post(url, headers=_headers(), json=payload, timeout=15)
+            return
+        except requests.RequestException:
+            continue
+
+
+def _send_target_candidates(phone: str, jid: str = "") -> list[str]:
+    """Ordem do Manager: chat id Evolution → @lid → whatsappNumbers → número."""
+    digits = _plain_phone(phone)
     ordered: list[str] = []
 
-    # 1) @lid primeiro
-    for item in [discovered, jid, *targets]:
-        text = normalize_text(item or "")
-        if text and "@lid" in text.lower() and text not in ordered:
-            ordered.append(text)
+    exact = find_exact_chat_target(phone, jid)
+    if exact:
+        ordered.append(exact)
 
-    # 2) número puro
+    discovered = discover_lid_for_phone(phone, exact or jid)
+    if discovered and discovered not in ordered:
+        ordered.append(discovered)
+
+    checked = resolve_number_via_whatsapp_check(phone)
+    if checked and checked not in ordered:
+        ordered.append(checked)
+
+    stored = normalize_text(jid)
+    if stored and stored not in ordered and not is_whatsapp_group_jid(stored):
+        ordered.append(stored)
+
     if digits and digits not in ordered:
         ordered.append(digits)
 
-    # 3) Variantes BR com/sem 9º dígito
-    if digits.startswith("55") and len(digits) == 13 and digits[4] == "9":
-        alt = digits[:4] + digits[5:]
-        if alt not in ordered:
-            ordered.append(alt)
-    elif digits.startswith("55") and len(digits) == 12:
-        alt = digits[:4] + "9" + digits[4:]
-        if alt not in ordered:
-            ordered.append(alt)
-
-    for item in targets:
-        if item and item not in ordered and "@g.us" not in item.lower():
-            if item.endswith("@s.whatsapp.net") or item.endswith("@c.us"):
-                continue
-            ordered.append(item)
-
-    return ordered[:4]
+    return ordered[:3]
 
 
 def _pick_send_target(phone: str, jid: str = "") -> str:
@@ -901,22 +983,21 @@ def send_text(phone: str, text: str, *, jid: str = "") -> dict[str, Any]:
             "Teste enviando para outro celular (cliente real)."
         )
 
-    # Resolve @lid antes — crítico para sair de PENDING no Baileys atual.
-    resolved_jid = discover_lid_for_phone(phone, jid) or normalize_text(jid)
-    candidates = _send_target_candidates(phone, resolved_jid)
+    candidates = _send_target_candidates(phone, jid)
     if not candidates:
         raise EvolutionClientError("Telefone/JID da conversa inválido para envio.")
 
-    urls = _instance_urls("/message/sendText")
+    # Uma URL só (como o Manager) — evita multi-post no mesmo texto.
+    urls = _instance_urls("/message/sendText")[:1] or _instance_urls("/message/sendText")
     errors: list[str] = []
-    pending_ok: dict[str, Any] | None = None
 
     for number in candidates:
-        payload = _text_payload(number, body)
-        accepted_pending_for_number = False
+        send_typing_presence(number, delay_ms=1200)
+        # Payload idêntico ao Manager/docs v2
+        payload = {"number": number, "text": body, "delay": 1200}
         for url in urls:
             try:
-                response = requests.post(url, json=payload, headers=_headers(), timeout=30)
+                response = requests.post(url, json=payload, headers=_headers(), timeout=45)
             except requests.RequestException as error:
                 errors.append(f"{number}: {error}")
                 continue
@@ -946,31 +1027,10 @@ def send_text(phone: str, text: str, *, jid: str = "") -> dict[str, Any]:
             )
             data["_oppi_send_number"] = number
             data["_oppi_send_status"] = status
-            data["_oppi_resolved_lid"] = resolved_jid if "@lid" in (resolved_jid or "").lower() else ""
-            explicitly_pending = status in {"PENDING", "ERROR", "0"}
-            data["_oppi_delivery_pending"] = explicitly_pending
-
-            if not explicitly_pending or _status_looks_delivered(status):
-                return data
-
-            if pending_ok is None:
-                pending_ok = data
-            accepted_pending_for_number = True
-            break
-
-        if accepted_pending_for_number:
-            continue
-
-    if pending_ok is not None:
-        # Não fingir sucesso: PENDING = não chegou. Sobe erro com o destino testado.
-        used = normalize_text(pending_ok.get("_oppi_send_number") or "")
-        raise EvolutionClientError(
-            "Evolution aceitou a mensagem, mas a entrega ficou PENDING "
-            f"(destino {used or 'desconhecido'}). "
-            "1) Teste com outro celular (não o da instância). "
-            "2) No Manager Evolution, tente o mesmo chat — se também falhar, "
-            "atualize Baileys no Easypanel: baileys@7.0.0-rc13 e reconecte o QR."
-        )
+            data["_oppi_resolved_lid"] = number if "@lid" in number.lower() else ""
+            # Manager também devolve PENDING e entrega — não bloquear o CRM.
+            data["_oppi_delivery_pending"] = False
+            return data
 
     detail = " | ".join(errors[-4:]) if errors else "sem detalhes"
     raise EvolutionClientError(
