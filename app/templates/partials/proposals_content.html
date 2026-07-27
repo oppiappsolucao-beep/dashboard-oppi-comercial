@@ -132,8 +132,46 @@
       {% endif %}
     </div>
 
-    <aside class="proposals-chat-panel panel-card panel" id="proposals-chat-panel">
-      {% include "partials/proposals_chat.html" %}
+    <aside class="proposals-assistant panel-card panel">
+      <div class="proposals-assistant-layout">
+        <div class="proposals-contacts">
+          <div class="proposals-contacts-header">
+            <div>
+              <div class="proposals-contacts-title">Empresas</div>
+              <div class="proposals-contacts-sub">Cadastro · Ponto Eletrônico Oppi</div>
+            </div>
+          </div>
+          <div class="proposals-contacts-search">
+            <input type="search" id="proposals-contacts-filter" placeholder="Buscar empresa..." autocomplete="off">
+          </div>
+          <div class="proposals-contacts-list" id="proposals-contacts-list">
+            {% for company in company_contacts or [] %}
+            <form
+              class="proposals-contact-form"
+              hx-post="/propostas/chat"
+              hx-target="#proposals-chat-panel"
+              hx-swap="innerHTML"
+            >
+              <input type="hidden" name="empresa" value="{{ company.name }}">
+              <input type="hidden" name="action" value="continuar">
+              <button type="submit" class="proposals-contact {% if company.active %}active{% endif %}" data-company="{{ company.name | lower }}">
+                <span class="proposals-contact-avatar">{{ company.initials }}</span>
+                <span class="proposals-contact-text">
+                  <strong>{{ company.name }}</strong>
+                  <small>{{ company.snippet }}</small>
+                </span>
+              </button>
+            </form>
+            {% else %}
+            <div class="proposals-contacts-empty">Nenhuma empresa no cadastro.</div>
+            {% endfor %}
+          </div>
+        </div>
+
+        <section class="proposals-chat-panel" id="proposals-chat-panel">
+          {% include "partials/proposals_chat.html" %}
+        </section>
+      </div>
     </aside>
   </div>
 
@@ -143,8 +181,8 @@
       <div class="proposals-workflow-step">
         <div class="proposals-workflow-icon tone-purple">💬</div>
         <div>
-          <div class="proposals-workflow-title">Perguntas no chat</div>
-          <div class="proposals-workflow-desc">Empresa, colaboradores e confirmação do valor.</div>
+          <div class="proposals-workflow-title">Cliente + serviços</div>
+          <div class="proposals-workflow-desc">Usa o cadastro e pergunta quais serviços incluir (ou colaboradores).</div>
         </div>
       </div>
       <div class="proposals-workflow-arrow">→</div>
@@ -152,7 +190,7 @@
         <div class="proposals-workflow-icon tone-blue">🧮</div>
         <div>
           <div class="proposals-workflow-title">Planos e sugestão</div>
-          <div class="proposals-workflow-desc">Calculamos boleto, cartão e anual; a Oppi sugere o melhor custo-benefício.</div>
+          <div class="proposals-workflow-desc">Boleto (cheio), recorrente (−R$ 10) e anual (−R$ 10/mês) + R$ 9,90 extras.</div>
         </div>
       </div>
       <div class="proposals-workflow-arrow">→</div>
@@ -160,7 +198,7 @@
         <div class="proposals-workflow-icon tone-pink">📄</div>
         <div>
           <div class="proposals-workflow-title">PDF após confirmação</div>
-          <div class="proposals-workflow-desc">O PDF só é gerado depois do resumo e aparece ao lado do formulário.</div>
+          <div class="proposals-workflow-desc">O PDF comercial só é gerado depois do resumo.</div>
         </div>
       </div>
       <div class="proposals-workflow-arrow">→</div>
@@ -174,3 +212,32 @@
     </div>
   </div>
 </form>
+
+<script>
+(function () {
+  var input = document.getElementById("proposals-contacts-filter");
+  var list = document.getElementById("proposals-contacts-list");
+  if (!list) return;
+  if (input) {
+    input.addEventListener("input", function () {
+      var q = (input.value || "").trim().toLowerCase();
+      list.querySelectorAll(".proposals-contact").forEach(function (btn) {
+        var name = (btn.getAttribute("data-company") || "").toLowerCase();
+        var form = btn.closest(".proposals-contact-form");
+        if (!form) return;
+        form.style.display = (!q || name.indexOf(q) !== -1) ? "" : "none";
+      });
+    });
+  }
+  list.querySelectorAll(".proposals-contact-form").forEach(function (form) {
+    form.addEventListener("htmx:afterRequest", function (event) {
+      if (event.detail.successful === false) return;
+      list.querySelectorAll(".proposals-contact").forEach(function (btn) {
+        btn.classList.remove("active");
+      });
+      var btn = form.querySelector(".proposals-contact");
+      if (btn) btn.classList.add("active");
+    });
+  });
+})();
+</script>

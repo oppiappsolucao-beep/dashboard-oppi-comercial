@@ -4,49 +4,25 @@
   hx-target="#proposals-chat-panel"
   hx-swap="innerHTML"
 >
-  <div class="proposals-quick-form-title">Nova proposta</div>
+  <div class="proposals-quick-form-title">Continuar no formulário</div>
 
   {% set step = (proposal_draft.step if proposal_draft else '') %}
 
-  <label class="proposals-quick-field">
-    <span>Buscar empresa cadastrada</span>
-    <input
-      type="search"
-      id="proposals-company-search"
-      class="proposals-company-search"
-      placeholder="Digite para filtrar…"
-      autocomplete="off"
-      {% if pending_company %}disabled{% endif %}
-    >
-  </label>
-
-  <label class="proposals-quick-field">
-    <span>Cliente (cadastro)</span>
-    <select
-      name="empresa"
-      id="proposals-company-select"
-      class="proposals-company-select"
-      required
-      size="6"
-      {% if pending_company %}disabled{% endif %}
-    >
-      <option value="" disabled {% if not pending_company %}selected{% endif %}>Selecione o cliente…</option>
-      {% for company in company_options %}
-      <option value="{{ company }}" {% if pending_company == company %}selected{% endif %}>{{ company }}</option>
-      {% endfor %}
-    </select>
-    {% if pending_company %}
-    <input type="hidden" name="empresa" value="{{ pending_company }}">
-    <small class="proposals-quick-hint">Cliente: <strong>{{ pending_company }}</strong></small>
-    {% endif %}
-  </label>
-
   {% if not pending_company %}
-  <button type="submit" class="btn proposals-quick-form-btn" name="action" value="continuar">Continuar</button>
-  <small class="proposals-quick-hint">Em seguida informamos a quantidade de colaboradores.</small>
+  <p class="proposals-quick-hint">Selecione um cliente na lista à esquerda para começar.</p>
   {% elif step == 'ask_collaborators' or not step or step == 'pick_company' %}
+  <input type="hidden" name="empresa" value="{{ pending_company }}">
   <label class="proposals-quick-field">
-    <span>Quantos colaboradores a empresa possui?</span>
+    <span>Serviços / colaboradores</span>
+    <input
+      type="text"
+      name="message"
+      placeholder="Ex.: ponto eletrônico para 12 colaboradores"
+      autocomplete="off"
+    >
+  </label>
+  <label class="proposals-quick-field">
+    <span>Ou só a quantidade</span>
     <input
       type="number"
       name="colaboradores"
@@ -54,13 +30,12 @@
       step="1"
       inputmode="numeric"
       placeholder="Ex.: 12"
-      required
-      value=""
       autocomplete="off"
     >
   </label>
   <button type="submit" class="btn proposals-quick-form-btn">Calcular planos</button>
   {% elif step == 'choose_plan' %}
+  <input type="hidden" name="empresa" value="{{ pending_company }}">
   <div class="proposals-plan-actions">
     <button type="submit" class="btn" name="action" value="sugerido">Gerar com valor sugerido</button>
     <button type="submit" class="btn btn-secondary" name="action" value="boleto">Boleto mensal</button>
@@ -74,6 +49,7 @@
   </label>
   <button type="submit" class="btn btn-secondary proposals-quick-form-btn" name="action" value="">Atualizar cálculos</button>
   {% elif step == 'manual_edit' %}
+  <input type="hidden" name="empresa" value="{{ pending_company }}">
   <div class="proposals-manual-grid">
     <label class="proposals-quick-field">
       <span>Forma de pagamento</span>
@@ -99,28 +75,10 @@
   </div>
   <button type="submit" class="btn proposals-quick-form-btn" name="action" value="salvar_manual">Continuar para resumo</button>
   {% elif step == 'confirm_summary' %}
+  <input type="hidden" name="empresa" value="{{ pending_company }}">
   <div class="proposals-plan-actions">
     <button type="submit" class="btn btn-secondary" name="action" value="voltar">Voltar e editar</button>
     <button type="submit" class="btn" name="action" value="gerar">Gerar proposta em PDF</button>
   </div>
   {% endif %}
 </form>
-
-<script>
-(function () {
-  var search = document.getElementById("proposals-company-search");
-  var select = document.getElementById("proposals-company-select");
-  if (!search || !select || search.disabled) return;
-  search.addEventListener("input", function () {
-    var q = (search.value || "").trim().toLowerCase();
-    Array.prototype.forEach.call(select.options, function (opt, idx) {
-      if (idx === 0 && !opt.value) {
-        opt.hidden = false;
-        return;
-      }
-      var label = (opt.textContent || "").toLowerCase();
-      opt.hidden = q ? label.indexOf(q) === -1 : false;
-    });
-  });
-})();
-</script>

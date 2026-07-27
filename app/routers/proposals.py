@@ -8,6 +8,7 @@ from app.services.legacy_core import invalidate_sheet_cache, normalize_text
 from app.services.proposal_pdf import generate_proposal_pdf, proposal_pdf_filename
 from app.services.proposals import (
     PROPOSAL_STATUS_OPTIONS,
+    build_proposal_company_contacts,
     build_proposal_company_options,
     build_proposal_form_message,
     build_proposals_kpi_cards,
@@ -17,6 +18,7 @@ from app.services.proposals import (
     handle_proposal_chat_message,
     clear_generated_proposal,
     strip_proposal_pdf_cards,
+    proposal_progress,
     render_proposal_chat_messages,
     should_show_proposal_quick_form,
 )
@@ -57,12 +59,22 @@ def _parse_proposals_params(request: Request, form: dict | None = None) -> dict:
 
 def _proposals_chat_context(request: Request, chat_messages: list[dict], df) -> dict:
     draft = request.session.get("proposals_draft") or {}
+    pending = normalize_text(request.session.get("proposals_pending_company"))
+    selected = normalize_text((draft or {}).get("company")) or pending
+    generated = get_generated_proposal(request)
     return {
         "chat_messages_html": render_proposal_chat_messages(chat_messages),
         "show_quick_form": should_show_proposal_quick_form(chat_messages),
         "company_options": build_proposal_company_options(df),
+        "company_contacts": build_proposal_company_contacts(
+            df,
+            selected=selected,
+            search=normalize_text(request.query_params.get("search", "")),
+        ),
+        "proposal_progress": proposal_progress(draft, has_pdf=bool(generated and generated.get("pdf_ready"))),
+        "selected_company": selected,
         "service_options": get_commercial_service_options(),
-        "pending_company": normalize_text(request.session.get("proposals_pending_company")),
+        "pending_company": pending,
         "proposal_draft": draft if isinstance(draft, dict) else {},
         "proposal_history": _proposal_history_for_context(request),
     }

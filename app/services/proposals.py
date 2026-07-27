@@ -736,8 +736,9 @@ def handle_proposal_chat_message(
             "role": "assistant",
             "content": (
                 f"Cadastro de **{company}** carregado.\n\n"
-                "**Quantos colaboradores a empresa possui?**\n"
-                "Informe a quantidade exata (número inteiro maior que zero)."
+                "**Quais os serviços que deseja incluir para esse cliente?**\n"
+                "Descreva o que precisa (ex.: ponto eletrônico para 12 colaboradores) "
+                "ou informe só a **quantidade de colaboradores**."
             ),
             "time": _now_time(),
         })
@@ -773,15 +774,19 @@ def handle_proposal_chat_message(
         })
         return chat_messages, None, pending_company, None
 
-    # —— Etapa 2: quantidade de colaboradores ——
+    // —— Etapa 2: serviços / quantidade de colaboradores ——
     if step in ("", "ask_collaborators", "pick_company") or step == "ask_collaborators":
-        count = parse_collaborators_count(colaboradores) or parse_collaborators_count(clean_message)
+        count = (
+            parse_collaborators_count(colaboradores)
+            or parse_collaborators_count(services_description)
+            or parse_collaborators_count(clean_message)
+        )
         if not count:
             chat_messages.append({
                 "role": "assistant",
                 "content": (
-                    f"**Quantos colaboradores a empresa possui?**\n"
-                    f"Informe um número inteiro maior que zero para **{company}**."
+                    f"**Quais os serviços que deseja incluir para {company}?**\n"
+                    "Descreva o plano (ex.: até 12 colaboradores) ou informe um número inteiro de colaboradores."
                 ),
                 "time": _now_time(),
             })
@@ -1049,6 +1054,70 @@ def build_proposal_company_options(df: pd.DataFrame) -> list[str]:
     return sorted(companies, key=str.casefold)
 
 
+def _company_initials(name: str) -> str:
+    parts = [part for part in normalize_text(name).split() if part]
+    if not parts:
+        return "OP"
+    if len(parts) == 1:
+        return parts[0][:2].upper()
+    return f"{parts[0][0]}{parts[1][0]}".upper()
+
+
+def build_proposal_company_contacts(
+    df: pd.DataFrame,
+    *,
+    selected: str = "",
+    search: str = "",
+) -> list[dict]:
+    """Lista lateral no estilo Pesos e Medidas, só para a aba Propostas."""
+    selected = normalize_text(selected)
+    term = normalize_search_text(search)
+    contacts = []
+    for company in build_proposal_company_options(df):
+        if term and term not in normalize_search_text(company):
+            continue
+        contacts.append(
+            {
+                "name": company,
+                "initials": _company_initials(company),
+                "snippet": "Cliente do cadastro",
+                "active": company.casefold() == selected.casefold() if selected else False,
+            }
+        )
+    return contacts
+
+
+def proposal_progress(draft: dict | None = None, *, has_pdf: bool = False) -> dict:
+    """Progresso do assistente (estrutura guiada tipo Pesos e Medidas)."""
+    total = 4
+    draft = draft if isinstance(draft, dict) else {}
+    step = normalize_text(draft.get("step"))
+    if has_pdf:
+        current = 4
+    elif step == "confirm_summary":
+        current = 3
+    elif step in ("choose_plan", "manual_edit"):
+        current = 2
+    elif step == "ask_collaborators" or normalize_text(draft.get("company")):
+        current = 1
+    else:
+        current = 0
+    percent = min(100, round((current / total) * 100)) if total else 0
+    labels = {
+        0: "Selecione o cliente",
+        1: "Serviços / colaboradores",
+        2: "Planos e pagamento",
+        3: "Confirmar resumo",
+        4: "PDF gerado",
+    }
+    return {
+        "current": current,
+        "total": total,
+        "percent": percent,
+        "label": labels.get(current, ""),
+    }
+
+
 def build_proposal_form_message(
     empresa: str,
     servico: str = "",
@@ -1084,10 +1153,10 @@ def default_proposal_chat_messages() -> list[dict]:
         "role": "assistant",
         "content": (
             "Olá! Vamos montar a proposta do **Ponto Eletrônico Oppi**.\n\n"
-            "1) Selecione o cliente cadastrado.\n"
-            "2) Informe a quantidade de colaboradores.\n"
-            "3) Veja as três formas de pagamento e a sugestão da Oppi.\n"
-            "4) Confirme o resumo — o PDF só é gerado depois da confirmação."
+            "1) Selecione o cliente na lista ao lado (só cadastros).\n"
+            "2) Me diga **quais serviços deseja incluir** — ou a quantidade de colaboradores.\n"
+            "3) Mostro boleto, recorrente e anual (com a sugestão da Oppi).\n"
+            "4) Confirme o resumo — o PDF só é gerado depois."
         ),
         "time": _now_time(),
     }]

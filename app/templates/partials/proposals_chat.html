@@ -1,6 +1,8 @@
 <div class="proposals-chat-header">
   <div>
-    <div class="proposals-chat-title">✦ Assistente de Propostas</div>
+    <div class="proposals-chat-title">
+      {% if selected_company %}{{ selected_company }}{% else %}✦ Assistente de Propostas{% endif %}
+    </div>
     <div class="proposals-chat-status">● Online</div>
   </div>
   <form method="post" action="/propostas/chat/reset">
@@ -15,12 +17,26 @@
   {% endif %}
 </div>
 
+{% set progress = proposal_progress or {"current": 0, "total": 4, "percent": 0, "label": ""} %}
+<div class="proposals-progress">
+  <div class="proposals-progress-label">
+    Progresso: {{ progress.current }}/{{ progress.total }}
+    {% if progress.label %}<span>· {{ progress.label }}</span>{% endif %}
+  </div>
+  <div class="proposals-progress-bar">
+    <div class="proposals-progress-fill" style="width:{{ progress.percent }}%"></div>
+  </div>
+</div>
+
 <form
   class="proposals-chat-input"
   hx-post="/propostas/chat"
   hx-target="#proposals-chat-panel"
   hx-swap="innerHTML"
 >
-  <input type="text" name="message" placeholder="Descreva a proposta que deseja gerar..." required autocomplete="off">
+  {% if pending_company %}
+  <input type="hidden" name="empresa" value="{{ pending_company }}">
+  {% endif %}
+  <input type="text" name="message" placeholder="Descreva os serviços ou a quantidade de colaboradores..." required autocomplete="off">
   <button type="submit" class="btn proposals-send-btn" aria-label="Enviar">➤</button>
 </form>
