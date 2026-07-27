@@ -629,25 +629,45 @@
 }
 
 @media (max-width: 800px) {
-  /* Lista: header compacto */
+  /* Lista: header no modelo mobile */
   .att-page-header {
-    margin-bottom: 8px;
+    margin-bottom: 12px;
+    gap: 10px;
   }
 
   .att-page-header .page-subtitle {
-    display: none;
+    display: block;
+    font-size: 0.82rem;
+    line-height: 1.35;
+  }
+
+  .att-page-actions {
+    align-items: center;
+    gap: 8px;
   }
 
   .att-page-actions .att-config-badge {
     font-size: 11px;
-    padding: 3px 8px;
+    padding: 4px 10px;
+    border-radius: 999px;
+  }
+
+  .att-page-actions #att-new-call-toggle {
+    flex: 1 1 auto;
+    background: linear-gradient(135deg, var(--pink), var(--purple));
+    border: none;
+    color: #fff;
+    font-weight: 700;
   }
 
   .att-shell {
     grid-template-columns: 1fr;
-    height: calc(100dvh - 148px);
+    height: calc(100dvh - 220px);
     min-height: 360px;
-    border-radius: 10px;
+    border-radius: 14px;
+    overflow: hidden;
+    background: #fff;
+    box-shadow: var(--shadow);
   }
 
   .att-col-list {
@@ -674,10 +694,13 @@
     flex-direction: column;
   }
 
-  /* Conversa aberta: some o header da página e o FAB — chat estilo WhatsApp */
+  /* Conversa aberta: chat tela cheia (some chrome global) */
   body:has(.att-shell--chat-open) .att-page-header,
   body:has(.att-shell--chat-open) .att-new-call-panel,
-  body:has(.att-shell--chat-open) .att-page-flash {
+  body:has(.att-shell--chat-open) .att-page-flash,
+  body:has(.att-shell--chat-open) .page-back-bar,
+  body:has(.att-shell--chat-open) .mobile-topbar,
+  body:has(.att-shell--chat-open) .mobile-bottom-nav {
     display: none !important;
   }
 
@@ -685,14 +708,18 @@
     display: none !important;
   }
 
+  body:has(.att-shell--chat-open) .main-content {
+    padding: 0 !important;
+  }
+
   body:has(.att-shell--chat-open) .att-shell {
-    height: calc(100dvh - 64px);
+    height: 100dvh;
     min-height: 0;
     border-radius: 0;
-    border-left: none;
-    border-right: none;
-    margin: 0 -12px;
-    width: calc(100% + 24px);
+    border: none;
+    margin: 0;
+    width: 100%;
+    box-shadow: none;
   }
 
   .att-thread {
@@ -708,8 +735,11 @@
 
   .att-chat-header {
     gap: 8px;
-    padding: 8px 10px;
+    padding: 10px 12px;
+    padding-top: calc(10px + env(safe-area-inset-top, 0px));
     flex-shrink: 0;
+    background: #fff;
+    border-bottom: 1px solid var(--border);
   }
 
   .att-chat-header-text {
@@ -750,8 +780,10 @@
   }
 
   .att-filters {
-    padding: 10px;
-    gap: 6px;
+    padding: 12px;
+    gap: 8px;
+    background: #fff;
+    border-bottom: 1px solid var(--border);
   }
 
   .att-input,
@@ -759,6 +791,7 @@
   .att-composer-input {
     min-height: 42px;
     font-size: 16px; /* evita zoom no iOS */
+    border-radius: 12px;
   }
 
   .att-composer {
@@ -766,6 +799,8 @@
     gap: 8px;
     flex-shrink: 0;
     padding-bottom: max(8px, env(safe-area-inset-bottom));
+    background: #fff;
+    border-top: 1px solid var(--border);
   }
 
   .att-attach-btn {

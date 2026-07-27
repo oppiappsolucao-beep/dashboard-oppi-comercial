@@ -9,14 +9,14 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/dashboard.css?v=20">
-  <link rel="stylesheet" href="/static/css/design-system.css?v=1">
+  <link rel="stylesheet" href="/static/css/dashboard.css?v={{ static_version }}">
+  <link rel="stylesheet" href="/static/css/design-system.css?v={{ static_version }}">
   <link rel="stylesheet" href="/static/css/registration.css?v=29">
   <script src="https://unpkg.com/htmx.org@2.0.4"></script>
   <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
-  <script src="/static/js/app.js?v=15" defer></script>
+  <script src="/static/js/app.js?v={{ static_version }}" defer></script>
 </head>
-<body class="app-body notranslate" translate="no">
+<body class="app-body notranslate" translate="no" data-active-page="{{ active_page | default('') }}">
   <div class="app-shell">
     <div class="sidebar-overlay" id="sidebar-overlay" aria-hidden="true"></div>
 
@@ -87,7 +87,10 @@
         <button type="button" class="mobile-menu-btn" id="mobile-menu-btn" aria-label="Abrir menu" aria-expanded="false" aria-controls="app-sidebar">
           <span class="mobile-menu-icon" aria-hidden="true"></span>
         </button>
-        <div class="mobile-topbar-brand">Oppi CRM</div>
+        <div class="mobile-topbar-brand">
+          <div class="brand-mark mobile-topbar-mark" aria-hidden="true"></div>
+          <span>Oppi CRM</span>
+        </div>
         <div class="mobile-topbar-avatar">{{ app_username[:2] | upper }}</div>
       </header>
 
@@ -97,6 +100,34 @@
       </main>
     </div>
   </div>
+
+  <nav class="mobile-bottom-nav" id="mobile-bottom-nav" aria-label="Navegação principal">
+    <a href="/visao-geral" class="mobile-bottom-link {% if active_page == 'overview' %}active{% endif %}">
+      <span class="mobile-bottom-icon" aria-hidden="true">▦</span>
+      <span class="mobile-bottom-label">Visão Geral</span>
+    </a>
+    <a href="/funil-de-vendas" class="mobile-bottom-link {% if active_page == 'funnel' %}active{% endif %}">
+      <span class="mobile-bottom-icon" aria-hidden="true">⛃</span>
+      <span class="mobile-bottom-label">Funil</span>
+    </a>
+    <a href="/leads-e-empresas" class="mobile-bottom-link {% if active_page == 'leads' %}active{% endif %}">
+      <span class="mobile-bottom-icon" aria-hidden="true">🏢</span>
+      <span class="mobile-bottom-label">Empresas</span>
+    </a>
+    <a href="/atividades" class="mobile-bottom-link {% if active_page == 'activities' %}active{% endif %}">
+      <span class="mobile-bottom-icon" aria-hidden="true">📋</span>
+      <span class="mobile-bottom-label">Atividades</span>
+    </a>
+    <a href="/atendimentos" class="mobile-bottom-link {% if active_page == 'attendances' %}active{% endif %}">
+      <span class="mobile-bottom-icon" aria-hidden="true">💬</span>
+      <span class="mobile-bottom-label">Atendimentos</span>
+      <span class="att-sidebar-badge mobile-bottom-badge" id="att-bottom-badge" hidden>0</span>
+    </a>
+    <button type="button" class="mobile-bottom-link mobile-bottom-more {% if active_page in ['proposals', 'goals', 'settings'] %}active{% endif %}" id="mobile-more-btn" aria-label="Mais opções" aria-controls="app-sidebar" aria-expanded="false">
+      <span class="mobile-bottom-icon" aria-hidden="true">⋯</span>
+      <span class="mobile-bottom-label">Mais</span>
+    </button>
+  </nav>
 
   <a href="{{ support_whatsapp_url }}" class="whatsapp-fab" target="_blank" rel="noopener" aria-label="Falar no WhatsApp Oppi {{ support_whatsapp_label }}">
     <span aria-hidden="true">💬</span>

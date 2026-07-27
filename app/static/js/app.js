@@ -60,17 +60,22 @@ function renderGoalsCharts() {
 }
 
 function initAttendanceSidebarBadge() {
-  const badge = document.getElementById("att-sidebar-badge");
-  if (!badge) return;
+  const badges = [
+    document.getElementById("att-sidebar-badge"),
+    document.getElementById("att-bottom-badge"),
+  ].filter(Boolean);
+  if (!badges.length) return;
 
   const apply = (count) => {
     const n = Number(count) || 0;
-    if (n > 0) {
-      badge.hidden = false;
-      badge.textContent = n > 99 ? "99+" : String(n);
-    } else {
-      badge.hidden = true;
-    }
+    badges.forEach((badge) => {
+      if (n > 0) {
+        badge.hidden = false;
+        badge.textContent = n > 99 ? "99+" : String(n);
+      } else {
+        badge.hidden = true;
+      }
+    });
   };
 
   const refresh = () => {
@@ -111,22 +116,25 @@ document.body.addEventListener("htmx:afterSwap", (event) => {
 function initMobileNavigation() {
   const body = document.body;
   const menuBtn = document.getElementById("mobile-menu-btn");
+  const moreBtn = document.getElementById("mobile-more-btn");
   const closeBtn = document.getElementById("sidebar-close-btn");
   const overlay = document.getElementById("sidebar-overlay");
   const sidebar = document.getElementById("app-sidebar");
-  if (!menuBtn || !sidebar) return;
+  if (!sidebar || (!menuBtn && !moreBtn)) return;
 
   const setOpen = (open) => {
     body.classList.toggle("sidebar-open", open);
-    menuBtn.setAttribute("aria-expanded", open ? "true" : "false");
+    menuBtn?.setAttribute("aria-expanded", open ? "true" : "false");
+    moreBtn?.setAttribute("aria-expanded", open ? "true" : "false");
     if (overlay) {
       overlay.setAttribute("aria-hidden", open ? "false" : "true");
     }
   };
 
-  menuBtn.addEventListener("click", () => {
-    setOpen(!body.classList.contains("sidebar-open"));
-  });
+  const toggle = () => setOpen(!body.classList.contains("sidebar-open"));
+
+  menuBtn?.addEventListener("click", toggle);
+  moreBtn?.addEventListener("click", toggle);
 
   closeBtn?.addEventListener("click", () => setOpen(false));
   overlay?.addEventListener("click", () => setOpen(false));
