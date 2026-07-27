@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-APP_BUILD = os.getenv("APP_BUILD", "20260727-proposal-pdf-model-v59").strip() or "20260727-proposal-pdf-model-v59"
+APP_BUILD = os.getenv("APP_BUILD", "20260727-funnel-kpi-mobile-grid-v60").strip() or "20260727-funnel-kpi-mobile-grid-v60"
 
 
 class Settings:

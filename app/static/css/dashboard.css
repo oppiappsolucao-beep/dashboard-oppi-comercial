@@ -1472,17 +1472,47 @@ a { color: inherit; text-decoration: none; }
 }
 
 @media (max-width: 640px) {
+  /* Mantém KPIs em grade (como no desktop), não empilhados em 1 coluna */
   .metric-grid,
   .funnel-kpi-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .funnel-kpi-card {
+    align-items: center;
+    gap: 10px;
+    padding: 12px;
+    min-height: 0;
+  }
+
+  .funnel-kpi-icon {
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    font-size: 1rem;
+  }
+
+  .funnel-kpi-label {
+    font-size: 0.72rem;
+  }
+
+  .funnel-kpi-value {
+    font-size: 1.25rem;
+  }
+
+  .funnel-kpi-trend {
+    font-size: 0.68rem;
   }
 
   .page-actions {
-    flex-direction: column;
+    flex-direction: row;
+    flex-wrap: wrap;
   }
 
   .page-actions .btn {
-    width: 100%;
+    width: auto;
+    flex: 1 1 calc(50% - 6px);
   }
 
   .filters-row-search .search-wrap input {
