@@ -7,7 +7,7 @@ ENV PYTHONUNBUFFERED=1
 ENV PORT=8501
 ENV HOME=/tmp
 ENV TZ=America/Sao_Paulo
-ENV APP_BUILD=20260727-drawer-phone-v76
+ENV APP_BUILD=20260727-slash-menu-v77
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \

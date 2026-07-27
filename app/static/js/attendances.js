@@ -270,6 +270,11 @@
       return;
     }
     if (ev.target.id === "att-chat-root" || ev.target.id === "att-messages") {
+      if (ev.target.id === "att-chat-root") {
+        ev.target.querySelectorAll("#att-conversation-list, .att-conversation-list").forEach(function (el) {
+          el.remove();
+        });
+      }
       scrollMessages();
       bindComposer(ev.target);
       bindCrmSheet(ev.target);
@@ -406,20 +411,7 @@
       headers: { "HX-Request": "true" },
     })
       .then(function (r) { return r.text(); })
-      .then(function (html) {
-        var root = $("#att-chat-root");
-        if (root) {
-          root.innerHTML = html;
-          if (window.htmx) window.htmx.process(root);
-        }
-        scrollMessages();
-        bindComposer(root || document);
-        bindCrmSheet(root || document);
-        setCrmSheetOpen(false);
-        refreshList({ bumpId: id });
-        lastInboxToken = "";
-        lastConversationToken = "";
-      })
+      .then(function (html) { applyChatHtml(html, id); })
       .catch(function () {});
     input.value = "";
   });
@@ -612,21 +604,7 @@
       headers: { "HX-Request": "true" },
     })
       .then(function (r) { return r.text(); })
-      .then(function (html) {
-        var root = $("#att-chat-root");
-        if (root) {
-          root.innerHTML = html;
-          if (window.htmx) window.htmx.process(root);
-        }
-        scrollMessages();
-        bindComposer(root || document);
-        bindCrmSheet(root || document);
-        setCrmSheetOpen(false);
-        syncComposerActions($(".att-composer"));
-        refreshList({ bumpId: id });
-        lastInboxToken = "";
-        lastConversationToken = "";
-      })
+      .then(function (html) { applyChatHtml(html, id); })
       .catch(function () {})
       .finally(function () {
         voiceState.sending = false;
@@ -801,10 +779,25 @@
     renderSlashMenu(form, items);
   }
 
+  function stripConversationListFromChatHtml(html) {
+    // Evita lista de conversas “grudar” abaixo do composer quando a resposta
+    // traz OOB / fragmento de inbox (fetch+innerHTML não processa hx-swap-oob).
+    try {
+      var wrap = document.createElement("div");
+      wrap.innerHTML = String(html || "");
+      wrap.querySelectorAll("#att-conversation-list, .att-conversation-list").forEach(function (el) {
+        el.remove();
+      });
+      return wrap.innerHTML;
+    } catch (e) {
+      return String(html || "");
+    }
+  }
+
   function applyChatHtml(html, id) {
     var root = $("#att-chat-root");
     if (root) {
-      root.innerHTML = html;
+      root.innerHTML = stripConversationListFromChatHtml(html);
       if (window.htmx) window.htmx.process(root);
     }
     scrollMessages();

@@ -1,5 +1,2 @@
-{# Resposta do envio: re-render thread + OOB lista #}
+{# Resposta do envio: só o thread. A lista da esquerda atualiza via JS (refreshList). #}
 {% include "partials/attendances_thread.html" %}
-<div id="att-conversation-list" hx-swap-oob="innerHTML">
-  {% include "partials/attendances_list.html" %}
-</div>

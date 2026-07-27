@@ -247,6 +247,12 @@
   min-height: 0;
 }
 
+/* Guarda: lista do inbox nunca deve aparecer dentro do painel do chat */
+#att-chat-root > #att-conversation-list,
+#att-chat-root > .att-conversation-list {
+  display: none !important;
+}
+
 .att-col-chat:has(.att-empty-state) {
   grid-template-columns: 1fr;
 }
