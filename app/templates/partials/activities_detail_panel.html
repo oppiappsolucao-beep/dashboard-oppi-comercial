@@ -33,6 +33,23 @@
         </div>
       </div>
       <div class="activity-drawer-meta-item">
+        <span class="activity-drawer-meta-icon" aria-hidden="true">☎</span>
+        <div>
+          <span class="activity-drawer-meta-label">Telefone</span>
+          {% if activity.phone_digits %}
+          <strong>
+            {% if activity.phone_wa_href %}
+            <a href="{{ activity.phone_wa_href }}" target="_blank" rel="noopener" class="activity-drawer-phone-link">{{ activity.phone }}</a>
+            {% else %}
+            <a href="{{ activity.phone_tel_href }}" class="activity-drawer-phone-link">{{ activity.phone }}</a>
+            {% endif %}
+          </strong>
+          {% else %}
+          <strong>{{ activity.phone or '—' }}</strong>
+          {% endif %}
+        </div>
+      </div>
+      <div class="activity-drawer-meta-item">
         <span class="activity-drawer-meta-icon" aria-hidden="true">⏱</span>
         <div>
           <span class="activity-drawer-meta-label">Prazo ideal</span>

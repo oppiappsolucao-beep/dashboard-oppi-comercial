@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-APP_BUILD = os.getenv("APP_BUILD", "20260727-search-keep-input-v75").strip() or "20260727-search-keep-input-v75"
+APP_BUILD = os.getenv("APP_BUILD", "20260727-drawer-phone-v76").strip() or "20260727-drawer-phone-v76"
 
 
 class Settings:

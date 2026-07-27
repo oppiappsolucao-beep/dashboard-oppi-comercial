@@ -1665,6 +1665,8 @@ def build_activity_detail_panel(
         )
         record["sheet_row"] = sheet_row
     _apply_cadastro_label_from_sheet(activity, df, sheet_row)
+    client_phone = ""
+    client_phone_digits = ""
     if sheet_row and not df.empty:
         row_match = _sheet_row_match(df, sheet_row)
         if not row_match.empty:
@@ -1673,6 +1675,15 @@ def build_activity_detail_panel(
             lead_empresa = normalize_text(lead.get("empresa"))
             if lead_empresa:
                 activity["empresa"] = lead_empresa
+            phones = _phones_from_sheet_row(df, columns, sheet_row)
+            client_phone = phones[0] if phones else normalize_text(lead.get("phone") or "")
+            client_phone_digits = normalize_phone_for_duplicate(client_phone) or normalize_digits(client_phone)
+    activity["phone"] = client_phone or "—"
+    activity["phone_digits"] = client_phone_digits
+    activity["phone_wa_href"] = (
+        f"https://wa.me/55{client_phone_digits}" if client_phone_digits else ""
+    )
+    activity["phone_tel_href"] = f"tel:{client_phone_digits}" if client_phone_digits else ""
 
     suggestion = suggest_from_result("Cliente respondeu", stage)
     next_action_current = next_action_display_stage(
