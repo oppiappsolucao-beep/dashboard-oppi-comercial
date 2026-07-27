@@ -1,11 +1,11 @@
-<div class="funnel-kpi-grid proposals-kpi-grid">
+<div class="proposals-kpi-grid">
   {% for card in kpi_cards %}
-  <div class="funnel-kpi-card panel">
-    <div class="funnel-kpi-icon tone-{{ card.tone }}">{{ card.icon }}</div>
-    <div class="funnel-kpi-body">
-      <div class="funnel-kpi-label">{{ card.label }}</div>
-      <div class="funnel-kpi-value">{{ card.value }}</div>
-      <div class="funnel-kpi-trend {% if card.trend_flat %}flat{% elif card.trend_up %}up{% else %}down{% endif %}">
+  <div class="proposals-kpi-card">
+    <div class="proposals-kpi-icon tone-{{ card.tone }}">{{ card.icon }}</div>
+    <div class="proposals-kpi-body">
+      <div class="proposals-kpi-label">{{ card.label }}</div>
+      <div class="proposals-kpi-value">{{ card.value }}</div>
+      <div class="proposals-kpi-trend {% if card.trend_flat %}flat{% elif card.trend_up %}up{% else %}down{% endif %}">
         {% if card.trend_flat %}→{% elif card.trend_up %}↑{% else %}↓{% endif %}
         {{ card.trend_pct }}% vs mês anterior
       </div>
@@ -14,203 +14,166 @@
   {% endfor %}
 </div>
 
-<div class="proposals-layout">
-    <aside class="proposals-assistant panel-card panel" data-proposal-active="{{ '1' if (pending_company or (proposal_draft and proposal_draft.step and proposal_draft.step != 'pick_company')) else '0' }}">
-    <div class="proposals-assistant-layout">
-      <div class="proposals-contacts">
-        <div class="proposals-contacts-header">
-          <div>
-            <div class="proposals-contacts-title">Empresas</div>
-            <div class="proposals-contacts-sub">Clique para iniciar a proposta</div>
-          </div>
-        </div>
-        <div class="proposals-contacts-search">
-          <input type="search" id="proposals-contacts-filter" placeholder="Buscar empresa..." autocomplete="off">
-        </div>
-        <div class="proposals-contacts-list" id="proposals-contacts-list">
-          {% for company in company_contacts or [] %}
-          <button
-            type="button"
-            class="proposals-contact {% if company.active %}active{% endif %}"
-            data-company="{{ company.name | lower }}"
-            hx-post="/propostas/chat"
-            hx-target="#proposals-chat-panel"
-            hx-swap="innerHTML"
-            hx-vals='{"empresa": {{ company.name_json | safe }}, "action": "continuar"}'
-          >
-            <span class="proposals-contact-avatar">{{ company.initials }}</span>
-            <span class="proposals-contact-text">
-              <strong>{{ company.name }}</strong>
-              <small>{{ company.snippet }}</small>
-            </span>
-          </button>
-          {% else %}
-          <div class="proposals-contacts-empty">Nenhuma empresa no cadastro.</div>
-          {% endfor %}
-        </div>
+<div
+  class="proposals-workbench"
+  data-proposal-active="{{ '1' if (pending_company or (proposal_draft and proposal_draft.step and proposal_draft.step != 'pick_company')) else '0' }}"
+>
+  <aside class="proposals-contacts">
+    <div class="proposals-contacts-header">
+      <div>
+        <div class="proposals-contacts-title">Empresas</div>
+        <div class="proposals-contacts-sub">Clique para iniciar</div>
       </div>
-
-      <section class="proposals-chat-panel" id="proposals-chat-panel">
-        {% include "partials/proposals_chat.html" %}
-      </section>
+    </div>
+    <div class="proposals-contacts-search">
+      <input type="search" id="proposals-contacts-filter" placeholder="Buscar empresa..." autocomplete="off">
+    </div>
+    <div class="proposals-contacts-list" id="proposals-contacts-list">
+      {% for company in company_contacts or [] %}
+      <button
+        type="button"
+        class="proposals-contact {% if company.active %}active{% endif %}"
+        data-company="{{ company.name | lower }}"
+        hx-post="/propostas/chat"
+        hx-target="#proposals-chat-panel"
+        hx-swap="innerHTML"
+        hx-vals='{"empresa": {{ company.name_json | safe }}, "action": "continuar"}'
+      >
+        <span class="proposals-contact-avatar">{{ company.initials }}</span>
+        <span class="proposals-contact-text">
+          <strong>{{ company.name }}</strong>
+          <small>{{ company.snippet }}</small>
+        </span>
+      </button>
+      {% else %}
+      <div class="proposals-contacts-empty">Nenhuma empresa no cadastro.</div>
+      {% endfor %}
     </div>
   </aside>
 
-  <div class="proposals-main panel-card panel">
+  <section class="proposals-chat-panel" id="proposals-chat-panel">
+    {% include "partials/proposals_chat.html" %}
+  </section>
+
+  <div class="proposals-preview">
     <div id="proposals-generated-panel">
       {% include "partials/proposals_generated_panel.html" %}
     </div>
+  </div>
+</div>
 
-    <form id="proposals-filters"
-      hx-post="/propostas/filtros"
-      hx-target="#proposals-root"
-      hx-swap="innerHTML"
-    >
-      <input type="hidden" name="page" value="{{ table.page }}" id="proposals-page-input">
+<form id="proposals-filters"
+  class="proposals-table-card panel-card panel"
+  hx-post="/propostas/filtros"
+  hx-target="#proposals-root"
+  hx-swap="innerHTML"
+>
+  <input type="hidden" name="page" value="{{ table.page }}" id="proposals-page-input">
 
-      <div class="proposals-table-header">
-        <div class="section-heading">Todas as propostas</div>
-        <div class="proposals-table-controls">
-          <select name="status_filter" onchange="document.getElementById('proposals-page-input').value='1'; document.getElementById('proposals-filters').requestSubmit();">
-            {% for option in status_options %}
-            <option value="{{ option }}" {% if proposals_params.status_filter == option %}selected{% endif %}>{{ option }}</option>
-            {% endfor %}
-          </select>
-          <div class="activities-date-range">
-            <span class="activities-date-icon">📅</span>
-            <input type="date" name="period_start" value="{{ filters.period_start }}"
-              onchange="document.getElementById('proposals-page-input').value='1'; document.getElementById('proposals-filters').requestSubmit();">
-            <span class="activities-date-sep">—</span>
-            <input type="date" name="period_end" value="{{ filters.period_end }}"
-              onchange="document.getElementById('proposals-page-input').value='1'; document.getElementById('proposals-filters').requestSubmit();">
+  <div class="proposals-table-header">
+    <div class="section-heading">Todas as propostas</div>
+    <div class="proposals-table-controls">
+      <select name="status_filter" onchange="document.getElementById('proposals-page-input').value='1'; document.getElementById('proposals-filters').requestSubmit();">
+        {% for option in status_options %}
+        <option value="{{ option }}" {% if proposals_params.status_filter == option %}selected{% endif %}>{{ option }}</option>
+        {% endfor %}
+      </select>
+      <div class="activities-date-range">
+        <span class="activities-date-icon">📅</span>
+        <input type="date" name="period_start" value="{{ filters.period_start }}"
+          onchange="document.getElementById('proposals-page-input').value='1'; document.getElementById('proposals-filters').requestSubmit();">
+        <span class="activities-date-sep">—</span>
+        <input type="date" name="period_end" value="{{ filters.period_end }}"
+          onchange="document.getElementById('proposals-page-input').value='1'; document.getElementById('proposals-filters').requestSubmit();">
+      </div>
+    </div>
+  </div>
+
+  {% if table.rows %}
+  <table class="data-table proposals-table">
+    <thead>
+      <tr>
+        <th>Código</th>
+        <th>Empresa</th>
+        <th>Responsável</th>
+        <th>Valor</th>
+        <th>Status</th>
+        <th>Vencimento</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in table.rows %}
+      <tr>
+        <td class="proposal-code">{{ row.code }}</td>
+        <td>
+          <div class="table-company">
+            <span class="table-company-icon">{{ row.empresa_initials }}</span>
+            <div class="table-company-name">{{ row.empresa }}</div>
           </div>
-        </div>
-      </div>
-
-      {% if table.rows %}
-      <table class="data-table proposals-table">
-        <thead>
-          <tr>
-            <th>Código</th>
-            <th>Empresa</th>
-            <th>Responsável</th>
-            <th>Valor</th>
-            <th>Status</th>
-            <th>Vencimento</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for row in table.rows %}
-          <tr>
-            <td class="proposal-code">{{ row.code }}</td>
-            <td>
-              <div class="table-company">
-                <span class="table-company-icon">{{ row.empresa_initials }}</span>
-                <div class="table-company-name">{{ row.empresa }}</div>
-              </div>
-            </td>
-            <td>
-              <div class="owner-cell">
-                <span class="owner-avatar">{{ row.vendedor_initials }}</span>
-                <span>{{ row.vendedor }}</span>
-              </div>
-            </td>
-            <td class="value-cell">{{ row.valor }}</td>
-            <td>
-              <span class="proposal-status-badge {{ row.status_class }}">{{ row.status_label }}</span>
-            </td>
-            <td>{{ row.vencimento }}</td>
-            <td class="table-actions">
-              {% if row.sheet_row %}
-              <a href="/cadastro/todos/{{ row.sheet_row }}/editar" class="table-menu-btn" title="Ver cadastro">⋯</a>
-              {% else %}
-              <span class="table-menu-btn muted">⋯</span>
-              {% endif %}
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-
-      <div class="activities-pagination">
-        <div class="activities-pagination-info">
-          Mostrando {{ table.from_record }} a {{ table.to_record }} de {{ table.total }} propostas
-        </div>
-        <div class="activities-pagination-controls">
-          {% if table.page > 1 %}
-          <button type="button" class="page-btn"
-            onclick="document.getElementById('proposals-page-input').value='{{ table.page - 1 }}'; document.getElementById('proposals-filters').requestSubmit();">‹</button>
+        </td>
+        <td>
+          <div class="owner-cell">
+            <span class="owner-avatar">{{ row.vendedor_initials }}</span>
+            <span>{{ row.vendedor }}</span>
+          </div>
+        </td>
+        <td class="value-cell">{{ row.valor }}</td>
+        <td>
+          <span class="proposal-status-badge {{ row.status_class }}">{{ row.status_label }}</span>
+        </td>
+        <td>{{ row.vencimento }}</td>
+        <td class="table-actions">
+          {% if row.sheet_row %}
+          <a href="/cadastro/todos/{{ row.sheet_row }}/editar" class="table-menu-btn" title="Ver cadastro">⋯</a>
+          {% else %}
+          <span class="table-menu-btn muted">⋯</span>
           {% endif %}
-          {% for p in range(1, table.total_pages + 1) %}
-            {% if p == table.page %}
-            <span class="page-btn active">{{ p }}</span>
-            {% elif p <= 3 or p > table.total_pages - 1 or (p >= table.page - 1 and p <= table.page + 1) %}
-            <button type="button" class="page-btn"
-              onclick="document.getElementById('proposals-page-input').value='{{ p }}'; document.getElementById('proposals-filters').requestSubmit();">{{ p }}</button>
-            {% elif p == 4 and table.page > 5 %}
-            <span class="page-ellipsis">…</span>
-            {% endif %}
-          {% endfor %}
-          {% if table.page < table.total_pages %}
-          <button type="button" class="page-btn"
-            onclick="document.getElementById('proposals-page-input').value='{{ table.page + 1 }}'; document.getElementById('proposals-filters').requestSubmit();">›</button>
-          {% endif %}
-        </div>
-        <div class="activities-per-page">
-          <label>Registros por página:</label>
-          <select name="per_page" onchange="document.getElementById('proposals-page-input').value='1'; document.getElementById('proposals-filters').requestSubmit();">
-            {% for size in [10, 25, 50] %}
-            <option value="{{ size }}" {% if table.per_page == size %}selected{% endif %}>{{ size }}</option>
-            {% endfor %}
-          </select>
-        </div>
-      </div>
-      {% else %}
-      <div class="proposals-empty">
-        Nenhuma proposta encontrada para os filtros selecionados.
-      </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="activities-pagination">
+    <div class="activities-pagination-info">
+      Mostrando {{ table.from_record }} a {{ table.to_record }} de {{ table.total }} propostas
+    </div>
+    <div class="activities-pagination-controls">
+      {% if table.page > 1 %}
+      <button type="button" class="page-btn"
+        onclick="document.getElementById('proposals-page-input').value='{{ table.page - 1 }}'; document.getElementById('proposals-filters').requestSubmit();">‹</button>
       {% endif %}
-    </form>
-  </div>
-</div>
-
-<div class="proposals-workflow panel-card panel">
-  <div class="section-heading">Fluxo de geração</div>
-  <div class="proposals-workflow-steps">
-    <div class="proposals-workflow-step">
-      <div class="proposals-workflow-icon tone-purple">💬</div>
-      <div>
-        <div class="proposals-workflow-title">Cliente + serviços</div>
-        <div class="proposals-workflow-desc">Clique na empresa, descreva os serviços ou informe colaboradores.</div>
-      </div>
+      {% for p in range(1, table.total_pages + 1) %}
+        {% if p == table.page %}
+        <span class="page-btn active">{{ p }}</span>
+        {% elif p <= 3 or p > table.total_pages - 1 or (p >= table.page - 1 and p <= table.page + 1) %}
+        <button type="button" class="page-btn"
+          onclick="document.getElementById('proposals-page-input').value='{{ p }}'; document.getElementById('proposals-filters').requestSubmit();">{{ p }}</button>
+        {% elif p == 4 and table.page > 5 %}
+        <span class="page-ellipsis">…</span>
+        {% endif %}
+      {% endfor %}
+      {% if table.page < table.total_pages %}
+      <button type="button" class="page-btn"
+        onclick="document.getElementById('proposals-page-input').value='{{ table.page + 1 }}'; document.getElementById('proposals-filters').requestSubmit();">›</button>
+      {% endif %}
     </div>
-    <div class="proposals-workflow-arrow">→</div>
-    <div class="proposals-workflow-step">
-      <div class="proposals-workflow-icon tone-blue">🧮</div>
-      <div>
-        <div class="proposals-workflow-title">Planos e sugestão</div>
-        <div class="proposals-workflow-desc">Boleto, cartão e anual — escolha ou use o valor sugerido.</div>
-      </div>
-    </div>
-    <div class="proposals-workflow-arrow">→</div>
-    <div class="proposals-workflow-step">
-      <div class="proposals-workflow-icon tone-pink">📄</div>
-      <div>
-        <div class="proposals-workflow-title">Confirmar e gerar PDF</div>
-        <div class="proposals-workflow-desc">No resumo, clique em “Gerar proposta em PDF”. O preview aparece ao lado.</div>
-      </div>
-    </div>
-    <div class="proposals-workflow-arrow">→</div>
-    <div class="proposals-workflow-step">
-      <div class="proposals-workflow-icon tone-green">📱</div>
-      <div>
-        <div class="proposals-workflow-title">Baixar / enviar</div>
-        <div class="proposals-workflow-desc">Baixe o PDF ou compartilhe com o cliente.</div>
-      </div>
+    <div class="activities-per-page">
+      <label>Registros por página:</label>
+      <select name="per_page" onchange="document.getElementById('proposals-page-input').value='1'; document.getElementById('proposals-filters').requestSubmit();">
+        {% for size in [10, 25, 50] %}
+        <option value="{{ size }}" {% if table.per_page == size %}selected{% endif %}>{{ size }}</option>
+        {% endfor %}
+      </select>
     </div>
   </div>
-</div>
+  {% else %}
+  <div class="proposals-empty">
+    Nenhuma proposta encontrada para os filtros selecionados.
+  </div>
+  {% endif %}
+</form>
 
 <script>
 (function () {
@@ -234,8 +197,8 @@
       btn.classList.remove("active");
     });
     target.classList.add("active");
-    var assistant = document.querySelector(".proposals-assistant");
-    if (assistant) assistant.setAttribute("data-proposal-active", "1");
+    var workbench = document.querySelector(".proposals-workbench");
+    if (workbench) workbench.setAttribute("data-proposal-active", "1");
     var chat = document.getElementById("proposals-chat-panel");
     if (chat) chat.scrollIntoView({ behavior: "smooth", block: "start" });
   });
