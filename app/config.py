@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-APP_BUILD = os.getenv("APP_BUILD", "20260727-funnel-kpi-mobile-grid-v60").strip() or "20260727-funnel-kpi-mobile-grid-v60"
+APP_BUILD = os.getenv("APP_BUILD", "20260727-whatsapp-send-retry-v61").strip() or "20260727-whatsapp-send-retry-v61"
 
 
 class Settings:

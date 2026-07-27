@@ -220,9 +220,22 @@ def send_text_message(
     # Atendente humano enviou → pausa a IA (evita confusão / resposta automática)
     if sender == "agent":
         updates["ai_mode"] = store.AI_MODE_PAUSED
+    used_number = normalize_text(response.get("_oppi_send_number") or "")
+    if used_number and "@lid" in used_number.lower() and used_number != normalize_text(
+        conversation.get("remote_jid") or ""
+    ):
+        updates["remote_jid"] = used_number
     if updates:
         store.update_conversation(conversation_id, **updates)
-    return message, ""
+
+    warning = ""
+    if response.get("_oppi_delivery_pending"):
+        warning = (
+            "Mensagem aceita pela Evolution, mas a entrega ficou PENDING. "
+            "Confira no WhatsApp do cliente; se não chegou, peça uma nova mensagem "
+            "dele para atualizar o contato e tente de novo."
+        )
+    return message, warning
 
 
 def send_media_message(

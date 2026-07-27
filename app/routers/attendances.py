@@ -153,13 +153,20 @@ def attendances_conversation(request: Request, conversation_id: str):
 @router.post("/atendimentos/conversa/{conversation_id}/enviar", response_class=HTMLResponse)
 async def attendances_send(request: Request, conversation_id: str, text: str = Form("")):
     require_auth(request)
-    _, error = attendances_service.send_text_message(
+    _, notice = attendances_service.send_text_message(
         conversation_id,
         text,
         sender="agent",
         assignee=_username(request),
     )
-    ctx = _page_ctx(request, selected_id=conversation_id, error=error)
+    # notice pode ser erro duro (sem mensagem enviada) ou aviso PENDING (enviou)
+    error = ""
+    flash = ""
+    if notice and ("PENDING" in notice or "aceita pela Evolution" in notice):
+        flash = notice
+    else:
+        error = notice
+    ctx = _page_ctx(request, selected_id=conversation_id, error=error, flash=flash)
     return render(request, "partials/attendances_send_response.html", ctx)
 
 

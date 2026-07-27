@@ -618,27 +618,78 @@ def assert_instance_ready() -> None:
 
 
 def _text_payload(number: str, body: str) -> dict[str, Any]:
-    # Um único formato — múltiplos payloads geravam várias entregas no WhatsApp.
+    # Um único formato por tentativa — múltiplos payloads no mesmo alvo geravam duplicatas.
     return {"number": number, "text": body}
 
 
-def _pick_send_target(phone: str, jid: str = "") -> str:
-    """Escolhe um único destino. Preferência: @lid > número puro > demais."""
-    targets = enrich_targets_from_chats(phone, jid)
-    if not targets:
-        return ""
-    for item in targets:
-        if "@lid" in item.lower():
-            return item
+def _plain_phone(phone: str) -> str:
     digits = normalize_digits(phone)
+    if not digits:
+        return ""
+    if not digits.startswith("55") and len(digits) >= 10:
+        digits = f"55{digits}"
+    return digits
+
+
+def _send_target_candidates(phone: str, jid: str = "") -> list[str]:
+    """
+    Destinos de envio em ordem.
+
+    Número puro costuma entregar quando o JID só fica PENDING.
+    @lid é necessário em algumas versões Baileys — fica como 2ª opção.
+    No máximo 3 alvos distintos para não spammar o WhatsApp.
+    """
+    targets = enrich_targets_from_chats(phone, jid)
+    digits = _plain_phone(phone)
+    ordered: list[str] = []
+
     if digits:
-        if not digits.startswith("55") and len(digits) >= 10:
-            digits = f"55{digits}"
-        for item in targets:
-            if normalize_digits(item) == digits or item == digits:
-                return digits
-        return digits
-    return targets[0]
+        ordered.append(digits)
+
+    for item in targets:
+        if "@lid" in item.lower() and item not in ordered:
+            ordered.append(item)
+            break
+
+    # Variantes BR com/sem 9º dígito (só número puro)
+    if digits.startswith("55") and len(digits) == 13 and digits[4] == "9":
+        alt = digits[:4] + digits[5:]
+        if alt not in ordered:
+            ordered.append(alt)
+    elif digits.startswith("55") and len(digits) == 12:
+        alt = digits[:4] + "9" + digits[4:]
+        if alt not in ordered:
+            ordered.append(alt)
+
+    for item in targets:
+        if item and item not in ordered and "@g.us" not in item.lower():
+            # Evita @s.whatsapp.net cedo — costuma aceitar sem entregar
+            if item.endswith("@s.whatsapp.net") or item.endswith("@c.us"):
+                continue
+            ordered.append(item)
+
+    return ordered[:3]
+
+
+def _pick_send_target(phone: str, jid: str = "") -> str:
+    candidates = _send_target_candidates(phone, jid)
+    return candidates[0] if candidates else ""
+
+
+def _status_looks_delivered(status: str) -> bool:
+    text = normalize_text(status).upper()
+    return text in {
+        "SERVER_ACK",
+        "DELIVERY_ACK",
+        "READ",
+        "PLAYED",
+        "SUCCESS",
+        "SENT",
+        "RECEIVED",
+        "2",
+        "3",
+        "4",
+    }
 
 
 def send_text(phone: str, text: str, *, jid: str = "") -> dict[str, Any]:
@@ -650,46 +701,69 @@ def send_text(phone: str, text: str, *, jid: str = "") -> dict[str, Any]:
 
     assert_instance_ready()
 
-    number = _pick_send_target(phone, jid)
-    if not number:
+    candidates = _send_target_candidates(phone, jid)
+    if not candidates:
         raise EvolutionClientError("Telefone/JID da conversa inválido para envio.")
 
     urls = _instance_urls("/message/sendText")
     errors: list[str] = []
-    payload = _text_payload(number, body)
+    pending_ok: dict[str, Any] | None = None
 
-    for url in urls:
-        try:
-            response = requests.post(url, json=payload, headers=_headers(), timeout=30)
-        except requests.RequestException as error:
-            errors.append(f"{number}: {error}")
-            continue
+    for number in candidates:
+        payload = _text_payload(number, body)
+        accepted_pending_for_number = False
+        for url in urls:
+            try:
+                response = requests.post(url, json=payload, headers=_headers(), timeout=30)
+            except requests.RequestException as error:
+                errors.append(f"{number}: {error}")
+                continue
 
-        data = _parse_json(response)
-        err = _response_looks_like_error(data)
-        if response.status_code >= 400 or err:
-            errors.append(
-                f"{number} HTTP {response.status_code}: {err or response.text[:180]}"
+            data = _parse_json(response)
+            err = _response_looks_like_error(data)
+            if response.status_code >= 400 or err:
+                errors.append(
+                    f"{number} HTTP {response.status_code}: {err or response.text[:180]}"
+                )
+                continue
+
+            msg_id = extract_message_id(data)
+            if not msg_id:
+                errors.append(
+                    f"{number}: Evolution respondeu sem ID de mensagem: {str(data)[:180]}"
+                )
+                continue
+
+            status = extract_message_status(data) or "UNKNOWN"
+            logger.info(
+                "Evolution sendText instance=%s number=%s id=%s status=%s",
+                resolved_instance_name(),
+                number,
+                msg_id,
+                status,
             )
+            data["_oppi_send_number"] = number
+            data["_oppi_send_status"] = status
+            # Só considera "pendente de verdade" quando a API diz PENDING/ERROR.
+            # Status vazio/UNKNOWN = aceito (comportamento antigo) — não dispara retry (evita duplicata).
+            explicitly_pending = status in {"PENDING", "ERROR", "0"}
+            data["_oppi_delivery_pending"] = explicitly_pending
+
+            if not explicitly_pending or _status_looks_delivered(status):
+                return data
+
+            # PENDING explícito: guarda e tenta o próximo formato (número ↔ @lid).
+            if pending_ok is None:
+                pending_ok = data
+            accepted_pending_for_number = True
+            break
+
+        if accepted_pending_for_number:
             continue
 
-        msg_id = extract_message_id(data)
-        if not msg_id:
-            errors.append(
-                f"{number}: Evolution respondeu sem ID de mensagem: {str(data)[:180]}"
-            )
-            continue
-
-        status = extract_message_status(data) or "UNKNOWN"
-        logger.info(
-            "Evolution sendText instance=%s number=%s id=%s status=%s",
-            resolved_instance_name(),
-            number,
-            msg_id,
-            status,
-        )
-        # Aceitou = uma entrega. Nunca tentar outros alvos (causa duplicatas no WhatsApp).
-        return data
+    if pending_ok is not None:
+        # Evolution aceitou, mas ficou PENDING em todos os alvos testados.
+        return pending_ok
 
     detail = " | ".join(errors[-4:]) if errors else "sem detalhes"
     raise EvolutionClientError(
