@@ -435,6 +435,16 @@ body.activity-drawer-open {
   color: var(--text);
 }
 
+.activity-drawer-phone-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.activity-drawer-phone-link:hover {
+  color: #0f766e;
+  text-decoration: underline;
+}
+
 .activity-drawer-section-label {
   font-size: 0.76rem;
   font-weight: 800;
