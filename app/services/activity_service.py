@@ -111,31 +111,70 @@ def _empresa_match_key(value: str) -> str:
     return normalize_search_text(normalize_text(value))
 
 
-def _resolve_sheet_row_for_activity(activity: dict, df: pd.DataFrame) -> int:
-    """Resolve o cadastro da atividade.
+def _sheet_row_match(df: pd.DataFrame, sheet_row: int) -> pd.DataFrame:
+    if df is None or df.empty or "_sheet_row" not in df.columns:
+        return df.iloc[0:0] if df is not None else pd.DataFrame()
+    try:
+        target = int(sheet_row or 0)
+    except (TypeError, ValueError):
+        return df.iloc[0:0]
+    if not target:
+        return df.iloc[0:0]
+    return df[df["_sheet_row"].astype(int) == target]
 
-    O sheet_row gravado na atividade é a fonte da verdade do clique/Ver.
-    Só tenta casar por nome quando não há vínculo — e só se o nome for único,
-    para não abrir o cadastro de outra empresa.
-    """
-    stored = int(activity.get("sheet_row") or 0)
-    if stored:
-        # Mantém o vínculo mesmo se o cadastro estiver fora do DataFrame filtrado
-        # (ex.: filtro de vendedor). Nunca remapeia por nome: isso abria outra empresa.
-        return stored
 
-    if df.empty or "_sheet_row" not in df.columns or "_empresa" not in df.columns:
+def _empresa_at_sheet_row(df: pd.DataFrame, sheet_row: int) -> str:
+    match = _sheet_row_match(df, sheet_row)
+    if match.empty or "_empresa" not in match.columns:
+        return ""
+    return normalize_text(match.iloc[0].get("_empresa", ""))
+
+
+def _unique_sheet_row_by_empresa(df: pd.DataFrame, empresa: str) -> int:
+    """Só vincula por nome quando há exatamente 1 cadastro com esse nome na planilha."""
+    if df is None or df.empty or "_sheet_row" not in df.columns or "_empresa" not in df.columns:
         return 0
-
-    empresa_key = _empresa_match_key(activity.get("empresa"))
+    empresa_key = _empresa_match_key(empresa)
     if not empresa_key:
         return 0
-
     keys = df["_empresa"].map(lambda value: _empresa_match_key(str(value)))
     matches = df[keys == empresa_key]
     if len(matches) != 1:
         return 0
     return int(matches.iloc[0]["_sheet_row"] or 0)
+
+
+def _resolve_sheet_row_for_activity(activity: dict, df: pd.DataFrame) -> int:
+    """Resolve o cadastro da atividade.
+
+    O sheet_row gravado é a fonte da verdade — exceto quando está claramente
+    inconsistente com o nome exibido e o nome casa com exatamente 1 linha
+    na planilha (vínculo envenenado por remap antigo).
+    """
+    stored = int(activity.get("sheet_row") or 0)
+    if stored:
+        sheet_empresa = _empresa_at_sheet_row(df, stored)
+        activity_key = _empresa_match_key(activity.get("empresa"))
+        sheet_key = _empresa_match_key(sheet_empresa)
+        if activity_key and sheet_key and activity_key != sheet_key:
+            healed = _unique_sheet_row_by_empresa(df, activity.get("empresa") or "")
+            if healed and healed != stored:
+                return healed
+        # Mantém o vínculo mesmo fora do DataFrame filtrado. Não remapeia por nome
+        # quando o nome está vazio, a linha sumiu ou há ambiguidade.
+        return stored
+
+    return _unique_sheet_row_by_empresa(df, activity.get("empresa") or "")
+
+
+def _apply_cadastro_label_from_sheet(activity: dict, df: pd.DataFrame, sheet_row: int) -> None:
+    """Garante que o nome na UI é o do cadastro que o clique abre."""
+    if not sheet_row:
+        return
+    cadastro_empresa = _empresa_at_sheet_row(df, sheet_row)
+    if cadastro_empresa:
+        activity["empresa"] = cadastro_empresa
+
 
 def _status_for_pipeline_stage(stage: str) -> str:
     normalized_stage = normalize_legacy_stage(stage) or normalize_text(stage) or "Novo Lead"
@@ -553,6 +592,7 @@ def buscar_atividades(
     search: str = "",
     period_start: date | None = None,
     period_end: date | None = None,
+    sheet_df: pd.DataFrame | None = None,
 ) -> list[dict]:
     """Lista atividades de leads e empresas no escopo do vendedor.
 
@@ -560,9 +600,12 @@ def buscar_atividades(
     leads/empresas). O período filtra pela data da atividade, não pela data
     do chamado do cadastro — assim empresas convertidas fora do período
     continuam aparecendo quando têm atividade no intervalo.
+
+    sheet_df: planilha completa (sem filtro de vendedor) para alinhar nome ↔ sheet_row.
     """
     sync_auto_activities(filtered_df, columns, tenant_id)
     rows = []
+    lookup_df = sheet_df if sheet_df is not None and not sheet_df.empty else filtered_df
     allowed_rows = set(filtered_df["_sheet_row"].astype(int).tolist()) if not filtered_df.empty else set()
     sellers_in_scope: set[str] = set()
     if not filtered_df.empty and "_vendedor" in filtered_df.columns:
@@ -595,9 +638,9 @@ def buscar_atividades(
                     continue
         serialized = _serialize_activity(record, tenant_id)
         stored_row = int(serialized.get("sheet_row") or 0)
-        resolved_row = _resolve_sheet_row_for_activity(serialized, filtered_df)
-        # Só grava vínculo novo quando a atividade ainda não tinha sheet_row
-        if resolved_row and not stored_row:
+        resolved_row = _resolve_sheet_row_for_activity(serialized, lookup_df)
+        # Grava vínculo novo OU corrige vínculo inconsistente (nome ≠ cadastro do sheet_row)
+        if resolved_row and resolved_row != stored_row:
             save_activity(
                 tenant_id,
                 record.get("id"),
@@ -605,6 +648,7 @@ def buscar_atividades(
                     "sheet_row": resolved_row,
                     "lead_id": str(resolved_row),
                     "company_id": str(resolved_row),
+                    "empresa": _empresa_at_sheet_row(lookup_df, resolved_row) or serialized.get("empresa"),
                 },
                 sync_pipeline=False,
             )
@@ -619,13 +663,8 @@ def buscar_atividades(
                 pass
         elif resolved_row:
             serialized["sheet_row"] = resolved_row
-        # Exibe o nome do cadastro vinculado (o que o clique abre), não um nome antigo/errado
-        if resolved_row and not filtered_df.empty and "_sheet_row" in filtered_df.columns:
-            row_match = filtered_df[filtered_df["_sheet_row"].astype(int) == int(resolved_row)]
-            if not row_match.empty:
-                cadastro_empresa = normalize_text(row_match.iloc[0].get("_empresa", ""))
-                if cadastro_empresa:
-                    serialized["empresa"] = cadastro_empresa
+        # Nome na lista = cadastro que o clique abre (planilha completa, não só o filtro)
+        _apply_cadastro_label_from_sheet(serialized, lookup_df, int(serialized.get("sheet_row") or 0))
         if search:
             blob = " | ".join([
                 serialized["title"],
@@ -1507,8 +1546,8 @@ def build_activity_detail_panel(
     stored_sheet_row = int(activity.get("sheet_row") or 0)
     sheet_row = _resolve_sheet_row_for_activity(activity, df)
     activity["sheet_row"] = sheet_row
-    # Só vincula automaticamente quando a atividade ainda não tinha sheet_row
-    if sheet_row and not stored_sheet_row:
+    # Grava vínculo novo ou corrige inconsistência nome ↔ sheet_row
+    if sheet_row and sheet_row != stored_sheet_row:
         save_activity(
             tenant_id,
             activity_id,
@@ -1516,12 +1555,14 @@ def build_activity_detail_panel(
                 "sheet_row": sheet_row,
                 "lead_id": str(sheet_row),
                 "company_id": str(sheet_row),
+                "empresa": _empresa_at_sheet_row(df, sheet_row) or activity.get("empresa"),
             },
             sync_pipeline=False,
         )
         record["sheet_row"] = sheet_row
+    _apply_cadastro_label_from_sheet(activity, df, sheet_row)
     if sheet_row and not df.empty:
-        row_match = df[df["_sheet_row"] == sheet_row]
+        row_match = _sheet_row_match(df, sheet_row)
         if not row_match.empty:
             lead = _lead_record(row_match.iloc[0], columns, tenant_id)
             lead_created_at = lead.get("created_at")
@@ -1786,6 +1827,7 @@ def build_activity_page_context(
         search=filters.search,
         period_start=filters.period_start,
         period_end=filters.period_end,
+        sheet_df=df,
     )
     table = build_activities_table(activities, params)
     kanban = build_activities_kanban(activities, params, tenant_id)

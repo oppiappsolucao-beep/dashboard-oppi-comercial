@@ -10,10 +10,15 @@
     </div>
   </td>
   <td>
+    {% if row.sheet_row %}
     <a href="/cadastro/todos/{{ row.sheet_row }}/editar?from=activities" class="activity-lead-link">
       <div class="activity-lead-company">{{ row.empresa }}</div>
       <div class="activity-lead-contact">{{ row.tipo_label or "Lead" }} · {{ row.contato }}</div>
     </a>
+    {% else %}
+    <div class="activity-lead-company">{{ row.empresa }}</div>
+    <div class="activity-lead-contact">{{ row.tipo_label or "Lead" }} · {{ row.contato }}</div>
+    {% endif %}
   </td>
   <td><span class="activity-stage-badge stage-{{ row.stage|lower|replace(' ', '-') }}">{{ row.stage }}{% if row.stage_legacy %} <span class="legacy-tag">legado</span>{% endif %}</span></td>
   <td>
@@ -76,8 +81,10 @@
       <details class="activity-menu">
         <summary class="table-menu-btn" title="Mais ações">⋯</summary>
         <div class="activity-menu-panel">
+          {% if row.sheet_row %}
           <a href="/cadastro/todos/{{ row.sheet_row }}/editar?from=activities">Ver</a>
           <a href="/cadastro/todos/{{ row.sheet_row }}/editar?from=activities&tab=atividades">Ver linha do tempo</a>
+          {% endif %}
           <button type="button" onclick="activityToggleExtra('{{ row.id }}')">Adicionar observação</button>
           <button type="button"
             hx-post="/atividades/{{ row.id }}/cancelar"

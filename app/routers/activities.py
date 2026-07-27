@@ -324,13 +324,16 @@ async def activities_create(
             response.headers["HX-Reswap"] = "innerHTML"
             return response
         row = row_match.iloc[0]
-        from app.services.activity_service import _lead_is_accessible
+        # Nome sempre da planilha do sheet_row — evita gravar empresa trocada
+        from app.services.activity_service import _contact_name, _lead_is_accessible
         if not _lead_is_accessible(row, user, admin_user):
             response = render(request, "partials/activities_new_modal.html", _modal_context(request, "Sem permissão para este lead."))
             response.status_code = 403
             response.headers["HX-Retarget"] = "#activity-modal-root"
             response.headers["HX-Reswap"] = "innerHTML"
             return response
+        empresa = normalize_text(row.get("_empresa", "")) or empresa
+        contato = _contact_name(row, columns) or contato
 
     payload = {
         "sheet_row": sheet_row,
