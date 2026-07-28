@@ -89,6 +89,7 @@ def page_context(
     flash: str = "",
     error: str = "",
     light: bool = False,
+    soft: bool = False,
 ) -> dict:
     # Manutenção pesada só na carga completa — filtros/HTMX precisam responder na hora
     if not light:
@@ -176,28 +177,48 @@ def page_context(
             else:
                 store.mark_conversation_read(selected_id)
                 selected = store.get_conversation(selected_id)
-                # Corrige CRM se estiver apontando para outro cadastro
-                try:
-                    selected = ensure_crm_link(selected) or selected
-                except Exception:
-                    pass
+                # Soft = refresh do poll: só HTML leve. CRM/mídia bloqueavam o único worker.
+                if not soft:
+                    try:
+                        selected = ensure_crm_link(selected) or selected
+                    except Exception:
+                        pass
                 messages = store.list_messages(selected_id)
-                # Áudio/mídia local em TODA conversa aberta (não só uma)
-                try:
-                    from app.services.attendance_media import hydrate_messages_media
+                if not soft:
+                    try:
+                        from app.services.attendance_media import (
+                            hydrate_messages_media,
+                            schedule_hydrate_message,
+                        )
 
-                    messages = hydrate_messages_media(
-                        messages,
-                        conversation=selected,
-                        limit=16,
+                        # Hidrata poucos no request; o resto em background
+                        messages = hydrate_messages_media(
+                            messages,
+                            conversation=selected,
+                            limit=4,
+                        )
+                        pending = [
+                            m
+                            for m in messages
+                            if normalize_text(m.get("type") or "") in ("audio", "image", "video", "document")
+                            and not normalize_text(m.get("media_url") or "").startswith("/atendimentos/media/")
+                            and normalize_text(m.get("evolution_id") or "")
+                        ]
+                        for item in pending[:12]:
+                            schedule_hydrate_message(
+                                item.get("id") or "",
+                                conversation_id=selected_id,
+                            )
+                    except Exception:
+                        pass
+                try:
+                    crm = attendance_crm.build_crm_panel(
+                        selected.get("sheet_row") if selected else None,
+                        fallback_name=(selected or {}).get("contact_name") or "",
+                        fallback_phone=(selected or {}).get("phone_e164") or "",
                     )
                 except Exception:
-                    pass
-                crm = attendance_crm.build_crm_panel(
-                    selected.get("sheet_row") if selected else None,
-                    fallback_name=(selected or {}).get("contact_name") or "",
-                    fallback_phone=(selected or {}).get("phone_e164") or "",
-                )
+                    crm = attendance_crm.build_crm_panel(None)
                 try:
                     from app.services.sectors import responsible_options_for_sector
 

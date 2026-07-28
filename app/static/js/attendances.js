@@ -128,7 +128,8 @@
         "?search=" + encodeURIComponent(search) +
         "&status=" + encodeURIComponent(status) +
         "&sector=" + encodeURIComponent(sector) +
-        "&line=" + encodeURIComponent(line),
+        "&line=" + encodeURIComponent(line) +
+        "&soft=1",
       { target: "#att-chat-root", swap: "innerHTML" }
     );
   }

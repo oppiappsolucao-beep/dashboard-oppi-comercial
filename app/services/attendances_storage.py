@@ -833,7 +833,18 @@ def list_messages(conversation_id: str, *, limit: int = 200) -> list[dict]:
 
 
 def mark_conversation_read(conversation_id: str) -> None:
-    _update_conversation(conversation_id, {"unread_count": 0, "updated_at": _now_iso()})
+    """Zera unread sem reescrever updated_at se já estava lido (evita loop do poll)."""
+    conversation_id = normalize_text(conversation_id)
+    if not conversation_id:
+        return
+    with _session() as db:
+        row = db.get(AttendanceConversation, conversation_id)
+        if not row:
+            return
+        if int(row.unread_count or 0) <= 0:
+            return
+        row.unread_count = 0
+        # Não mexe em updated_at: o poll usa max(updated_at) no inbox_token.
     _notify({"type": "conversation_read", "conversation_id": conversation_id})
 
 

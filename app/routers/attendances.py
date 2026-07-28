@@ -69,6 +69,7 @@ def _page_ctx(
     flash: str = "",
     error: str = "",
     light: bool = False,
+    soft: bool = False,
 ) -> dict:
     search, status, selected, sector, line = _filters(request, form)
     return attendances_service.page_context(
@@ -81,6 +82,7 @@ def _page_ctx(
         flash=flash,
         error=error,
         light=light,
+        soft=soft,
     )
 
 
@@ -182,16 +184,23 @@ async def attendances_filters(request: Request):
 
 
 @router.get("/atendimentos/conversa/{conversation_id}", response_class=HTMLResponse)
-def attendances_conversation(request: Request, conversation_id: str):
+def attendances_conversation(request: Request, conversation_id: str, soft: int = 0):
     require_auth(request)
-    # Sync em background — se for síncrono, trava o único worker e o webhook para de receber
-    try:
-        attendances_service.schedule_sync_messages_from_evolution(
-            conversation_id, limit=40, force=True
-        )
-    except Exception:
-        pass
-    ctx = _page_ctx(request, selected_id=conversation_id, light=True)
+    is_soft = bool(soft)
+    # Soft = refresh do poll: não dispara Evolution de novo (quebrava o worker único).
+    if not is_soft:
+        try:
+            attendances_service.schedule_sync_messages_from_evolution(
+                conversation_id, limit=40, force=False
+            )
+        except Exception:
+            pass
+    ctx = _page_ctx(
+        request,
+        selected_id=conversation_id,
+        light=True,
+        soft=is_soft,
+    )
     if not ctx.get("selected"):
         return HTMLResponse("<div class='att-empty'>Conversa não encontrada.</div>", status_code=404)
     return render(request, "partials/attendances_thread.html", ctx)
