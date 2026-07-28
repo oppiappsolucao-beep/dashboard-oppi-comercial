@@ -16,8 +16,24 @@ logger = logging.getLogger(__name__)
 _DELETE_BLOCKED_DEPARTMENTS = frozenset({"atendimento", "cadastro"})
 
 
-def can_delete_attendance_conversation(session_user: dict | None) -> bool:
-    """Só Administrador; Atendimento e Cadastro não podem (mesmo se perfil estiver errado)."""
+def can_delete_attendance_conversation(
+    session_user: dict | None,
+    *,
+    request=None,
+) -> bool:
+    """Só Administrador (ou login master APP_USERNAME). Atendimento/Cadastro não podem."""
+    try:
+        if request is not None:
+            uname = normalize_text(getattr(request, "session", {}).get("username") or "")
+            if uname and uname.lower() == settings.app_username.lower():
+                return True
+            role_sess = normalize_text(getattr(request, "session", {}).get("user_role") or "")
+            if role_sess == "Administrador":
+                dept = normalize_text((session_user or {}).get("department_name") or "").lower()
+                if dept not in _DELETE_BLOCKED_DEPARTMENTS:
+                    return True
+    except Exception:
+        pass
     if not session_user:
         return False
     role = normalize_text(session_user.get("role") or "")
@@ -269,7 +285,9 @@ def page_context(
         "tag_options": tag_options,
         "quick_replies": quick_replies,
         "is_admin": (session_user or {}).get("role") == "Administrador",
-        "can_delete_conversation": can_delete_attendance_conversation(session_user),
+        "can_delete_conversation": can_delete_attendance_conversation(
+            session_user
+        ),
     }
 
 

@@ -448,17 +448,21 @@ def attendances_finalize(request: Request, conversation_id: str):
 def attendances_delete(request: Request, conversation_id: str):
     require_auth(request)
     session_user = get_session_user(request)
-    if not attendances_service.can_delete_attendance_conversation(session_user):
-        ctx = _page_ctx(
-            request,
-            selected_id=conversation_id,
-            error="Apenas o administrador pode excluir conversas. Cadastro no CRM não é apagado por esta ação.",
-            light=True,
+    if not attendances_service.can_delete_attendance_conversation(
+        session_user, request=request
+    ):
+        return HTMLResponse(
+            "<div class='att-error'>Apenas o administrador pode excluir conversas.</div>",
+            status_code=403,
         )
-        return render(request, "partials/attendances_thread.html", ctx)
 
-    # Remove só a conversa/mensagens da inbox — não apaga cadastro no CRM/planilha
-    attendances_service.delete_conversation(conversation_id)
+    # Soft-delete: some da lista e o sync não recria
+    ok = attendances_service.delete_conversation(conversation_id)
+    if not ok:
+        return HTMLResponse(
+            "<div class='att-error'>Conversa não encontrada ou já excluída.</div>",
+            status_code=404,
+        )
     ctx = _page_ctx(
         request,
         selected_id="",

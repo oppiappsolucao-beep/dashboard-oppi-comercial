@@ -388,11 +388,18 @@
           shell.setAttribute("data-selected", "");
           shell.classList.remove("att-shell--chat-open");
         }
+        try {
+          var u = new URL(window.location.href);
+          u.searchParams.delete("c");
+          window.history.replaceState({}, "", u.toString());
+        } catch (e) {}
         lastInboxToken = "";
         lastConversationToken = "";
         refreshList({ clearSelection: true });
-        if (!res.ok) {
-          window.alert("Não foi possível excluir a conversa (HTTP " + res.status + ").");
+        if (!res.ok || (res.html && res.html.indexOf("att-error") !== -1)) {
+          var msg = "Não foi possível excluir a conversa.";
+          if (res.status === 403) msg = "Sem permissão para excluir (apenas Administrador).";
+          window.alert(msg);
         }
       })
       .catch(function () {
