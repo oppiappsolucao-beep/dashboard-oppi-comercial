@@ -201,8 +201,9 @@ def attendances_conversation(request: Request, conversation_id: str, soft: int =
         light=True,
         soft=is_soft,
     )
+    # Sempre 200: HTMX ignora 404 e o clique parece “não abrir”
     if not ctx.get("selected"):
-        return HTMLResponse("<div class='att-empty'>Conversa não encontrada.</div>", status_code=404)
+        return render(request, "partials/attendances_thread.html", ctx)
     return render(request, "partials/attendances_thread.html", ctx)
 
 

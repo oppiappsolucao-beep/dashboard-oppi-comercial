@@ -173,59 +173,29 @@ def page_context(
                 selected = None
                 selected_id = ""
             elif (
-                effective_sector is not None
+                scope.get("locked")
+                and effective_sector is not None
                 and selected.get("sector_id") not in (None, effective_sector)
                 and int(selected.get("sector_id") or 0) != int(effective_sector)
             ):
-                # Fora do escopo do usuário/filtro — não abre a conversa
-                selected = None
-                selected_id = ""
-            elif (
-                active_line
-                and normalize_text(selected.get("evolution_instance") or "").lower()
-                and normalize_text(selected.get("evolution_instance") or "").lower()
-                != active_line.lower()
-            ):
-                # Conversa de outra linha WhatsApp
+                # Usuário preso a um setor — não abre conversa de outro
                 selected = None
                 selected_id = ""
             else:
+                # Clique explícito: alinha a linha à conversa (não devolve 404 silencioso)
+                conv_line = normalize_text(selected.get("evolution_instance") or "")
+                if conv_line:
+                    active_line = _resolve_line_filter(conv_line, whatsapp_lines)
+
                 store.mark_conversation_read(selected_id)
                 selected = store.get_conversation(selected_id)
-                # Soft = refresh do poll: só HTML leve. CRM/mídia bloqueavam o único worker.
-                if not soft:
-                    try:
-                        selected = ensure_crm_link(selected) or selected
-                    except Exception:
-                        pass
                 messages = store.list_messages(selected_id)
+                # CRM / mídia nunca no request — travava o worker e o chat “não abria”
                 if not soft:
                     try:
-                        from app.services.attendance_media import (
-                            hydrate_messages_media,
-                            schedule_hydrate_message,
-                        )
-
-                        # Hidrata poucos no request; o resto em background
-                        messages = hydrate_messages_media(
-                            messages,
-                            conversation=selected,
-                            limit=4,
-                        )
-                        pending = [
-                            m
-                            for m in messages
-                            if normalize_text(m.get("type") or "") in ("audio", "image", "video", "document")
-                            and not normalize_text(m.get("media_url") or "").startswith("/atendimentos/media/")
-                            and normalize_text(m.get("evolution_id") or "")
-                        ]
-                        for item in pending[:12]:
-                            schedule_hydrate_message(
-                                item.get("id") or "",
-                                conversation_id=selected_id,
-                            )
+                        schedule_open_enrichment(selected_id)
                     except Exception:
-                        pass
+                        logger.exception("Falha ao agendar enriquecimento da conversa")
                 try:
                     crm = attendance_crm.build_crm_panel(
                         selected.get("sheet_row") if selected else None,
@@ -752,6 +722,38 @@ _SYNC_GUARD = threading.Lock()
 _INBOX_SYNC_LAST = 0.0
 _INBOX_SYNC_MIN_INTERVAL_SEC = 45.0
 _INBOX_SYNC_LOCK = threading.Lock()
+
+
+def schedule_open_enrichment(conversation_id: str) -> None:
+    """CRM + mídia em background ao abrir o chat (não bloqueia o worker)."""
+    conversation_id = normalize_text(conversation_id)
+    if not conversation_id:
+        return
+
+    def _run() -> None:
+        try:
+            conv = store.get_conversation(conversation_id)
+            if not conv:
+                return
+            try:
+                ensure_crm_link(conv)
+            except Exception:
+                logger.exception("ensure_crm_link em background falhou (%s)", conversation_id)
+            try:
+                from app.services.attendance_media import hydrate_messages_media
+
+                messages = store.list_messages(conversation_id)
+                hydrate_messages_media(messages, conversation=conv, limit=8)
+            except Exception:
+                logger.exception("hydrate media em background falhou (%s)", conversation_id)
+        except Exception:
+            logger.exception("schedule_open_enrichment falhou (%s)", conversation_id)
+
+    threading.Thread(
+        target=_run,
+        daemon=True,
+        name=f"att-open-{conversation_id[:10]}",
+    ).start()
 
 
 def schedule_sync_inbox_from_evolution(*, force: bool = False) -> None:
