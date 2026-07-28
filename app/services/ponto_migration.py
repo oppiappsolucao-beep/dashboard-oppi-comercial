@@ -303,8 +303,10 @@ def _persist_extras(sheet_row: int, company: dict, *, ativo_crm: bool) -> None:
 def apply_company(company: dict, *, local_only: bool = True) -> dict:
     """Grava no CRM como empresa.
 
-    local_only=True (padrão na migração): enfileira local sem bater na cota Google Sheets.
-    As empresas aparecem em Empresas imediatamente e sincronizam depois.
+    local_only=True:
+    - Se o CNPJ já existe na planilha (snapshot): só promove para tipo Empresa (lead_actions).
+    - Se já está pendente local: atualiza extras.
+    - Senão: cria pendente local (aparece na lista sem Google Sheets).
     """
     preview = preview_company(company)
     action = preview["action"]
@@ -313,7 +315,44 @@ def apply_company(company: dict, *, local_only: bool = True) -> dict:
 
     form = map_ponto_company_to_form(company)
     ativo_crm = bool(company.get("ativo")) and not bool(company.get("bloqueado_plataforma"))
+    cnpj = normalize_cnpj_for_duplicate(company.get("cnpj"))
+    ponto_id = int(company.get("oppi_ponto_company_id") or 0)
 
+    # 1) Já existe na planilha → promove para Empresa (não cria pendente duplicado).
+    existing_sheet = find_sheet_row_by_cnpj(cnpj) if cnpj else None
+    if existing_sheet and existing_sheet > 0:
+        try:
+            _persist_extras(existing_sheet, company, ativo_crm=ativo_crm)
+            return {
+                **preview,
+                "action": "promote",
+                "sheet_row": existing_sheet,
+                "ok": True,
+                "message": f"CNPJ já na planilha (linha {existing_sheet}) — promovido para Empresa.",
+            }
+        except Exception as err:
+            return {**preview, "ok": False, "message": f"Falha ao promover linha {existing_sheet}: {err}"}
+
+    # 2) Já existe pendente local com mesmo CNPJ → só reforça extras.
+    try:
+        from app.services.pending_companies import list_pending_companies
+
+        for pend in list_pending_companies("pending") or []:
+            if normalize_cnpj_for_duplicate((pend.get("payload") or {}).get("cnpj")) != cnpj:
+                continue
+            sheet_row = int(pend.get("local_sheet_row") or -pend["id"])
+            _persist_extras(sheet_row, company, ativo_crm=ativo_crm)
+            return {
+                **preview,
+                "action": "skip_already",
+                "sheet_row": sheet_row,
+                "ok": True,
+                "message": f"Já estava pendente local (id {sheet_row}).",
+            }
+    except Exception:
+        pass
+
+    # 3) Novo → pendente local
     if local_only or action == "create":
         try:
             from app.services.pending_companies import enqueue_payload_locally
@@ -332,7 +371,7 @@ def apply_company(company: dict, *, local_only: bool = True) -> dict:
 
     # Caminho legado (update na planilha) — só se explicitamente local_only=False
     try:
-        if action == "update":
+        if action == "update" and preview.get("sheet_row"):
             sheet_row = int(preview["sheet_row"])
             save_company_edit(sheet_row, form)
         else:
@@ -391,15 +430,23 @@ def build_migration_audit(payload: dict | list) -> dict:
 
     local_actions = _local_lead_actions()
     migrated_ponto_ids = set()
-    for record in local_actions.values():
+    empresa_rows = set()
+    for key, record in local_actions.items():
         pid = int(record.get("oppi_ponto_company_id") or 0)
         if pid:
             migrated_ponto_ids.add(pid)
+        if normalize_text(record.get("cadastro_tipo")).lower() == "empresa":
+            try:
+                empresa_rows.add(int(key))
+            except Exception:
+                pass
 
-    snapshot_cnpjs = set(_cnpj_index_from_snapshot().keys())
+    snapshot_index = _cnpj_index_from_snapshot()
+    snapshot_cnpjs = set(snapshot_index.keys())
 
     found = []
     missing = []
+    as_empresa = []
     for company in companies:
         if not isinstance(company, dict):
             continue
@@ -413,27 +460,49 @@ def build_migration_audit(payload: dict | list) -> dict:
             reasons.append("pending_obs")
         if cnpj and cnpj in pending_cnpjs:
             reasons.append("pending_cnpj")
+        sheet_row = snapshot_index.get(cnpj) if cnpj else None
         if cnpj and cnpj in snapshot_cnpjs:
             reasons.append("snapshot")
+        visible = False
+        if cnpj and cnpj in pending_cnpjs:
+            visible = True
+        if sheet_row and sheet_row in empresa_rows:
+            visible = True
+        if ponto_id and ponto_id in migrated_ponto_ids:
+            # extras já gravados com cadastro_tipo=empresa
+            for key, record in local_actions.items():
+                if int(record.get("oppi_ponto_company_id") or 0) != ponto_id:
+                    continue
+                if normalize_text(record.get("cadastro_tipo")).lower() == "empresa":
+                    visible = True
+                    break
         row = {
             "oppi_ponto_company_id": ponto_id,
             "empresa": nome,
             "cnpj": cnpj,
+            "sheet_row": sheet_row,
             "found": bool(reasons),
+            "visible_as_empresa": visible,
             "where": reasons,
         }
+        if visible:
+            as_empresa.append(row)
         if reasons:
             found.append(row)
         else:
             missing.append(row)
 
+    not_visible = [r for r in found + missing if not r.get("visible_as_empresa")]
     return {
-        "expected": len(companies),
+        "expected": len([c for c in companies if isinstance(c, dict)]),
         "found_count": len(found),
         "missing_count": len(missing),
         "pending_count": len(pending),
+        "visible_as_empresa": len(as_empresa),
+        "need_promote": len(not_visible),
         "found": found,
         "missing": missing,
+        "not_visible": not_visible,
     }
 
 
@@ -450,42 +519,6 @@ def migrate_companies(payload: dict | list, *, apply: bool = False, local_only: 
         if not isinstance(item, dict):
             continue
         if apply:
-            # Idempotente: se já migrado por ponto_id, não duplica pending.
-            ponto_id = int(item.get("oppi_ponto_company_id") or 0)
-            existing_id = find_sheet_row_by_ponto_id(ponto_id) if ponto_id else None
-            cnpj = normalize_cnpj_for_duplicate(item.get("cnpj"))
-            already_pending = False
-            if cnpj:
-                try:
-                    from app.services.pending_companies import list_pending_companies
-
-                    for pend in list_pending_companies("pending") or []:
-                        if normalize_cnpj_for_duplicate((pend.get("payload") or {}).get("cnpj")) == cnpj:
-                            already_pending = True
-                            existing_id = int(pend.get("local_sheet_row") or -pend["id"])
-                            break
-                except Exception:
-                    pass
-            if existing_id or already_pending:
-                sheet_row = int(existing_id or 0)
-                ativo_crm = bool(item.get("ativo")) and not bool(item.get("bloqueado_plataforma"))
-                try:
-                    if sheet_row:
-                        _persist_extras(sheet_row, item, ativo_crm=ativo_crm)
-                except Exception:
-                    pass
-                results.append(
-                    {
-                        "action": "skip_already",
-                        "oppi_ponto_company_id": ponto_id,
-                        "empresa": normalize_text(item.get("razao_social")) or normalize_text(item.get("nome")),
-                        "cnpj": cnpj,
-                        "sheet_row": sheet_row or None,
-                        "ok": True,
-                        "message": "Já existia — extras atualizados, sem duplicar.",
-                    }
-                )
-                continue
             results.append(apply_company(item, local_only=local_only))
         else:
             results.append(preview_company(item))
@@ -496,6 +529,7 @@ def migrate_companies(payload: dict | list, *, apply: bool = False, local_only: 
         "total": len(results),
         "create": sum(1 for r in results if r.get("action") == "create"),
         "update": sum(1 for r in results if r.get("action") == "update"),
+        "promote": sum(1 for r in results if r.get("action") == "promote"),
         "skip_already": sum(1 for r in results if r.get("action") == "skip_already"),
         "skip_missing_cnpj": sum(1 for r in results if r.get("action") == "skip_missing_cnpj"),
         "ok": sum(1 for r in results if r.get("ok")) if apply else None,

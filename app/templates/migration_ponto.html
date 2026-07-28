@@ -23,19 +23,29 @@
   <h2>Auditoria</h2>
   <p>
     esperado={{ audit.expected }}
-    · encontrados={{ audit.found_count }}
-    · faltando={{ audit.missing_count }}
+    · visíveis como Empresa={{ audit.visible_as_empresa or 0 }}
+    · precisam promover={{ audit.need_promote or 0 }}
     · pendentes locais={{ audit.pending_count }}
+    · faltando={{ audit.missing_count }}
   </p>
+  {% if audit.not_visible %}
+  <p class="form-hint">Já no CRM, mas ainda não como Empresa (clique Aplicar para promover):</p>
+  <ul>
+    {% for row in audit.not_visible %}
+    <li>#{{ row.oppi_ponto_company_id }} — {{ row.empresa }} ({{ row.cnpj }})</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
   {% if audit.missing_count > 0 %}
-  <p class="form-hint">Faltando (ainda não no CRM local/snapshot):</p>
+  <p class="form-hint">Ainda não encontrados:</p>
   <ul>
     {% for row in audit.missing %}
     <li>#{{ row.oppi_ponto_company_id }} — {{ row.empresa }} ({{ row.cnpj }})</li>
     {% endfor %}
   </ul>
-  {% else %}
-  <p class="form-hint">Todas as 20 estão mapeadas no CRM (local, pendente ou snapshot).</p>
+  {% endif %}
+  {% if (audit.visible_as_empresa or 0) >= (audit.expected or 0) %}
+  <p class="form-hint">Todas as {{ audit.expected }} devem aparecer em Empresas após F5.</p>
   {% endif %}
 </div>
 {% endif %}
@@ -79,6 +89,7 @@
   <p>
     total={{ result.total }}
     · create={{ result.create }}
+    · promote={{ result.promote or 0 }}
     · update={{ result.update }}
     · já existia={{ result.skip_already or 0 }}
     · skip_cnpj={{ result.skip_missing_cnpj }}
