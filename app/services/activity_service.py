@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import time
 from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta
 from urllib.parse import urlencode
@@ -82,6 +83,9 @@ STATUS_CLASS = {
     "reagendada": "reagendada",
     "cancelada": "cancelada",
 }
+
+_AUTO_ACTIVITIES_SYNC_LAST = 0.0
+_AUTO_ACTIVITIES_SYNC_TTL_SEC = 90.0
 
 
 @dataclass
@@ -530,6 +534,12 @@ def sync_auto_activities(
     columns: dict,
     tenant_id: str | None = None,
 ) -> None:
+    global _AUTO_ACTIVITIES_SYNC_LAST
+    now = time.monotonic()
+    if (now - _AUTO_ACTIVITIES_SYNC_LAST) < _AUTO_ACTIVITIES_SYNC_TTL_SEC:
+        return
+    _AUTO_ACTIVITIES_SYNC_LAST = now
+
     queue = buscar_leads_para_acao(filtered_df, columns, tenant_id=tenant_id)
     for item in queue:
         sheet_row = int(item["sheet_row"])

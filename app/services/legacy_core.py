@@ -37,6 +37,12 @@ def invalidate_prepared_cache() -> None:
     global _prepared_cache_df, _prepared_cache_columns
     _prepared_cache_df = None
     _prepared_cache_columns = None
+    try:
+        from app.dependencies import invalidate_merged_prepared_cache
+
+        invalidate_merged_prepared_cache()
+    except Exception:
+        pass
 
 
 def get_cached_prepared_data():

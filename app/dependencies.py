@@ -1,6 +1,7 @@
 from fastapi import Request
 from fastapi.responses import RedirectResponse
 import pandas as pd
+import time
 
 from app.config import settings
 from app.services.legacy_core import (
@@ -16,6 +17,19 @@ from app.services.legacy_core import (
     set_pricing_store,
 )
 
+# Evita remesclar pendentes + copiar DF em toda troca de aba
+_MERGED_PREPARED_DF: pd.DataFrame | None = None
+_MERGED_PREPARED_COLUMNS: dict | None = None
+_MERGED_PREPARED_AT = 0.0
+_MERGED_PREPARED_TTL_SEC = 25.0
+
+
+def invalidate_merged_prepared_cache() -> None:
+    global _MERGED_PREPARED_DF, _MERGED_PREPARED_COLUMNS, _MERGED_PREPARED_AT
+    _MERGED_PREPARED_DF = None
+    _MERGED_PREPARED_COLUMNS = None
+    _MERGED_PREPARED_AT = 0.0
+
 
 def get_pricing_store(request: Request) -> PricingSessionStore:
     if "pricing" not in request.session:
@@ -27,6 +41,8 @@ def get_pricing_store(request: Request) -> PricingSessionStore:
 
 def get_prepared_data(refresh: bool = False):
     """Carrega a planilha com cache. Nunca derruba a tela por limite 429."""
+    global _MERGED_PREPARED_DF, _MERGED_PREPARED_COLUMNS, _MERGED_PREPARED_AT
+
     def _merge_pending(prepared: pd.DataFrame, columns: dict):
         base = prepared.copy() if prepared is not None and not getattr(prepared, "empty", True) else pd.DataFrame()
         # Remove pendentes antigos do cache antes de remesclar (fonte da verdade = SQLite).
@@ -48,12 +64,25 @@ def get_prepared_data(refresh: bool = False):
 
     if refresh:
         invalidate_sheet_cache()
+        invalidate_merged_prepared_cache()
     else:
+        now = time.monotonic()
+        if (
+            _MERGED_PREPARED_DF is not None
+            and (now - _MERGED_PREPARED_AT) < _MERGED_PREPARED_TTL_SEC
+        ):
+            ensure_sheet_refresh_if_stale()
+            return _MERGED_PREPARED_DF.copy(), dict(_MERGED_PREPARED_COLUMNS or {})
+
         cached = get_cached_prepared_data()
         if cached is not None:
             ensure_sheet_refresh_if_stale()
             prepared, columns = cached
-            return _merge_pending(prepared, columns or {})
+            merged_df, merged_cols = _merge_pending(prepared, columns or {})
+            _MERGED_PREPARED_DF = merged_df
+            _MERGED_PREPARED_COLUMNS = dict(merged_cols or {})
+            _MERGED_PREPARED_AT = time.monotonic()
+            return merged_df.copy(), dict(merged_cols or {})
 
     try:
         df = load_sheet_data(force_refresh=refresh)
@@ -72,7 +101,11 @@ def get_prepared_data(refresh: bool = False):
             ].copy()
         # Cacheia só a base da planilha (sem pendentes locais).
         set_cached_prepared_data(prepared if prepared is not None else pd.DataFrame(), columns or {})
-        return _merge_pending(prepared, columns or {})
+        merged_df, merged_cols = _merge_pending(prepared, columns or {})
+        _MERGED_PREPARED_DF = merged_df
+        _MERGED_PREPARED_COLUMNS = dict(merged_cols or {})
+        _MERGED_PREPARED_AT = time.monotonic()
+        return merged_df.copy(), dict(merged_cols or {})
     except Exception:
         pending_only, columns = _merge_pending(pd.DataFrame(), {})
         if not pending_only.empty:

@@ -106,21 +106,32 @@ def page_context(
     light: bool = False,
     soft: bool = False,
 ) -> dict:
-    # Manutenção pesada só na carga completa — filtros/HTMX precisam responder na hora
+    # Manutenção pesada só na carga completa — e em background (não trava troca de aba)
     if not light:
-        try:
-            store.purge_group_conversations()
-            store.delete_conversations_by_contact_names()
-        except Exception:
-            logger.exception("Falha ao limpar conversas indesejadas da inbox")
+        def _maintenance() -> None:
+            try:
+                store.purge_group_conversations()
+                store.delete_conversations_by_contact_names()
+            except Exception:
+                logger.exception("Falha ao limpar conversas indesejadas da inbox")
+            try:
+                schedule_sync_inbox_from_evolution(force=False)
+            except Exception:
+                logger.exception("Falha ao agendar sync inbox Evolution")
 
-        try:
-            schedule_sync_inbox_from_evolution(force=False)
-        except Exception:
-            logger.exception("Falha ao agendar sync inbox Evolution")
+        threading.Thread(target=_maintenance, daemon=True, name="att-page-maint").start()
 
     effective_sector, scope = _resolve_sector_filter(session_user, sector_filter)
-    whatsapp_lines = build_whatsapp_line_options(refresh_owners=not light)
+    # Rótulos das linhas: só cache (HTTP Evolution fora do hot path)
+    whatsapp_lines = build_whatsapp_line_options(refresh_owners=False)
+    if not light:
+        def _warm_owners() -> None:
+            try:
+                build_whatsapp_line_options(refresh_owners=True)
+            except Exception:
+                logger.exception("Falha ao aquecer rótulos das linhas WhatsApp")
+
+        threading.Thread(target=_warm_owners, daemon=True, name="att-warm-owners").start()
     active_line = _resolve_line_filter(line_filter, whatsapp_lines)
     conversations = store.list_conversations(
         search=search,
