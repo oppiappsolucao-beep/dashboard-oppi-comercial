@@ -113,6 +113,11 @@ def page_context(
             else:
                 store.mark_conversation_read(selected_id)
                 selected = store.get_conversation(selected_id)
+                # Corrige CRM se estiver apontando para outro cadastro
+                try:
+                    selected = ensure_crm_link(selected) or selected
+                except Exception:
+                    pass
                 messages = store.list_messages(selected_id)
                 # Áudio/mídia local em TODA conversa aberta (não só uma)
                 try:
@@ -125,7 +130,11 @@ def page_context(
                     )
                 except Exception:
                     pass
-                crm = attendance_crm.build_crm_panel(selected.get("sheet_row") if selected else None)
+                crm = attendance_crm.build_crm_panel(
+                    selected.get("sheet_row") if selected else None,
+                    fallback_name=(selected or {}).get("contact_name") or "",
+                    fallback_phone=(selected or {}).get("phone_e164") or "",
+                )
                 try:
                     from app.services.sectors import responsible_options_for_sector
 
@@ -185,10 +194,21 @@ def ensure_crm_link(
     contact_name: str = "",
     vendedor: str = "",
 ) -> dict:
-    if conversation.get("sheet_row"):
+    """Garante vínculo CRM pelo WhatsApp da conversa (corrige vínculo errado)."""
+    if not conversation or not conversation.get("id"):
         return conversation
+    phone = conversation.get("phone_e164", "")
+    current_row = conversation.get("sheet_row")
+    if current_row and attendance_crm.sheet_row_matches_phone(current_row, phone):
+        return conversation
+
+    # Vínculo ausente ou de outro contato — limpa e resolve de novo pelo telefone
+    if current_row:
+        store.update_conversation(conversation["id"], sheet_row=None)
+        conversation = {**conversation, "sheet_row": None}
+
     sheet_row = attendance_crm.resolve_or_create_lead(
-        phone=conversation.get("phone_e164", ""),
+        phone=phone,
         contact_name=contact_name or conversation.get("contact_name", ""),
         vendedor=vendedor or conversation.get("assignee", ""),
     )

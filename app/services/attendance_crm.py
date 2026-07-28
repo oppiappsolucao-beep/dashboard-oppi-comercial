@@ -11,10 +11,27 @@ from app.services.legacy_core import (
 )
 from app.services.lead_actions_storage import DEFAULT_TENANT_ID
 from app.services.registration import (
-    is_cadastro_ativo,
     save_cadastro_tipo,
     save_new_company,
 )
+
+
+def phones_strongly_match(left, right) -> bool:
+    """Match forte de WhatsApp: igual ou mesmos 10/11 dígitos finais (com DDD).
+
+    Nunca usa só os 8 últimos — isso misturava cadastros diferentes no CRM.
+    """
+    a = normalize_phone_for_duplicate(left)
+    b = normalize_phone_for_duplicate(right)
+    if not a or not b:
+        return False
+    if a == b:
+        return True
+    if len(a) >= 11 and len(b) >= 11 and a[-11:] == b[-11:]:
+        return True
+    if len(a) >= 10 and len(b) >= 10 and a[-10:] == b[-10:]:
+        return True
+    return False
 
 
 def _phones_from_row(row, columns: dict) -> set[str]:
@@ -49,23 +66,46 @@ def find_sheet_row_by_phone(phone: str) -> int | None:
     if df is None or getattr(df, "empty", True):
         return None
 
+    exact_hit: int | None = None
+    strong_hit: int | None = None
+
     for _, row in df.iterrows():
         sheet_row = int(row.get("_sheet_row", 0) or 0)
         if not sheet_row:
             continue
-        if not is_cadastro_ativo(DEFAULT_TENANT_ID, sheet_row):
-            # ainda vincula se o número bater (não recria lead)
-            pass
         row_phones = _phones_from_row(row, columns)
+        if not row_phones:
+            continue
         if target in row_phones:
-            return sheet_row
-        # também compara com DDI 55
-        if f"55{target}"[-11:] in {p[-11:] for p in row_phones if len(p) >= 10}:
-            return sheet_row
-        for existing in row_phones:
-            if existing[-8:] == target[-8:] and len(target) >= 8 and len(existing) >= 8:
+            primary = normalize_phone_for_duplicate(row.get("_telefone", ""))
+            if primary == target:
                 return sheet_row
-    return None
+            exact_hit = exact_hit or sheet_row
+            continue
+        if any(phones_strongly_match(target, existing) for existing in row_phones):
+            strong_hit = strong_hit or sheet_row
+
+    return exact_hit or strong_hit
+
+
+def sheet_row_matches_phone(sheet_row: int | None, phone: str) -> bool:
+    """Confere se o cadastro vinculado realmente tem o WhatsApp da conversa."""
+    if not sheet_row:
+        return False
+    target = normalize_phone_for_duplicate(phone)
+    if not target:
+        return False
+    try:
+        df, columns = get_prepared_data()
+    except Exception:
+        return False
+    if df is None or getattr(df, "empty", True):
+        return False
+    matches = df[df["_sheet_row"] == int(sheet_row)]
+    if matches.empty:
+        return False
+    row_phones = _phones_from_row(matches.iloc[0], columns)
+    return any(phones_strongly_match(target, existing) for existing in row_phones)
 
 
 def create_lead_from_whatsapp(
@@ -121,12 +161,17 @@ def resolve_or_create_lead(
         return None
 
 
-def build_crm_panel(sheet_row: int | None) -> dict:
+def build_crm_panel(
+    sheet_row: int | None,
+    *,
+    fallback_name: str = "",
+    fallback_phone: str = "",
+) -> dict:
     empty = {
         "sheet_row": None,
-        "empresa": "—",
-        "contato": "—",
-        "telefone": "—",
+        "empresa": normalize_text(fallback_name) or "—",
+        "contato": normalize_text(fallback_name) or "—",
+        "telefone": normalize_text(fallback_phone) or "—",
         "vendedor": "—",
         "etapa": "—",
         "edit_href": "",
@@ -148,7 +193,7 @@ def build_crm_panel(sheet_row: int | None) -> dict:
         "sheet_row": int(sheet_row),
         "empresa": empresa,
         "contato": socio or empresa,
-        "telefone": normalize_text(row.get("_telefone", "")) or "—",
+        "telefone": normalize_text(row.get("_telefone", "")) or normalize_text(fallback_phone) or "—",
         "vendedor": normalize_text(row.get("_vendedor", "")) or "Sem vendedor",
         "etapa": normalize_text(row.get("_status_grupo") or row.get("_status_original")) or "Novo Lead",
         "edit_href": f"/cadastro/todos/{int(sheet_row)}/editar?from=attendances",
