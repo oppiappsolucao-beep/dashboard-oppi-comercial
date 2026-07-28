@@ -135,6 +135,15 @@ def migration_reprocess_finance(
     request: Request,
     filename: str = Form(...),
 ):
+    """Compat: botão 3 agora restaura as 20 à força."""
+    return migration_force_restore(request, filename=filename)
+
+
+@router.post("/restaurar-20", response_class=HTMLResponse)
+def migration_force_restore(
+    request: Request,
+    filename: str = Form(...),
+):
     redirect = require_auth(request)
     if redirect:
         return redirect
@@ -151,18 +160,17 @@ def migration_reprocess_finance(
     try:
         if not target.exists():
             raise FileNotFoundError(f"Arquivo não encontrado: {target.name}")
-        # Reabre synced antes do reprocess — evita sumiço após sync automático.
-        try:
-            from app.services.pending_companies import reopen_synced_migration_pendings
+        payload = _load_payload(target)
+        from app.services.ponto_migration import build_migration_audit, force_restore_all_companies
 
-            reopen_synced_migration_pendings()
+        result = force_restore_all_companies(payload)
+        audit = result.get("audit") or build_migration_audit(payload)
+        try:
+            from app.services.legacy_core import invalidate_sheet_cache
+
+            invalidate_sheet_cache()
         except Exception:
             pass
-        payload = _load_payload(target)
-        from app.services.ponto_migration import build_migration_audit, reprocess_finance_from_export
-
-        result = reprocess_finance_from_export(payload)
-        audit = result.get("audit") or build_migration_audit(payload)
     except Exception as exc:
         error = str(exc)
 

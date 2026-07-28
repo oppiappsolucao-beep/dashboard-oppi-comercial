@@ -628,6 +628,8 @@ def _upsert_migration_pending(company: dict) -> int:
     form["servico"] = form.get("servico") or MIGRATED_SERVICE_NAME
     form["cadastro_tipo"] = "empresa"
     form["status"] = MIGRATED_STATUS
+    # Sempre data de hoje para não sumir em filtro de período.
+    form["data_chamado"] = date.today().strftime("%d/%m/%Y")
     cnpj = normalize_cnpj_for_duplicate(company.get("cnpj"))
     ponto_id = int(company.get("oppi_ponto_company_id") or 0)
 
@@ -653,12 +655,114 @@ def _upsert_migration_pending(company: dict) -> int:
         payload["colaboradores"] = form.get("colaboradores", "")
         payload["valor_proposta"] = valor
         payload["servico"] = form.get("servico") or MIGRATED_SERVICE_NAME
+        payload["data_chamado"] = form["data_chamado"]
         update_pending_company_payload(pending_id, payload)
-        if normalize_text(best.get("status")).lower() != "pending":
-            mark_pending_company_pending(pending_id, last_error="Reaberto na migração Oppi Ponto")
+        mark_pending_company_pending(pending_id, last_error="Migração Oppi Ponto (visível local)")
         return int(best.get("local_sheet_row") or -pending_id)
 
-    return int(enqueue_payload_locally(form, last_error="Migração Oppi Ponto (local)"))
+    try:
+        return int(enqueue_payload_locally(form, last_error="Migração Oppi Ponto (local)"))
+    except Exception:
+        # Fallback sem cache da planilha
+        from app.services.crm_local_db import enqueue_pending_company
+
+        headers = [
+            "Nome Empresas", "CNPJ", "Data do chamado", "Status WhatsApp",
+            "Observações", "Serviços fechados", "Valor do serviço", "Colaboradores", "Vendedor",
+        ]
+        row_values = [""] * len(headers)
+        mapping = {
+            "Nome Empresas": form.get("empresa"),
+            "CNPJ": form.get("cnpj"),
+            "Data do chamado": form.get("data_chamado"),
+            "Status WhatsApp": form.get("status"),
+            "Observações": form.get("observacoes"),
+            "Serviços fechados": form.get("servico"),
+            "Valor do serviço": form.get("valor_proposta"),
+            "Colaboradores": form.get("colaboradores"),
+            "Vendedor": form.get("vendedor") or "Oppi",
+        }
+        for idx, header in enumerate(headers):
+            row_values[idx] = normalize_text(mapping.get(header))
+        pending_id = enqueue_pending_company(
+            empresa=form.get("empresa") or "Empresa",
+            payload=form,
+            headers=headers,
+            row_values=row_values,
+            last_error="Migração Oppi Ponto (fallback)",
+        )
+        return -int(pending_id)
+
+
+def force_restore_all_companies(payload: dict | list) -> dict:
+    """Restaura à força as 20 empresas do JSON como pendentes visíveis."""
+    if isinstance(payload, dict):
+        companies = payload.get("companies") or []
+    else:
+        companies = payload
+    if not isinstance(companies, list):
+        raise ValueError("JSON inválido")
+
+    try:
+        from app.services.pending_companies import reopen_synced_migration_pendings
+
+        reopen_synced_migration_pendings()
+    except Exception:
+        pass
+
+    results = []
+    for company in companies:
+        if not isinstance(company, dict):
+            continue
+        form = map_ponto_company_to_form(company)
+        cnpj = normalize_cnpj_for_duplicate(company.get("cnpj"))
+        ponto_id = int(company.get("oppi_ponto_company_id") or 0)
+        try:
+            sheet_row = _upsert_migration_pending(company)
+            _persist_extras(sheet_row, company, ativo_crm=True, sync_sheet=False)
+            remember_migrated_company(company, sheet_row=sheet_row)
+            results.append(
+                {
+                    "ok": True,
+                    "action": "force_restore",
+                    "oppi_ponto_company_id": ponto_id,
+                    "empresa": form.get("empresa"),
+                    "cnpj": cnpj,
+                    "sheet_row": sheet_row,
+                    "valor": form.get("valor_proposta"),
+                    "colaboradores": form.get("colaboradores"),
+                    "message": f"Restaurada na lista (linha local {sheet_row})",
+                }
+            )
+        except Exception as err:
+            results.append(
+                {
+                    "ok": False,
+                    "action": "force_restore",
+                    "oppi_ponto_company_id": ponto_id,
+                    "empresa": form.get("empresa"),
+                    "cnpj": cnpj,
+                    "sheet_row": None,
+                    "message": str(err),
+                }
+            )
+
+    from app.services.pending_companies import list_pending_companies, _is_migration_empresa_payload
+
+    pending_mig = [
+        item for item in (list_pending_companies("pending") or [])
+        if _is_migration_empresa_payload(item.get("payload") or {})
+    ]
+    return {
+        "apply": True,
+        "action": "force_restore",
+        "total": len(results),
+        "ok": sum(1 for r in results if r.get("ok")),
+        "failed": sum(1 for r in results if not r.get("ok")),
+        "pending_migration_visible": len(pending_mig),
+        "results": results,
+        "audit": build_migration_audit(payload),
+    }
 
 
 def reprocess_finance_from_export(payload: dict | list) -> dict:

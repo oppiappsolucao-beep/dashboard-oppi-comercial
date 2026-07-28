@@ -13,8 +13,9 @@
 
 <div class="card" style="max-width:720px;margin-bottom:16px">
   <p class="form-hint" style="margin:0">
-    Esperado no JSON: <strong>20 empresas</strong>. Se a lista Empresas mostrar menos,
-    clique em <strong>Aplicar migração</strong> de novo (não duplica) e depois F5 em Empresas.
+    Esperado no JSON: <strong>20 empresas</strong>. Se a lista mostrar menos de 20,
+    use o botão <strong>3) Restaurar as 20 empresas</strong> e depois abra Empresas com
+    período em branco e “50 por página”.
   </p>
 </div>
 
@@ -72,14 +73,14 @@
         onclick="return confirm('Completar migração das empresas faltantes (modo local)?');">
         2) Aplicar / completar migração
       </button>
-      <button type="submit" class="btn btn-secondary" formaction="/migracao-ponto/reprocessar-valores"
-        onclick="return confirm('Reaplicar valor do plano + colaboradores do JSON nas empresas migradas?');">
-        3) Reprocessar valores / funcionários
+      <button type="submit" class="btn" formaction="/migracao-ponto/restaurar-20"
+        style="background:#067647;border-color:#067647"
+        onclick="return confirm('Restaurar à força as 20 empresas do JSON na lista Empresas?');">
+        3) Restaurar as 20 empresas
       </button>
     </div>
     <p class="form-hint" style="margin-top:12px">
-      Depois, abra <a href="/leads-e-empresas">Empresas</a> e atualize (F5).
-      O botão 3 atualiza financeiro (serviço fechado) e quantidade de colaboradores a partir do export.
+      Depois: <a href="/leads-e-empresas?per_page=50">Empresas (50 por página)</a> · limpe o período se estiver preenchido.
     </p>
   </form>
   {% else %}
@@ -93,17 +94,20 @@
 <div class="card" style="margin-top:20px;max-width:960px">
   <h2>
     Resultado
-    {% if result.action == 'reprocess_finance' %}(REPROCESSAR VALORES)
+    {% if result.action == 'force_restore' %}(RESTAURAR 20)
+    {% elif result.action == 'reprocess_finance' %}(REPROCESSAR VALORES)
     {% elif result.apply %}(APPLY)
     {% else %}(DRY-RUN)
     {% endif %}
   </h2>
   <p>
     total={{ result.total }}
-    {% if result.action == 'reprocess_finance' %}
+    {% if result.action in ['force_restore', 'reprocess_finance'] %}
     · ok={{ result.ok }}
     · failed={{ result.failed }}
-    · criadas={{ result.created or 0 }}
+    {% if result.pending_migration_visible is defined %}
+    · pendentes visíveis={{ result.pending_migration_visible }}
+    {% endif %}
     {% else %}
     · create={{ result.create }}
     · promote={{ result.promote or 0 }}

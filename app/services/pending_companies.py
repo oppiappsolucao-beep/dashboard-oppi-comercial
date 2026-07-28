@@ -149,6 +149,21 @@ def enqueue_payload_locally(payload: dict, *, last_error: str = "Migração loca
     )
 
 
+def _is_migration_empresa_payload(payload: dict) -> bool:
+    tipo = normalize_text(payload.get("cadastro_tipo")).lower() or "lead"
+    observacoes = normalize_text(payload.get("observacoes"))
+    servico = normalize_text(payload.get("servico"))
+    vendedor = normalize_text(payload.get("vendedor"))
+    return (
+        tipo == "empresa"
+        or "Migrado do Oppi Ponto" in observacoes
+        or "oppi_ponto_company_id" in observacoes
+        or "company_id=" in observacoes
+        or "Ponto Eletrônico" in servico
+        or vendedor.lower() == "oppi"
+    )
+
+
 def _pending_row_dict(item: dict) -> dict:
     payload = item.get("payload") or {}
     empresa = normalize_text(payload.get("empresa") or item.get("empresa"))
@@ -160,6 +175,9 @@ def _pending_row_dict(item: dict) -> dict:
     except ValueError:
         created_date = today
     status = normalize_text(payload.get("status")) or "Novo Lead"
+    # Migração Oppi: usa hoje para não sumir do filtro de período.
+    if _is_migration_empresa_payload(payload):
+        created_date = today
     return {
         "_sheet_row": local_row,
         "_empresa": empresa,
@@ -193,21 +211,6 @@ def _pending_row_dict(item: dict) -> dict:
         "_pending_local": True,
         "_cadastro_tipo": normalize_text(payload.get("cadastro_tipo")).lower() or "lead",
     }
-
-
-def _is_migration_empresa_payload(payload: dict) -> bool:
-    tipo = normalize_text(payload.get("cadastro_tipo")).lower() or "lead"
-    observacoes = normalize_text(payload.get("observacoes"))
-    servico = normalize_text(payload.get("servico"))
-    vendedor = normalize_text(payload.get("vendedor"))
-    return (
-        tipo == "empresa"
-        or "Migrado do Oppi Ponto" in observacoes
-        or "oppi_ponto_company_id" in observacoes
-        or "company_id=" in observacoes
-        or "Ponto Eletrônico" in servico
-        or vendedor.lower() == "oppi"
-    )
 
 
 def reopen_synced_migration_pendings() -> int:

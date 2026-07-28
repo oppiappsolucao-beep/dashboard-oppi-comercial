@@ -29,26 +29,33 @@ def _parse_leads_params(request: Request, form: dict | None = None) -> dict:
     except (TypeError, ValueError):
         page = 1
     try:
-        per_page = int(data.get("per_page", 10))
+        per_page = int(data.get("per_page", 50))
     except (TypeError, ValueError):
-        per_page = 10
+        per_page = 50
 
     return {
         "tab": "empresas",
         "stage": stage,
         "sort": sort if sort in ("recent", "name") else "recent",
         "page": max(1, page),
-        "per_page": per_page if per_page in (10, 25, 50) else 10,
+        "per_page": per_page if per_page in (10, 25, 50) else 50,
     }
 
 
 def _leads_context(request: Request, filters, leads_params: dict):
     df, columns = get_prepared_data()
     options = get_filter_options(df)
-    # Empresas: lista completa (sem janela de 7 dias). Leads/funil mantêm período curto.
-    if leads_params.get("tab") != "empresas":
+    # Empresas: lista completa — sem janela de datas (migração não pode sumir por período).
+    if leads_params.get("tab") == "empresas":
+        filters = replace(
+            filters,
+            period_start=None,
+            period_end=None,
+            status="Todos os status",
+        )
+    else:
         filters = apply_last_days_period_filters(filters, days=7)
-    filters = replace(filters, status="Todos os status")
+        filters = replace(filters, status="Todos os status")
 
     filtered_df = apply_dashboard_filters(df, columns, filters)
     empresas_df = apply_leads_view(
