@@ -208,6 +208,10 @@ storage/monthly_goals.json
 storage/app_settings.json
 storage/account_users.json
 storage/proposal_pdfs/
+storage/crm_local.db
+storage/screenshots/
+storage/proposta_modelo_teste.pdf
+storage/attendance_media/
 
 # Ruff stuff:
 .ruff_cache/
