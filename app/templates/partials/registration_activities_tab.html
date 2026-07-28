@@ -6,7 +6,12 @@
     </div>
     <div class="registration-activities-actions">
       <a href="{{ activities_href }}" class="btn btn-secondary">Ver em Atividades</a>
-      <a href="{{ new_activity_href }}" class="btn">＋ Nova atividade</a>
+      <button type="button"
+        class="btn"
+        id="registration-open-new-activity-btn"
+        hx-get="/atividades/nova/modal?sheet_row={{ sheet_row }}&empresa={{ values.empresa | urlencode }}&return_to={{ return_to_atividades | urlencode }}"
+        hx-target="#activity-modal-root"
+        hx-swap="innerHTML">＋ Nova atividade</button>
     </div>
   </div>
 

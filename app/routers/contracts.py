@@ -282,6 +282,7 @@ async def contract_edit_page(request: Request, sheet_row: int):
         sheet_row,
         values.get("empresa", ""),
         lead_created_at=row.get("_data_chamado") or data_chamado_raw or parsed_date,
+        from_page=from_page,
     )
     page_ctx = build_cadastro_edit_page_context(
         tenant_id=DEFAULT_TENANT_ID,

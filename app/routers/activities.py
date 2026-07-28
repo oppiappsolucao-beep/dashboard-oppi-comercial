@@ -88,25 +88,36 @@ def _render_content(request, filters, activities_params, success="", error=""):
     )
 
 
-def _modal_context(request: Request, error: str = ""):
+def _modal_context(
+    request: Request,
+    error: str = "",
+    *,
+    return_to: str = "",
+    prefill_sheet_row: int | None = None,
+    prefill_empresa: str | None = None,
+):
     df, columns = get_prepared_data()
     options = get_filter_options(df)
     filters = apply_default_period_filters(parse_dashboard_filters(request), df)
     filters = apply_seller_scope(request, filters, options["seller_options"], is_admin(request))
     current_user = normalize_text(request.session.get("username", "")) or "Usuário"
-    try:
-        prefill_sheet_row = int(request.query_params.get("sheet_row") or 0)
-    except (TypeError, ValueError):
-        prefill_sheet_row = 0
-    prefill_empresa = normalize_text(request.query_params.get("empresa", ""))
+    if prefill_sheet_row is None:
+        try:
+            prefill_sheet_row = int(request.query_params.get("sheet_row") or 0)
+        except (TypeError, ValueError):
+            prefill_sheet_row = 0
+    if prefill_empresa is None:
+        prefill_empresa = normalize_text(request.query_params.get("empresa", ""))
+    safe_return = normalize_text(return_to) or normalize_text(request.query_params.get("return_to", ""))
     return build_new_activity_modal_context(
         seller_options=options["seller_options"],
         current_user=current_user,
         is_admin_user=is_admin(request),
         today_iso=date.today().isoformat(),
         error=error,
-        prefill_sheet_row=prefill_sheet_row,
-        prefill_empresa=prefill_empresa,
+        prefill_sheet_row=int(prefill_sheet_row or 0),
+        prefill_empresa=normalize_text(prefill_empresa),
+        return_to=safe_return,
     )
 
 
@@ -313,6 +324,7 @@ async def activities_create(
     niche: str = Form("Todos os nichos"),
     state: str = Form("Todos os estados"),
     search: str = Form(""),
+    return_to: str = Form(""),
 ):
     redirect = require_auth(request)
     if redirect:
@@ -320,12 +332,25 @@ async def activities_create(
 
     user = normalize_text(request.session.get("username", "")) or "Usuário"
     admin_user = is_admin(request)
+    safe_return = normalize_text(return_to)
+    if safe_return and not safe_return.startswith("/"):
+        safe_return = ""
 
     df, columns = get_prepared_data()
     if sheet_row:
         row_match = df[df["_sheet_row"] == sheet_row]
         if row_match.empty:
-            response = render(request, "partials/activities_new_modal.html", _modal_context(request, "Lead não encontrado."))
+            response = render(
+                request,
+                "partials/activities_new_modal.html",
+                _modal_context(
+                    request,
+                    "Lead não encontrado.",
+                    return_to=safe_return,
+                    prefill_sheet_row=sheet_row,
+                    prefill_empresa=empresa,
+                ),
+            )
             response.status_code = 422
             response.headers["HX-Retarget"] = "#activity-modal-root"
             response.headers["HX-Reswap"] = "innerHTML"
@@ -334,7 +359,17 @@ async def activities_create(
         # Nome sempre da planilha do sheet_row — evita gravar empresa trocada
         from app.services.activity_service import _contact_name, _lead_is_accessible
         if not _lead_is_accessible(row, user, admin_user):
-            response = render(request, "partials/activities_new_modal.html", _modal_context(request, "Sem permissão para este lead."))
+            response = render(
+                request,
+                "partials/activities_new_modal.html",
+                _modal_context(
+                    request,
+                    "Sem permissão para este lead.",
+                    return_to=safe_return,
+                    prefill_sheet_row=sheet_row,
+                    prefill_empresa=empresa,
+                ),
+            )
             response.status_code = 403
             response.headers["HX-Retarget"] = "#activity-modal-root"
             response.headers["HX-Reswap"] = "innerHTML"
@@ -373,10 +408,25 @@ async def activities_create(
 
     _, error = criar_atividade(DEFAULT_TENANT_ID, payload, user, is_admin_user=admin_user)
     if error:
-        response = render(request, "partials/activities_new_modal.html", _modal_context(request, error))
+        response = render(
+            request,
+            "partials/activities_new_modal.html",
+            _modal_context(
+                request,
+                error,
+                return_to=safe_return,
+                prefill_sheet_row=sheet_row,
+                prefill_empresa=empresa,
+            ),
+        )
         response.status_code = 422
         response.headers["HX-Retarget"] = "#activity-modal-root"
         response.headers["HX-Reswap"] = "innerHTML"
+        return response
+
+    if safe_return:
+        response = HTMLResponse("")
+        response.headers["HX-Redirect"] = safe_return
         return response
 
     filters = parse_dashboard_filters(request, {

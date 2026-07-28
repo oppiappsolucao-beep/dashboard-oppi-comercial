@@ -1894,6 +1894,7 @@ def build_cadastro_activities_context(
     empresa: str,
     *,
     lead_created_at=None,
+    from_page: str = "",
 ) -> dict:
     activities = buscar_atividades_do_cadastro(tenant_id, sheet_row)
     lead_action = get_lead_action(tenant_id, sheet_row) or {}
@@ -1905,6 +1906,10 @@ def build_cadastro_activities_context(
         lead_created_at=lead_created_at,
     )
     query = urlencode({"sheet_row": sheet_row, "empresa": empresa})
+    return_params = {"tab": "atividades"}
+    if normalize_text(from_page):
+        return_params["from"] = normalize_text(from_page)
+    return_to = f"/cadastro/todos/{int(sheet_row)}/editar?{urlencode(return_params)}"
     return {
         "activities": activities,
         "activities_count": len(activities),
@@ -1912,6 +1917,7 @@ def build_cadastro_activities_context(
         "timeline": timeline,
         "activities_href": "/atividades",
         "new_activity_href": f"/atividades?{query}",
+        "return_to_atividades": return_to,
     }
 
 
@@ -2635,11 +2641,15 @@ def build_new_activity_modal_context(
     error: str = "",
     prefill_sheet_row: int = 0,
     prefill_empresa: str = "",
+    return_to: str = "",
 ) -> dict:
     import json
 
     responsibles = buscar_responsaveis_permitidos(seller_options, current_user, is_admin_user)
     default_responsible = responsibles[0] if responsibles else current_user
+    safe_return = normalize_text(return_to)
+    if safe_return and not safe_return.startswith("/"):
+        safe_return = ""
     return {
         "pipeline_stage_options": PIPELINE_STAGE_OPTIONS,
         "channel_options": CHANNEL_OPTIONS,
@@ -2656,6 +2666,7 @@ def build_new_activity_modal_context(
         "next_action_options_json": json.dumps(get_next_action_options(), ensure_ascii=False),
         "prefill_sheet_row": int(prefill_sheet_row or 0),
         "prefill_empresa": normalize_text(prefill_empresa),
+        "return_to": safe_return,
         "modal_error": error,
     }
 
