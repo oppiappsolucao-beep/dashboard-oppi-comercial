@@ -241,6 +241,7 @@ def page_context(
         "responsible_options": responsible_options,
         "tag_options": tag_options,
         "quick_replies": quick_replies,
+        "is_admin": (session_user or {}).get("role") == "Administrador",
     }
 
 

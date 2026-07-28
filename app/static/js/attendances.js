@@ -327,9 +327,21 @@
       if (shell && thread) {
         shell.setAttribute("data-selected", thread.getAttribute("data-conversation-id") || "");
         shell.classList.add("att-shell--chat-open");
+      } else if (shell) {
+        shell.setAttribute("data-selected", "");
+        shell.classList.remove("att-shell--chat-open");
       }
       lastConversationToken = "";
     }
+  });
+
+  document.body.addEventListener("att-conversation-deleted", function () {
+    var shell = $("#att-shell");
+    if (shell) {
+      shell.setAttribute("data-selected", "");
+      shell.classList.remove("att-shell--chat-open");
+    }
+    refreshList({ clearSelection: true });
   });
 
   document.body.addEventListener("htmx:afterRequest", function (ev) {

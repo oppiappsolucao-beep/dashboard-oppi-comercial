@@ -691,6 +691,19 @@
   width: 100%;
 }
 
+.att-crm-actions .att-btn-danger,
+.btn.att-btn-danger {
+  background: #B91C1C;
+  border-color: #B91C1C;
+  color: #fff;
+}
+
+.att-crm-actions .att-btn-danger:hover,
+.btn.att-btn-danger:hover {
+  background: #991B1B;
+  border-color: #991B1B;
+}
+
 .att-notes-form {
   display: flex;
   flex-direction: column;

@@ -431,9 +431,26 @@ def attendances_finalize(request: Request, conversation_id: str):
 @router.post("/atendimentos/conversa/{conversation_id}/excluir", response_class=HTMLResponse)
 def attendances_delete(request: Request, conversation_id: str):
     require_auth(request)
+    from app.dependencies import is_admin
+
+    if not is_admin(request):
+        ctx = _page_ctx(
+            request,
+            selected_id=conversation_id,
+            error="Apenas o administrador pode excluir conversas.",
+        )
+        return render(request, "partials/attendances_thread.html", ctx)
+
+    # Remove só a conversa/mensagens da inbox — não apaga cadastro no CRM/planilha
     attendances_service.delete_conversation(conversation_id)
-    ctx = _page_ctx(request, selected_id="", flash="Conversa removida da inbox.")
-    return render(request, "partials/attendances_thread.html", ctx)
+    ctx = _page_ctx(
+        request,
+        selected_id="",
+        flash="Conversa excluída do atendimento. O cadastro no CRM foi mantido.",
+    )
+    response = render(request, "partials/attendances_empty_after_delete.html", ctx)
+    response.headers["HX-Trigger"] = "att-conversation-deleted"
+    return response
 
 
 @router.post("/atendimentos/conversa/{conversation_id}/notas", response_class=HTMLResponse)
