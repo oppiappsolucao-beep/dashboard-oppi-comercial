@@ -394,6 +394,18 @@ class AttendanceMessage(Base):
     conversation = relationship("AttendanceConversation", back_populates="messages")
 
 
+class AttendanceSuppressedChat(Base):
+    """Contatos removidos da inbox — sync/Evolution não recria até nova msg do lead."""
+
+    __tablename__ = "attendance_suppressed_chats"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    phone_e164 = Column(String(32), nullable=False, default="", index=True)
+    remote_jid = Column(String(255), nullable=False, default="", index=True)
+    evolution_instance = Column(String(120), nullable=False, default="", index=True)
+    suppressed_at = Column(String(40), nullable=False, default="")
+
+
 class AppMeta(Base):
     """Flags leves de migração/config persistidas no mesmo DATABASE_URL."""
 

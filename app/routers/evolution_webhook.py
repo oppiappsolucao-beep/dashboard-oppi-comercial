@@ -170,6 +170,7 @@ def ingest_evolution_message_item(
     *,
     push_name: str = "",
     evolution_instance: str = "",
+    allow_reopen: bool = False,
 ) -> bool:
     """Persiste um item no formato Evolution (webhook ou findMessages). Retorna True se salvou."""
     if not isinstance(item, dict):
@@ -195,6 +196,16 @@ def ingest_evolution_message_item(
 
     evolution_id = normalize_text(key.get("id") or item.get("id") or "")
     instance = normalize_text(evolution_instance)
+    suppressed = store.is_chat_suppressed(
+        phone_e164=phone, remote_jid=remote_jid, evolution_instance=instance
+    )
+    if suppressed:
+        # Sync histórico não reabre; mensagem nova do lead (webhook) reabre
+        if not (allow_reopen and not from_me):
+            return False
+        store.clear_chat_suppression(
+            phone_e164=phone, remote_jid=remote_jid, evolution_instance=instance
+        )
     conversation = None
     if phone:
         conversation = store.upsert_conversation_by_phone(
@@ -202,6 +213,7 @@ def ingest_evolution_message_item(
             contact_name=name,
             remote_jid=remote_jid,
             evolution_instance=instance,
+            ignore_suppression=True if (suppressed and allow_reopen and not from_me) else False,
         )
     if not conversation and remote_jid:
         conversation = store.upsert_conversation_by_remote_jid(
@@ -209,6 +221,7 @@ def ingest_evolution_message_item(
             contact_name=name,
             phone_e164=phone,
             evolution_instance=instance,
+            ignore_suppression=True if (suppressed and allow_reopen and not from_me) else False,
         )
     if not conversation:
         return False
@@ -277,6 +290,22 @@ def _handle_messages_upsert(payload: dict) -> int:
             continue
 
         evolution_id = normalize_text(key.get("id") or item.get("id") or "")
+        suppressed = store.is_chat_suppressed(
+            phone_e164=phone, remote_jid=remote_jid, evolution_instance=instance
+        )
+        if suppressed:
+            # Só reabre se o lead mandou mensagem nova (não histórico/sync)
+            if from_me:
+                logger.info(
+                    "webhook drop suppressed_chat phone=%s jid=%s from_me=%s",
+                    phone,
+                    remote_jid,
+                    from_me,
+                )
+                continue
+            store.clear_chat_suppression(
+                phone_e164=phone, remote_jid=remote_jid, evolution_instance=instance
+            )
         conversation = None
         if phone:
             conversation = store.upsert_conversation_by_phone(
@@ -284,6 +313,7 @@ def _handle_messages_upsert(payload: dict) -> int:
                 contact_name=push_name,
                 remote_jid=remote_jid,
                 evolution_instance=instance,
+                ignore_suppression=bool(suppressed and not from_me),
             )
         if not conversation and remote_jid:
             conversation = store.upsert_conversation_by_remote_jid(
@@ -291,6 +321,7 @@ def _handle_messages_upsert(payload: dict) -> int:
                 contact_name=push_name,
                 phone_e164=phone,
                 evolution_instance=instance,
+                ignore_suppression=bool(suppressed and not from_me),
             )
         if not conversation:
             logger.info(

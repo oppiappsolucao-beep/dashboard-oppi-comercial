@@ -345,7 +345,7 @@
     refreshList({ clearSelection: true });
   });
 
-  // Excluir conversa: confirm + POST explícito (hx-confirm quebrava o clique)
+  // Excluir conversa: confirm + fetch (não depende do HTMX ajax)
   document.body.addEventListener("click", function (ev) {
     var btn = ev.target && ev.target.closest ? ev.target.closest(".att-delete-conv-btn") : null;
     if (!btn) return;
@@ -360,11 +360,45 @@
     ) {
       return;
     }
-    if (!window.htmx) return;
-    window.htmx.ajax("POST", url, {
-      target: "#att-chat-root",
-      swap: "innerHTML",
-    });
+    btn.disabled = true;
+    fetch(url, {
+      method: "POST",
+      credentials: "same-origin",
+      headers: {
+        "HX-Request": "true",
+        Accept: "text/html",
+      },
+      cache: "no-store",
+    })
+      .then(function (r) {
+        return r.text().then(function (html) {
+          return { ok: r.ok, status: r.status, html: html };
+        });
+      })
+      .then(function (res) {
+        var root = $("#att-chat-root");
+        if (root && res.html) {
+          root.innerHTML = res.html;
+          if (window.htmx && window.htmx.process) {
+            window.htmx.process(root);
+          }
+        }
+        var shell = $("#att-shell");
+        if (shell) {
+          shell.setAttribute("data-selected", "");
+          shell.classList.remove("att-shell--chat-open");
+        }
+        lastInboxToken = "";
+        lastConversationToken = "";
+        refreshList({ clearSelection: true });
+        if (!res.ok) {
+          window.alert("Não foi possível excluir a conversa (HTTP " + res.status + ").");
+        }
+      })
+      .catch(function () {
+        window.alert("Falha de rede ao excluir a conversa. Tente de novo.");
+        btn.disabled = false;
+      });
   });
 
   document.body.addEventListener("htmx:afterRequest", function (ev) {

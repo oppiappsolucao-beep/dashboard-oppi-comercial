@@ -20,7 +20,8 @@ def can_delete_attendance_conversation(session_user: dict | None) -> bool:
     """Só Administrador; Atendimento e Cadastro não podem (mesmo se perfil estiver errado)."""
     if not session_user:
         return False
-    if session_user.get("role") != "Administrador":
+    role = normalize_text(session_user.get("role") or "")
+    if role != "Administrador":
         return False
     dept = normalize_text(session_user.get("department_name") or "").lower()
     if dept in _DELETE_BLOCKED_DEPARTMENTS:

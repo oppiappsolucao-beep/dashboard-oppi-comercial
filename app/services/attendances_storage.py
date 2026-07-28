@@ -14,7 +14,11 @@ from sqlalchemy.exc import IntegrityError
 
 from app.services.legacy_core import normalize_digits, normalize_text
 from database.connection import SessionLocal
-from database.models import AttendanceConversation, AttendanceMessage
+from database.models import (
+    AttendanceConversation,
+    AttendanceMessage,
+    AttendanceSuppressedChat,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -258,6 +262,7 @@ def upsert_conversation_by_remote_jid(
     contact_name: str = "",
     phone_e164: str = "",
     evolution_instance: str = "",
+    ignore_suppression: bool = False,
 ) -> dict:
     """Cria/atualiza conversa a partir do JID — cobre contato novo que só chega como @lid."""
     from app.services.evolution_client import is_whatsapp_group_jid, normalize_phone_from_jid
@@ -275,6 +280,10 @@ def upsert_conversation_by_remote_jid(
         phone = ""
     if _normalize_contact_key(contact_name) in UNWANTED_INBOX_CONTACT_KEYS:
         return {}
+    if not ignore_suppression and is_chat_suppressed(
+        phone_e164=phone, remote_jid=remote_jid, evolution_instance=instance
+    ):
+        return {}
 
     if phone and len(normalize_digits(phone)) >= 10 and len(normalize_digits(phone)) <= 15:
         return upsert_conversation_by_phone(
@@ -282,6 +291,7 @@ def upsert_conversation_by_remote_jid(
             contact_name=contact_name,
             remote_jid=remote_jid,
             evolution_instance=instance,
+            ignore_suppression=ignore_suppression,
         )
 
     existing = get_conversation_by_remote_jid(
@@ -411,8 +421,111 @@ def delete_conversations_by_contact_names(names: list[str] | None = None) -> dic
     return {"removed": len(removed_ids), "ids": removed_ids, "names": removed_names}
 
 
+def is_chat_suppressed(
+    *,
+    phone_e164: str = "",
+    remote_jid: str = "",
+    evolution_instance: str = "",
+) -> bool:
+    """True se o admin excluiu esta conversa da inbox (sync não deve recriar)."""
+    phone = normalize_text(phone_e164)
+    jid = normalize_text(remote_jid)
+    instance = resolve_evolution_instance(evolution_instance)
+    if not phone and not jid:
+        return False
+    with _session(commit=False) as db:
+        q = db.query(AttendanceSuppressedChat.id)
+        if instance:
+            q = q.filter(
+                or_(
+                    func.lower(AttendanceSuppressedChat.evolution_instance) == instance.lower(),
+                    AttendanceSuppressedChat.evolution_instance == "",
+                )
+            )
+        clauses = []
+        if phone:
+            clauses.append(AttendanceSuppressedChat.phone_e164 == phone)
+            try:
+                from app.services.evolution_client import phone_match_variants
+
+                variants = phone_match_variants(phone) or [phone]
+                clauses.append(AttendanceSuppressedChat.phone_e164.in_(variants))
+            except Exception:
+                pass
+        if jid:
+            clauses.append(AttendanceSuppressedChat.remote_jid == jid)
+        if not clauses:
+            return False
+        return q.filter(or_(*clauses)).first() is not None
+
+
+def suppress_chat(
+    *,
+    phone_e164: str = "",
+    remote_jid: str = "",
+    evolution_instance: str = "",
+) -> None:
+    phone = normalize_text(phone_e164)
+    jid = normalize_text(remote_jid)
+    instance = resolve_evolution_instance(evolution_instance)
+    if not phone and not jid:
+        return
+    if is_chat_suppressed(phone_e164=phone, remote_jid=jid, evolution_instance=instance):
+        return
+    with _lock, _session() as db:
+        db.add(
+            AttendanceSuppressedChat(
+                phone_e164=phone,
+                remote_jid=jid,
+                evolution_instance=instance,
+                suppressed_at=_now_iso(),
+            )
+        )
+
+
+def clear_chat_suppression(
+    *,
+    phone_e164: str = "",
+    remote_jid: str = "",
+    evolution_instance: str = "",
+) -> int:
+    """Remove bloqueio (ex.: lead mandou mensagem nova após exclusão)."""
+    phone = normalize_text(phone_e164)
+    jid = normalize_text(remote_jid)
+    instance = resolve_evolution_instance(evolution_instance)
+    if not phone and not jid:
+        return 0
+    with _lock, _session() as db:
+        q = db.query(AttendanceSuppressedChat)
+        if instance:
+            q = q.filter(
+                or_(
+                    func.lower(AttendanceSuppressedChat.evolution_instance) == instance.lower(),
+                    AttendanceSuppressedChat.evolution_instance == "",
+                )
+            )
+        clauses = []
+        if phone:
+            clauses.append(AttendanceSuppressedChat.phone_e164 == phone)
+            try:
+                from app.services.evolution_client import phone_match_variants
+
+                variants = phone_match_variants(phone) or [phone]
+                clauses.append(AttendanceSuppressedChat.phone_e164.in_(variants))
+            except Exception:
+                pass
+        if jid:
+            clauses.append(AttendanceSuppressedChat.remote_jid == jid)
+        if not clauses:
+            return 0
+        rows = q.filter(or_(*clauses)).all()
+        for row in rows:
+            db.delete(row)
+        return len(rows)
+
+
 def delete_conversation(conversation_id: str) -> bool:
-    """Remove conversa e mensagens permanentemente."""
+    """Remove conversa e mensagens; bloqueia recriação pelo sync da Evolution."""
     conversation_id = normalize_text(conversation_id)
     if not conversation_id:
         return False
@@ -420,10 +533,17 @@ def delete_conversation(conversation_id: str) -> bool:
         row = db.get(AttendanceConversation, conversation_id)
         if not row:
             return False
+        phone = normalize_text(row.phone_e164 or "")
+        jid = normalize_text(row.remote_jid or "")
+        instance = resolve_evolution_instance(getattr(row, "evolution_instance", "") or "")
         db.query(AttendanceMessage).filter(
             AttendanceMessage.conversation_id == conversation_id
         ).delete(synchronize_session=False)
         db.delete(row)
+    try:
+        suppress_chat(phone_e164=phone, remote_jid=jid, evolution_instance=instance)
+    except Exception:
+        logger.exception("Falha ao registrar conversa suprimida %s", conversation_id)
     _notify({"type": "conversation_deleted", "conversation_id": conversation_id})
     return True
 
@@ -508,6 +628,7 @@ def upsert_conversation_by_phone(
     status: str | None = None,
     remote_jid: str = "",
     evolution_instance: str = "",
+    ignore_suppression: bool = False,
 ) -> dict:
     from app.services.evolution_client import is_whatsapp_group_jid, phone_match_variants
 
@@ -521,6 +642,10 @@ def upsert_conversation_by_phone(
         return {}
     if not phone:
         raise ValueError("Telefone obrigatório")
+    if not ignore_suppression and is_chat_suppressed(
+        phone_e164=phone, remote_jid=remote_jid, evolution_instance=instance
+    ):
+        return {}
     now = _now_iso()
     remote_jid = normalize_text(remote_jid)
     phone_variants = phone_match_variants(phone) or [phone]

@@ -19,6 +19,12 @@ MIGRATION_KEY = "attendance_sqlite_migrated"
 def ensure_attendance_schema_columns() -> None:
     """Adiciona colunas novas em attendance_conversations se o banco já existia."""
     try:
+        from database.models import AttendanceSuppressedChat
+
+        AttendanceSuppressedChat.__table__.create(bind=engine, checkfirst=True)
+    except Exception:
+        logger.exception("Falha ao criar tabela attendance_suppressed_chats")
+    try:
         insp = inspect(engine)
         if "attendance_conversations" not in insp.get_table_names():
             return
