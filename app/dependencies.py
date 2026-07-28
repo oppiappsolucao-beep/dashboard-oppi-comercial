@@ -27,19 +27,38 @@ def get_pricing_store(request: Request) -> PricingSessionStore:
 
 def get_prepared_data(refresh: bool = False):
     """Carrega a planilha com cache. Nunca derruba a tela por limite 429."""
+    def _merge_pending(prepared: pd.DataFrame, columns: dict):
+        base = prepared.copy() if prepared is not None and not getattr(prepared, "empty", True) else pd.DataFrame()
+        # Remove pendentes antigos do cache antes de remesclar (fonte da verdade = SQLite).
+        if not base.empty and "_pending_local" in base.columns:
+            try:
+                base = base[~base["_pending_local"].fillna(False).astype(bool)].copy()
+            except Exception:
+                pass
+        try:
+            from app.services.pending_companies import merge_pending_companies_into_df
+
+            base = merge_pending_companies_into_df(base)
+        except Exception:
+            pass
+        if base is None or base.empty:
+            return pd.DataFrame(), columns or {}
+        cols = columns or identify_columns(base)
+        return base, cols
+
     if refresh:
         invalidate_sheet_cache()
     else:
         cached = get_cached_prepared_data()
         if cached is not None:
-            # Navegação rápida: serve memória e atualiza planilha em background se TTL caiu.
             ensure_sheet_refresh_if_stale()
-            return cached
+            prepared, columns = cached
+            return _merge_pending(prepared, columns or {})
 
     try:
         df = load_sheet_data(force_refresh=refresh)
     except Exception:
-        return pd.DataFrame(), {}
+        return _merge_pending(pd.DataFrame(), {})
 
     if df is None:
         df = pd.DataFrame()
@@ -51,29 +70,13 @@ def get_prepared_data(refresh: bool = False):
             prepared = prepared[
                 prepared["_empresa"].apply(lambda value: normalize_text(value) != "")
             ].copy()
-        try:
-            from app.services.pending_companies import merge_pending_companies_into_df
-
-            prepared = merge_pending_companies_into_df(prepared)
-        except Exception:
-            pass
-        if prepared.empty:
-            set_cached_prepared_data(pd.DataFrame(), columns)
-            return pd.DataFrame(), columns
-        columns = columns or identify_columns(prepared)
-        set_cached_prepared_data(prepared, columns)
-        return prepared, columns
+        # Cacheia só a base da planilha (sem pendentes locais).
+        set_cached_prepared_data(prepared if prepared is not None else pd.DataFrame(), columns or {})
+        return _merge_pending(prepared, columns or {})
     except Exception:
-        try:
-            from app.services.pending_companies import merge_pending_companies_into_df
-
-            pending_only = merge_pending_companies_into_df(pd.DataFrame())
-            if not pending_only.empty:
-                columns = identify_columns(pending_only)
-                set_cached_prepared_data(pending_only, columns)
-                return pending_only, columns
-        except Exception:
-            pass
+        pending_only, columns = _merge_pending(pd.DataFrame(), {})
+        if not pending_only.empty:
+            return pending_only, columns
         return pd.DataFrame(), {}
 
 

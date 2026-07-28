@@ -94,14 +94,10 @@ def map_ponto_company_to_form(company: dict) -> dict:
     whatsapp = normalize_text(company.get("whatsapp")) or normalize_text(company.get("telefone"))
     telefone = normalize_text(company.get("telefone"))
     created = company.get("created_at")
+    # Lista de Empresas não filtra por 7 dias, mas mantemos data de migração = hoje
+    # para aparecer em visões com período curto.
     data_chamado = date.today().strftime("%d/%m/%Y")
-    if isinstance(created, datetime):
-        data_chamado = created.strftime("%d/%m/%Y")
-    elif isinstance(created, str) and len(created) >= 10:
-        try:
-            data_chamado = datetime.fromisoformat(created.replace("Z", "+00:00")).strftime("%d/%m/%Y")
-        except ValueError:
-            pass
+    _ = created
 
     colaboradores = company.get("funcionarios")
     colaboradores_txt = ""

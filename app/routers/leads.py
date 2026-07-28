@@ -45,7 +45,9 @@ def _parse_leads_params(request: Request, form: dict | None = None) -> dict:
 def _leads_context(request: Request, filters, leads_params: dict):
     df, columns = get_prepared_data()
     options = get_filter_options(df)
-    filters = apply_last_days_period_filters(filters, days=7)
+    # Empresas: lista completa (sem janela de 7 dias). Leads/funil mantêm período curto.
+    if leads_params.get("tab") != "empresas":
+        filters = apply_last_days_period_filters(filters, days=7)
     filters = replace(filters, status="Todos os status")
 
     filtered_df = apply_dashboard_filters(df, columns, filters)

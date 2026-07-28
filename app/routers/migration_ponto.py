@@ -99,6 +99,12 @@ def migration_run(
 
         result = migrate_companies(payload, apply=(str(apply) == "1"), local_only=True)
         audit = result.get("audit") or build_migration_audit(payload)
+        try:
+            from app.services.legacy_core import invalidate_sheet_cache
+
+            invalidate_sheet_cache()
+        except Exception:
+            pass
     except Exception as exc:
         message = str(exc)
         if "429" in message or "Quota exceeded" in message:
