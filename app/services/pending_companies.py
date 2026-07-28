@@ -201,8 +201,8 @@ def merge_pending_companies_into_df(df: pd.DataFrame) -> pd.DataFrame:
         return df
 
     existing_names: set[str] = set()
-    existing_cnpjs: set[str] = set()
-    empresa_cnpjs: set[str] = set()
+    # Só conta Empresa se a linha JÁ ESTÁ no dataframe atual (não use índice externo).
+    empresa_cnpjs_in_df: set[str] = set()
     if df is not None and not df.empty:
         if "_empresa" in df.columns:
             existing_names = {
@@ -217,20 +217,22 @@ def merge_pending_companies_into_df(df: pd.DataFrame) -> pd.DataFrame:
                     if normalize_text(key).lower() == "cnpj":
                         cnpj = normalize_cnpj_for_duplicate(row.get(key))
                         break
-            if cnpj:
-                existing_cnpjs.add(cnpj)
-                tipo = normalize_text(row.get("_cadastro_tipo")).lower()
-                if tipo == "empresa":
-                    empresa_cnpjs.add(cnpj)
-                else:
-                    # Confere índice de migração / lead_actions via CNPJ
-                    try:
-                        from app.services.ponto_migration import is_cnpj_migrated_empresa
+            if not cnpj:
+                continue
+            tipo = normalize_text(row.get("_cadastro_tipo")).lower()
+            if tipo == "empresa" or bool(row.get("_pending_local")):
+                empresa_cnpjs_in_df.add(cnpj)
+            else:
+                # Linha da planilha presente: se resolve como empresa, conta.
+                try:
+                    from app.services.registration import resolve_cadastro_tipo
+                    from app.services.lead_actions_storage import DEFAULT_TENANT_ID
 
-                        if is_cnpj_migrated_empresa(cnpj):
-                            empresa_cnpjs.add(cnpj)
-                    except Exception:
-                        pass
+                    sheet_row = int(row.get("_sheet_row") or 0)
+                    if sheet_row > 0 and resolve_cadastro_tipo(DEFAULT_TENANT_ID, sheet_row, cnpj=cnpj) == "empresa":
+                        empresa_cnpjs_in_df.add(cnpj)
+                except Exception:
+                    pass
 
     rows = []
     for item in pending:
@@ -239,17 +241,15 @@ def merge_pending_companies_into_df(df: pd.DataFrame) -> pd.DataFrame:
         if not empresa:
             continue
         cnpj = normalize_cnpj_for_duplicate(payload.get("cnpj"))
-        # Se já aparece como Empresa, não duplica.
-        if cnpj and cnpj in empresa_cnpjs:
+        # Só pula pendente se essa empresa JÁ aparece no df atual como Empresa.
+        if cnpj and cnpj in empresa_cnpjs_in_df:
             continue
-        # Se só existe como Lead na planilha, ainda inclui o pendente (vira Empresa na UI).
         if not cnpj and empresa.lower() in existing_names:
             continue
         rows.append(_pending_row_dict(item))
         existing_names.add(empresa.lower())
         if cnpj:
-            existing_cnpjs.add(cnpj)
-            empresa_cnpjs.add(cnpj)
+            empresa_cnpjs_in_df.add(cnpj)
 
     if not rows:
         return df
@@ -258,8 +258,6 @@ def merge_pending_companies_into_df(df: pd.DataFrame) -> pd.DataFrame:
     if df is None or df.empty:
         return pending_df.reset_index(drop=True)
 
-    # Remove da base as linhas Lead com o mesmo CNPJ do pendente Empresa
-    # (senão o dedupe da listagem mantém o Lead e esconde o pendente).
     pending_cnpjs_add = {
         normalize_cnpj_for_duplicate(row.get("CNPJ"))
         for _, row in pending_df.iterrows()
@@ -275,6 +273,7 @@ def merge_pending_companies_into_df(df: pd.DataFrame) -> pd.DataFrame:
                     return normalize_cnpj_for_duplicate(row.get(key))
             return ""
 
+        # Remove Lead da planilha com mesmo CNPJ para o pendente Empresa ganhar.
         df = df[~df.apply(lambda row: _row_cnpj(row) in pending_cnpjs_add, axis=1)].copy()
 
     combined = pd.concat([pending_df, df], ignore_index=True, sort=False)
