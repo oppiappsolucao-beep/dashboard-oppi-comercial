@@ -200,6 +200,7 @@ def merge_pending_companies_into_df(df: pd.DataFrame) -> pd.DataFrame:
 
     Regra simples para migração Oppi Ponto:
     - Pendente com cadastro_tipo=empresa SEMPRE entra (por CNPJ único).
+    - Prefere empresa/migração sobre lead no mesmo CNPJ.
     - Remove da planilha linhas com o mesmo CNPJ para não esconder o pendente no dedupe.
     """
     from app.services.legacy_core import normalize_cnpj_for_duplicate
@@ -208,7 +209,26 @@ def merge_pending_companies_into_df(df: pd.DataFrame) -> pd.DataFrame:
     if not pending:
         return df if df is not None else pd.DataFrame()
 
-    # Um pendente por CNPJ (fica o de maior id = mais recente).
+    def _is_migration_empresa(payload: dict) -> bool:
+        tipo = normalize_text(payload.get("cadastro_tipo")).lower() or "lead"
+        observacoes = normalize_text(payload.get("observacoes"))
+        servico = normalize_text(payload.get("servico"))
+        vendedor = normalize_text(payload.get("vendedor"))
+        return (
+            tipo == "empresa"
+            or "Migrado do Oppi Ponto" in observacoes
+            or "oppi_ponto_company_id" in observacoes
+            or "company_id=" in observacoes
+            or "Ponto Eletrônico" in servico
+            or vendedor.lower() == "oppi"
+        )
+
+    def _priority(item: dict) -> tuple[int, int]:
+        payload = item.get("payload") or {}
+        # Empresa/migração vence lead; depois o id mais recente.
+        return (1 if _is_migration_empresa(payload) else 0, int(item.get("id") or 0))
+
+    # Um pendente por CNPJ (empresa/migração tem prioridade).
     by_cnpj: dict[str, dict] = {}
     by_name_only: list[dict] = []
     for item in pending:
@@ -217,40 +237,24 @@ def merge_pending_companies_into_df(df: pd.DataFrame) -> pd.DataFrame:
         if not empresa:
             continue
         cnpj = normalize_cnpj_for_duplicate(payload.get("cnpj"))
-        tipo = normalize_text(payload.get("cadastro_tipo")).lower() or "lead"
-        # Migração / empresa: prioriza na lista.
         if cnpj:
             prev = by_cnpj.get(cnpj)
-            if prev is None or int(item.get("id") or 0) >= int(prev.get("id") or 0):
+            if prev is None or _priority(item) >= _priority(prev):
                 by_cnpj[cnpj] = item
         else:
             by_name_only.append(item)
 
     rows: list[dict] = []
     seen_names: set[str] = set()
-    # Primeiro todas as empresas migradas (com CNPJ).
-    for cnpj, item in by_cnpj.items():
+    for _cnpj, item in by_cnpj.items():
         payload = item.get("payload") or {}
-        tipo = normalize_text(payload.get("cadastro_tipo")).lower() or "lead"
-        observacoes = normalize_text(payload.get("observacoes"))
-        servico = normalize_text(payload.get("servico"))
-        vendedor = normalize_text(payload.get("vendedor"))
-        is_migration = (
-            tipo == "empresa"
-            or "Migrado do Oppi Ponto" in observacoes
-            or "oppi_ponto_company_id" in observacoes
-            or "company_id=" in observacoes
-            or "Ponto Eletrônico" in servico
-            or vendedor.lower() == "oppi"
-        )
-        if not is_migration and tipo != "empresa":
+        if not _is_migration_empresa(payload):
             continue
         row = _pending_row_dict(item)
         row["_cadastro_tipo"] = "empresa"
         rows.append(row)
         seen_names.add(normalize_text(row.get("_empresa")).lower())
 
-    # Se sobrou pendente lead sem CNPJ, mantém comportamento antigo leve.
     for item in by_name_only:
         payload = item.get("payload") or {}
         if normalize_text(payload.get("cadastro_tipo")).lower() == "empresa":

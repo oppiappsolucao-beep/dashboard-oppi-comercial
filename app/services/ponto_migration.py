@@ -383,12 +383,7 @@ def apply_company(company: dict, *, local_only: bool = True) -> dict:
 
     def _ensure_pending() -> int | None:
         try:
-            from app.services.pending_companies import enqueue_payload_locally, list_pending_companies
-
-            for pend in list_pending_companies("pending") or []:
-                if normalize_cnpj_for_duplicate((pend.get("payload") or {}).get("cnpj")) == cnpj:
-                    return int(pend.get("local_sheet_row") or -pend["id"])
-            return enqueue_payload_locally(form, last_error="Migração Oppi Ponto (local)")
+            return _upsert_migration_pending(company)
         except Exception:
             return None
 
@@ -612,17 +607,24 @@ def _sheet_rows_for_company(company: dict) -> list[int]:
     return sorted(rows)
 
 
-def _update_pending_finance(company: dict, form: dict, valor: str, colaboradores: str) -> list[int]:
-    """Atualiza payload de todos os pendentes (qualquer status) desta empresa."""
-    from app.services.crm_local_db import update_pending_company_payload
-    from app.services.pending_companies import list_pending_companies
+def _upsert_migration_pending(company: dict) -> int:
+    """Garante pendente local status=pending para a empresa (cria ou reabre synced)."""
+    from app.services.crm_local_db import mark_pending_company_pending, update_pending_company_payload
+    from app.services.pending_companies import enqueue_payload_locally, list_pending_companies
 
+    form = map_ponto_company_to_form(company)
+    closed = map_closed_services(company)
+    valor = closed[0].get("valor", "") if closed else form.get("valor_proposta", "")
+    form["valor_proposta"] = valor
+    form["servico"] = form.get("servico") or MIGRATED_SERVICE_NAME
+    form["cadastro_tipo"] = "empresa"
+    form["status"] = MIGRATED_STATUS
     cnpj = normalize_cnpj_for_duplicate(company.get("cnpj"))
     ponto_id = int(company.get("oppi_ponto_company_id") or 0)
-    touched: list[int] = []
 
+    best: dict | None = None
     for pend in list_pending_companies(None) or []:
-        pl = dict(pend.get("payload") or {})
+        pl = pend.get("payload") or {}
         match = False
         if cnpj and normalize_cnpj_for_duplicate(pl.get("cnpj")) == cnpj:
             match = True
@@ -630,22 +632,28 @@ def _update_pending_finance(company: dict, form: dict, valor: str, colaboradores
             match = True
         if not match:
             continue
-        pl["colaboradores"] = colaboradores
-        pl["valor_proposta"] = valor
-        pl["servico"] = form.get("servico") or MIGRATED_SERVICE_NAME
-        pl["cadastro_tipo"] = "empresa"
-        pl["status"] = MIGRATED_STATUS
-        update_pending_company_payload(int(pend["id"]), pl)
-        touched.append(int(pend.get("local_sheet_row") or -pend["id"]))
-    return touched
+        if best is None or int(pend.get("id") or 0) >= int(best.get("id") or 0):
+            best = pend
+
+    if best is not None:
+        pending_id = int(best["id"])
+        payload = dict(best.get("payload") or {})
+        payload.update(form)
+        payload["cadastro_tipo"] = "empresa"
+        payload["status"] = MIGRATED_STATUS
+        payload["colaboradores"] = form.get("colaboradores", "")
+        payload["valor_proposta"] = valor
+        payload["servico"] = form.get("servico") or MIGRATED_SERVICE_NAME
+        update_pending_company_payload(pending_id, payload)
+        if normalize_text(best.get("status")).lower() != "pending":
+            mark_pending_company_pending(pending_id, last_error="Reaberto na migração Oppi Ponto")
+        return int(best.get("local_sheet_row") or -pending_id)
+
+    return int(enqueue_payload_locally(form, last_error="Migração Oppi Ponto (local)"))
 
 
 def reprocess_finance_from_export(payload: dict | list) -> dict:
-    """Reaplica valor do plano + colaboradores para TODAS as empresas do JSON.
-
-    Se a empresa não existir no CRM local, recria o pendente (apply local).
-    Grava só local — não chama Google Sheets (evita 429 / timeout).
-    """
+    """Reaplica valor/colaboradores e GARANTE as 20 empresas como pendente local visível."""
     if isinstance(payload, dict):
         companies = payload.get("companies") or []
     else:
@@ -663,10 +671,12 @@ def reprocess_finance_from_export(payload: dict | list) -> dict:
         closed = map_closed_services(company)
         valor = closed[0].get("valor", "") if closed else form.get("valor_proposta", "")
         colaboradores = form.get("colaboradores", "")
-        ativo_crm = bool(company.get("ativo")) and not bool(company.get("bloqueado_plataforma"))
+        # Sempre ativo no CRM comercial para aparecer na lista Empresas.
+        # Bloqueio real fica no Oppi Ponto (botões bloquear/liberar).
+        ativo_crm = True
         created = False
         errors: list[str] = []
-        updated: list[int] = []
+        sheet_row: int | None = None
 
         if not cnpj:
             results.append(
@@ -685,58 +695,39 @@ def reprocess_finance_from_export(payload: dict | list) -> dict:
             continue
 
         try:
-            rows = _sheet_rows_for_company(company)
-            # Garante cadastro local se não achar nenhuma linha
-            if not rows:
-                applied = apply_company(company, local_only=True)
-                created = bool(applied.get("ok"))
-                if applied.get("sheet_row"):
-                    rows = [int(applied["sheet_row"])]
-                else:
-                    rows = _sheet_rows_for_company(company)
-                if not created and not rows:
-                    errors.append(applied.get("message") or "não foi possível criar pendente")
-
-            try:
-                pending_rows = _update_pending_finance(company, form, valor, colaboradores)
-                for row in pending_rows:
-                    if row not in updated:
-                        updated.append(row)
-            except Exception as err:
-                errors.append(f"pending: {err}")
-
-            for sheet_row in rows:
+            existing_rows = _sheet_rows_for_company(company)
+            sheet_row = _upsert_migration_pending(company)
+            if not existing_rows:
+                created = True
+            _persist_extras(sheet_row, company, ativo_crm=ativo_crm, sync_sheet=False)
+            # Também atualiza outras linhas já ligadas (planilha / lead_actions)
+            for extra_row in existing_rows:
+                if int(extra_row) == int(sheet_row):
+                    continue
                 try:
-                    _persist_extras(sheet_row, company, ativo_crm=ativo_crm, sync_sheet=False)
-                    if sheet_row not in updated:
-                        updated.append(sheet_row)
+                    _persist_extras(int(extra_row), company, ativo_crm=ativo_crm, sync_sheet=False)
                 except Exception as err:
-                    errors.append(f"row {sheet_row}: {err}")
-
-            # Sempre grava índice mesmo se só o CNPJ existir no JSON
-            remember_migrated_company(
-                company,
-                sheet_row=updated[0] if updated else (rows[0] if rows else None),
-            )
+                    errors.append(f"row {extra_row}: {err}")
+            remember_migrated_company(company, sheet_row=sheet_row)
         except Exception as err:
             errors.append(str(err))
+            sheet_row = None
 
-        ok = bool(updated) and not errors
-        action = "reprocess_created" if created else "reprocess_finance"
+        ok = sheet_row is not None
         results.append(
             {
                 "ok": ok,
-                "action": action,
+                "action": "reprocess_created" if created else "reprocess_finance",
                 "oppi_ponto_company_id": ponto_id,
                 "empresa": form.get("empresa"),
                 "cnpj": cnpj,
-                "sheet_row": updated[0] if updated else None,
-                "rows": updated,
+                "sheet_row": sheet_row,
+                "rows": [sheet_row] if sheet_row is not None else [],
                 "valor": valor,
                 "colaboradores": colaboradores,
                 "message": (
-                    ("Criada + " if created else "")
-                    + f"atualizado em {len(updated)} linha(s): {valor or 'sem valor'} · {colaboradores or 'sem colaboradores'}"
+                    ("Criada/reaberta · " if created else "Atualizada · ")
+                    + f"{valor or 'sem valor'} · {colaboradores or 'sem colaboradores'}"
                     + (f" | avisos: {'; '.join(errors)}" if errors else "")
                 ),
             }

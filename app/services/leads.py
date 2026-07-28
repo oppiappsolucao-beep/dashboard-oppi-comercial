@@ -267,8 +267,10 @@ def apply_leads_view(
             axis=1,
         )
         if "CNPJ" in result.columns:
+            from app.services.legacy_core import normalize_cnpj_for_duplicate as _norm_cnpj
+
             result["_dedupe_key"] = result["CNPJ"].apply(
-                lambda value: normalize_text(value) or ""
+                lambda value: _norm_cnpj(value) or ""
             )
             result.loc[result["_dedupe_key"] == "", "_dedupe_key"] = result["_empresa"].astype(str)
             result = result.sort_values(

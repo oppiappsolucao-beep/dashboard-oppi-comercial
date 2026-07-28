@@ -284,6 +284,21 @@ def mark_pending_company_synced(pending_id: int, sheet_row: int) -> None:
         conn.commit()
 
 
+def mark_pending_company_pending(pending_id: int, *, last_error: str = "") -> None:
+    """Reabre pendente (ex.: migração precisa voltar a aparecer na lista)."""
+    init_crm_local_db()
+    with _lock, _connect() as conn:
+        conn.execute(
+            """
+            UPDATE pending_companies
+            SET status = 'pending', last_error = ?
+            WHERE id = ?
+            """,
+            (_normalize_text(last_error)[:500], int(pending_id)),
+        )
+        conn.commit()
+
+
 def mark_pending_company_error(pending_id: int, error: str) -> None:
     init_crm_local_db()
     with _lock, _connect() as conn:
