@@ -70,7 +70,7 @@ def infer_partners_count(values: dict) -> int:
     return 0
 
 
-def validate_registration_form(form: dict) -> str | None:
+def validate_registration_form(form: dict, *, require_whatsapp: bool = False) -> str | None:
     empresa = normalize_text(form.get("empresa"))
     cnpj = normalize_text(form.get("cnpj"))
     telefone_b2b = normalize_text(form.get("telefone_b2b"))
@@ -79,11 +79,14 @@ def validate_registration_form(form: dict) -> str | None:
 
     if not empresa:
         return "Preencha o nome da empresa para concluir o cadastro."
+    if require_whatsapp and not telefone_b2b:
+        return "Preencha o Celular / WhatsApp para concluir o cadastro."
+    if telefone_b2b and not normalize_phone_for_duplicate(telefone_b2b):
+        return "Digite um número válido no campo Celular / WhatsApp."
     if cnpj and not normalize_cnpj_for_duplicate(cnpj):
         return "Digite um CNPJ válido com 14 números."
 
     for label, phone in [
-        ("Celular WhatsApp", telefone_b2b),
         ("Telefone fixo", telefone_fixo),
         ("Telefone alternativo", telefone_alternativo),
     ]:
@@ -91,6 +94,107 @@ def validate_registration_form(form: dict) -> str | None:
             return f"Digite um número válido no campo {label}."
 
     return None
+
+
+def find_existing_by_whatsapp(
+    whatsapp: str,
+    *,
+    ignore_sheet_row: int | None = None,
+) -> dict | None:
+    """Localiza cadastro com o mesmo WhatsApp (planilha + pendentes)."""
+    from app.services.legacy_core import phones_match_for_duplicate
+
+    target = normalize_phone_for_duplicate(whatsapp)
+    if not target:
+        return None
+
+    ignore = int(ignore_sheet_row) if ignore_sheet_row else None
+
+    # 1) Dataframe preparado (inclui pendentes mesclados)
+    try:
+        from app.dependencies import get_prepared_data
+
+        df, columns = get_prepared_data()
+    except Exception:
+        df, columns = None, {}
+
+    if df is not None and not getattr(df, "empty", True):
+        phone_keys = [
+            key
+            for key in (
+                "telefone_b2b",
+                "telefone_fixo",
+                "telefone_alternativo",
+                "telefone_socio_1",
+                "telefone_socio_2",
+                "telefone_socio_3",
+            )
+            if columns.get(key)
+        ]
+        for _, row in df.iterrows():
+            sheet_row = int(row.get("_sheet_row", 0) or 0)
+            if ignore and sheet_row == ignore:
+                continue
+            phones = []
+            for key in phone_keys:
+                col = columns.get(key)
+                if col and col in row.index:
+                    phones.append(row.get(col, ""))
+            phones.append(row.get("_telefone", ""))
+            for phone in phones:
+                if phones_match_for_duplicate(target, phone):
+                    return {
+                        "sheet_row": sheet_row,
+                        "empresa": normalize_text(row.get("_empresa") or row.get("Nome Empresas") or ""),
+                        "whatsapp": normalize_phone_for_duplicate(phone) or target,
+                    }
+
+    # 2) Pendentes locais ainda não sincronizados
+    try:
+        from app.services.crm_local_db import list_pending_companies
+
+        for item in list_pending_companies("pending"):
+            payload = item.get("payload") if isinstance(item.get("payload"), dict) else {}
+            pending_id = int(item.get("id") or 0)
+            pseudo_row = -pending_id if pending_id else None
+            if ignore and pseudo_row and pseudo_row == ignore:
+                continue
+            for field in (
+                "telefone_b2b",
+                "telefone_fixo",
+                "telefone_alternativo",
+                "telefone_socio_1",
+                "telefone_socio_2",
+                "telefone_socio_3",
+            ):
+                if phones_match_for_duplicate(target, payload.get(field)):
+                    return {
+                        "sheet_row": pseudo_row or 0,
+                        "empresa": normalize_text(payload.get("empresa") or item.get("empresa") or ""),
+                        "whatsapp": normalize_phone_for_duplicate(payload.get(field)) or target,
+                    }
+    except Exception:
+        pass
+
+    return None
+
+
+def assert_whatsapp_not_registered(
+    whatsapp: str,
+    *,
+    ignore_sheet_row: int | None = None,
+) -> None:
+    """Bloqueia cadastro/edição com WhatsApp já existente."""
+    hit = find_existing_by_whatsapp(whatsapp, ignore_sheet_row=ignore_sheet_row)
+    if not hit:
+        return
+    digits = hit.get("whatsapp") or normalize_phone_for_duplicate(whatsapp)
+    empresa = hit.get("empresa") or ""
+    if empresa:
+        raise DuplicateRegistrationError(
+            f"Número de WhatsApp já cadastrado: {digits} (cadastro: {empresa})."
+        )
+    raise DuplicateRegistrationError(f"Número de WhatsApp já cadastrado: {digits}.")
 
 
 def build_registration_payload(form: dict) -> dict:
@@ -119,10 +223,12 @@ def build_registration_payload(form: dict) -> dict:
 
 
 def save_new_company(form: dict) -> int:
-    error = validate_registration_form(form)
+    error = validate_registration_form(form, require_whatsapp=True)
     if error:
         raise ValueError(error)
-    return append_company_to_sheet(build_registration_payload(form))
+    payload = build_registration_payload(form)
+    assert_whatsapp_not_registered(payload.get("telefone_b2b") or "")
+    return append_company_to_sheet(payload)
 
 
 def _existing_edit_field_values(sheet_row: int) -> dict[str, str]:
@@ -151,7 +257,7 @@ def _existing_edit_field_values(sheet_row: int) -> dict[str, str]:
 
 
 def save_company_edit(sheet_row: int, form: dict) -> None:
-    error = validate_registration_form(form)
+    error = validate_registration_form(form, require_whatsapp=False)
     if error:
         raise ValueError(error)
     payload = build_registration_payload(form)
@@ -159,6 +265,11 @@ def save_company_edit(sheet_row: int, form: dict) -> None:
     for field in EDIT_FIELDS_PRESERVE_WHEN_ABSENT:
         if field not in form:
             payload[field] = normalize_text(existing.get(field, ""))
+    if payload.get("telefone_b2b"):
+        assert_whatsapp_not_registered(
+            payload.get("telefone_b2b") or "",
+            ignore_sheet_row=int(sheet_row),
+        )
     update_company_in_sheet(sheet_row, payload)
 
 

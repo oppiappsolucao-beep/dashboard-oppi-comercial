@@ -1495,6 +1495,30 @@ def normalize_phone_for_duplicate(value) -> str:
     return digits if len(digits) >= 8 else ""
 
 
+def phone_match_keys(value) -> set[str]:
+    """Chaves de comparação para telefone/WhatsApp (com e sem DDD)."""
+    digits = normalize_phone_for_duplicate(value)
+    if not digits:
+        return set()
+    keys = {digits}
+    if len(digits) >= 8:
+        keys.add(digits[-8:])
+    if len(digits) >= 10:
+        keys.add(digits[-10:])
+    if len(digits) >= 11:
+        keys.add(digits[-11:])
+    return keys
+
+
+def phones_match_for_duplicate(left, right) -> bool:
+    """True quando dois telefones representam o mesmo WhatsApp/número."""
+    left_keys = phone_match_keys(left)
+    right_keys = phone_match_keys(right)
+    if not left_keys or not right_keys:
+        return False
+    return bool(left_keys & right_keys)
+
+
 def normalize_cpf_for_duplicate(value) -> str:
     """Normaliza CPF para comparação, ignorando campos vazios ou incompletos."""
     digits = normalize_digits(value)
@@ -1603,7 +1627,10 @@ def validate_unique_company_registration(
 
             existing_phone = normalize_phone_for_duplicate(row[index])
 
-            if existing_phone and existing_phone in submitted_phones:
+            if existing_phone and any(
+                phones_match_for_duplicate(existing_phone, submitted)
+                for submitted in submitted_phones
+            ):
                 duplicate_phones.add(existing_phone)
 
         for index in cpf_column_indexes:
@@ -1631,7 +1658,7 @@ def validate_unique_company_registration(
 
     if duplicate_phones:
         phones_text = ", ".join(sorted(duplicate_phones))
-        messages.append(f"Telefone já cadastrado: {phones_text}")
+        messages.append(f"Número de WhatsApp/telefone já cadastrado: {phones_text}")
 
     if duplicate_cpfs:
         cpfs_text = ", ".join(sorted(duplicate_cpfs))
