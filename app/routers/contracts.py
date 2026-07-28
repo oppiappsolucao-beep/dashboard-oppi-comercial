@@ -236,6 +236,12 @@ async def contract_edit_page(request: Request, sheet_row: int):
     lead_extra = get_lead_action(DEFAULT_TENANT_ID, sheet_row) or {}
     values["setor_id"] = normalize_text(lead_extra.get("setor_id"))
     values["setor"] = normalize_text(lead_extra.get("setor"))
+    if not normalize_text(values.get("colaboradores")) and lead_extra.get("colaboradores"):
+        values["colaboradores"] = normalize_text(lead_extra.get("colaboradores"))
+    if not normalize_text(values.get("valor_proposta")) and lead_extra.get("valor_proposta"):
+        values["valor_proposta"] = normalize_text(lead_extra.get("valor_proposta"))
+    if not normalize_text(values.get("servico")) and lead_extra.get("servico"):
+        values["servico"] = normalize_text(lead_extra.get("servico"))
     # Se nicho custom não está na lista padrão, ainda mostra no select via niche_options merge
     niche_options = get_niche_options()
     if values["nicho"] and values["nicho"] not in niche_options:
@@ -288,6 +294,21 @@ async def contract_edit_page(request: Request, sheet_row: int):
             if any(normalize_text(item.get(key)) for key in ("servico", "valor", "vencimento"))
         ])
 
+    from app.services.oppi_ponto_bridge import resolve_oppi_ponto_company_id
+    from app.services.oppi_ponto_client import oppi_ponto_configured
+
+    oppi_ponto_company_id = resolve_oppi_ponto_company_id(
+        sheet_row,
+        cnpj=values.get("cnpj", ""),
+        lookup_remote=False,
+    )
+    oppi_ponto_ctx = {
+        "configured": oppi_ponto_configured(),
+        "company_id": oppi_ponto_company_id,
+        "bloqueado": bool(lead_extra.get("oppi_ponto_bloqueado")),
+        "onboarded": bool(lead_extra.get("oppi_ponto_onboarded") or oppi_ponto_company_id),
+    }
+
     back_href = {
         "leads": "/leads-e-empresas",
         "activities": "/atividades",
@@ -334,6 +355,7 @@ async def contract_edit_page(request: Request, sheet_row: int):
             "cadastro_ativo": cadastro_ativo,
             "cadastro_tipo_options": CADASTRO_TIPO_OPTIONS,
             "active_tab": active_tab,
+            "oppi_ponto": oppi_ponto_ctx,
             **activities_ctx,
             **page_ctx,
         },
@@ -378,6 +400,7 @@ async def contract_edit_submit(request: Request, sheet_row: int):
             primary_closed = save_closed_services(DEFAULT_TENANT_ID, sheet_row, closed_items)
             form_dict["servico"] = primary_closed.get("servico", "")
             form_dict["valor_proposta"] = primary_closed.get("valor", "")
+        previous_tipo = resolve_cadastro_tipo(DEFAULT_TENANT_ID, sheet_row, cnpj=form_dict.get("cnpj", ""))
         save_company_edit(sheet_row, form_dict)
         save_cadastro_tipo(DEFAULT_TENANT_ID, sheet_row, form_dict.get("cadastro_tipo", "lead"))
         save_access_fields(DEFAULT_TENANT_ID, sheet_row, form_dict)
@@ -398,7 +421,28 @@ async def contract_edit_submit(request: Request, sheet_row: int):
             (setor or {}).get("name", ""),
         )
         invalidate_sheet_cache()
-        request.session["edit_success"] = "Cadastro salvo com sucesso."
+
+        onboard_note = ""
+        try:
+            from app.services.oppi_ponto_bridge import maybe_auto_onboard_on_empresa
+
+            onboard_result = maybe_auto_onboard_on_empresa(
+                sheet_row,
+                values=form_dict,
+                previous_tipo=previous_tipo,
+                new_tipo=form_dict.get("cadastro_tipo", "lead"),
+                status=form_dict.get("status", ""),
+            )
+            if onboard_result and onboard_result.get("ok"):
+                onboard_note = f" {onboard_result.get('message', '')}"
+                if onboard_result.get("password"):
+                    onboard_note += f" Senha gerada: {onboard_result['password']}"
+            elif onboard_result and not onboard_result.get("ok"):
+                onboard_note = f" (Oppi Ponto: {onboard_result.get('message', 'falha no onboard')})"
+        except Exception:
+            pass
+
+        request.session["edit_success"] = f"Cadastro salvo com sucesso.{onboard_note}"
         return RedirectResponse(url=_edit_page_url(sheet_row, from_page=from_page), status_code=303)
     except DuplicateRegistrationError as error:
         request.session["edit_error"] = str(error)
@@ -480,9 +524,131 @@ async def contract_update_tipo(request: Request, sheet_row: int, cadastro_tipo: 
     if redirect:
         return redirect
 
+    previous_tipo = resolve_cadastro_tipo(DEFAULT_TENANT_ID, sheet_row)
     save_cadastro_tipo(DEFAULT_TENANT_ID, sheet_row, cadastro_tipo)
+
+    try:
+        from app.services.oppi_ponto_bridge import maybe_auto_onboard_on_empresa
+
+        df, columns = get_prepared_data()
+        row = _get_row_by_sheet(df, sheet_row)
+        values = {}
+        if row is not None:
+            values = {key: _contract_edit_value(row, columns, key) for key in [
+                "empresa", "cnpj", "email", "telefone_b2b", "telefone_fixo",
+                "socio_1", "email_socio_1", "telefone_socio_1",
+                "servico", "valor_proposta", "colaboradores",
+            ]}
+            values["email_empresa"] = values.get("email", "")
+            values.update(load_access_fields(DEFAULT_TENANT_ID, sheet_row))
+        result = maybe_auto_onboard_on_empresa(
+            sheet_row,
+            values=values,
+            previous_tipo=previous_tipo,
+            new_tipo=cadastro_tipo,
+        )
+        if result and result.get("ok"):
+            msg = result.get("message") or "Oppi Ponto sincronizado."
+            if result.get("password"):
+                msg += f" Senha: {result['password']}"
+            request.session["edit_success"] = msg
+        elif result and not result.get("ok"):
+            request.session["edit_error"] = result.get("message") or "Falha no Oppi Ponto."
+    except Exception:
+        pass
+
     referer = request.headers.get("referer") or f"/cadastro/todos/{sheet_row}/editar"
     return RedirectResponse(url=referer, status_code=303)
+
+
+@router.post("/cadastro/todos/{sheet_row}/oppi-ponto")
+async def contract_oppi_ponto_action(
+    request: Request,
+    sheet_row: int,
+    action: str = Form(...),
+    motivo: str = Form("Ação manual pelo CRM Comercial"),
+    from_: str = Form("", alias="from"),
+    tab: str = Form("financeiro"),
+):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+
+    from_page = _resolve_edit_from_page(from_)
+    edit_url = _edit_page_url(sheet_row, tab=normalize_text(tab) or "financeiro", from_page=from_page)
+
+    df, columns = get_prepared_data()
+    row = _get_row_by_sheet(df, sheet_row)
+    if row is None:
+        request.session["edit_error"] = "Cadastro não encontrado."
+        return RedirectResponse(url="/cadastro/todos", status_code=303)
+
+    values = {key: _contract_edit_value(row, columns, key) for key in [
+        "empresa", "cnpj", "email", "telefone_b2b", "telefone_fixo",
+        "socio_1", "email_socio_1", "telefone_socio_1",
+        "servico", "valor_proposta", "colaboradores",
+    ]}
+    values["email_empresa"] = values.get("email", "")
+    values.update(load_access_fields(DEFAULT_TENANT_ID, sheet_row))
+    from app.services.lead_actions_storage import get_lead_action
+
+    lead_extra = get_lead_action(DEFAULT_TENANT_ID, sheet_row) or {}
+    if not normalize_text(values.get("colaboradores")) and lead_extra.get("colaboradores"):
+        values["colaboradores"] = normalize_text(lead_extra.get("colaboradores"))
+
+    try:
+        from app.services.oppi_ponto_bridge import (
+            block_company_on_ponto,
+            release_payment_on_ponto,
+            sync_or_onboard_company,
+            unblock_company_on_ponto,
+        )
+        from app.services.oppi_ponto_client import OppiPontoError
+    except Exception as error:
+        request.session["edit_error"] = f"Falha ao carregar integração Oppi Ponto: {error}"
+        return RedirectResponse(url=edit_url, status_code=303)
+
+    try:
+        act = normalize_text(action).lower()
+        if act == "bloquear":
+            result = block_company_on_ponto(sheet_row, cnpj=values.get("cnpj", ""))
+            request.session["edit_success"] = f"Empresa bloqueada no Oppi Ponto (#{result['company_id']})."
+        elif act == "desbloquear":
+            result = unblock_company_on_ponto(sheet_row, cnpj=values.get("cnpj", ""))
+            request.session["edit_success"] = f"Empresa desbloqueada no Oppi Ponto (#{result['company_id']})."
+        elif act in {"liberar_pagamento", "liberar"}:
+            result = release_payment_on_ponto(
+                sheet_row,
+                cnpj=values.get("cnpj", ""),
+                motivo=motivo or "Liberação manual pelo CRM Comercial",
+            )
+            request.session["edit_success"] = (
+                f"Pagamento liberado no Oppi Ponto (#{result['company_id']}). Acesso restaurado."
+            )
+        elif act in {"onboard", "sincronizar"}:
+            closed = load_closed_services(
+                DEFAULT_TENANT_ID,
+                sheet_row,
+                servico=values.get("servico", ""),
+                valor_proposta=values.get("valor_proposta", ""),
+            )
+            result = sync_or_onboard_company(
+                sheet_row,
+                values=values,
+                closed_services=closed,
+            )
+            msg = result.get("message") or "Oppi Ponto sincronizado."
+            if result.get("password"):
+                msg += f" Senha gerada: {result['password']}"
+            request.session["edit_success"] = msg
+        else:
+            request.session["edit_error"] = f"Ação desconhecida: {action}"
+    except OppiPontoError as error:
+        request.session["edit_error"] = str(error)
+    except Exception as error:
+        request.session["edit_error"] = f"Falha Oppi Ponto: {error}"
+
+    return RedirectResponse(url=edit_url, status_code=303)
 
 
 @router.post("/cadastro/todos/{sheet_row}/status", response_class=HTMLResponse)

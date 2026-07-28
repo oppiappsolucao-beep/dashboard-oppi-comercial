@@ -130,6 +130,11 @@
   </form>
 </div>
 
+<form id="oppi-ponto-form" method="post" action="/cadastro/todos/{{ sheet_row }}/oppi-ponto" hidden>
+  {% if from_page %}<input type="hidden" name="from" value="{{ from_page }}">{% endif %}
+  <input type="hidden" name="tab" value="financeiro">
+</form>
+
 {% include "partials/registration_delete_modal.html" %}
 
 <form id="client-toggle-ativo-form" method="post" action="/cadastro/todos/{{ sheet_row }}/ativo" hidden>

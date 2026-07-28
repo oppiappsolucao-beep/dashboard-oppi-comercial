@@ -215,11 +215,53 @@ async def new_registration_submit(request: Request):
                 f"A sincronização com a planilha acontece automaticamente.{activity_warning}"
             )
             tab = "empresas" if normalize_text(form_dict.get("cadastro_tipo")).lower() == "empresa" else "leads"
+            try:
+                if normalize_text(form_dict.get("cadastro_tipo")).lower() == "empresa":
+                    from app.services.oppi_ponto_bridge import maybe_auto_onboard_on_empresa
+
+                    onboard_result = maybe_auto_onboard_on_empresa(
+                        sheet_row,
+                        values=form_dict,
+                        previous_tipo="lead",
+                        new_tipo="empresa",
+                        status=form_dict.get("status", ""),
+                    )
+                    if onboard_result and onboard_result.get("ok") and onboard_result.get("password"):
+                        request.session["company_registration_success"] += (
+                            f" Oppi Ponto: {onboard_result.get('message')} Senha: {onboard_result['password']}"
+                        )
+                    elif onboard_result and onboard_result.get("ok"):
+                        request.session["company_registration_success"] += (
+                            f" Oppi Ponto: {onboard_result.get('message')}"
+                        )
+            except Exception:
+                pass
             return RedirectResponse(url=f"/leads-e-empresas?tab={tab}", status_code=303)
 
         request.session["company_registration_success"] = (
             f'"{empresa}" cadastrado com sucesso com o status "{status}".{activity_warning}'
         )
+        try:
+            if normalize_text(form_dict.get("cadastro_tipo")).lower() == "empresa":
+                from app.services.oppi_ponto_bridge import maybe_auto_onboard_on_empresa
+
+                onboard_result = maybe_auto_onboard_on_empresa(
+                    sheet_row,
+                    values=form_dict,
+                    previous_tipo="lead",
+                    new_tipo="empresa",
+                    status=form_dict.get("status", ""),
+                )
+                if onboard_result and onboard_result.get("ok"):
+                    request.session["company_registration_success"] += (
+                        f" Oppi Ponto: {onboard_result.get('message')}"
+                    )
+                    if onboard_result.get("password"):
+                        request.session["company_registration_success"] += (
+                            f" Senha: {onboard_result['password']}"
+                        )
+        except Exception:
+            pass
         return RedirectResponse(url=_edit_page_url(sheet_row, from_page=from_page), status_code=303)
     except DuplicateRegistrationError as error:
         request.session["registration_error"] = str(error)

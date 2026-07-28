@@ -67,14 +67,19 @@
     </div>
 
     <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:16px">
-      <button type="submit" name="apply" value="0" class="btn btn-outline">1) Simular (dry-run)</button>
-      <button type="submit" name="apply" value="1" class="btn"
+      <button type="submit" name="apply" value="0" class="btn btn-outline" formaction="/migracao-ponto/executar">1) Simular (dry-run)</button>
+      <button type="submit" name="apply" value="1" class="btn" formaction="/migracao-ponto/executar"
         onclick="return confirm('Completar migração das empresas faltantes (modo local)?');">
         2) Aplicar / completar migração
+      </button>
+      <button type="submit" class="btn btn-secondary" formaction="/migracao-ponto/reprocessar-valores"
+        onclick="return confirm('Reaplicar valor do plano + colaboradores do JSON nas empresas migradas?');">
+        3) Reprocessar valores / funcionários
       </button>
     </div>
     <p class="form-hint" style="margin-top:12px">
       Depois, abra <a href="/leads-e-empresas">Empresas</a> e atualize (F5).
+      O botão 3 atualiza financeiro (serviço fechado) e quantidade de colaboradores a partir do export.
     </p>
   </form>
   {% else %}
@@ -86,9 +91,19 @@
 
 {% if result %}
 <div class="card" style="margin-top:20px;max-width:960px">
-  <h2>Resultado {% if result.apply %}(APPLY){% else %}(DRY-RUN){% endif %}</h2>
+  <h2>
+    Resultado
+    {% if result.action == 'reprocess_finance' %}(REPROCESSAR VALORES)
+    {% elif result.apply %}(APPLY)
+    {% else %}(DRY-RUN)
+    {% endif %}
+  </h2>
   <p>
     total={{ result.total }}
+    {% if result.action == 'reprocess_finance' %}
+    · ok={{ result.ok }}
+    · failed={{ result.failed }}
+    {% else %}
     · create={{ result.create }}
     · promote={{ result.promote or 0 }}
     · update={{ result.update }}
@@ -97,6 +112,7 @@
     {% if result.apply %}
     · ok={{ result.ok }}
     · failed={{ result.failed }}
+    {% endif %}
     {% endif %}
   </p>
   <div class="table-wrap">
@@ -119,7 +135,7 @@
           <td>{{ row.empresa }}</td>
           <td>{{ row.cnpj }}</td>
           <td>{{ row.sheet_row or "—" }}</td>
-          <td>{{ row.message or row.pagamento_status or "" }}</td>
+          <td>{{ row.message or row.pagamento_status or "" }}{% if row.valor %} · {{ row.valor }}{% endif %}{% if row.colaboradores %} · {{ row.colaboradores }}{% endif %}</td>
         </tr>
         {% endfor %}
       </tbody>

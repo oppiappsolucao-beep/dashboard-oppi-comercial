@@ -28,6 +28,52 @@
     </div>
   </section>
 
+  {% if oppi_ponto is defined %}
+  <section class="client-edit-section panel" id="oppi-ponto-access">
+    <div class="client-edit-section-head">
+      <span class="client-edit-section-icon">🔐</span>
+      <div>
+        <h2>Acesso Oppi Ponto</h2>
+        <p>
+          {% if oppi_ponto.configured %}
+            {% if oppi_ponto.company_id %}
+              Vinculado ao Ponto #{{ oppi_ponto.company_id }}{% if oppi_ponto.bloqueado %} · bloqueado{% endif %}.
+            {% else %}
+              Ainda sem vínculo. Use “Liberar acesso” para criar/vincular no Ponto.
+            {% endif %}
+          {% else %}
+            Configure OPPI_PONTO_API_URL e OPPI_PONTO_CRM_API_KEY no EasyPanel do CRM.
+          {% endif %}
+        </p>
+      </div>
+    </div>
+    {% if oppi_ponto.configured %}
+    <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
+      <button type="submit" form="oppi-ponto-form" name="action" value="onboard" class="btn btn-secondary"
+        onclick="return confirm('Criar ou vincular esta empresa no Oppi Ponto?');">
+        Liberar acesso / sincronizar
+      </button>
+      <button type="submit" form="oppi-ponto-form" name="action" value="bloquear" class="btn btn-secondary"
+        onclick="return confirm('Bloquear acesso desta empresa no Oppi Ponto?');">
+        Bloquear
+      </button>
+      <button type="submit" form="oppi-ponto-form" name="action" value="desbloquear" class="btn btn-secondary"
+        onclick="return confirm('Desbloquear acesso no Oppi Ponto?');">
+        Desbloquear
+      </button>
+      <div class="form-group" style="min-width:220px;margin:0">
+        <label>Motivo da liberação de pagamento</label>
+        <input type="text" form="oppi-ponto-form" name="motivo" value="Pagamento confirmado no CRM" placeholder="Motivo">
+      </div>
+      <button type="submit" form="oppi-ponto-form" name="action" value="liberar_pagamento" class="btn"
+        onclick="return confirm('Marcar pagamento como pago e liberar acesso (inclui filiais)?');">
+        Liberar pagamento
+      </button>
+    </div>
+    {% endif %}
+  </section>
+  {% endif %}
+
   {% include "partials/registration_closed_services.html" %}
 
   <section class="client-edit-section panel" id="payment-history-section">

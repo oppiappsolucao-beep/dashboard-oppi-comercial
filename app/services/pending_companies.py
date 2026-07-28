@@ -187,6 +187,9 @@ def _pending_row_dict(item: dict) -> dict:
         "Sócio 1": normalize_text(payload.get("socio_1")),
         "Observações": normalize_text(payload.get("observacoes")),
         "Data do chamado": created_date.strftime("%d/%m/%Y"),
+        "Serviços fechados": normalize_text(payload.get("servico")),
+        "Valor do serviço": normalize_text(payload.get("valor_proposta")),
+        "Colaboradores": normalize_text(payload.get("colaboradores")),
         "_pending_local": True,
         "_cadastro_tipo": normalize_text(payload.get("cadastro_tipo")).lower() or "lead",
     }

@@ -231,6 +231,34 @@ def list_pending_companies(status: str = "pending") -> list[dict]:
     return items
 
 
+def update_pending_company_payload(pending_id: int, payload: dict, *, row_values: list[str] | None = None) -> None:
+    init_crm_local_db()
+    with _lock, _connect() as conn:
+        if row_values is None:
+            conn.execute(
+                """
+                UPDATE pending_companies
+                SET payload_json = ?
+                WHERE id = ?
+                """,
+                (json.dumps(payload, ensure_ascii=False, default=str), int(pending_id)),
+            )
+        else:
+            conn.execute(
+                """
+                UPDATE pending_companies
+                SET payload_json = ?, row_values_json = ?
+                WHERE id = ?
+                """,
+                (
+                    json.dumps(payload, ensure_ascii=False, default=str),
+                    json.dumps(row_values, ensure_ascii=False, default=str),
+                    int(pending_id),
+                ),
+            )
+        conn.commit()
+
+
 def mark_pending_company_synced(pending_id: int, sheet_row: int) -> None:
     init_crm_local_db()
     with _lock, _connect() as conn:

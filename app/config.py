@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-APP_BUILD = os.getenv("APP_BUILD", "20260727-search-narrow-v80").strip() or "20260727-search-narrow-v80"
+APP_BUILD = os.getenv("APP_BUILD", "20260728-oppi-ponto-bridge-v81").strip() or "20260728-oppi-ponto-bridge-v81"
 
 
 class Settings:
@@ -23,6 +23,8 @@ class Settings:
     evolution_webhook_token: str = ""
     ai_attendance_prompt: str = ""
     ai_attendance_enabled: bool = False
+    oppi_ponto_api_url: str = "https://ponto.oppitech.com.br"
+    oppi_ponto_crm_api_key: str = ""
 
     app_username: str
     app_password: str
@@ -75,6 +77,8 @@ class Settings:
         self.ai_attendance_enabled = os.getenv("AI_ATTENDANCE_ENABLED", "").strip().lower() in {
             "1", "true", "sim", "yes", "on",
         }
+        self.oppi_ponto_api_url = os.getenv("OPPI_PONTO_API_URL", "https://ponto.oppitech.com.br").strip().rstrip("/")
+        self.oppi_ponto_crm_api_key = os.getenv("OPPI_PONTO_CRM_API_KEY", "").strip()
 
     @property
     def evolution_configured(self) -> bool:

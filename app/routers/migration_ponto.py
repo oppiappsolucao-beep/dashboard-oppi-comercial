@@ -128,3 +128,46 @@ def migration_run(
             "error": error,
         },
     )
+
+
+@router.post("/reprocessar-valores", response_class=HTMLResponse)
+def migration_reprocess_finance(
+    request: Request,
+    filename: str = Form(...),
+):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+    if not is_admin(request):
+        return RedirectResponse("/visao-geral", status_code=303)
+
+    files = _json_candidates()
+    storage = get_storage_dir()
+    target = storage / Path(filename).name
+    error = None
+    result = None
+    audit = None
+
+    try:
+        if not target.exists():
+            raise FileNotFoundError(f"Arquivo não encontrado: {target.name}")
+        payload = _load_payload(target)
+        from app.services.ponto_migration import build_migration_audit, reprocess_finance_from_export
+
+        result = reprocess_finance_from_export(payload)
+        audit = result.get("audit") or build_migration_audit(payload)
+    except Exception as exc:
+        error = str(exc)
+
+    return render(
+        request,
+        "migration_ponto.html",
+        {
+            "active_page": "settings",
+            "files": [{"name": p.name, "path": str(p), "size": p.stat().st_size} for p in files],
+            "default_file": target.name if target.exists() else (files[0].name if files else DEFAULT_JSON_NAME),
+            "result": result,
+            "audit": audit,
+            "error": error,
+        },
+    )
