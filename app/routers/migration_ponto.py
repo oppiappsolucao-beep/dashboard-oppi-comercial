@@ -85,9 +85,17 @@ def migration_run(
         payload = _load_payload(target)
         from app.services.ponto_migration import migrate_companies
 
-        result = migrate_companies(payload, apply=(str(apply) == "1"))
+        result = migrate_companies(payload, apply=(str(apply) == "1"), local_only=True)
     except Exception as exc:
-        error = str(exc)
+        message = str(exc)
+        if "429" in message or "Quota exceeded" in message:
+            error = (
+                "A cota da Google Sheets estourou (muitas leituras por minuto). "
+                "Aguarde 2 minutos e clique em Aplicar de novo — a migração agora grava local "
+                "e não depende da planilha na hora."
+            )
+        else:
+            error = message
 
     return render(
         request,

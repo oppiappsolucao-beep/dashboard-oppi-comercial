@@ -174,43 +174,87 @@ def map_access_fields(company: dict) -> dict:
     }
 
 
-def find_sheet_row_by_cnpj(cnpj: str) -> int | None:
-    from app.dependencies import get_prepared_data
+def _local_lead_actions() -> dict[str, dict]:
+    """Lê lead_actions só do disco/SQLite — sem Google Sheets."""
+    import json
 
+    from app.services.storage_paths import get_storage_dir
+
+    merged: dict[str, dict] = {}
+    path = get_storage_dir() / "lead_actions.json"
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+        bucket = raw.get(DEFAULT_TENANT_ID) if isinstance(raw, dict) else {}
+        if isinstance(bucket, dict):
+            for key, value in bucket.items():
+                if isinstance(value, dict):
+                    merged[str(key)] = value
+    except Exception:
+        pass
+
+    try:
+        from app.services.crm_local_db import load_lead_actions_store
+
+        db_store = load_lead_actions_store() or {}
+        bucket = db_store.get(DEFAULT_TENANT_ID) if isinstance(db_store, dict) else {}
+        if isinstance(bucket, dict):
+            for key, value in bucket.items():
+                if isinstance(value, dict):
+                    merged[str(key)] = value
+    except Exception:
+        pass
+    return merged
+
+
+def _cnpj_index_from_snapshot() -> dict[str, int]:
+    """Índice CNPJ → sheet_row a partir do snapshot local (sem API)."""
+    try:
+        from app.services.legacy_core import (
+            get_last_good_sheet_values,
+            hydrate_sheet_cache_from_disk,
+            _load_folha1_snapshot_values,
+        )
+
+        hydrate_sheet_cache_from_disk()
+        values = get_last_good_sheet_values() or _load_folha1_snapshot_values()
+    except Exception:
+        values = None
+    if not values or len(values) < 2:
+        return {}
+
+    headers = [normalize_text(h).lower() for h in values[0]]
+    try:
+        cnpj_idx = headers.index("cnpj")
+    except ValueError:
+        return {}
+
+    index: dict[str, int] = {}
+    for offset, row in enumerate(values[1:], start=2):
+        if cnpj_idx >= len(row):
+            continue
+        digits = normalize_cnpj_for_duplicate(row[cnpj_idx])
+        if digits:
+            index[digits] = offset
+    return index
+
+
+def find_sheet_row_by_cnpj(cnpj: str) -> int | None:
     digits = normalize_cnpj_for_duplicate(cnpj)
     if not digits:
         return None
-
-    df, columns = get_prepared_data()
-    if df.empty:
-        return None
-
-    cnpj_col = columns.get("cnpj")
-    if not cnpj_col or cnpj_col not in df.columns:
-        return None
-
-    for _, row in df.iterrows():
-        existing = normalize_cnpj_for_duplicate(row.get(cnpj_col, ""))
-        if existing == digits:
-            sheet_row = int(row.get("_sheet_row") or 0)
-            return sheet_row or None
-    return None
+    return _cnpj_index_from_snapshot().get(digits)
 
 
 def find_sheet_row_by_ponto_id(company_id: int) -> int | None:
-    from app.services.lead_actions_storage import get_all_lead_actions
-
     if not company_id:
         return None
-    actions = get_all_lead_actions(DEFAULT_TENANT_ID) or {}
-    for sheet_row_key, record in actions.items():
-        if not isinstance(record, dict):
+    for sheet_row_key, record in _local_lead_actions().items():
+        if int(record.get("oppi_ponto_company_id") or 0) != int(company_id):
             continue
-        if int(record.get("oppi_ponto_company_id") or 0) == int(company_id):
-            try:
-                return int(sheet_row_key)
-            except (TypeError, ValueError):
-                continue
+        try:
+            return int(sheet_row_key)
+        except (TypeError, ValueError):
+            continue
     return None
 
 
@@ -223,7 +267,7 @@ def preview_company(company: dict) -> dict:
 
     if not cnpj:
         action = "skip_missing_cnpj"
-    elif existing:
+    elif existing and existing > 0:
         action = "update"
     else:
         action = "create"
@@ -239,34 +283,11 @@ def preview_company(company: dict) -> dict:
     }
 
 
-def apply_company(company: dict) -> dict:
-    """Grava no CRM como empresa. Retorna resultado da operação."""
-    preview = preview_company(company)
-    action = preview["action"]
-    if action == "skip_missing_cnpj":
-        return {**preview, "ok": False, "message": "CNPJ inválido ou ausente — não migrado."}
-
-    form = map_ponto_company_to_form(company)
+def _persist_extras(sheet_row: int, company: dict, *, ativo_crm: bool) -> None:
     closed = map_closed_services(company)
     payments = map_payment_history(company)
     access = map_access_fields(company)
     ponto_id = int(company.get("oppi_ponto_company_id") or 0)
-    ativo_crm = bool(company.get("ativo")) and not bool(company.get("bloqueado_plataforma"))
-
-    try:
-        if action == "update":
-            sheet_row = int(preview["sheet_row"])
-            save_company_edit(sheet_row, form)
-        else:
-            sheet_row = save_new_company(form)
-    except DuplicateRegistrationError as err:
-        # Corrida / telefone duplicado: tenta achar por CNPJ de novo
-        sheet_row = find_sheet_row_by_cnpj(form.get("cnpj", ""))
-        if not sheet_row:
-            return {**preview, "ok": False, "message": str(err)}
-        save_company_edit(sheet_row, form)
-        action = "update"
-
     save_cadastro_tipo(DEFAULT_TENANT_ID, sheet_row, "empresa")
     save_cadastro_ativo(DEFAULT_TENANT_ID, sheet_row, ativo_crm)
     save_closed_services(DEFAULT_TENANT_ID, sheet_row, closed)
@@ -282,6 +303,61 @@ def apply_company(company: dict) -> dict:
         },
     )
 
+
+def apply_company(company: dict, *, local_only: bool = True) -> dict:
+    """Grava no CRM como empresa.
+
+    local_only=True (padrão na migração): enfileira local sem bater na cota Google Sheets.
+    As empresas aparecem em Empresas imediatamente e sincronizam depois.
+    """
+    preview = preview_company(company)
+    action = preview["action"]
+    if action == "skip_missing_cnpj":
+        return {**preview, "ok": False, "message": "CNPJ inválido ou ausente — não migrado."}
+
+    form = map_ponto_company_to_form(company)
+    ativo_crm = bool(company.get("ativo")) and not bool(company.get("bloqueado_plataforma"))
+
+    if local_only or action == "create":
+        try:
+            from app.services.pending_companies import enqueue_payload_locally
+
+            sheet_row = enqueue_payload_locally(form, last_error="Migração Oppi Ponto (local)")
+            _persist_extras(sheet_row, company, ativo_crm=ativo_crm)
+            return {
+                **preview,
+                "action": "create",
+                "sheet_row": sheet_row,
+                "ok": True,
+                "message": f"Empresa enfileirada localmente (id {sheet_row}). Aparece em Empresas agora.",
+            }
+        except Exception as err:
+            return {**preview, "ok": False, "message": f"Falha local: {err}"}
+
+    # Caminho legado (update na planilha) — só se explicitamente local_only=False
+    try:
+        if action == "update":
+            sheet_row = int(preview["sheet_row"])
+            save_company_edit(sheet_row, form)
+        else:
+            sheet_row = save_new_company(form)
+    except DuplicateRegistrationError as err:
+        sheet_row = find_sheet_row_by_cnpj(form.get("cnpj", ""))
+        if not sheet_row:
+            return {**preview, "ok": False, "message": str(err)}
+        try:
+            save_company_edit(sheet_row, form)
+        except Exception as edit_err:
+            if "429" in str(edit_err) or "Quota" in str(edit_err):
+                return {**preview, "ok": False, "message": "Cota Google Sheets esgotada. Aguarde 2 minutos e tente de novo."}
+            return {**preview, "ok": False, "message": str(edit_err)}
+        action = "update"
+    except Exception as err:
+        if "429" in str(err) or "Quota" in str(err):
+            return {**preview, "ok": False, "message": "Cota Google Sheets esgotada. Aguarde 2 minutos e tente de novo."}
+        return {**preview, "ok": False, "message": str(err)}
+
+    _persist_extras(sheet_row, company, ativo_crm=ativo_crm)
     return {
         **preview,
         "action": action,
@@ -291,7 +367,7 @@ def apply_company(company: dict) -> dict:
     }
 
 
-def migrate_companies(payload: dict | list, *, apply: bool = False) -> dict:
+def migrate_companies(payload: dict | list, *, apply: bool = False, local_only: bool = True) -> dict:
     if isinstance(payload, dict):
         companies = payload.get("companies") or []
     else:
@@ -304,12 +380,13 @@ def migrate_companies(payload: dict | list, *, apply: bool = False) -> dict:
         if not isinstance(item, dict):
             continue
         if apply:
-            results.append(apply_company(item))
+            results.append(apply_company(item, local_only=local_only))
         else:
             results.append(preview_company(item))
 
     summary = {
         "apply": apply,
+        "local_only": local_only if apply else None,
         "total": len(results),
         "create": sum(1 for r in results if r.get("action") == "create"),
         "update": sum(1 for r in results if r.get("action") == "update"),

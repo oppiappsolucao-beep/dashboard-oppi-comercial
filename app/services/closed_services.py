@@ -140,7 +140,8 @@ def closed_services_sheet_values(items: list[dict]) -> dict[str, str]:
 
 def sync_closed_services_to_sheet(sheet_row: int, tenant_id: str | None, items: list[dict]) -> None:
     """Espelha serviços fechados nas colunas dedicadas da planilha."""
-    if not sheet_row:
+    if not sheet_row or int(sheet_row) < 0:
+        # Pendente local / migração — não consome cota Google.
         return
 
     from app.services.legacy_core import update_company_commercial_fields
@@ -149,7 +150,13 @@ def sync_closed_services_to_sheet(sheet_row: int, tenant_id: str | None, items: 
     if not mirror["servico"] and not mirror["valor_proposta"]:
         return
 
-    update_company_commercial_fields(sheet_row, mirror)
+    try:
+        update_company_commercial_fields(sheet_row, mirror)
+    except Exception as error:
+        message = str(error)
+        if "429" in message or "Quota exceeded" in message:
+            return
+        raise
 
 
 def save_closed_services(

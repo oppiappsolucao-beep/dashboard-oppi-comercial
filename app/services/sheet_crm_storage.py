@@ -31,8 +31,30 @@ CRM_STORAGE_TABS = {
 def _open_spreadsheet():
     if not settings.sheets_configured:
         return None
-    client = get_gsheet_client()
-    return client.open_by_key(settings.sheet_id)
+    try:
+        client = get_gsheet_client()
+        return client.open_by_key(settings.sheet_id)
+    except Exception:
+        return None
+
+
+def get_worksheet(tab_name: str):
+    try:
+        spreadsheet = _open_spreadsheet()
+    except Exception:
+        return None
+    if spreadsheet is None:
+        return None
+    try:
+        return spreadsheet.worksheet(tab_name)
+    except WorksheetNotFound:
+        try:
+            ensure_crm_storage_tabs()
+            return spreadsheet.worksheet(tab_name)
+        except Exception:
+            return None
+    except Exception:
+        return None
 
 
 def ensure_crm_storage_tabs(force: bool = False) -> dict[str, bool]:
@@ -65,22 +87,6 @@ def ensure_crm_storage_tabs(force: bool = False) -> dict[str, bool]:
             result[tab_name] = False
     mark_tabs_ensured()
     return result
-
-
-def get_worksheet(tab_name: str):
-    spreadsheet = _open_spreadsheet()
-    if spreadsheet is None:
-        return None
-    try:
-        return spreadsheet.worksheet(tab_name)
-    except WorksheetNotFound:
-        ensure_crm_storage_tabs()
-        try:
-            return spreadsheet.worksheet(tab_name)
-        except Exception:
-            return None
-    except Exception:
-        return None
 
 
 def header_indexes(headers_row: list[str], expected: list[str]) -> dict[str, int] | None:

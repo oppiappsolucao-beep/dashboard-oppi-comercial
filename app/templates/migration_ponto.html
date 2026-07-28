@@ -11,6 +11,13 @@
 <div class="alert alert-error">{{ error }}</div>
 {% endif %}
 
+<div class="card" style="max-width:720px;margin-bottom:16px">
+  <p class="form-hint" style="margin:0">
+    Se aparecer erro 429 (cota Google), aguarde 2 minutos e use só o botão
+    <strong>Aplicar migração</strong>. A gravação fica local e as empresas aparecem na lista na hora;
+    a planilha sincroniza depois.
+  </p>
+</div>
 <div class="card" style="max-width:720px">
   <h2>Arquivo JSON</h2>
   {% if files %}
@@ -29,10 +36,13 @@
     <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:16px">
       <button type="submit" name="apply" value="0" class="btn btn-outline">1) Simular (dry-run)</button>
       <button type="submit" name="apply" value="1" class="btn"
-        onclick="return confirm('Gravar as empresas no CRM agora?');">
+        onclick="return confirm('Gravar as 20 empresas no CRM agora (modo local, sem Google Sheets na hora)?');">
         2) Aplicar migração
       </button>
     </div>
+    <p class="form-hint" style="margin-top:12px">
+      Depois de aplicar, abra <a href="/leads-e-empresas">Empresas</a> e atualize a página (F5).
+    </p>
   </form>
   {% else %}
   <p class="form-hint">

@@ -74,6 +74,7 @@ def queue_company_registration(
     headers: list[str],
     row_values: list[str],
     last_error: str = "",
+    backup_to_sheet: bool = True,
 ) -> int:
     remember_sheet_headers(headers)
     empresa = normalize_text(payload.get("empresa"))
@@ -84,8 +85,68 @@ def queue_company_registration(
         row_values=row_values,
         last_error=last_error,
     )
-    _append_pending_to_sheet_tab(pending_id, empresa, payload, headers, row_values)
+    if backup_to_sheet:
+        _append_pending_to_sheet_tab(pending_id, empresa, payload, headers, row_values)
     return -int(pending_id)
+
+
+def enqueue_payload_locally(payload: dict, *, last_error: str = "Migração local (quota Sheets)") -> int:
+    """Enfileira cadastro só no SQLite/local — sem ler/gravar Google Sheets."""
+    from app.services.legacy_core import (
+        get_last_good_sheet_values,
+        hydrate_sheet_cache_from_disk,
+        _set_sheet_value_by_header,
+        _apply_address_fields,
+        _apply_commercial_fields,
+    )
+
+    hydrate_sheet_cache_from_disk()
+    headers = resolve_registration_headers(get_last_good_sheet_values())
+    if not headers:
+        headers = [
+            "Nome Empresas", "CNPJ", "Data de abertura", "Capital",
+            "Endereço", "Número", "Complemento", "CEP", "Bairro", "Município", "UF",
+            "Email", "Site empresa",
+            "Celular WhatsApp", "Telefone fixo", "Telefone lemitt",
+            "Sócio 1", "CPF", "E-mail Sócio 1", "Telefone",
+            "Sócio 2", "Telefone sócio 2", "CPF_2",
+            "Sócio 3", "Telefone sócio 3", "CPF_3",
+            "Instagram", "Linkedin", "Vendedor",
+            "Status WhatsApp", "Data do chamado", "Última atualização", "Observações",
+            "Serviços fechados", "Valor do serviço", "Colaboradores",
+        ]
+        remember_sheet_headers(headers)
+
+    row_values = [""] * len(headers)
+    _set_sheet_value_by_header(row_values, headers, ["Nome Empresas", "Nome da empresa", "Empresa", "Nome Empresa", "Nome empresas", "Nome Empresa(s)"], payload.get("empresa"))
+    _set_sheet_value_by_header(row_values, headers, ["Data de abertura", "Data abertura"], payload.get("data_abertura"))
+    _set_sheet_value_by_header(row_values, headers, ["Capital", "Capital social"], payload.get("capital"))
+    _set_sheet_value_by_header(row_values, headers, ["CNPJ"], payload.get("cnpj"))
+    _apply_address_fields(row_values, headers, payload)
+    _set_sheet_value_by_header(row_values, headers, ["Email", "E-mail"], payload.get("email_empresa"))
+    _set_sheet_value_by_header(row_values, headers, ["Site empresa", "Site", "Website"], payload.get("site"))
+    _set_sheet_value_by_header(row_values, headers, ["Celular WhatsApp", "Telefone (b2b)", "Telefone b2b"], payload.get("telefone_b2b"))
+    _set_sheet_value_by_header(row_values, headers, ["Telefone fixo", "Fixo"], payload.get("telefone_fixo"))
+    _set_sheet_value_by_header(row_values, headers, ["Telefone lemitt", "Telefone alternativo", "Outro telefone"], payload.get("telefone_alternativo"))
+    _set_sheet_value_by_header(row_values, headers, ["Sócio 1", "Socio 1", "Sócio1", "Socio1"], payload.get("socio_1"))
+    _set_sheet_value_by_header(row_values, headers, ["CPF"], payload.get("cpf_socio_1"), occurrence=1)
+    _set_sheet_value_by_header(row_values, headers, ["E-mail Sócio 1", "Email Sócio 1", "E-mail Socio 1", "Email Socio 1"], payload.get("email_socio_1"))
+    _set_sheet_value_by_header(row_values, headers, ["Telefone"], payload.get("telefone_socio_1"), occurrence=1)
+    _set_sheet_value_by_header(row_values, headers, ["Vendedor", "Responsável", "Responsavel"], payload.get("vendedor"))
+    _set_sheet_value_by_header(row_values, headers, ["Status WhatsApp", "Status", "Etapa"], payload.get("status"))
+    _set_sheet_value_by_header(row_values, headers, ["Data do chamado", "Data chamado"], payload.get("data_chamado"))
+    _set_sheet_value_by_header(row_values, headers, ["Última atualização", "Ultima atualização", "Ultima atualizacao"], payload.get("ultima_atualizacao"))
+    _set_sheet_value_by_header(row_values, headers, ["Observações", "Observacoes", "Observação", "Observacao"], payload.get("observacoes"))
+    _apply_commercial_fields(row_values, headers, payload)
+    _set_sheet_value_by_header(row_values, headers, ["Colaboradores", "Qtd colaboradores"], payload.get("colaboradores"))
+
+    return queue_company_registration(
+        payload=payload,
+        headers=headers,
+        row_values=row_values,
+        last_error=last_error,
+        backup_to_sheet=False,
+    )
 
 
 def _pending_row_dict(item: dict) -> dict:
