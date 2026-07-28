@@ -122,6 +122,7 @@ def page_context(
     error: str = "",
     light: bool = False,
     soft: bool = False,
+    request=None,
 ) -> dict:
     # Manutenção pesada só na carga completa — e em background (não trava troca de aba)
     if not light:
@@ -286,7 +287,7 @@ def page_context(
         "quick_replies": quick_replies,
         "is_admin": (session_user or {}).get("role") == "Administrador",
         "can_delete_conversation": can_delete_attendance_conversation(
-            session_user
+            session_user, request=request
         ),
     }
 

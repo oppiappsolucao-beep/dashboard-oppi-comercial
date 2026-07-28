@@ -55,10 +55,13 @@
               hx-swap="innerHTML">Finalizar</button>
       {% endif %}
       {% if can_delete_conversation %}
-      <button type="button" class="btn att-btn-danger att-delete-conv-btn"
-              data-delete-url="/atendimentos/conversa/{{ selected.id }}/excluir">
-        Excluir conversa
-      </button>
+      <form method="post"
+            action="/atendimentos/conversa/{{ selected.id }}/excluir"
+            class="att-delete-form"
+            onsubmit="return confirm('Excluir esta conversa do Atendimentos?\n\nO cadastro no CRM NÃO será apagado.');">
+        <input type="hidden" name="line" value="{{ line_filter }}">
+        <button type="submit" class="btn att-btn-danger att-delete-conv-btn">Excluir conversa</button>
+      </form>
       {% endif %}
     </div>
   </form>

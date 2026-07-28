@@ -10,7 +10,7 @@ import uuid
 from pathlib import Path
 
 from fastapi import APIRouter, File, Form, Request, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 
 from app.dependencies import get_session_user, require_auth
 from app.services import attendances as attendances_service
@@ -83,6 +83,7 @@ def _page_ctx(
         error=error,
         light=light,
         soft=soft,
+        request=request,
     )
 
 
@@ -169,7 +170,20 @@ async def attendances_start_call(
 @router.get("/atendimentos", response_class=HTMLResponse)
 def attendances_page(request: Request):
     require_auth(request)
-    return render(request, "attendances/index.html", _page_ctx(request))
+    flash = ""
+    error = ""
+    if request.query_params.get("deleted") == "1":
+        flash = "Conversa excluída do atendimento. O cadastro no CRM foi mantido."
+    err = normalize_text(request.query_params.get("error") or "")
+    if err == "sem_permissao":
+        error = "Apenas o administrador pode excluir conversas."
+    elif err == "nao_encontrada":
+        error = "Conversa não encontrada ou já excluída."
+    return render(
+        request,
+        "attendances/index.html",
+        _page_ctx(request, flash=flash, error=error),
+    )
 
 
 @router.post("/atendimentos/filtros", response_class=HTMLResponse)
@@ -445,26 +459,56 @@ def attendances_finalize(request: Request, conversation_id: str):
 
 
 @router.post("/atendimentos/conversa/{conversation_id}/excluir", response_class=HTMLResponse)
-def attendances_delete(request: Request, conversation_id: str):
-    require_auth(request)
+async def attendances_delete(request: Request, conversation_id: str):
+    auth = require_auth(request)
+    if isinstance(auth, RedirectResponse):
+        return auth
     session_user = get_session_user(request)
+    form = {}
+    try:
+        form = dict(await request.form())
+    except Exception:
+        form = {}
+    line = normalize_text(
+        form.get("line") or request.query_params.get("line", "")
+    )
+    is_htmx = (request.headers.get("HX-Request") or "").lower() == "true"
+
     if not attendances_service.can_delete_attendance_conversation(
         session_user, request=request
     ):
-        return HTMLResponse(
-            "<div class='att-error'>Apenas o administrador pode excluir conversas.</div>",
-            status_code=403,
-        )
+        if is_htmx:
+            return HTMLResponse(
+                "<div class='att-error'>Apenas o administrador pode excluir conversas.</div>",
+                status_code=403,
+            )
+        from urllib.parse import urlencode
 
-    # Soft-delete: some da lista e o sync não recria
+        qs = urlencode({"line": line, "error": "sem_permissao"})
+        return RedirectResponse(url=f"/atendimentos?{qs}", status_code=303)
+
     ok = attendances_service.delete_conversation(conversation_id)
     if not ok:
-        return HTMLResponse(
-            "<div class='att-error'>Conversa não encontrada ou já excluída.</div>",
-            status_code=404,
-        )
+        if is_htmx:
+            return HTMLResponse(
+                "<div class='att-error'>Conversa não encontrada ou já excluída.</div>",
+                status_code=404,
+            )
+        from urllib.parse import urlencode
+
+        qs = urlencode({"line": line, "error": "nao_encontrada"})
+        return RedirectResponse(url=f"/atendimentos?{qs}", status_code=303)
+
+    # Form nativo (sem JS): recarrega a página sem a conversa
+    if not is_htmx:
+        from urllib.parse import urlencode
+
+        qs = urlencode({"line": line, "deleted": "1"})
+        return RedirectResponse(url=f"/atendimentos?{qs}", status_code=303)
+
     ctx = _page_ctx(
         request,
+        form={"line": line} if line else None,
         selected_id="",
         flash="Conversa excluída do atendimento. O cadastro no CRM foi mantido.",
         light=True,

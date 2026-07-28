@@ -345,69 +345,6 @@
     refreshList({ clearSelection: true });
   });
 
-  // Excluir conversa: confirm + fetch (não depende do HTMX ajax)
-  document.body.addEventListener("click", function (ev) {
-    var btn = ev.target && ev.target.closest ? ev.target.closest(".att-delete-conv-btn") : null;
-    if (!btn) return;
-    ev.preventDefault();
-    ev.stopPropagation();
-    var url = btn.getAttribute("data-delete-url") || "";
-    if (!url) return;
-    if (
-      !window.confirm(
-        "Excluir esta conversa do Atendimentos?\n\nRemove só o chat e as mensagens.\nO cadastro no CRM NÃO será apagado."
-      )
-    ) {
-      return;
-    }
-    btn.disabled = true;
-    fetch(url, {
-      method: "POST",
-      credentials: "same-origin",
-      headers: {
-        "HX-Request": "true",
-        Accept: "text/html",
-      },
-      cache: "no-store",
-    })
-      .then(function (r) {
-        return r.text().then(function (html) {
-          return { ok: r.ok, status: r.status, html: html };
-        });
-      })
-      .then(function (res) {
-        var root = $("#att-chat-root");
-        if (root && res.html) {
-          root.innerHTML = res.html;
-          if (window.htmx && window.htmx.process) {
-            window.htmx.process(root);
-          }
-        }
-        var shell = $("#att-shell");
-        if (shell) {
-          shell.setAttribute("data-selected", "");
-          shell.classList.remove("att-shell--chat-open");
-        }
-        try {
-          var u = new URL(window.location.href);
-          u.searchParams.delete("c");
-          window.history.replaceState({}, "", u.toString());
-        } catch (e) {}
-        lastInboxToken = "";
-        lastConversationToken = "";
-        refreshList({ clearSelection: true });
-        if (!res.ok || (res.html && res.html.indexOf("att-error") !== -1)) {
-          var msg = "Não foi possível excluir a conversa.";
-          if (res.status === 403) msg = "Sem permissão para excluir (apenas Administrador).";
-          window.alert(msg);
-        }
-      })
-      .catch(function () {
-        window.alert("Falha de rede ao excluir a conversa. Tente de novo.");
-        btn.disabled = false;
-      });
-  });
-
   document.body.addEventListener("htmx:afterRequest", function (ev) {
     var path = (ev.detail && ev.detail.pathInfo && ev.detail.pathInfo.requestPath) || "";
     if (path.indexOf("/atendimentos/conversa/") === -1) return;

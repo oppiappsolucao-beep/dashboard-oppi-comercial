@@ -21,12 +21,13 @@
             aria-controls="att-crm-panel"
             title="CRM e ações">CRM</button>
     {% if can_delete_conversation %}
-    <button type="button"
-            class="btn att-btn-danger att-delete-conv-btn"
-            title="Excluir conversa do atendimento (CRM permanece)"
-            data-delete-url="/atendimentos/conversa/{{ selected.id }}/excluir">
-      Excluir
-    </button>
+    <form method="post"
+          action="/atendimentos/conversa/{{ selected.id }}/excluir"
+          class="att-delete-form"
+          onsubmit="return confirm('Excluir esta conversa do Atendimentos?\n\nRemove só o chat.\nO cadastro no CRM NÃO será apagado.');">
+      <input type="hidden" name="line" value="{{ line_filter }}">
+      <button type="submit" class="btn att-btn-danger att-delete-conv-btn">Excluir</button>
+    </form>
     {% endif %}
   </header>
 

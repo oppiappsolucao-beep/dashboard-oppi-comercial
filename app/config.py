@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-APP_BUILD = os.getenv("APP_BUILD", "20260728-soft-delete-v101").strip() or "20260728-soft-delete-v101"
+APP_BUILD = os.getenv("APP_BUILD", "20260728-excluir-form-v102").strip() or "20260728-excluir-form-v102"
 
 class Settings:
     sheet_id: str = "1GAbrca0NSiJfPXaSte1qGxXCsGkQPacoRsm0PVB51gE"
