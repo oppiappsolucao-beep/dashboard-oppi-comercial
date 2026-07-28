@@ -6,8 +6,7 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-APP_BUILD = os.getenv("APP_BUILD", "20260728-force20-noperiod-v86").strip() or "20260728-force20-noperiod-v86"
-
+APP_BUILD = os.getenv("APP_BUILD", "20260728-audio-send-v87").strip() or "20260728-audio-send-v87"
 
 class Settings:
     sheet_id: str = "1GAbrca0NSiJfPXaSte1qGxXCsGkQPacoRsm0PVB51gE"

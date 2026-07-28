@@ -1138,33 +1138,76 @@ def send_whatsapp_audio(
     number = _pick_send_target(phone, jid)
     if not number:
         raise EvolutionClientError("Telefone/JID da conversa inválido para envio.")
-    audio = str(audio_base64 or "").strip()
-    if not audio:
+    raw = str(audio_base64 or "").strip()
+    if not raw:
         raise EvolutionClientError("Áudio vazio.")
-    # Evolution recomenda data URI para converter/reproduzir corretamente no WhatsApp
-    if not audio.startswith("data:"):
-        mime = (mimetype or "audio/ogg").split(";")[0].strip() or "audio/ogg"
-        audio = f"data:{mime};base64,{audio}"
+    mime = (mimetype or "audio/ogg").split(";")[0].strip() or "audio/ogg"
+    # Aceita data URI ou base64 puro
+    if raw.startswith("data:") and "," in raw:
+        header, b64 = raw.split(",", 1)
+        raw_b64 = b64.strip()
+        if ";base64" in header and ":" in header:
+            maybe_mime = header.split(":", 1)[1].split(";", 1)[0].strip()
+            if maybe_mime.startswith("audio/"):
+                mime = maybe_mime
+    else:
+        raw_b64 = raw
+    if not raw_b64:
+        raise EvolutionClientError("Áudio vazio.")
+
+    data_uri = f"data:{mime};base64,{raw_b64}"
+    # Ordem: formato que já funcionava → variantes de versões Evolution
+    payloads: list[dict[str, Any]] = [
+        {"number": number, "audio": raw_b64, "encoding": True},
+        {"number": number, "audio": raw_b64},
+        {"number": number, "audio": data_uri, "encoding": True},
+        {
+            "number": number,
+            "options": {"encoding": True},
+            "audioMessage": {"audio": raw_b64},
+        },
+        {
+            "number": number,
+            "options": {"encoding": True},
+            "audioMessage": {"audio": data_uri},
+        },
+    ]
+
     errors: list[str] = []
-    payload = {
-        "number": number,
-        "audio": audio,
-        "encoding": True,
-    }
-    for url in _instance_urls("/message/sendWhatsAppAudio"):
-        try:
-            response = requests.post(url, json=payload, headers=_headers(), timeout=90)
-        except requests.RequestException as error:
-            errors.append(str(error))
-            continue
-        data = _parse_json(response)
-        err = _response_looks_like_error(data)
-        if response.status_code >= 400 or err:
-            errors.append(err or response.text[:180])
-            continue
-        if extract_message_id(data):
-            return data
-        errors.append(f"sem ID: {str(data)[:160]}")
+    for payload in payloads:
+        for url in _instance_urls("/message/sendWhatsAppAudio"):
+            try:
+                response = requests.post(url, json=payload, headers=_headers(), timeout=90)
+            except requests.RequestException as error:
+                errors.append(str(error))
+                continue
+            data = _parse_json(response)
+            err = _response_looks_like_error(data)
+            if response.status_code >= 400 or err:
+                detail = err or response.text[:180] or f"HTTP {response.status_code}"
+                errors.append(detail)
+                continue
+            if extract_message_id(data):
+                return data
+            # Algumas versões devolvem 201/200 sem key.id — aceita se não parece erro
+            if response.status_code < 400 and data:
+                data.setdefault("_oppi_send_status", extract_message_status(data) or "UNKNOWN")
+                return data
+            errors.append(f"sem ID: {str(data)[:160]}")
+
+    # Fallback: sendMedia como áudio (não PTT, mas entrega)
+    try:
+        return send_media(
+            phone,
+            media_url=raw_b64,
+            media_type="audio",
+            filename="audio.ogg" if "ogg" in mime else "audio.webm",
+            mimetype=mime,
+            jid=jid,
+        )
+    except EvolutionClientError as media_error:
+        errors.append(str(media_error))
+
     raise EvolutionClientError(
-        "Falha ao enviar áudio via Evolution. " + (" | ".join(errors[-3:]) if errors else "")
+        "Falha ao enviar áudio via Evolution. " + (" | ".join(errors[-4:]) if errors else "")
     )
