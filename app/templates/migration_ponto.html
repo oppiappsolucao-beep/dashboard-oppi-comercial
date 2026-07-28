@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="page-header">
+  <div>
+    <div class="page-title">Migrar clientes do Oppi Ponto</div>
+    <div class="page-subtitle">Importa o JSON do Ponto como Empresa (não Lead): fechamento → financeiro → suporte.</div>
+  </div>
+</section>
+
+{% if error %}
+<div class="alert alert-error">{{ error }}</div>
+{% endif %}
+
+<div class="card" style="max-width:720px">
+  <h2>Arquivo JSON</h2>
+  {% if files %}
+  <form method="post" action="/migracao-ponto/executar">
+    <div class="form-group">
+      <label>Arquivo em storage</label>
+      <select name="filename">
+        {% for f in files %}
+        <option value="{{ f.name }}" {% if f.name == default_file %}selected{% endif %}>
+          {{ f.name }} ({{ f.size }} bytes)
+        </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:16px">
+      <button type="submit" name="apply" value="0" class="btn btn-outline">1) Simular (dry-run)</button>
+      <button type="submit" name="apply" value="1" class="btn"
+        onclick="return confirm('Gravar as empresas no CRM agora?');">
+        2) Aplicar migração
+      </button>
+    </div>
+  </form>
+  {% else %}
+  <p class="form-hint">
+    Nenhum JSON encontrado em storage. O arquivo
+    <code>oppi-ponto-crm-migration-2026-07-28.json</code> precisa estar em
+    <code>/app/storage</code>.
+  </p>
+  {% endif %}
+</div>
+
+{% if result %}
+<div class="card" style="margin-top:20px;max-width:960px">
+  <h2>Resultado {% if result.apply %}(APPLY){% else %}(DRY-RUN){% endif %}</h2>
+  <p>
+    total={{ result.total }}
+    · create={{ result.create }}
+    · update={{ result.update }}
+    · skip_cnpj={{ result.skip_missing_cnpj }}
+    {% if result.apply %}
+    · ok={{ result.ok }}
+    · failed={{ result.failed }}
+    {% endif %}
+  </p>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Ação</th>
+          <th>ID Ponto</th>
+          <th>Empresa</th>
+          <th>CNPJ</th>
+          <th>Linha</th>
+          <th>Msg</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in result.results %}
+        <tr>
+          <td>{{ row.action }}</td>
+          <td>{{ row.oppi_ponto_company_id }}</td>
+          <td>{{ row.empresa }}</td>
+          <td>{{ row.cnpj }}</td>
+          <td>{{ row.sheet_row or "—" }}</td>
+          <td>{{ row.message or row.pagamento_status or "" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

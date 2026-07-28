@@ -1,7 +1,7 @@
 """Serviços fechados por cadastro — persistidos em lead_actions e espelhados na planilha."""
 from __future__ import annotations
 
-from starlette.datastructures import FormData
+from typing import Any
 
 from app.services.lead_actions_storage import get_lead_action, save_lead_action
 from app.services.legacy_core import as_python_date, normalize_text, parse_date
@@ -92,7 +92,7 @@ def load_closed_services(
     return [_EMPTY_ITEM.copy()]
 
 
-def parse_closed_services_from_form(form: FormData) -> list[dict]:
+def parse_closed_services_from_form(form: Any) -> list[dict]:
     servicos = form.getlist("closed_servico")
     valores = form.getlist("closed_valor")
     pagamentos = form.getlist("closed_forma_pagamento")

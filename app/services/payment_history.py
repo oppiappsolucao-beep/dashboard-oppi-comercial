@@ -1,7 +1,7 @@
 """Histórico de pagamentos do cliente — persistido em lead_actions."""
 from __future__ import annotations
 
-from starlette.datastructures import FormData
+from typing import Any
 
 from app.services.lead_actions_storage import get_lead_action, save_lead_action
 from app.services.legacy_core import as_python_date, normalize_text, parse_date
@@ -65,7 +65,7 @@ def load_payment_history(tenant_id: str | None, sheet_row: int) -> list[dict]:
     return [item for item in items if _has_payment_data(item)]
 
 
-def parse_payment_history_from_form(form: FormData) -> list[dict]:
+def parse_payment_history_from_form(form: Any) -> list[dict]:
     datas = form.getlist("pay_data")
     descricoes = form.getlist("pay_descricao")
     valores = form.getlist("pay_valor")
