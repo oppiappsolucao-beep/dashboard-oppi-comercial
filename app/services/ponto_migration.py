@@ -367,6 +367,80 @@ def apply_company(company: dict, *, local_only: bool = True) -> dict:
     }
 
 
+def build_migration_audit(payload: dict | list) -> dict:
+    """Compara JSON do Ponto com o que já está no CRM (local/pendente/snapshot)."""
+    if isinstance(payload, dict):
+        companies = payload.get("companies") or []
+    else:
+        companies = payload
+    if not isinstance(companies, list):
+        raise ValueError("JSON inválido")
+
+    from app.services.pending_companies import list_pending_companies
+
+    pending = list_pending_companies("pending") or []
+    pending_cnpjs = set()
+    pending_ponto_ids = set()
+    for item in pending:
+        pl = item.get("payload") or {}
+        digits = normalize_cnpj_for_duplicate(pl.get("cnpj"))
+        if digits:
+            pending_cnpjs.add(digits)
+        obs = normalize_text(pl.get("observacoes"))
+        if "company_id=" in obs:
+            try:
+                pending_ponto_ids.add(int(obs.split("company_id=")[1].split(")")[0].split(".")[0].split()[0]))
+            except Exception:
+                pass
+
+    local_actions = _local_lead_actions()
+    migrated_ponto_ids = set()
+    for record in local_actions.values():
+        pid = int(record.get("oppi_ponto_company_id") or 0)
+        if pid:
+            migrated_ponto_ids.add(pid)
+
+    snapshot_cnpjs = set(_cnpj_index_from_snapshot().keys())
+
+    found = []
+    missing = []
+    for company in companies:
+        if not isinstance(company, dict):
+            continue
+        ponto_id = int(company.get("oppi_ponto_company_id") or 0)
+        cnpj = normalize_cnpj_for_duplicate(company.get("cnpj"))
+        nome = normalize_text(company.get("razao_social")) or normalize_text(company.get("nome"))
+        reasons = []
+        if ponto_id and ponto_id in migrated_ponto_ids:
+            reasons.append("lead_actions")
+        if ponto_id and ponto_id in pending_ponto_ids:
+            reasons.append("pending_obs")
+        if cnpj and cnpj in pending_cnpjs:
+            reasons.append("pending_cnpj")
+        if cnpj and cnpj in snapshot_cnpjs:
+            reasons.append("snapshot")
+        row = {
+            "oppi_ponto_company_id": ponto_id,
+            "empresa": nome,
+            "cnpj": cnpj,
+            "found": bool(reasons),
+            "where": reasons,
+        }
+        if reasons:
+            found.append(row)
+        else:
+            missing.append(row)
+
+    return {
+        "expected": len(companies),
+        "found_count": len(found),
+        "missing_count": len(missing),
+        "pending_count": len(pending),
+        "found": found,
+        "missing": missing,
+    }
+
+
 def migrate_companies(payload: dict | list, *, apply: bool = False, local_only: bool = True) -> dict:
     if isinstance(payload, dict):
         companies = payload.get("companies") or []
@@ -380,6 +454,42 @@ def migrate_companies(payload: dict | list, *, apply: bool = False, local_only: 
         if not isinstance(item, dict):
             continue
         if apply:
+            # Idempotente: se já migrado por ponto_id, não duplica pending.
+            ponto_id = int(item.get("oppi_ponto_company_id") or 0)
+            existing_id = find_sheet_row_by_ponto_id(ponto_id) if ponto_id else None
+            cnpj = normalize_cnpj_for_duplicate(item.get("cnpj"))
+            already_pending = False
+            if cnpj:
+                try:
+                    from app.services.pending_companies import list_pending_companies
+
+                    for pend in list_pending_companies("pending") or []:
+                        if normalize_cnpj_for_duplicate((pend.get("payload") or {}).get("cnpj")) == cnpj:
+                            already_pending = True
+                            existing_id = int(pend.get("local_sheet_row") or -pend["id"])
+                            break
+                except Exception:
+                    pass
+            if existing_id or already_pending:
+                sheet_row = int(existing_id or 0)
+                ativo_crm = bool(item.get("ativo")) and not bool(item.get("bloqueado_plataforma"))
+                try:
+                    if sheet_row:
+                        _persist_extras(sheet_row, item, ativo_crm=ativo_crm)
+                except Exception:
+                    pass
+                results.append(
+                    {
+                        "action": "skip_already",
+                        "oppi_ponto_company_id": ponto_id,
+                        "empresa": normalize_text(item.get("razao_social")) or normalize_text(item.get("nome")),
+                        "cnpj": cnpj,
+                        "sheet_row": sheet_row or None,
+                        "ok": True,
+                        "message": "Já existia — extras atualizados, sem duplicar.",
+                    }
+                )
+                continue
             results.append(apply_company(item, local_only=local_only))
         else:
             results.append(preview_company(item))
@@ -390,9 +500,11 @@ def migrate_companies(payload: dict | list, *, apply: bool = False, local_only: 
         "total": len(results),
         "create": sum(1 for r in results if r.get("action") == "create"),
         "update": sum(1 for r in results if r.get("action") == "update"),
+        "skip_already": sum(1 for r in results if r.get("action") == "skip_already"),
         "skip_missing_cnpj": sum(1 for r in results if r.get("action") == "skip_missing_cnpj"),
         "ok": sum(1 for r in results if r.get("ok")) if apply else None,
         "failed": sum(1 for r in results if apply and not r.get("ok")),
         "results": results,
+        "audit": build_migration_audit(payload) if apply else None,
     }
     return summary

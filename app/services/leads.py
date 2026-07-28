@@ -255,8 +255,18 @@ def apply_leads_view(
             return result.iloc[0:0]
 
     if tab == "empresas":
-        result = result.sort_values(["_empresa", "_data_chamado"], ascending=[True, False])
-        result = result.drop_duplicates(subset=["_empresa"], keep="first")
+        # Prefere CNPJ para não esconder filiais com nomes parecidos.
+        if "CNPJ" in result.columns:
+            result["_dedupe_key"] = result["CNPJ"].apply(
+                lambda value: normalize_text(value) or ""
+            )
+            result.loc[result["_dedupe_key"] == "", "_dedupe_key"] = result["_empresa"].astype(str)
+            result = result.sort_values(["_empresa", "_data_chamado"], ascending=[True, False])
+            result = result.drop_duplicates(subset=["_dedupe_key"], keep="first")
+            result = result.drop(columns=["_dedupe_key"], errors="ignore")
+        else:
+            result = result.sort_values(["_empresa", "_data_chamado"], ascending=[True, False])
+            result = result.drop_duplicates(subset=["_empresa"], keep="first")
 
     if stage and stage != "Todas as etapas":
         result = result[

@@ -13,11 +13,33 @@
 
 <div class="card" style="max-width:720px;margin-bottom:16px">
   <p class="form-hint" style="margin:0">
-    Se aparecer erro 429 (cota Google), aguarde 2 minutos e use só o botão
-    <strong>Aplicar migração</strong>. A gravação fica local e as empresas aparecem na lista na hora;
-    a planilha sincroniza depois.
+    Esperado no JSON: <strong>20 empresas</strong>. Se a lista Empresas mostrar menos,
+    clique em <strong>Aplicar migração</strong> de novo (não duplica) e depois F5 em Empresas.
   </p>
 </div>
+
+{% if audit %}
+<div class="card" style="max-width:960px;margin-bottom:16px">
+  <h2>Auditoria</h2>
+  <p>
+    esperado={{ audit.expected }}
+    · encontrados={{ audit.found_count }}
+    · faltando={{ audit.missing_count }}
+    · pendentes locais={{ audit.pending_count }}
+  </p>
+  {% if audit.missing_count > 0 %}
+  <p class="form-hint">Faltando (ainda não no CRM local/snapshot):</p>
+  <ul>
+    {% for row in audit.missing %}
+    <li>#{{ row.oppi_ponto_company_id }} — {{ row.empresa }} ({{ row.cnpj }})</li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="form-hint">Todas as 20 estão mapeadas no CRM (local, pendente ou snapshot).</p>
+  {% endif %}
+</div>
+{% endif %}
+
 <div class="card" style="max-width:720px">
   <h2>Arquivo JSON</h2>
   {% if files %}
@@ -36,19 +58,17 @@
     <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:16px">
       <button type="submit" name="apply" value="0" class="btn btn-outline">1) Simular (dry-run)</button>
       <button type="submit" name="apply" value="1" class="btn"
-        onclick="return confirm('Gravar as 20 empresas no CRM agora (modo local, sem Google Sheets na hora)?');">
-        2) Aplicar migração
+        onclick="return confirm('Completar migração das empresas faltantes (modo local)?');">
+        2) Aplicar / completar migração
       </button>
     </div>
     <p class="form-hint" style="margin-top:12px">
-      Depois de aplicar, abra <a href="/leads-e-empresas">Empresas</a> e atualize a página (F5).
+      Depois, abra <a href="/leads-e-empresas">Empresas</a> e atualize (F5).
     </p>
   </form>
   {% else %}
   <p class="form-hint">
-    Nenhum JSON encontrado em storage. O arquivo
-    <code>oppi-ponto-crm-migration-2026-07-28.json</code> precisa estar em
-    <code>/app/storage</code>.
+    Nenhum JSON encontrado em storage.
   </p>
   {% endif %}
 </div>
@@ -60,6 +80,7 @@
     total={{ result.total }}
     · create={{ result.create }}
     · update={{ result.update }}
+    · já existia={{ result.skip_already or 0 }}
     · skip_cnpj={{ result.skip_missing_cnpj }}
     {% if result.apply %}
     · ok={{ result.ok }}

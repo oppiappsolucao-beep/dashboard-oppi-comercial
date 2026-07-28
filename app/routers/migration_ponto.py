@@ -48,6 +48,16 @@ def migration_page(request: Request):
         return RedirectResponse("/visao-geral", status_code=303)
 
     files = _json_candidates()
+    audit = None
+    error = None
+    if files:
+        try:
+            from app.services.ponto_migration import build_migration_audit
+
+            audit = build_migration_audit(_load_payload(files[0]))
+        except Exception as exc:
+            error = f"Não foi possível auditar agora: {exc}"
+
     return render(
         request,
         "migration_ponto.html",
@@ -56,7 +66,8 @@ def migration_page(request: Request):
             "files": [{"name": p.name, "path": str(p), "size": p.stat().st_size} for p in files],
             "default_file": files[0].name if files else DEFAULT_JSON_NAME,
             "result": None,
-            "error": None,
+            "audit": audit,
+            "error": error,
         },
     )
 
@@ -78,14 +89,16 @@ def migration_run(
     target = storage / Path(filename).name
     error = None
     result = None
+    audit = None
 
     try:
         if not target.exists():
             raise FileNotFoundError(f"Arquivo não encontrado: {target.name}")
         payload = _load_payload(target)
-        from app.services.ponto_migration import migrate_companies
+        from app.services.ponto_migration import build_migration_audit, migrate_companies
 
         result = migrate_companies(payload, apply=(str(apply) == "1"), local_only=True)
+        audit = result.get("audit") or build_migration_audit(payload)
     except Exception as exc:
         message = str(exc)
         if "429" in message or "Quota exceeded" in message:
@@ -105,6 +118,7 @@ def migration_run(
             "files": [{"name": p.name, "path": str(p), "size": p.stat().st_size} for p in files],
             "default_file": target.name if target.exists() else (files[0].name if files else DEFAULT_JSON_NAME),
             "result": result,
+            "audit": audit,
             "error": error,
         },
     )

@@ -194,23 +194,48 @@ def _pending_row_dict(item: dict) -> dict:
 
 def merge_pending_companies_into_df(df: pd.DataFrame) -> pd.DataFrame:
     """Inclui cadastros locais ainda não sincronizados nas listagens do site."""
+    from app.services.legacy_core import normalize_cnpj_for_duplicate
+
     pending = list_pending_companies("pending")
     if not pending:
         return df
 
+    existing_names: set[str] = set()
+    existing_cnpjs: set[str] = set()
+    if df is not None and not df.empty:
+        if "_empresa" in df.columns:
+            existing_names = {
+                normalize_text(value).lower()
+                for value in df["_empresa"].tolist()
+                if normalize_text(value)
+            }
+        for _, row in df.iterrows():
+            cnpj = normalize_cnpj_for_duplicate(row.get("CNPJ") or row.get("cnpj") or "")
+            if not cnpj:
+                # tenta coluna dinâmica
+                for key in row.index:
+                    if normalize_text(key).lower() == "cnpj":
+                        cnpj = normalize_cnpj_for_duplicate(row.get(key))
+                        break
+            if cnpj:
+                existing_cnpjs.add(cnpj)
+
     rows = []
     for item in pending:
-        empresa = normalize_text((item.get("payload") or {}).get("empresa") or item.get("empresa"))
+        payload = item.get("payload") or {}
+        empresa = normalize_text(payload.get("empresa") or item.get("empresa"))
         if not empresa:
             continue
-        if df is not None and not df.empty and "_empresa" in df.columns:
-            exists = any(
-                normalize_text(value).lower() == empresa.lower()
-                for value in df["_empresa"].tolist()
-            )
-            if exists:
-                continue
+        cnpj = normalize_cnpj_for_duplicate(payload.get("cnpj"))
+        # Evita duplicar o mesmo CNPJ; se só o nome bate mas CNPJ é outro, mantém (filiais).
+        if cnpj and cnpj in existing_cnpjs:
+            continue
+        if not cnpj and empresa.lower() in existing_names:
+            continue
         rows.append(_pending_row_dict(item))
+        existing_names.add(empresa.lower())
+        if cnpj:
+            existing_cnpjs.add(cnpj)
 
     if not rows:
         return df
