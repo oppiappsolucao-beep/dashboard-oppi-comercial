@@ -195,19 +195,30 @@ def enqueue_pending_company(
         return int(cur.lastrowid)
 
 
-def list_pending_companies(status: str = "pending") -> list[dict]:
+def list_pending_companies(status: str | None = "pending") -> list[dict]:
+    """Lista pendentes. status=None retorna todos (pending + synced + erro)."""
     init_crm_local_db()
     with _connect() as conn:
-        rows = conn.execute(
-            """
-            SELECT id, empresa, payload_json, headers_json, row_values_json, status,
-                   created_at, synced_sheet_row, last_error
-            FROM pending_companies
-            WHERE status = ?
-            ORDER BY id
-            """,
-            (status,),
-        ).fetchall()
+        if status is None:
+            rows = conn.execute(
+                """
+                SELECT id, empresa, payload_json, headers_json, row_values_json, status,
+                       created_at, synced_sheet_row, last_error
+                FROM pending_companies
+                ORDER BY id
+                """
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """
+                SELECT id, empresa, payload_json, headers_json, row_values_json, status,
+                       created_at, synced_sheet_row, last_error
+                FROM pending_companies
+                WHERE status = ?
+                ORDER BY id
+                """,
+                (status,),
+            ).fetchall()
     items = []
     for row in rows:
         try:

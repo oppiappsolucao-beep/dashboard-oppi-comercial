@@ -337,16 +337,17 @@ def preview_company(company: dict) -> dict:
     }
 
 
-def _persist_extras(sheet_row: int, company: dict, *, ativo_crm: bool) -> None:
+def _persist_extras(sheet_row: int, company: dict, *, ativo_crm: bool, sync_sheet: bool = True) -> None:
     closed = map_closed_services(company)
     payments = map_payment_history(company)
     access = map_access_fields(company)
     ponto_id = int(company.get("oppi_ponto_company_id") or 0)
     save_cadastro_tipo(DEFAULT_TENANT_ID, sheet_row, "empresa")
     save_cadastro_ativo(DEFAULT_TENANT_ID, sheet_row, ativo_crm)
-    save_closed_services(DEFAULT_TENANT_ID, sheet_row, closed)
+    save_closed_services(DEFAULT_TENANT_ID, sheet_row, closed, sync_sheet=sync_sheet)
     save_payment_history(DEFAULT_TENANT_ID, sheet_row, payments)
     save_access_fields(DEFAULT_TENANT_ID, sheet_row, access)
+    form = map_ponto_company_to_form(company)
     save_lead_action(
         DEFAULT_TENANT_ID,
         sheet_row,
@@ -354,6 +355,9 @@ def _persist_extras(sheet_row: int, company: dict, *, ativo_crm: bool) -> None:
             "oppi_ponto_company_id": ponto_id,
             "migrated_from_ponto": True,
             "migrated_at": datetime.now().isoformat(timespec="seconds"),
+            "colaboradores": form.get("colaboradores", ""),
+            "valor_proposta": form.get("valor_proposta", ""),
+            "servico": form.get("servico") or MIGRATED_SERVICE_NAME,
         },
     )
     remember_migrated_company(company, sheet_row=sheet_row)
@@ -594,7 +598,8 @@ def _sheet_rows_for_company(company: dict) -> list[int]:
     try:
         from app.services.pending_companies import list_pending_companies
 
-        for pend in list_pending_companies("pending") or []:
+        # pending + synced — migração antiga pode ter marcado synced
+        for pend in list_pending_companies(None) or []:
             pl = pend.get("payload") or {}
             if cnpj and normalize_cnpj_for_duplicate(pl.get("cnpj")) == cnpj:
                 rows.add(int(pend.get("local_sheet_row") or -pend["id"]))
@@ -607,17 +612,46 @@ def _sheet_rows_for_company(company: dict) -> list[int]:
     return sorted(rows)
 
 
+def _update_pending_finance(company: dict, form: dict, valor: str, colaboradores: str) -> list[int]:
+    """Atualiza payload de todos os pendentes (qualquer status) desta empresa."""
+    from app.services.crm_local_db import update_pending_company_payload
+    from app.services.pending_companies import list_pending_companies
+
+    cnpj = normalize_cnpj_for_duplicate(company.get("cnpj"))
+    ponto_id = int(company.get("oppi_ponto_company_id") or 0)
+    touched: list[int] = []
+
+    for pend in list_pending_companies(None) or []:
+        pl = dict(pend.get("payload") or {})
+        match = False
+        if cnpj and normalize_cnpj_for_duplicate(pl.get("cnpj")) == cnpj:
+            match = True
+        if ponto_id and f"company_id={ponto_id}" in normalize_text(pl.get("observacoes")):
+            match = True
+        if not match:
+            continue
+        pl["colaboradores"] = colaboradores
+        pl["valor_proposta"] = valor
+        pl["servico"] = form.get("servico") or MIGRATED_SERVICE_NAME
+        pl["cadastro_tipo"] = "empresa"
+        pl["status"] = MIGRATED_STATUS
+        update_pending_company_payload(int(pend["id"]), pl)
+        touched.append(int(pend.get("local_sheet_row") or -pend["id"]))
+    return touched
+
+
 def reprocess_finance_from_export(payload: dict | list) -> dict:
-    """Reaplica valor do plano + colaboradores + serviços fechados a partir do JSON do Ponto."""
+    """Reaplica valor do plano + colaboradores para TODAS as empresas do JSON.
+
+    Se a empresa não existir no CRM local, recria o pendente (apply local).
+    Grava só local — não chama Google Sheets (evita 429 / timeout).
+    """
     if isinstance(payload, dict):
         companies = payload.get("companies") or []
     else:
         companies = payload
     if not isinstance(companies, list):
         raise ValueError("JSON inválido: esperado lista em 'companies'.")
-
-    from app.services.crm_local_db import update_pending_company_payload
-    from app.services.pending_companies import list_pending_companies
 
     results = []
     for company in companies:
@@ -630,52 +664,69 @@ def reprocess_finance_from_export(payload: dict | list) -> dict:
         valor = closed[0].get("valor", "") if closed else form.get("valor_proposta", "")
         colaboradores = form.get("colaboradores", "")
         ativo_crm = bool(company.get("ativo")) and not bool(company.get("bloqueado_plataforma"))
-        rows = _sheet_rows_for_company(company)
-        updated: list[int] = []
+        created = False
         errors: list[str] = []
+        updated: list[int] = []
 
-        # Atualiza payload dos pendentes (lista Empresas lê daqui).
+        if not cnpj:
+            results.append(
+                {
+                    "ok": False,
+                    "action": "skip_missing_cnpj",
+                    "oppi_ponto_company_id": ponto_id,
+                    "empresa": form.get("empresa"),
+                    "cnpj": cnpj,
+                    "sheet_row": None,
+                    "valor": valor,
+                    "colaboradores": colaboradores,
+                    "message": "CNPJ inválido — pulado.",
+                }
+            )
+            continue
+
         try:
-            for pend in list_pending_companies("pending") or []:
-                pl = dict(pend.get("payload") or {})
-                match = False
-                if cnpj and normalize_cnpj_for_duplicate(pl.get("cnpj")) == cnpj:
-                    match = True
-                if ponto_id and f"company_id={ponto_id}" in normalize_text(pl.get("observacoes")):
-                    match = True
-                if not match:
-                    continue
-                pl["colaboradores"] = colaboradores
-                pl["valor_proposta"] = valor
-                pl["servico"] = form.get("servico") or MIGRATED_SERVICE_NAME
-                pl["cadastro_tipo"] = "empresa"
-                try:
-                    update_pending_company_payload(int(pend["id"]), pl)
-                except Exception as err:
-                    errors.append(f"pending#{pend.get('id')}: {err}")
-        except Exception as err:
-            errors.append(f"pending_list: {err}")
+            rows = _sheet_rows_for_company(company)
+            # Garante cadastro local se não achar nenhuma linha
+            if not rows:
+                applied = apply_company(company, local_only=True)
+                created = bool(applied.get("ok"))
+                if applied.get("sheet_row"):
+                    rows = [int(applied["sheet_row"])]
+                else:
+                    rows = _sheet_rows_for_company(company)
+                if not created and not rows:
+                    errors.append(applied.get("message") or "não foi possível criar pendente")
 
-        for sheet_row in rows:
             try:
-                _persist_extras(sheet_row, company, ativo_crm=ativo_crm)
-                save_lead_action(
-                    DEFAULT_TENANT_ID,
-                    sheet_row,
-                    {
-                        "colaboradores": colaboradores,
-                        "valor_proposta": valor,
-                        "servico": form.get("servico") or MIGRATED_SERVICE_NAME,
-                    },
-                )
-                updated.append(sheet_row)
+                pending_rows = _update_pending_finance(company, form, valor, colaboradores)
+                for row in pending_rows:
+                    if row not in updated:
+                        updated.append(row)
             except Exception as err:
-                errors.append(f"row {sheet_row}: {err}")
+                errors.append(f"pending: {err}")
 
+            for sheet_row in rows:
+                try:
+                    _persist_extras(sheet_row, company, ativo_crm=ativo_crm, sync_sheet=False)
+                    if sheet_row not in updated:
+                        updated.append(sheet_row)
+                except Exception as err:
+                    errors.append(f"row {sheet_row}: {err}")
+
+            # Sempre grava índice mesmo se só o CNPJ existir no JSON
+            remember_migrated_company(
+                company,
+                sheet_row=updated[0] if updated else (rows[0] if rows else None),
+            )
+        except Exception as err:
+            errors.append(str(err))
+
+        ok = bool(updated) and not errors
+        action = "reprocess_created" if created else "reprocess_finance"
         results.append(
             {
-                "ok": bool(updated) and not errors,
-                "action": "reprocess_finance",
+                "ok": ok,
+                "action": action,
                 "oppi_ponto_company_id": ponto_id,
                 "empresa": form.get("empresa"),
                 "cnpj": cnpj,
@@ -684,7 +735,8 @@ def reprocess_finance_from_export(payload: dict | list) -> dict:
                 "valor": valor,
                 "colaboradores": colaboradores,
                 "message": (
-                    f"Atualizado em {len(updated)} linha(s): {valor or 'sem valor'} · {colaboradores or 'sem colaboradores'}"
+                    ("Criada + " if created else "")
+                    + f"atualizado em {len(updated)} linha(s): {valor or 'sem valor'} · {colaboradores or 'sem colaboradores'}"
                     + (f" | avisos: {'; '.join(errors)}" if errors else "")
                 ),
             }
@@ -696,6 +748,7 @@ def reprocess_finance_from_export(payload: dict | list) -> dict:
         "total": len(results),
         "ok": sum(1 for r in results if r.get("ok")),
         "failed": sum(1 for r in results if not r.get("ok")),
+        "created": sum(1 for r in results if r.get("action") == "reprocess_created"),
         "results": results,
         "audit": build_migration_audit(payload),
     }

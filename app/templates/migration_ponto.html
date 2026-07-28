@@ -103,6 +103,7 @@
     {% if result.action == 'reprocess_finance' %}
     · ok={{ result.ok }}
     · failed={{ result.failed }}
+    · criadas={{ result.created or 0 }}
     {% else %}
     · create={{ result.create }}
     · promote={{ result.promote or 0 }}

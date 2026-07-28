@@ -163,6 +163,8 @@ def save_closed_services(
     tenant_id: str | None,
     sheet_row: int,
     items: list[dict],
+    *,
+    sync_sheet: bool = True,
 ) -> dict:
     normalized = [_normalize_item(item) for item in items if isinstance(item, dict)]
     if not normalized:
@@ -178,7 +180,8 @@ def save_closed_services(
             "vencimento": primary.get("vencimento", ""),
         },
     )
-    sync_closed_services_to_sheet(sheet_row, tenant_id, normalized)
+    if sync_sheet:
+        sync_closed_services_to_sheet(sheet_row, tenant_id, normalized)
     return primary
 
 

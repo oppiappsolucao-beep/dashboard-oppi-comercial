@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-APP_BUILD = os.getenv("APP_BUILD", "20260728-oppi-ponto-bridge-v81").strip() or "20260728-oppi-ponto-bridge-v81"
+APP_BUILD = os.getenv("APP_BUILD", "20260728-reprocess-all-v82").strip() or "20260728-reprocess-all-v82"
 
 
 class Settings:
