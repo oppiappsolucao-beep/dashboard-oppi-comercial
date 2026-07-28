@@ -150,6 +150,13 @@ async def startup_maintenance() -> None:
                 log.info("Attendance named delete: %s", named)
             except Exception as purge_error:
                 log.error("Attendance group purge: %s", purge_error)
+            try:
+                from app.services.attendance_media import backfill_all_conversations_media
+
+                fixed = backfill_all_conversations_media(limit=60)
+                log.info("Attendance media backfill: %s", fixed)
+            except Exception as media_error:
+                log.error("Attendance media backfill: %s", media_error)
         except Exception as error:
             log.error("Startup DATABASE_URL / attendance migrate: %s", error)
 

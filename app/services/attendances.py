@@ -114,6 +114,17 @@ def page_context(
                 store.mark_conversation_read(selected_id)
                 selected = store.get_conversation(selected_id)
                 messages = store.list_messages(selected_id)
+                # Áudio/mídia local em TODA conversa aberta (não só uma)
+                try:
+                    from app.services.attendance_media import hydrate_messages_media
+
+                    messages = hydrate_messages_media(
+                        messages,
+                        conversation=selected,
+                        limit=16,
+                    )
+                except Exception:
+                    pass
                 crm = attendance_crm.build_crm_panel(selected.get("sheet_row") if selected else None)
                 try:
                     from app.services.sectors import responsible_options_for_sector

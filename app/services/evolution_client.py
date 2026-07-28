@@ -1211,3 +1211,70 @@ def send_whatsapp_audio(
     raise EvolutionClientError(
         "Falha ao enviar áudio via Evolution. " + (" | ".join(errors[-4:]) if errors else "")
     )
+
+
+def get_base64_from_media_message(
+    message_id: str,
+    *,
+    remote_jid: str = "",
+    from_me: bool | None = None,
+) -> dict[str, Any]:
+    """Baixa mídia (áudio/imagem/…) via Evolution getBase64FromMediaMessage."""
+    if not is_configured():
+        raise EvolutionClientError("Evolution API não configurada.")
+    msg_id = normalize_text(message_id)
+    if not msg_id:
+        raise EvolutionClientError("ID da mensagem Evolution vazio.")
+
+    key: dict[str, Any] = {"id": msg_id}
+    jid = normalize_text(remote_jid)
+    if jid:
+        key["remoteJid"] = jid
+    if from_me is not None:
+        key["fromMe"] = bool(from_me)
+
+    payloads = [
+        {"message": {"key": key}, "convertToMp4": False},
+        {"message": {"key": {"id": msg_id}}, "convertToMp4": False},
+        {"message": {"key": key}},
+    ]
+    errors: list[str] = []
+    for payload in payloads:
+        for url in _instance_urls("/chat/getBase64FromMediaMessage"):
+            try:
+                response = requests.post(url, json=payload, headers=_headers(), timeout=90)
+            except requests.RequestException as error:
+                errors.append(str(error))
+                continue
+            data = _parse_json(response)
+            err = _response_looks_like_error(data)
+            if response.status_code >= 400 or err:
+                errors.append(err or response.text[:160] or f"HTTP {response.status_code}")
+                continue
+            # Resposta pode vir aninhada
+            nested = data.get("data") if isinstance(data.get("data"), dict) else data
+            b64 = (
+                normalize_text(nested.get("base64") or "")
+                or normalize_text(data.get("base64") or "")
+            )
+            if b64.startswith("data:") and "," in b64:
+                b64 = b64.split(",", 1)[1]
+            if not b64:
+                errors.append("resposta sem base64")
+                continue
+            mime = normalize_text(
+                nested.get("mimetype") or nested.get("mimeType") or data.get("mimetype") or ""
+            )
+            filename = normalize_text(
+                nested.get("fileName") or nested.get("filename") or data.get("fileName") or ""
+            )
+            return {
+                "base64": b64,
+                "mimetype": mime,
+                "filename": filename,
+                "mediaType": normalize_text(nested.get("mediaType") or data.get("mediaType") or ""),
+            }
+    raise EvolutionClientError(
+        "Não foi possível baixar a mídia na Evolution. "
+        + (" | ".join(errors[-3:]) if errors else "")
+    )

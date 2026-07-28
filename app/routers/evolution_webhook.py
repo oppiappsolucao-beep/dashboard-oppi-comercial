@@ -178,7 +178,7 @@ def ingest_evolution_message_item(item: dict, *, push_name: str = "") -> bool:
     if not conversation:
         return False
 
-    store.add_message(
+    saved_msg = store.add_message(
         conversation["id"],
         direction="out" if from_me else "in",
         body=body or (f"[{msg_type}]" if msg_type != "text" else ""),
@@ -190,6 +190,18 @@ def ingest_evolution_message_item(item: dict, *, push_name: str = "") -> bool:
         sender="agent" if from_me else "contact",
         bump_unread=not from_me,
     )
+    if (
+        saved_msg
+        and msg_type in ("audio", "image", "video", "document")
+        and evolution_id
+        and saved_msg.get("id")
+    ):
+        try:
+            from app.services.attendance_media import schedule_hydrate_message
+
+            schedule_hydrate_message(saved_msg["id"], conversation["id"])
+        except Exception:
+            logger.exception("hydrate schedule falhou jid=%s", remote_jid)
     return True
 
 
@@ -254,7 +266,7 @@ def _handle_messages_upsert(payload: dict) -> int:
         direction = "out" if from_me else "in"
         sender = "agent" if from_me else "contact"
         # Grava a mensagem ANTES de CRM/IA — webhook não pode travar na planilha Google
-        store.add_message(
+        saved_msg = store.add_message(
             conversation["id"],
             direction=direction,
             body=body or (f"[{msg_type}]" if msg_type != "text" else ""),
@@ -267,6 +279,20 @@ def _handle_messages_upsert(payload: dict) -> int:
             bump_unread=not from_me,
         )
         count += 1
+
+        # Baixa áudio/mídia local para TODAS as conversas (não só a aberta)
+        if (
+            saved_msg
+            and msg_type in ("audio", "image", "video", "document")
+            and evolution_id
+            and saved_msg.get("id")
+        ):
+            try:
+                from app.services.attendance_media import schedule_hydrate_message
+
+                schedule_hydrate_message(saved_msg["id"], conversation["id"])
+            except Exception:
+                logger.exception("hydrate schedule falhou jid=%s", remote_jid)
 
         conversation_id = conversation["id"]
         inbound_body = body if (not from_me and body) else ""

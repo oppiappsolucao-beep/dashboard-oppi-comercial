@@ -695,6 +695,52 @@ def get_message(message_id: str) -> dict | None:
         return _message_to_dict(row) if row else None
 
 
+def update_message_media(
+    message_id: str,
+    *,
+    media_url: str = "",
+    media_mime: str = "",
+    media_filename: str = "",
+) -> dict | None:
+    """Atualiza URL/MIME local da mídia (todas as conversas)."""
+    message_id = normalize_text(message_id)
+    if not message_id:
+        return None
+    with _lock, _session() as db:
+        row = db.get(AttendanceMessage, message_id)
+        if not row:
+            return None
+        if media_url:
+            row.media_url = media_url
+        if media_mime:
+            row.media_mime = media_mime
+        if media_filename:
+            row.media_filename = media_filename
+        db.flush()
+        return _message_to_dict(row)
+
+
+def list_messages_needing_media(*, limit: int = 200) -> list[dict]:
+    """Áudios/imagens/vídeos com URL externa ou vazia (todas as conversas)."""
+    with _session(commit=False) as db:
+        rows = (
+            db.query(AttendanceMessage)
+            .filter(AttendanceMessage.msg_type.in_(("audio", "image", "video", "document")))
+            .order_by(AttendanceMessage.created_at.desc())
+            .limit(max(1, min(int(limit or 200), 1000)))
+            .all()
+        )
+        out = []
+        for row in rows:
+            url = (row.media_url or "").strip()
+            if url.startswith("/atendimentos/media/"):
+                continue
+            if not (row.evolution_id or "").strip():
+                continue
+            out.append(_message_to_dict(row))
+        return out
+
+
 def list_messages(conversation_id: str, *, limit: int = 200) -> list[dict]:
     with _session(commit=False) as db:
         rows = (
