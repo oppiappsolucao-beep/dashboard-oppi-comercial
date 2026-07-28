@@ -12,6 +12,21 @@ from app.services.legacy_core import normalize_text
 
 logger = logging.getLogger(__name__)
 
+# Setores/perfis operacionais: nunca excluem conversa da inbox
+_DELETE_BLOCKED_DEPARTMENTS = frozenset({"atendimento", "cadastro"})
+
+
+def can_delete_attendance_conversation(session_user: dict | None) -> bool:
+    """Só Administrador; Atendimento e Cadastro não podem (mesmo se perfil estiver errado)."""
+    if not session_user:
+        return False
+    if session_user.get("role") != "Administrador":
+        return False
+    dept = normalize_text(session_user.get("department_name") or "").lower()
+    if dept in _DELETE_BLOCKED_DEPARTMENTS:
+        return False
+    return True
+
 
 def _resolve_sector_filter(session_user: dict | None, sector_filter: str) -> tuple[int | str | None, dict]:
     from app.services.sectors import attendance_scope_for_user
@@ -272,6 +287,7 @@ def page_context(
         "tag_options": tag_options,
         "quick_replies": quick_replies,
         "is_admin": (session_user or {}).get("role") == "Administrador",
+        "can_delete_conversation": can_delete_attendance_conversation(session_user),
     }
 
 

@@ -446,13 +446,12 @@ def attendances_finalize(request: Request, conversation_id: str):
 @router.post("/atendimentos/conversa/{conversation_id}/excluir", response_class=HTMLResponse)
 def attendances_delete(request: Request, conversation_id: str):
     require_auth(request)
-    from app.dependencies import is_admin
-
-    if not is_admin(request):
+    session_user = get_session_user(request)
+    if not attendances_service.can_delete_attendance_conversation(session_user):
         ctx = _page_ctx(
             request,
             selected_id=conversation_id,
-            error="Apenas o administrador pode excluir conversas.",
+            error="Apenas o administrador pode excluir conversas. Cadastro no CRM não é apagado por esta ação.",
         )
         return render(request, "partials/attendances_thread.html", ctx)
 

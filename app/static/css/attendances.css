@@ -704,6 +704,15 @@
   border-color: #991B1B;
 }
 
+.att-delete-conv-btn {
+  flex-shrink: 0;
+  height: 34px;
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 700;
+  margin-left: auto;
+}
+
 .att-notes-form {
   display: flex;
   flex-direction: column;
