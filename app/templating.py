@@ -41,6 +41,22 @@ def render(
         active_page = ctx.get("active_page")
         if active_page:
             ctx["back_fallback"] = PAGE_BACK_FALLBACKS.get(active_page, "/visao-geral")
+    if "display_username" not in ctx or "display_role" not in ctx:
+        try:
+            from app.dependencies import get_session_user
+
+            user = get_session_user(request)
+        except Exception:
+            user = None
+        if user:
+            ctx.setdefault(
+                "display_username",
+                user.get("name") or user.get("username") or settings.app_username,
+            )
+            ctx.setdefault("display_role", user.get("role") or "")
+        else:
+            ctx.setdefault("display_username", settings.app_username)
+            ctx.setdefault("display_role", "")
     return templates.TemplateResponse(
         request=request,
         name=name,

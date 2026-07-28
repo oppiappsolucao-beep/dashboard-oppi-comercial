@@ -345,6 +345,28 @@
     refreshList({ clearSelection: true });
   });
 
+  // Excluir conversa: confirm + POST explícito (hx-confirm quebrava o clique)
+  document.body.addEventListener("click", function (ev) {
+    var btn = ev.target && ev.target.closest ? ev.target.closest(".att-delete-conv-btn") : null;
+    if (!btn) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    var url = btn.getAttribute("data-delete-url") || "";
+    if (!url) return;
+    if (
+      !window.confirm(
+        "Excluir esta conversa do Atendimentos?\n\nRemove só o chat e as mensagens.\nO cadastro no CRM NÃO será apagado."
+      )
+    ) {
+      return;
+    }
+    if (!window.htmx) return;
+    window.htmx.ajax("POST", url, {
+      target: "#att-chat-root",
+      swap: "innerHTML",
+    });
+  });
+
   document.body.addEventListener("htmx:afterRequest", function (ev) {
     var path = (ev.detail && ev.detail.pathInfo && ev.detail.pathInfo.requestPath) || "";
     if (path.indexOf("/atendimentos/conversa/") === -1) return;

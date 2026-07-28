@@ -73,10 +73,10 @@
           </span>
         </a>
         <div class="sidebar-user">
-          <div class="sidebar-user-avatar">{{ app_username[:2] | upper }}</div>
+          <div class="sidebar-user-avatar">{{ (display_username or app_username)[:2] | upper }}</div>
           <div>
-            <div class="sidebar-user-name">{{ app_username }}</div>
-            <div class="sidebar-user-role">Vendedor</div>
+            <div class="sidebar-user-name">{{ display_username or app_username }}</div>
+            <div class="sidebar-user-role">{{ display_role or '—' }}</div>
           </div>
         </div>
       </div>

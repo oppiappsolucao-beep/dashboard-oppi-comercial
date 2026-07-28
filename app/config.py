@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-APP_BUILD = os.getenv("APP_BUILD", "20260728-nav-rapida-v98").strip() or "20260728-nav-rapida-v98"
+APP_BUILD = os.getenv("APP_BUILD", "20260728-excluir-click-v99").strip() or "20260728-excluir-click-v99"
 
 class Settings:
     sheet_id: str = "1GAbrca0NSiJfPXaSte1qGxXCsGkQPacoRsm0PVB51gE"

@@ -453,6 +453,7 @@ def attendances_delete(request: Request, conversation_id: str):
             request,
             selected_id=conversation_id,
             error="Apenas o administrador pode excluir conversas. Cadastro no CRM não é apagado por esta ação.",
+            light=True,
         )
         return render(request, "partials/attendances_thread.html", ctx)
 
@@ -462,6 +463,7 @@ def attendances_delete(request: Request, conversation_id: str):
         request,
         selected_id="",
         flash="Conversa excluída do atendimento. O cadastro no CRM foi mantido.",
+        light=True,
     )
     response = render(request, "partials/attendances_empty_after_delete.html", ctx)
     response.headers["HX-Trigger"] = "att-conversation-deleted"
