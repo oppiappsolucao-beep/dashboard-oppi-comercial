@@ -258,10 +258,25 @@ async def contract_edit_page(request: Request, sheet_row: int):
         "atividades": "atividades",
         "proposta": "proposta",
         "propostas": "proposta",
+        "acesso": "acesso",
+        "oppi": "acesso",
+        "ponto": "acesso",
         "financeiro": "financeiro",
         "suporte": "suporte",
     }
     active_tab = tab_aliases.get(active_tab, "dados")
+
+    from app.services.oppi_ponto_bridge import refresh_ponto_snapshot
+    from app.services.oppi_ponto_client import oppi_ponto_configured
+
+    ponto_snapshot = refresh_ponto_snapshot(sheet_row, cnpj=values.get("cnpj", ""))
+    # Recarrega lead_extra após snapshot (funcionários / contrato).
+    lead_extra = get_lead_action(DEFAULT_TENANT_ID, sheet_row) or {}
+    if not normalize_text(values.get("colaboradores")) and lead_extra.get("colaboradores"):
+        values["colaboradores"] = normalize_text(lead_extra.get("colaboradores"))
+    if ponto_snapshot.get("funcionarios") and not normalize_text(values.get("colaboradores")):
+        values["colaboradores"] = f"{ponto_snapshot['funcionarios']} colaboradores"
+
     activities_ctx = build_cadastro_activities_context(
         DEFAULT_TENANT_ID,
         sheet_row,
@@ -294,19 +309,16 @@ async def contract_edit_page(request: Request, sheet_row: int):
             if any(normalize_text(item.get(key)) for key in ("servico", "valor", "vencimento"))
         ])
 
-    from app.services.oppi_ponto_bridge import resolve_oppi_ponto_company_id
-    from app.services.oppi_ponto_client import oppi_ponto_configured
-
-    oppi_ponto_company_id = resolve_oppi_ponto_company_id(
-        sheet_row,
-        cnpj=values.get("cnpj", ""),
-        lookup_remote=False,
-    )
     oppi_ponto_ctx = {
         "configured": oppi_ponto_configured(),
-        "company_id": oppi_ponto_company_id,
-        "bloqueado": bool(lead_extra.get("oppi_ponto_bloqueado")),
-        "onboarded": bool(lead_extra.get("oppi_ponto_onboarded") or oppi_ponto_company_id),
+        "company_id": ponto_snapshot.get("company_id"),
+        "bloqueado": bool(ponto_snapshot.get("bloqueado")),
+        "onboarded": bool(lead_extra.get("oppi_ponto_onboarded") or ponto_snapshot.get("company_id")),
+        "funcionarios": int(ponto_snapshot.get("funcionarios") or 0),
+        "contrato_aceito": ponto_snapshot.get("contrato_aceito"),
+        "plano_valor": ponto_snapshot.get("plano_valor") or values.get("valor_proposta") or "",
+        "admin_nome": ponto_snapshot.get("admin_nome") or "",
+        "admin_email": ponto_snapshot.get("admin_email") or "",
     }
 
     back_href = {
@@ -392,6 +404,18 @@ async def contract_edit_submit(request: Request, sheet_row: int):
             request.session["edit_success"] = "Financeiro atualizado com sucesso."
             return RedirectResponse(
                 url=_edit_page_url(sheet_row, tab="financeiro", from_page=from_page),
+                status_code=303,
+            )
+
+        if action == "save_acesso":
+            # Mantém senha atual se o campo vier vazio.
+            current_access = load_access_fields(DEFAULT_TENANT_ID, sheet_row)
+            if not normalize_text(form_dict.get("senha_acesso")):
+                form_dict["senha_acesso"] = current_access.get("senha_acesso", "")
+            save_access_fields(DEFAULT_TENANT_ID, sheet_row, form_dict)
+            request.session["edit_success"] = "Credenciais de acesso atualizadas."
+            return RedirectResponse(
+                url=_edit_page_url(sheet_row, tab="acesso", from_page=from_page),
                 status_code=303,
             )
 
@@ -568,14 +592,14 @@ async def contract_oppi_ponto_action(
     action: str = Form(...),
     motivo: str = Form("Ação manual pelo CRM Comercial"),
     from_: str = Form("", alias="from"),
-    tab: str = Form("financeiro"),
+    tab: str = Form("acesso"),
 ):
     redirect = require_auth(request)
     if redirect:
         return redirect
 
     from_page = _resolve_edit_from_page(from_)
-    edit_url = _edit_page_url(sheet_row, tab=normalize_text(tab) or "financeiro", from_page=from_page)
+    edit_url = _edit_page_url(sheet_row, tab=normalize_text(tab) or "acesso", from_page=from_page)
 
     df, columns = get_prepared_data()
     row = _get_row_by_sheet(df, sheet_row)

@@ -348,6 +348,11 @@ def _persist_extras(sheet_row: int, company: dict, *, ativo_crm: bool, sync_shee
     save_payment_history(DEFAULT_TENANT_ID, sheet_row, payments)
     save_access_fields(DEFAULT_TENANT_ID, sheet_row, access)
     form = map_ponto_company_to_form(company)
+    funcionarios = 0
+    try:
+        funcionarios = int(company.get("funcionarios") or 0)
+    except (TypeError, ValueError):
+        funcionarios = 0
     save_lead_action(
         DEFAULT_TENANT_ID,
         sheet_row,
@@ -358,6 +363,10 @@ def _persist_extras(sheet_row: int, company: dict, *, ativo_crm: bool, sync_shee
             "colaboradores": form.get("colaboradores", ""),
             "valor_proposta": form.get("valor_proposta", ""),
             "servico": form.get("servico") or MIGRATED_SERVICE_NAME,
+            "oppi_ponto_funcionarios": funcionarios,
+            "oppi_ponto_contrato_aceito": bool(company.get("contrato_aceito")),
+            "oppi_ponto_bloqueado": bool(company.get("bloqueado_plataforma")),
+            "oppi_ponto_plano_valor": form.get("valor_proposta", ""),
         },
     )
     remember_migrated_company(company, sheet_row=sheet_row)

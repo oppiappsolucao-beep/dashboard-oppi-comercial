@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-APP_BUILD = os.getenv("APP_BUILD", "20260728-reprocess-force20-v83").strip() or "20260728-reprocess-force20-v83"
+APP_BUILD = os.getenv("APP_BUILD", "20260728-acesso-tab-v84").strip() or "20260728-acesso-tab-v84"
 
 
 class Settings:

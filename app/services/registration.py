@@ -533,6 +533,27 @@ def build_cadastro_edit_page_context(
     elif valor_display == "—":
         valor_display = "R$ —"
 
+    funcionarios_count = 0
+    try:
+        funcionarios_count = int(lead_action.get("oppi_ponto_funcionarios") or 0)
+    except (TypeError, ValueError):
+        funcionarios_count = 0
+    if funcionarios_count <= 0:
+        import re
+
+        raw_colab = normalize_text(values.get("colaboradores")) or normalize_text(lead_action.get("colaboradores"))
+        match = re.search(r"(\d+)", raw_colab)
+        if match:
+            funcionarios_count = int(match.group(1))
+
+    if "oppi_ponto_contrato_aceito" in lead_action:
+        contrato_aceito = bool(lead_action.get("oppi_ponto_contrato_aceito"))
+        contrato_value = "Assinado" if contrato_aceito else "Não assinado"
+        contrato_hint = "Contrato Oppi Ponto" if contrato_aceito else "Pendente de assinatura"
+    else:
+        contrato_value = "—"
+        contrato_hint = "Sem vínculo no Oppi Ponto"
+
     return {
         "header_initials": _cadastro_initials(empresa),
         "header_subtitle": _format_registered_at(data_chamado, cadastro_tipo=cadastro_tipo),
@@ -552,16 +573,16 @@ def build_cadastro_edit_page_context(
                 "hint": "Responsável comercial",
             },
             {
-                "icon": "📅",
-                "label": "Última Atividade",
-                "value": last_activity_when,
-                "hint": last_activity_label,
+                "icon": "👥",
+                "label": "Funcionários cadastrados",
+                "value": str(funcionarios_count),
+                "hint": "No Oppi Ponto / colaboradores",
             },
             {
-                "icon": "✅",
-                "label": "Próxima Ação",
-                "value": proxima_acao,
-                "hint": proxima_acao_when,
+                "icon": "📝",
+                "label": "Contrato",
+                "value": contrato_value,
+                "hint": contrato_hint,
             },
             {
                 "icon": "💲",

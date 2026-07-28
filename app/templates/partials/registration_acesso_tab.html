@@ -1,0 +1,108 @@
+<div class="client-edit-sections">
+  <section class="client-edit-section panel">
+    <div class="client-edit-section-head">
+      <span class="client-edit-section-icon">🔐</span>
+      <div>
+        <h2>Acesso Oppi Ponto</h2>
+        <p>Liberação, bloqueio e credenciais do cliente na plataforma de ponto.</p>
+      </div>
+    </div>
+
+    <div class="client-edit-proposal-grid">
+      <div class="client-edit-proposal-stat">
+        <span class="client-edit-proposal-label">Empresa no Ponto</span>
+        <strong>{% if oppi_ponto.company_id %}#{{ oppi_ponto.company_id }}{% else %}—{% endif %}</strong>
+      </div>
+      <div class="client-edit-proposal-stat highlight">
+        <span class="client-edit-proposal-label">Funcionários</span>
+        <strong>{{ oppi_ponto.funcionarios if oppi_ponto.funcionarios is defined else 0 }}</strong>
+      </div>
+      <div class="client-edit-proposal-stat">
+        <span class="client-edit-proposal-label">Contrato</span>
+        <strong>
+          {% if oppi_ponto.contrato_aceito is none %}—
+          {% elif oppi_ponto.contrato_aceito %}Assinado
+          {% else %}Não assinado{% endif %}
+        </strong>
+      </div>
+      <div class="client-edit-proposal-stat">
+        <span class="client-edit-proposal-label">Status de acesso</span>
+        <strong>
+          {% if not oppi_ponto.company_id %}Sem vínculo
+          {% elif oppi_ponto.bloqueado %}Bloqueado
+          {% else %}Liberado{% endif %}
+        </strong>
+      </div>
+    </div>
+
+    {% if not oppi_ponto.configured %}
+    <div class="alert-warning" style="margin-top:12px">
+      Configure <code>OPPI_PONTO_API_URL</code> e <code>OPPI_PONTO_CRM_API_KEY</code> no EasyPanel do CRM para liberar/bloquear.
+    </div>
+    {% endif %}
+  </section>
+
+  <section class="client-edit-section panel">
+    <div class="client-edit-section-head">
+      <span class="client-edit-section-icon">👤</span>
+      <div>
+        <h2>Credenciais do gestor</h2>
+        <p>E-mails e senha usados no login do Oppi Ponto.</p>
+      </div>
+    </div>
+
+    <div class="form-grid cols-2">
+      <div class="form-group">
+        <label>E-mail de login do gestor</label>
+        <input name="email_login_gestor" type="email" value="{{ values.email_login_gestor }}" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label>E-mail de confirmação do administrador</label>
+        <input name="email_confirmacao_admin" type="email" value="{{ values.email_confirmacao_admin }}" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label>E-mail de cobrança</label>
+        <input name="email_cobranca" type="email" value="{{ values.email_cobranca }}" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label>Nova senha de acesso</label>
+        <input name="senha_acesso" type="password" value="" placeholder="Deixe em branco para manter" autocomplete="new-password">
+      </div>
+    </div>
+  </section>
+
+  <section class="client-edit-section panel">
+    <div class="client-edit-section-head">
+      <span class="client-edit-section-icon">⚡</span>
+      <div>
+        <h2>Ações de acesso</h2>
+        <p>Bloquear ou liberar o cliente no Oppi Ponto (como no painel Dev).</p>
+      </div>
+    </div>
+
+    <div class="oppi-acesso-actions">
+      <button type="submit" name="action" value="save_acesso" class="btn">Salvar alterações</button>
+      {% if oppi_ponto.configured %}
+      <button type="submit" form="oppi-ponto-form" name="action" value="bloquear" class="btn btn-outline-danger"
+        onclick="return confirm('Bloquear acesso desta empresa no Oppi Ponto?');">
+        Bloquear acesso
+      </button>
+      <button type="submit" form="oppi-ponto-form" name="action" value="liberar_pagamento" class="btn btn-outline-success"
+        onclick="return confirm('Liberar acesso e marcar pagamento como pago no Oppi Ponto?');">
+        Liberar acesso
+      </button>
+      <button type="submit" form="oppi-ponto-form" name="action" value="onboard" class="btn btn-secondary"
+        onclick="return confirm('Criar ou vincular esta empresa no Oppi Ponto?');">
+        Sincronizar / criar no Ponto
+      </button>
+      {% endif %}
+    </div>
+
+    {% if oppi_ponto.configured %}
+    <div class="form-group" style="margin-top:14px;max-width:420px">
+      <label>Motivo da liberação</label>
+      <input type="text" form="oppi-ponto-form" name="motivo" value="Pagamento confirmado no CRM" placeholder="Motivo da liberação">
+    </div>
+    {% endif %}
+  </section>
+</div>

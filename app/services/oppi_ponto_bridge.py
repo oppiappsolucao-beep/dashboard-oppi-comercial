@@ -27,6 +27,73 @@ def generate_access_password(length: int = 12) -> str:
     return "".join(secrets.choice(alphabet) for _ in range(max(8, length)))
 
 
+def refresh_ponto_snapshot(sheet_row: int, *, cnpj: str = "") -> dict:
+    """Atualiza snapshot local (funcionários, contrato, bloqueio) a partir do Oppi Ponto."""
+    snapshot = {
+        "company_id": resolve_oppi_ponto_company_id(sheet_row, cnpj=cnpj, lookup_remote=False),
+        "funcionarios": 0,
+        "contrato_aceito": None,
+        "bloqueado": False,
+        "ativo": True,
+        "plano_valor": "",
+        "admin_nome": "",
+        "admin_email": "",
+    }
+    stored = get_lead_action(DEFAULT_TENANT_ID, sheet_row) or {}
+    try:
+        snapshot["funcionarios"] = int(stored.get("oppi_ponto_funcionarios") or 0)
+    except (TypeError, ValueError):
+        snapshot["funcionarios"] = 0
+    if "oppi_ponto_contrato_aceito" in stored:
+        snapshot["contrato_aceito"] = bool(stored.get("oppi_ponto_contrato_aceito"))
+    snapshot["bloqueado"] = bool(stored.get("oppi_ponto_bloqueado"))
+    snapshot["plano_valor"] = normalize_text(stored.get("valor_proposta") or stored.get("oppi_ponto_plano_valor"))
+
+    if not oppi_ponto_configured():
+        return snapshot
+
+    digits = normalize_cnpj_for_duplicate(cnpj)
+    try:
+        remote = None
+        if digits:
+            remote = get_company_by_cnpj(digits)
+        if isinstance(remote, dict) and remote.get("id"):
+            company_id = int(remote["id"])
+            funcionarios = int(remote.get("funcionarios") or 0)
+            contrato = bool(remote.get("contrato_aceito"))
+            bloqueado = bool(remote.get("bloqueado_plataforma"))
+            ativo = bool(remote.get("ativo", True))
+            plano_valor = normalize_text(remote.get("plano_valor"))
+            save_lead_action(
+                DEFAULT_TENANT_ID,
+                sheet_row,
+                {
+                    "oppi_ponto_company_id": company_id,
+                    "oppi_ponto_funcionarios": funcionarios,
+                    "oppi_ponto_contrato_aceito": contrato,
+                    "oppi_ponto_bloqueado": bloqueado,
+                    "oppi_ponto_plano_valor": plano_valor,
+                },
+            )
+            snapshot.update(
+                {
+                    "company_id": company_id,
+                    "funcionarios": funcionarios,
+                    "contrato_aceito": contrato,
+                    "bloqueado": bloqueado,
+                    "ativo": ativo,
+                    "plano_valor": plano_valor,
+                    "admin_nome": normalize_text(remote.get("admin_nome")),
+                    "admin_email": normalize_text(remote.get("admin_email")),
+                }
+            )
+    except OppiPontoError:
+        pass
+    except Exception:
+        log.exception("Falha ao atualizar snapshot Oppi Ponto")
+    return snapshot
+
+
 def resolve_oppi_ponto_company_id(
     sheet_row: int,
     *,

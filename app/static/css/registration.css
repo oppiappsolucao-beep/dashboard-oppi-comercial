@@ -1565,6 +1565,41 @@
   cursor: not-allowed;
 }
 
+.btn-outline-danger {
+  background: #fff;
+  color: #b42318;
+  border: 1px solid #b42318;
+}
+
+.btn-outline-danger:hover {
+  background: #fff5f5;
+  color: #912018;
+  border-color: #912018;
+}
+
+.btn-outline-success {
+  background: #fff;
+  color: #067647;
+  border: 1px solid #067647;
+}
+
+.btn-outline-success:hover {
+  background: #f0fdf4;
+  color: #05603a;
+  border-color: #05603a;
+}
+
+.oppi-acesso-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.oppi-acesso-actions .btn {
+  min-height: 42px;
+}
+
 .client-delete-modal {
   position: fixed;
   inset: 0;

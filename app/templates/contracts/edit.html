@@ -73,6 +73,11 @@
       <span class="client-edit-tab-title"><span class="client-edit-tab-icon" aria-hidden="true">📄</span> Propostas</span>
       <span class="client-edit-tab-sub">Propostas enviadas{% if proposals_count %}<span class="client-edit-tab-badge">{{ proposals_count }}</span>{% endif %}</span>
     </a>
+    <a href="/cadastro/todos/{{ sheet_row }}/editar?tab=acesso{% if from_page %}&from={{ from_page }}{% endif %}"
+      class="client-edit-tab {% if active_tab == 'acesso' %}is-active{% endif %}">
+      <span class="client-edit-tab-title"><span class="client-edit-tab-icon" aria-hidden="true">🔐</span> Acesso</span>
+      <span class="client-edit-tab-sub">Oppi Ponto · liberar/bloquear</span>
+    </a>
     <a href="/cadastro/todos/{{ sheet_row }}/editar?tab=financeiro{% if from_page %}&from={{ from_page }}{% endif %}"
       class="client-edit-tab {% if active_tab == 'financeiro' %}is-active{% endif %}">
       <span class="client-edit-tab-title"><span class="client-edit-tab-icon" aria-hidden="true">💳</span> Financeiro</span>
@@ -106,6 +111,11 @@
     <footer class="client-edit-footer panel client-edit-footer-compact">
       {% include "partials/registration_danger_actions.html" %}
     </footer>
+    {% elif active_tab == 'acesso' %}
+    {% include "partials/registration_acesso_tab.html" %}
+    <footer class="client-edit-footer panel client-edit-footer-compact">
+      {% include "partials/registration_danger_actions.html" %}
+    </footer>
     {% elif active_tab == 'financeiro' %}
     {% include "partials/registration_financeiro_tab.html" %}
     <footer class="client-edit-footer panel">
@@ -132,7 +142,7 @@
 
 <form id="oppi-ponto-form" method="post" action="/cadastro/todos/{{ sheet_row }}/oppi-ponto" hidden>
   {% if from_page %}<input type="hidden" name="from" value="{{ from_page }}">{% endif %}
-  <input type="hidden" name="tab" value="financeiro">
+  <input type="hidden" name="tab" value="acesso">
 </form>
 
 {% include "partials/registration_delete_modal.html" %}
