@@ -151,6 +151,13 @@ def migration_reprocess_finance(
     try:
         if not target.exists():
             raise FileNotFoundError(f"Arquivo não encontrado: {target.name}")
+        # Reabre synced antes do reprocess — evita sumiço após sync automático.
+        try:
+            from app.services.pending_companies import reopen_synced_migration_pendings
+
+            reopen_synced_migration_pendings()
+        except Exception:
+            pass
         payload = _load_payload(target)
         from app.services.ponto_migration import build_migration_audit, reprocess_finance_from_export
 

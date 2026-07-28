@@ -195,40 +195,71 @@ def _pending_row_dict(item: dict) -> dict:
     }
 
 
+def _is_migration_empresa_payload(payload: dict) -> bool:
+    tipo = normalize_text(payload.get("cadastro_tipo")).lower() or "lead"
+    observacoes = normalize_text(payload.get("observacoes"))
+    servico = normalize_text(payload.get("servico"))
+    vendedor = normalize_text(payload.get("vendedor"))
+    return (
+        tipo == "empresa"
+        or "Migrado do Oppi Ponto" in observacoes
+        or "oppi_ponto_company_id" in observacoes
+        or "company_id=" in observacoes
+        or "Ponto Eletrônico" in servico
+        or vendedor.lower() == "oppi"
+    )
+
+
+def reopen_synced_migration_pendings() -> int:
+    """Reabre pendentes de migração marcados como synced (eles sumiam da lista Empresas)."""
+    from app.services.crm_local_db import mark_pending_company_pending
+
+    reopened = 0
+    for item in list_pending_companies(None) or []:
+        status = normalize_text(item.get("status")).lower()
+        if status == "pending":
+            continue
+        payload = item.get("payload") or {}
+        if not _is_migration_empresa_payload(payload):
+            continue
+        try:
+            mark_pending_company_pending(
+                int(item["id"]),
+                last_error="Reaberto: migração Oppi Ponto fica local até sync manual",
+            )
+            reopened += 1
+        except Exception:
+            continue
+    return reopened
+
+
 def merge_pending_companies_into_df(df: pd.DataFrame) -> pd.DataFrame:
     """Inclui cadastros locais pendentes nas listagens.
 
-    Regra simples para migração Oppi Ponto:
-    - Pendente com cadastro_tipo=empresa SEMPRE entra (por CNPJ único).
-    - Prefere empresa/migração sobre lead no mesmo CNPJ.
-    - Remove da planilha linhas com o mesmo CNPJ para não esconder o pendente no dedupe.
+    Regra: migração Oppi Ponto (pending ou synced) SEMPRE aparece por CNPJ.
     """
     from app.services.legacy_core import normalize_cnpj_for_duplicate
 
-    pending = list_pending_companies("pending")
+    try:
+        reopen_synced_migration_pendings()
+    except Exception:
+        pass
+
+    all_items = list_pending_companies(None) or []
+    pending = []
+    for item in all_items:
+        status = normalize_text(item.get("status")).lower() or "pending"
+        payload = item.get("payload") or {}
+        if status == "pending" or _is_migration_empresa_payload(payload):
+            pending.append(item)
+
     if not pending:
         return df if df is not None else pd.DataFrame()
 
-    def _is_migration_empresa(payload: dict) -> bool:
-        tipo = normalize_text(payload.get("cadastro_tipo")).lower() or "lead"
-        observacoes = normalize_text(payload.get("observacoes"))
-        servico = normalize_text(payload.get("servico"))
-        vendedor = normalize_text(payload.get("vendedor"))
-        return (
-            tipo == "empresa"
-            or "Migrado do Oppi Ponto" in observacoes
-            or "oppi_ponto_company_id" in observacoes
-            or "company_id=" in observacoes
-            or "Ponto Eletrônico" in servico
-            or vendedor.lower() == "oppi"
-        )
-
     def _priority(item: dict) -> tuple[int, int]:
         payload = item.get("payload") or {}
-        # Empresa/migração vence lead; depois o id mais recente.
-        return (1 if _is_migration_empresa(payload) else 0, int(item.get("id") or 0))
+        return (1 if _is_migration_empresa_payload(payload) else 0, int(item.get("id") or 0))
 
-    # Um pendente por CNPJ (empresa/migração tem prioridade).
     by_cnpj: dict[str, dict] = {}
     by_name_only: list[dict] = []
     for item in pending:
@@ -248,7 +279,7 @@ def merge_pending_companies_into_df(df: pd.DataFrame) -> pd.DataFrame:
     seen_names: set[str] = set()
     for _cnpj, item in by_cnpj.items():
         payload = item.get("payload") or {}
-        if not _is_migration_empresa(payload):
+        if not _is_migration_empresa_payload(payload):
             continue
         row = _pending_row_dict(item)
         row["_cadastro_tipo"] = "empresa"
@@ -351,7 +382,11 @@ def recover_pending_from_sheet_tab() -> int:
 
 
 def sync_pending_companies_to_sheet(*, max_items: int = 20) -> dict:
-    """Envia cadastros locais pendentes para a Folha1."""
+    """Envia cadastros locais pendentes para a Folha1.
+
+    Empresas migradas do Oppi Ponto NÃO entram no sync automático —
+    o sync marcava como synced e elas sumiam da lista Empresas.
+    """
     from app.services.legacy_core import (
         get_gsheet_client,
         invalidate_sheet_cache,
@@ -359,9 +394,22 @@ def sync_pending_companies_to_sheet(*, max_items: int = 20) -> dict:
     )
     from app.config import settings
 
-    pending = list_pending_companies("pending")[:max_items]
+    raw_pending = list_pending_companies("pending") or []
+    pending = [
+        item for item in raw_pending
+        if not _is_migration_empresa_payload(item.get("payload") or {})
+    ][:max_items]
+    skipped_migration = len(raw_pending) - len([
+        item for item in raw_pending
+        if not _is_migration_empresa_payload(item.get("payload") or {})
+    ])
     if not pending:
-        return {"synced": 0, "failed": 0, "remaining": 0}
+        return {
+            "synced": 0,
+            "failed": 0,
+            "remaining": len(raw_pending),
+            "skipped_migration": skipped_migration,
+        }
 
     synced = 0
     failed = 0
@@ -371,14 +419,28 @@ def sync_pending_companies_to_sheet(*, max_items: int = 20) -> dict:
         worksheet = _open_worksheet(spreadsheet, settings.worksheet_name)
     except Exception as error:
         log.warning("Sync pendentes: sem acesso à planilha (%s)", error)
-        return {"synced": 0, "failed": len(pending), "remaining": len(pending)}
+        return {
+            "synced": 0,
+            "failed": len(pending),
+            "remaining": len(raw_pending),
+            "skipped_migration": skipped_migration,
+        }
 
     for item in pending:
         try:
-            from app.services.legacy_core import _folha1_next_row, _write_folha1_row, get_last_good_sheet_values
+            from app.services.legacy_core import _folha1_next_row, _write_folha1_row
+            from app.services.lead_actions_storage import DEFAULT_TENANT_ID, get_lead_action, save_lead_action
 
             next_row = _folha1_next_row(worksheet, None)
             sheet_row = _write_folha1_row(worksheet, next_row, item["row_values"])
+            local_row = int(item.get("local_sheet_row") or -item["id"])
+            # Copia lead_actions do id local negativo para a linha real da planilha.
+            try:
+                local_action = get_lead_action(DEFAULT_TENANT_ID, local_row) or {}
+                if local_action and sheet_row:
+                    save_lead_action(DEFAULT_TENANT_ID, int(sheet_row), dict(local_action))
+            except Exception:
+                pass
             mark_pending_company_synced(item["id"], sheet_row or item["id"])
             synced += 1
             time.sleep(1.2)
@@ -400,4 +462,9 @@ def sync_pending_companies_to_sheet(*, max_items: int = 20) -> dict:
             pass
 
     remaining = len(list_pending_companies("pending"))
-    return {"synced": synced, "failed": failed, "remaining": remaining}
+    return {
+        "synced": synced,
+        "failed": failed,
+        "remaining": remaining,
+        "skipped_migration": skipped_migration,
+    }
