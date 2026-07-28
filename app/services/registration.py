@@ -253,14 +253,20 @@ def resolve_cadastro_tipo(
     """Tipo do cadastro: fonte da verdade é o botão Lead/Empresa.
 
     Sem tipo explícito, assume lead — CNPJ sozinho não promove a empresa.
+    Exceção: CNPJs migrados do Oppi Ponto (índice local) contam como empresa.
     """
     if sheet_row:
         stored = get_lead_action(tenant_id, sheet_row) or {}
         tipo = normalize_text(stored.get("cadastro_tipo")).lower()
         if tipo in {"lead", "empresa"}:
             return tipo
-    # cnpj é aceito por compatibilidade de assinatura, mas não altera o tipo
-    _ = cnpj
+    try:
+        from app.services.ponto_migration import is_cnpj_migrated_empresa
+
+        if is_cnpj_migrated_empresa(cnpj):
+            return "empresa"
+    except Exception:
+        pass
     return "lead"
 
 

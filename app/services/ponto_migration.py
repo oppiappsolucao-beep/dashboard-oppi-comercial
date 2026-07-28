@@ -25,6 +25,64 @@ from app.services.lead_actions_storage import DEFAULT_TENANT_ID, save_lead_actio
 
 MIGRATED_STATUS = "Fechado"
 MIGRATED_SERVICE_NAME = "Ponto Eletrônico Oppi"
+MIGRATION_INDEX_FILE = "ponto_migration_index.json"
+
+
+def _migration_index_path():
+    from app.services.storage_paths import get_storage_dir
+
+    return get_storage_dir() / MIGRATION_INDEX_FILE
+
+
+def load_migration_index() -> dict:
+    import json
+
+    path = _migration_index_path()
+    if not path.exists():
+        return {"by_cnpj": {}, "by_ponto_id": {}}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {"by_cnpj": {}, "by_ponto_id": {}}
+    if not isinstance(data, dict):
+        return {"by_cnpj": {}, "by_ponto_id": {}}
+    data.setdefault("by_cnpj", {})
+    data.setdefault("by_ponto_id", {})
+    return data
+
+
+def remember_migrated_company(company: dict, *, sheet_row: int | None = None) -> None:
+    """Índice local: CNPJ migrado do Ponto = sempre Empresa na listagem."""
+    import json
+
+    cnpj = normalize_cnpj_for_duplicate(company.get("cnpj"))
+    ponto_id = int(company.get("oppi_ponto_company_id") or 0)
+    if not cnpj and not ponto_id:
+        return
+    data = load_migration_index()
+    entry = {
+        "oppi_ponto_company_id": ponto_id,
+        "empresa": normalize_text(company.get("razao_social")) or normalize_text(company.get("nome")),
+        "cnpj": cnpj,
+        "sheet_row": sheet_row,
+        "cadastro_tipo": "empresa",
+        "updated_at": datetime.now().isoformat(timespec="seconds"),
+    }
+    if cnpj:
+        data["by_cnpj"][cnpj] = entry
+    if ponto_id:
+        data["by_ponto_id"][str(ponto_id)] = entry
+    path = _migration_index_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def is_cnpj_migrated_empresa(cnpj: str) -> bool:
+    digits = normalize_cnpj_for_duplicate(cnpj)
+    if not digits:
+        return False
+    entry = (load_migration_index().get("by_cnpj") or {}).get(digits)
+    return bool(entry and entry.get("cadastro_tipo") == "empresa")
 
 
 def _format_money(value: str) -> str:
@@ -298,15 +356,17 @@ def _persist_extras(sheet_row: int, company: dict, *, ativo_crm: bool) -> None:
             "migrated_at": datetime.now().isoformat(timespec="seconds"),
         },
     )
+    remember_migrated_company(company, sheet_row=sheet_row)
 
 
 def apply_company(company: dict, *, local_only: bool = True) -> dict:
     """Grava no CRM como empresa.
 
     local_only=True:
-    - Se o CNPJ já existe na planilha (snapshot): só promove para tipo Empresa (lead_actions).
-    - Se já está pendente local: atualiza extras.
-    - Senão: cria pendente local (aparece na lista sem Google Sheets).
+    - Sempre garante índice local (CNPJ = Empresa na listagem).
+    - Se CNPJ já existe na planilha: promove lead_actions + cria pendente se ainda não houver
+      (garante aparecer mesmo com cache da planilha incompleto).
+    - Senão: cria pendente local.
     """
     preview = preview_company(company)
     action = preview["action"]
@@ -316,90 +376,74 @@ def apply_company(company: dict, *, local_only: bool = True) -> dict:
     form = map_ponto_company_to_form(company)
     ativo_crm = bool(company.get("ativo")) and not bool(company.get("bloqueado_plataforma"))
     cnpj = normalize_cnpj_for_duplicate(company.get("cnpj"))
-    ponto_id = int(company.get("oppi_ponto_company_id") or 0)
 
-    # 1) Já existe na planilha → promove para Empresa (não cria pendente duplicado).
+    def _ensure_pending() -> int | None:
+        try:
+            from app.services.pending_companies import enqueue_payload_locally, list_pending_companies
+
+            for pend in list_pending_companies("pending") or []:
+                if normalize_cnpj_for_duplicate((pend.get("payload") or {}).get("cnpj")) == cnpj:
+                    return int(pend.get("local_sheet_row") or -pend["id"])
+            return enqueue_payload_locally(form, last_error="Migração Oppi Ponto (local)")
+        except Exception:
+            return None
+
     existing_sheet = find_sheet_row_by_cnpj(cnpj) if cnpj else None
     if existing_sheet and existing_sheet > 0:
         try:
             _persist_extras(existing_sheet, company, ativo_crm=ativo_crm)
+        except Exception as err:
+            # Mesmo com falha parcial, grava índice e tenta pendente para ficar visível.
+            remember_migrated_company(company, sheet_row=existing_sheet)
+            pending_row = _ensure_pending()
+            if pending_row:
+                try:
+                    _persist_extras(pending_row, company, ativo_crm=ativo_crm)
+                except Exception:
+                    remember_migrated_company(company, sheet_row=pending_row)
             return {
                 **preview,
                 "action": "promote",
                 "sheet_row": existing_sheet,
                 "ok": True,
-                "message": f"CNPJ já na planilha (linha {existing_sheet}) — promovido para Empresa.",
+                "message": f"Promovido com ressalva ({err}). Pendente={pending_row}.",
             }
-        except Exception as err:
-            return {**preview, "ok": False, "message": f"Falha ao promover linha {existing_sheet}: {err}"}
 
-    # 2) Já existe pendente local com mesmo CNPJ → só reforça extras.
-    try:
-        from app.services.pending_companies import list_pending_companies
+        pending_row = _ensure_pending()
+        if pending_row:
+            try:
+                _persist_extras(pending_row, company, ativo_crm=ativo_crm)
+            except Exception:
+                remember_migrated_company(company, sheet_row=pending_row)
+        return {
+            **preview,
+            "action": "promote",
+            "sheet_row": existing_sheet,
+            "ok": True,
+            "message": f"CNPJ na planilha (linha {existing_sheet}) promovido + pendente local para garantir lista.",
+        }
 
-        for pend in list_pending_companies("pending") or []:
-            if normalize_cnpj_for_duplicate((pend.get("payload") or {}).get("cnpj")) != cnpj:
-                continue
-            sheet_row = int(pend.get("local_sheet_row") or -pend["id"])
-            _persist_extras(sheet_row, company, ativo_crm=ativo_crm)
-            return {
-                **preview,
-                "action": "skip_already",
-                "sheet_row": sheet_row,
-                "ok": True,
-                "message": f"Já estava pendente local (id {sheet_row}).",
-            }
-    except Exception:
-        pass
-
-    # 3) Novo → pendente local
+    # Novo / sem snapshot: pendente local
     if local_only or action == "create":
         try:
-            from app.services.pending_companies import enqueue_payload_locally
-
-            sheet_row = enqueue_payload_locally(form, last_error="Migração Oppi Ponto (local)")
+            sheet_row = _ensure_pending()
+            if not sheet_row:
+                raise RuntimeError("Não foi possível criar pendente local")
             _persist_extras(sheet_row, company, ativo_crm=ativo_crm)
             return {
                 **preview,
                 "action": "create",
                 "sheet_row": sheet_row,
                 "ok": True,
-                "message": f"Empresa enfileirada localmente (id {sheet_row}). Aparece em Empresas agora.",
+                "message": f"Empresa enfileirada localmente (id {sheet_row}).",
             }
         except Exception as err:
+            # Último recurso: só índice
+            remember_migrated_company(company, sheet_row=None)
             return {**preview, "ok": False, "message": f"Falha local: {err}"}
 
-    # Caminho legado (update na planilha) — só se explicitamente local_only=False
-    try:
-        if action == "update" and preview.get("sheet_row"):
-            sheet_row = int(preview["sheet_row"])
-            save_company_edit(sheet_row, form)
-        else:
-            sheet_row = save_new_company(form)
-    except DuplicateRegistrationError as err:
-        sheet_row = find_sheet_row_by_cnpj(form.get("cnpj", ""))
-        if not sheet_row:
-            return {**preview, "ok": False, "message": str(err)}
-        try:
-            save_company_edit(sheet_row, form)
-        except Exception as edit_err:
-            if "429" in str(edit_err) or "Quota" in str(edit_err):
-                return {**preview, "ok": False, "message": "Cota Google Sheets esgotada. Aguarde 2 minutos e tente de novo."}
-            return {**preview, "ok": False, "message": str(edit_err)}
-        action = "update"
-    except Exception as err:
-        if "429" in str(err) or "Quota" in str(err):
-            return {**preview, "ok": False, "message": "Cota Google Sheets esgotada. Aguarde 2 minutos e tente de novo."}
-        return {**preview, "ok": False, "message": str(err)}
-
-    _persist_extras(sheet_row, company, ativo_crm=ativo_crm)
-    return {
-        **preview,
-        "action": action,
-        "sheet_row": sheet_row,
-        "ok": True,
-        "message": f"{'Atualizada' if action == 'update' else 'Criada'} como empresa (linha {sheet_row}).",
-    }
+    remember_migrated_company(company, sheet_row=preview.get("sheet_row"))
+    return {**preview, "ok": False, "message": "Modo local obrigatório nesta migração."}
 
 
 def build_migration_audit(payload: dict | list) -> dict:
@@ -468,8 +512,9 @@ def build_migration_audit(payload: dict | list) -> dict:
             visible = True
         if sheet_row and sheet_row in empresa_rows:
             visible = True
+        if cnpj and is_cnpj_migrated_empresa(cnpj):
+            visible = True
         if ponto_id and ponto_id in migrated_ponto_ids:
-            # extras já gravados com cadastro_tipo=empresa
             for key, record in local_actions.items():
                 if int(record.get("oppi_ponto_company_id") or 0) != ponto_id:
                     continue

@@ -255,18 +255,34 @@ def apply_leads_view(
             return result.iloc[0:0]
 
     if tab == "empresas":
-        # Prefere CNPJ para não esconder filiais com nomes parecidos.
+        # Prefere Empresa/pendente sobre Lead no mesmo CNPJ.
+        result = result.copy()
+        result["_empresa_rank"] = result.apply(
+            lambda row: 0
+            if (
+                normalize_text(row.get("_cadastro_tipo")).lower() == "empresa"
+                or bool(row.get("_pending_local"))
+            )
+            else 1,
+            axis=1,
+        )
         if "CNPJ" in result.columns:
             result["_dedupe_key"] = result["CNPJ"].apply(
                 lambda value: normalize_text(value) or ""
             )
             result.loc[result["_dedupe_key"] == "", "_dedupe_key"] = result["_empresa"].astype(str)
-            result = result.sort_values(["_empresa", "_data_chamado"], ascending=[True, False])
+            result = result.sort_values(
+                ["_empresa_rank", "_empresa", "_data_chamado"],
+                ascending=[True, True, False],
+            )
             result = result.drop_duplicates(subset=["_dedupe_key"], keep="first")
-            result = result.drop(columns=["_dedupe_key"], errors="ignore")
         else:
-            result = result.sort_values(["_empresa", "_data_chamado"], ascending=[True, False])
+            result = result.sort_values(
+                ["_empresa_rank", "_empresa", "_data_chamado"],
+                ascending=[True, True, False],
+            )
             result = result.drop_duplicates(subset=["_empresa"], keep="first")
+        result = result.drop(columns=["_dedupe_key", "_empresa_rank"], errors="ignore")
 
     if stage and stage != "Todas as etapas":
         result = result[
