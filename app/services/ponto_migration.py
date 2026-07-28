@@ -458,14 +458,26 @@ def build_migration_audit(payload: dict | list) -> dict:
     from app.services.pending_companies import list_pending_companies
 
     pending = list_pending_companies("pending") or []
+    pending_migration = []
     pending_cnpjs = set()
     pending_ponto_ids = set()
     for item in pending:
         pl = item.get("payload") or {}
         digits = normalize_cnpj_for_duplicate(pl.get("cnpj"))
+        obs = normalize_text(pl.get("observacoes"))
+        servico = normalize_text(pl.get("servico"))
+        tipo = normalize_text(pl.get("cadastro_tipo")).lower()
+        is_mig = (
+            tipo == "empresa"
+            or "Migrado do Oppi Ponto" in obs
+            or "company_id=" in obs
+            or "Ponto Eletrônico" in servico
+            or normalize_text(pl.get("vendedor")).lower() == "oppi"
+        )
+        if is_mig:
+            pending_migration.append(item)
         if digits:
             pending_cnpjs.add(digits)
-        obs = normalize_text(pl.get("observacoes"))
         if "company_id=" in obs:
             try:
                 pending_ponto_ids.add(int(obs.split("company_id=")[1].split(")")[0].split(".")[0].split()[0]))
@@ -543,6 +555,12 @@ def build_migration_audit(payload: dict | list) -> dict:
         "found_count": len(found),
         "missing_count": len(missing),
         "pending_count": len(pending),
+        "pending_migration_count": len(pending_migration),
+        "pending_migration_cnpjs": len({
+            normalize_cnpj_for_duplicate((i.get("payload") or {}).get("cnpj"))
+            for i in pending_migration
+            if normalize_cnpj_for_duplicate((i.get("payload") or {}).get("cnpj"))
+        }),
         "visible_as_empresa": len(as_empresa),
         "need_promote": len(not_visible),
         "found": found,

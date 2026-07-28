@@ -193,88 +193,95 @@ def _pending_row_dict(item: dict) -> dict:
 
 
 def merge_pending_companies_into_df(df: pd.DataFrame) -> pd.DataFrame:
-    """Inclui cadastros locais ainda não sincronizados nas listagens do site."""
+    """Inclui cadastros locais pendentes nas listagens.
+
+    Regra simples para migração Oppi Ponto:
+    - Pendente com cadastro_tipo=empresa SEMPRE entra (por CNPJ único).
+    - Remove da planilha linhas com o mesmo CNPJ para não esconder o pendente no dedupe.
+    """
     from app.services.legacy_core import normalize_cnpj_for_duplicate
 
     pending = list_pending_companies("pending")
     if not pending:
-        return df
+        return df if df is not None else pd.DataFrame()
 
-    existing_names: set[str] = set()
-    # Só conta Empresa se a linha JÁ ESTÁ no dataframe atual (não use índice externo).
-    empresa_cnpjs_in_df: set[str] = set()
-    if df is not None and not df.empty:
-        if "_empresa" in df.columns:
-            existing_names = {
-                normalize_text(value).lower()
-                for value in df["_empresa"].tolist()
-                if normalize_text(value)
-            }
-        for _, row in df.iterrows():
-            cnpj = normalize_cnpj_for_duplicate(row.get("CNPJ") or row.get("cnpj") or "")
-            if not cnpj:
-                for key in row.index:
-                    if normalize_text(key).lower() == "cnpj":
-                        cnpj = normalize_cnpj_for_duplicate(row.get(key))
-                        break
-            if not cnpj:
-                continue
-            tipo = normalize_text(row.get("_cadastro_tipo")).lower()
-            if tipo == "empresa" or bool(row.get("_pending_local")):
-                empresa_cnpjs_in_df.add(cnpj)
-            else:
-                # Linha da planilha presente: se resolve como empresa, conta.
-                try:
-                    from app.services.registration import resolve_cadastro_tipo
-                    from app.services.lead_actions_storage import DEFAULT_TENANT_ID
-
-                    sheet_row = int(row.get("_sheet_row") or 0)
-                    if sheet_row > 0 and resolve_cadastro_tipo(DEFAULT_TENANT_ID, sheet_row, cnpj=cnpj) == "empresa":
-                        empresa_cnpjs_in_df.add(cnpj)
-                except Exception:
-                    pass
-
-    rows = []
+    # Um pendente por CNPJ (fica o de maior id = mais recente).
+    by_cnpj: dict[str, dict] = {}
+    by_name_only: list[dict] = []
     for item in pending:
         payload = item.get("payload") or {}
         empresa = normalize_text(payload.get("empresa") or item.get("empresa"))
         if not empresa:
             continue
         cnpj = normalize_cnpj_for_duplicate(payload.get("cnpj"))
-        # Só pula pendente se essa empresa JÁ aparece no df atual como Empresa.
-        if cnpj and cnpj in empresa_cnpjs_in_df:
-            continue
-        if not cnpj and empresa.lower() in existing_names:
-            continue
-        rows.append(_pending_row_dict(item))
-        existing_names.add(empresa.lower())
+        tipo = normalize_text(payload.get("cadastro_tipo")).lower() or "lead"
+        # Migração / empresa: prioriza na lista.
         if cnpj:
-            empresa_cnpjs_in_df.add(cnpj)
+            prev = by_cnpj.get(cnpj)
+            if prev is None or int(item.get("id") or 0) >= int(prev.get("id") or 0):
+                by_cnpj[cnpj] = item
+        else:
+            by_name_only.append(item)
+
+    rows: list[dict] = []
+    seen_names: set[str] = set()
+    # Primeiro todas as empresas migradas (com CNPJ).
+    for cnpj, item in by_cnpj.items():
+        payload = item.get("payload") or {}
+        tipo = normalize_text(payload.get("cadastro_tipo")).lower() or "lead"
+        observacoes = normalize_text(payload.get("observacoes"))
+        servico = normalize_text(payload.get("servico"))
+        vendedor = normalize_text(payload.get("vendedor"))
+        is_migration = (
+            tipo == "empresa"
+            or "Migrado do Oppi Ponto" in observacoes
+            or "oppi_ponto_company_id" in observacoes
+            or "company_id=" in observacoes
+            or "Ponto Eletrônico" in servico
+            or vendedor.lower() == "oppi"
+        )
+        if not is_migration and tipo != "empresa":
+            continue
+        row = _pending_row_dict(item)
+        row["_cadastro_tipo"] = "empresa"
+        rows.append(row)
+        seen_names.add(normalize_text(row.get("_empresa")).lower())
+
+    # Se sobrou pendente lead sem CNPJ, mantém comportamento antigo leve.
+    for item in by_name_only:
+        payload = item.get("payload") or {}
+        if normalize_text(payload.get("cadastro_tipo")).lower() == "empresa":
+            row = _pending_row_dict(item)
+            row["_cadastro_tipo"] = "empresa"
+            name = normalize_text(row.get("_empresa")).lower()
+            if name and name not in seen_names:
+                rows.append(row)
+                seen_names.add(name)
 
     if not rows:
-        return df
+        return df if df is not None else pd.DataFrame()
 
     pending_df = pd.DataFrame(rows)
     if df is None or df.empty:
         return pending_df.reset_index(drop=True)
 
-    pending_cnpjs_add = {
-        normalize_cnpj_for_duplicate(row.get("CNPJ"))
-        for _, row in pending_df.iterrows()
-        if normalize_cnpj_for_duplicate(row.get("CNPJ"))
+    pending_cnpjs = {
+        normalize_cnpj_for_duplicate(value)
+        for value in pending_df.get("CNPJ", []).tolist()
+        if normalize_cnpj_for_duplicate(value)
     }
-    if pending_cnpjs_add:
-        def _row_cnpj(row) -> str:
-            cnpj = normalize_cnpj_for_duplicate(row.get("CNPJ") or row.get("cnpj") or "")
-            if cnpj:
-                return cnpj
-            for key in row.index:
-                if normalize_text(key).lower() == "cnpj":
-                    return normalize_cnpj_for_duplicate(row.get(key))
-            return ""
 
-        # Remove Lead da planilha com mesmo CNPJ para o pendente Empresa ganhar.
-        df = df[~df.apply(lambda row: _row_cnpj(row) in pending_cnpjs_add, axis=1)].copy()
+    def _row_cnpj(row) -> str:
+        cnpj = normalize_cnpj_for_duplicate(row.get("CNPJ") or row.get("cnpj") or "")
+        if cnpj:
+            return cnpj
+        for key in row.index:
+            if normalize_text(key).lower() == "cnpj":
+                return normalize_cnpj_for_duplicate(row.get(key))
+        return ""
+
+    if pending_cnpjs:
+        df = df[~df.apply(lambda row: _row_cnpj(row) in pending_cnpjs, axis=1)].copy()
 
     combined = pd.concat([pending_df, df], ignore_index=True, sort=False)
     return combined.reset_index(drop=True)

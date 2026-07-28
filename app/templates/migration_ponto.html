@@ -24,8 +24,9 @@
   <p>
     esperado={{ audit.expected }}
     · visíveis como Empresa={{ audit.visible_as_empresa or 0 }}
-    · precisam promover={{ audit.need_promote or 0 }}
+    · pendentes migração={{ audit.pending_migration_cnpjs or audit.pending_migration_count or 0 }}
     · pendentes locais={{ audit.pending_count }}
+    · precisam promover={{ audit.need_promote or 0 }}
     · faltando={{ audit.missing_count }}
   </p>
   {% if audit.not_visible %}
