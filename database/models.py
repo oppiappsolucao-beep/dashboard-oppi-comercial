@@ -349,6 +349,7 @@ class AttendanceConversation(Base):
     unread_count = Column(Integer, nullable=False, default=0)
     typing = Column(Boolean, nullable=False, default=False)
     remote_jid = Column(String(255), nullable=False, default="")
+    evolution_instance = Column(String(120), nullable=False, default="", index=True)
     sector_id = Column(Integer, nullable=True, index=True)
     sector_name = Column(String(150), nullable=False, default="")
     created_at = Column(String(40), nullable=False, default="")

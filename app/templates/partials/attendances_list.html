@@ -1,12 +1,12 @@
 {% if conversations %}
   {% for c in conversations %}
-  <a href="/atendimentos?c={{ c.id }}&search={{ search | urlencode }}&status={{ status_filter | urlencode }}&sector={{ sector_filter | urlencode }}"
+  <a href="/atendimentos?c={{ c.id }}&search={{ search | urlencode }}&status={{ status_filter | urlencode }}&sector={{ sector_filter | urlencode }}&line={{ line_filter | urlencode }}"
      class="att-conv-item {% if selected and selected.id == c.id %}active{% endif %}"
      data-conversation-id="{{ c.id }}"
-     hx-get="/atendimentos/conversa/{{ c.id }}?search={{ search | urlencode }}&status={{ status_filter | urlencode }}&sector={{ sector_filter | urlencode }}"
+     hx-get="/atendimentos/conversa/{{ c.id }}?search={{ search | urlencode }}&status={{ status_filter | urlencode }}&sector={{ sector_filter | urlencode }}&line={{ line_filter | urlencode }}"
      hx-target="#att-chat-root"
      hx-swap="innerHTML"
-     hx-push-url="/atendimentos?c={{ c.id }}&search={{ search | urlencode }}&status={{ status_filter | urlencode }}&sector={{ sector_filter | urlencode }}"
+     hx-push-url="/atendimentos?c={{ c.id }}&search={{ search | urlencode }}&status={{ status_filter | urlencode }}&sector={{ sector_filter | urlencode }}&line={{ line_filter | urlencode }}"
      hx-on::after-request="document.getElementById('att-shell')?.classList.add('att-shell--chat-open')">
     <div class="att-avatar" {% if c.profile_pic_url %}style="background-image:url('{{ c.profile_pic_url }}')"{% endif %}>
       {% if not c.profile_pic_url %}{{ c.initials }}{% endif %}
@@ -30,7 +30,7 @@
 {% else %}
   <div class="att-list-empty">
     {% if evolution_configured %}
-      Nenhuma conversa ainda. Envie um WhatsApp para a instância Evolution.
+      Nenhuma conversa nesta linha ainda.
     {% else %}
       Configure <code>EVOLUTION_API_*</code> e o webhook<br>
       <code>https://comercial.oppitech.com.br/webhooks/evolution</code>

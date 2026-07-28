@@ -101,7 +101,9 @@
       values: {
         search: ($("#att-search") || {}).value || "",
         status: ($("#att-status") || {}).value || "abertos",
-        conversation_id: selectedId(),
+        sector: ($("#att-sector") || {}).value || "todos",
+        line: ($("#att-line") || {}).value || "",
+        conversation_id: opts.clearSelection ? "" : selectedId(),
       },
     });
     if (opts.bumpId) {
@@ -118,13 +120,50 @@
     if (!id || !window.htmx) return;
     var search = ($("#att-search") || {}).value || "";
     var status = ($("#att-status") || {}).value || "abertos";
+    var sector = ($("#att-sector") || {}).value || "todos";
+    var line = ($("#att-line") || {}).value || "";
     window.htmx.ajax(
       "GET",
       "/atendimentos/conversa/" + encodeURIComponent(id) +
         "?search=" + encodeURIComponent(search) +
-        "&status=" + encodeURIComponent(status),
+        "&status=" + encodeURIComponent(status) +
+        "&sector=" + encodeURIComponent(sector) +
+        "&line=" + encodeURIComponent(line),
       { target: "#att-chat-root", swap: "innerHTML" }
     );
+  }
+
+  function switchWhatsappLine(lineId) {
+    if (!lineId) return;
+    var input = $("#att-line");
+    var shell = $("#att-shell");
+    if (input) input.value = lineId;
+    if (shell) {
+      shell.setAttribute("data-line", lineId);
+      shell.setAttribute("data-selected", "");
+      shell.classList.remove("att-shell--chat-open");
+    }
+    document.querySelectorAll(".att-line-pill").forEach(function (btn) {
+      var active = btn.getAttribute("data-line") === lineId;
+      btn.classList.toggle("active", active);
+      btn.setAttribute("aria-selected", active ? "true" : "false");
+    });
+    var chat = $("#att-chat-root");
+    if (chat) {
+      chat.innerHTML =
+        '<div class="att-empty-state"><div class="att-empty-icon">💬</div>' +
+        "<h2>Selecione uma conversa</h2>" +
+        "<p>Mensagens desta linha WhatsApp aparecem aqui.</p></div>";
+    }
+    var hiddenConv = document.querySelector('.att-filters input[name="conversation_id"]');
+    if (hiddenConv) hiddenConv.remove();
+    try {
+      var url = new URL(window.location.href);
+      url.searchParams.set("line", lineId);
+      url.searchParams.delete("c");
+      window.history.replaceState({}, "", url.toString());
+    } catch (e) {}
+    refreshList({ clearSelection: true });
   }
 
   function handleEvent(data) {
@@ -495,6 +534,17 @@
   if (newCallCancel && newCallPanel) {
     newCallCancel.addEventListener("click", function () {
       newCallPanel.setAttribute("hidden", "hidden");
+    });
+  }
+
+  var lineSwitcher = $("#att-line-switcher");
+  if (lineSwitcher) {
+    lineSwitcher.addEventListener("click", function (ev) {
+      var btn = ev.target && ev.target.closest ? ev.target.closest(".att-line-pill") : null;
+      if (!btn) return;
+      var lineId = btn.getAttribute("data-line") || "";
+      if (!lineId || btn.classList.contains("active")) return;
+      switchWhatsappLine(lineId);
     });
   }
 

@@ -18,6 +18,49 @@ from database.models import AttendanceConversation, AttendanceMessage
 
 logger = logging.getLogger(__name__)
 
+
+def _primary_evolution_instance() -> str:
+    try:
+        from app.config import settings
+
+        return normalize_text(settings.evolution_primary_instance)
+    except Exception:
+        return ""
+
+
+def resolve_evolution_instance(value: str | None = None) -> str:
+    """Nome canônico da linha; vazio no banco = primary."""
+    name = normalize_text(value or "")
+    primary = _primary_evolution_instance()
+    if not name:
+        return primary
+    try:
+        from app.config import settings
+
+        for configured in settings.evolution_instances:
+            if configured.lower() == name.lower():
+                return configured
+    except Exception:
+        pass
+    return name
+
+
+def _sql_instance_match(wanted: str):
+    """Filtro SQL: conversas da linha (legado vazio = primary)."""
+    primary = _primary_evolution_instance()
+    wanted_n = normalize_text(wanted) or primary
+    wanted_l = wanted_n.lower()
+    primary_l = primary.lower()
+    col = AttendanceConversation.evolution_instance
+    if wanted_l == primary_l or not primary_l:
+        return or_(
+            func.lower(col) == wanted_l,
+            col == "",
+            col.is_(None),
+        )
+    return func.lower(col) == wanted_l
+
+
 STATUS_NOVO_LEAD = "novo_lead"
 STATUS_EM_ATENDIMENTO = "em_atendimento"
 STATUS_FINALIZADO = "finalizado"
@@ -132,6 +175,9 @@ def _conversation_to_dict(row: AttendanceConversation | None) -> dict:
         "typing": bool(row.typing),
         "sector_id": int(row.sector_id) if getattr(row, "sector_id", None) else None,
         "sector_name": getattr(row, "sector_name", None) or "",
+        "evolution_instance": resolve_evolution_instance(
+            getattr(row, "evolution_instance", None) or ""
+        ),
         "created_at": row.created_at or "",
         "updated_at": row.updated_at or "",
         "initials": _initials(row.contact_name or row.phone_e164),
@@ -162,7 +208,11 @@ def get_conversation(conversation_id: str) -> dict | None:
         return _conversation_to_dict(row) if row else None
 
 
-def get_conversation_by_phone(phone_e164: str) -> dict | None:
+def get_conversation_by_phone(
+    phone_e164: str,
+    *,
+    evolution_instance: str | None = None,
+) -> dict | None:
     from app.services.evolution_client import phone_match_variants
 
     phone = normalize_text(phone_e164)
@@ -170,27 +220,35 @@ def get_conversation_by_phone(phone_e164: str) -> dict | None:
         return None
     variants = phone_match_variants(phone) or [phone]
     with _session(commit=False) as db:
-        row = (
-            db.query(AttendanceConversation)
-            .filter(AttendanceConversation.phone_e164.in_(variants))
-            .order_by(AttendanceConversation.updated_at.desc())
-            .first()
+        q = db.query(AttendanceConversation).filter(
+            AttendanceConversation.phone_e164.in_(variants)
         )
+        if evolution_instance is not None:
+            instance = resolve_evolution_instance(evolution_instance)
+            if instance:
+                q = q.filter(_sql_instance_match(instance))
+        row = q.order_by(AttendanceConversation.updated_at.desc()).first()
         return _conversation_to_dict(row) if row else None
 
 
-def get_conversation_by_remote_jid(remote_jid: str) -> dict | None:
+def get_conversation_by_remote_jid(
+    remote_jid: str,
+    *,
+    evolution_instance: str | None = None,
+) -> dict | None:
     """Localiza conversa pelo JID (@lid ou @s.whatsapp.net) — útil quando o webhook não traz telefone."""
     jid = normalize_text(remote_jid)
     if not jid:
         return None
     with _session(commit=False) as db:
-        row = (
-            db.query(AttendanceConversation)
-            .filter(AttendanceConversation.remote_jid == jid)
-            .order_by(AttendanceConversation.updated_at.desc())
-            .first()
+        q = db.query(AttendanceConversation).filter(
+            AttendanceConversation.remote_jid == jid
         )
+        if evolution_instance is not None:
+            instance = resolve_evolution_instance(evolution_instance)
+            if instance:
+                q = q.filter(_sql_instance_match(instance))
+        row = q.order_by(AttendanceConversation.updated_at.desc()).first()
         return _conversation_to_dict(row) if row else None
 
 
@@ -199,6 +257,7 @@ def upsert_conversation_by_remote_jid(
     *,
     contact_name: str = "",
     phone_e164: str = "",
+    evolution_instance: str = "",
 ) -> dict:
     """Cria/atualiza conversa a partir do JID — cobre contato novo que só chega como @lid."""
     from app.services.evolution_client import is_whatsapp_group_jid, normalize_phone_from_jid
@@ -206,6 +265,7 @@ def upsert_conversation_by_remote_jid(
     remote_jid = normalize_text(remote_jid)
     contact_name = normalize_text(contact_name)
     phone = normalize_text(phone_e164)
+    instance = resolve_evolution_instance(evolution_instance)
     # Nunca derive telefone a partir de @lid (vira número inventado enorme)
     if not phone and remote_jid and "@lid" not in remote_jid.lower():
         phone = normalize_phone_from_jid(remote_jid)
@@ -221,13 +281,18 @@ def upsert_conversation_by_remote_jid(
             phone,
             contact_name=contact_name,
             remote_jid=remote_jid,
+            evolution_instance=instance,
         )
 
-    existing = get_conversation_by_remote_jid(remote_jid)
+    existing = get_conversation_by_remote_jid(
+        remote_jid, evolution_instance=instance or ""
+    )
     if existing:
         updates: dict = {}
         if contact_name and not normalize_text(existing.get("contact_name") or ""):
             updates["contact_name"] = contact_name
+        if instance and not normalize_text(existing.get("evolution_instance") or ""):
+            updates["evolution_instance"] = instance
         if updates:
             return update_conversation(existing["id"], **updates) or existing
         return existing
@@ -253,6 +318,7 @@ def upsert_conversation_by_remote_jid(
             unread_count=0,
             typing=False,
             remote_jid=remote_jid,
+            evolution_instance=instance,
             sector_id=None,
             sector_name="",
             created_at=now,
@@ -367,10 +433,12 @@ def list_conversations(
     search: str = "",
     status: str = "",
     sector_id: int | str | None = None,
+    evolution_instance: str = "",
     limit: int = 100,
 ) -> list[dict]:
     from app.services.evolution_client import is_whatsapp_group_jid
 
+    instance = resolve_evolution_instance(evolution_instance)
     with _session(commit=False) as db:
         q = db.query(AttendanceConversation)
         if status and status != "todos":
@@ -382,6 +450,8 @@ def list_conversations(
             # Padrão / "todos": só fila ativa (Novo Lead + Em Atendimento).
             # Finalizados só aparecem quando o filtro "Finalizado" é selecionado.
             q = q.filter(AttendanceConversation.status != STATUS_FINALIZADO)
+        if instance:
+            q = q.filter(_sql_instance_match(instance))
         if sector_id not in (None, "", "todos", "all"):
             try:
                 sid = int(sector_id)
@@ -437,12 +507,14 @@ def upsert_conversation_by_phone(
     sheet_row: int | None = None,
     status: str | None = None,
     remote_jid: str = "",
+    evolution_instance: str = "",
 ) -> dict:
     from app.services.evolution_client import is_whatsapp_group_jid, phone_match_variants
 
     phone = normalize_text(phone_e164)
     remote_jid = normalize_text(remote_jid)
     contact_name = normalize_text(contact_name)
+    instance = resolve_evolution_instance(evolution_instance)
     if is_whatsapp_group_jid(phone) or is_whatsapp_group_jid(remote_jid):
         return {}
     if _normalize_contact_key(contact_name) in UNWANTED_INBOX_CONTACT_KEYS:
@@ -454,21 +526,21 @@ def upsert_conversation_by_phone(
     phone_variants = phone_match_variants(phone) or [phone]
 
     with _lock, _session() as db:
-        existing = (
-            db.query(AttendanceConversation)
-            .filter(AttendanceConversation.phone_e164.in_(phone_variants))
-            .order_by(AttendanceConversation.updated_at.desc())
-            .first()
+        q = db.query(AttendanceConversation).filter(
+            AttendanceConversation.phone_e164.in_(phone_variants)
         )
+        if instance:
+            q = q.filter(_sql_instance_match(instance))
+        existing = q.order_by(AttendanceConversation.updated_at.desc()).first()
         # Mesmo contato pode ter sido aberto só com @lid (sem telefone no 1º payload)
         phone_linked_from_jid = False
         if not existing and remote_jid:
-            existing = (
-                db.query(AttendanceConversation)
-                .filter(AttendanceConversation.remote_jid == remote_jid)
-                .order_by(AttendanceConversation.updated_at.desc())
-                .first()
+            jq = db.query(AttendanceConversation).filter(
+                AttendanceConversation.remote_jid == remote_jid
             )
+            if instance:
+                jq = jq.filter(_sql_instance_match(instance))
+            existing = jq.order_by(AttendanceConversation.updated_at.desc()).first()
             if existing and phone and existing.phone_e164 != phone:
                 existing.phone_e164 = phone
                 phone_linked_from_jid = True
@@ -486,6 +558,11 @@ def upsert_conversation_by_phone(
             if status:
                 existing.status = status
                 changed = True
+            if instance and normalize_text(getattr(existing, "evolution_instance", "") or "") != instance:
+                # só preenche se vazio (legado) — não troca de linha
+                if not normalize_text(getattr(existing, "evolution_instance", "") or ""):
+                    existing.evolution_instance = instance
+                    changed = True
             if remote_jid and remote_jid != (existing.remote_jid or ""):
                 current = normalize_text(existing.remote_jid or "")
                 # Nunca trocar @lid por número/@s.whatsapp.net — PN costuma ficar PENDING no Baileys.
@@ -519,6 +596,7 @@ def upsert_conversation_by_phone(
             unread_count=0,
             typing=False,
             remote_jid=remote_jid,
+            evolution_instance=instance,
             sector_id=None,
             sector_name="",
             created_at=now,
@@ -553,6 +631,7 @@ def _update_conversation(conversation_id: str, fields: dict) -> None:
         "phone_e164",
         "sector_id",
         "sector_name",
+        "evolution_instance",
     }
     with _lock, _session() as db:
         row = db.get(AttendanceConversation, conversation_id)
@@ -758,9 +837,13 @@ def mark_conversation_read(conversation_id: str) -> None:
     _notify({"type": "conversation_read", "conversation_id": conversation_id})
 
 
-def count_unread() -> int:
+def count_unread(*, evolution_instance: str = "") -> int:
+    instance = resolve_evolution_instance(evolution_instance) if evolution_instance else ""
     with _session(commit=False) as db:
-        total = db.query(func.coalesce(func.sum(AttendanceConversation.unread_count), 0)).scalar()
+        q = db.query(func.coalesce(func.sum(AttendanceConversation.unread_count), 0))
+        if instance:
+            q = q.filter(_sql_instance_match(instance))
+        total = q.scalar()
         return int(total or 0)
 
 

@@ -35,6 +35,18 @@
         <span>Nome / empresa</span>
         <input type="text" name="contact_name" class="att-input" placeholder="Opcional" autocomplete="off">
       </label>
+      {% if whatsapp_lines and whatsapp_lines|length > 1 %}
+      <label class="att-new-call-field">
+        <span>Linha WhatsApp</span>
+        <select name="line" class="att-input att-select">
+          {% for line in whatsapp_lines %}
+          <option value="{{ line.id }}" {% if line_filter == line.id %}selected{% endif %}>{{ line.label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      {% else %}
+      <input type="hidden" name="line" value="{{ line_filter }}">
+      {% endif %}
       <label class="att-new-call-field att-new-call-field-wide">
         <span>Mensagem inicial</span>
         <input type="text" name="first_message" class="att-input" placeholder="Opcional — envia ao abrir o chamado" autocomplete="off">
@@ -49,13 +61,29 @@
 
 <div class="att-shell {% if selected %}att-shell--chat-open{% endif %}" id="att-shell"
      data-selected="{{ selected.id if selected else '' }}"
-     data-evolution="{{ '1' if evolution_configured else '0' }}">
+     data-evolution="{{ '1' if evolution_configured else '0' }}"
+     data-line="{{ line_filter }}">
   <aside class="att-col att-col-list">
+    {% if whatsapp_lines and whatsapp_lines|length > 1 %}
+    <div class="att-line-switcher" id="att-line-switcher" role="tablist" aria-label="Linha WhatsApp">
+      {% for line in whatsapp_lines %}
+      <button type="button"
+              class="att-line-pill {% if line_filter == line.id %}active{% endif %}"
+              data-line="{{ line.id }}"
+              role="tab"
+              aria-selected="{{ 'true' if line_filter == line.id else 'false' }}">
+        <span class="att-line-pill-label">{{ line.label }}</span>
+        {% if line.unread %}<span class="att-line-pill-unread">{{ line.unread }}</span>{% endif %}
+      </button>
+      {% endfor %}
+    </div>
+    {% endif %}
     <form class="att-filters"
           hx-post="/atendimentos/filtros"
           hx-target="#att-conversation-list"
           hx-swap="innerHTML"
-          hx-trigger="submit, keyup changed delay:300ms from:#att-search, change from:#att-status, change from:#att-sector">
+          hx-trigger="submit, keyup changed delay:300ms from:#att-search, change from:#att-status, change from:#att-sector, change from:#att-line">
+      <input type="hidden" id="att-line" name="line" value="{{ line_filter }}">
       <input type="search" id="att-search" name="search" value="{{ search }}" placeholder="Buscar nome ou telefone…" class="att-input" autocomplete="off">
       <select id="att-status" name="status" class="att-input att-select">
         {% for value, label in status_options %}

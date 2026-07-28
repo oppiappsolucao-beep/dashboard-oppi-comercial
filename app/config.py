@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-APP_BUILD = os.getenv("APP_BUILD", "20260728-crm-match-v91").strip() or "20260728-crm-match-v91"
+APP_BUILD = os.getenv("APP_BUILD", "20260728-dual-wa-v92").strip() or "20260728-dual-wa-v92"
 
 class Settings:
     sheet_id: str = "1GAbrca0NSiJfPXaSte1qGxXCsGkQPacoRsm0PVB51gE"
@@ -80,8 +80,33 @@ class Settings:
         self.oppi_ponto_crm_api_key = os.getenv("OPPI_PONTO_CRM_API_KEY", "").strip()
 
     @property
+    def evolution_instances(self) -> list[str]:
+        """Lista de instâncias Evolution (EVOLUTION_INSTANCE com vírgulas)."""
+        seen: set[str] = set()
+        out: list[str] = []
+        for part in (self.evolution_instance or "").split(","):
+            name = part.strip()
+            if not name:
+                continue
+            key = name.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(name)
+        return out
+
+    @property
+    def evolution_primary_instance(self) -> str:
+        instances = self.evolution_instances
+        return instances[0] if instances else ""
+
+    @property
     def evolution_configured(self) -> bool:
-        return bool(self.evolution_api_url and self.evolution_api_key and self.evolution_instance)
+        return bool(
+            self.evolution_api_url
+            and self.evolution_api_key
+            and self.evolution_primary_instance
+        )
 
     @property
     def support_whatsapp_url(self) -> str:

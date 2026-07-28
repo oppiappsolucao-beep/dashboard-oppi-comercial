@@ -131,6 +131,7 @@ def hydrate_message_media(message: dict, *, conversation: dict | None = None) ->
             evolution_id,
             remote_jid=normalize_text(conv.get("remote_jid") or ""),
             from_me=from_me,
+            instance=normalize_text(conv.get("evolution_instance") or ""),
         )
         local_url, mime, filename = persist_media_base64(
             data.get("base64") or "",

@@ -32,6 +32,10 @@ def ensure_attendance_schema_columns() -> None:
             statements.append(
                 "ALTER TABLE attendance_conversations ADD COLUMN sector_name VARCHAR(150) DEFAULT ''"
             )
+        if "evolution_instance" not in cols:
+            statements.append(
+                "ALTER TABLE attendance_conversations ADD COLUMN evolution_instance VARCHAR(120) DEFAULT ''"
+            )
         if not statements:
             return
         with engine.begin() as conn:

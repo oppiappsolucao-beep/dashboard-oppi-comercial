@@ -36,10 +36,34 @@ def _url(path: str) -> str:
 
 
 def _instance_name() -> str:
-    name = normalize_text(settings.evolution_instance)
+    name = normalize_text(settings.evolution_primary_instance) or normalize_text(
+        (settings.evolution_instances or [""])[0] if settings.evolution_instances else ""
+    )
+    if not name:
+        # fallback: primeira parte se env ainda for string crua
+        raw = normalize_text(settings.evolution_instance).split(",")[0].strip()
+        name = raw
     if not name:
         raise EvolutionClientError("EVOLUTION_INSTANCE não configurada.")
     return name
+
+
+def configured_instance_names() -> list[str]:
+    return list(settings.evolution_instances or [])
+
+
+def match_configured_instance(name: str) -> str:
+    """Resolve nome de instância contra a lista configurada (case-insensitive)."""
+    wanted = normalize_text(name)
+    if not wanted:
+        return _instance_name()
+    for configured in configured_instance_names():
+        if configured.lower() == wanted.lower():
+            return configured
+    for configured in configured_instance_names():
+        if wanted.lower() in configured.lower() or configured.lower() in wanted.lower():
+            return configured
+    return wanted
 
 
 def fetch_instance_names() -> list[str]:
@@ -93,12 +117,12 @@ def _iter_instance_rows() -> list[dict]:
     return [item for item in rows if isinstance(item, dict)]
 
 
-def get_instance_owner_phone() -> str:
-    """Número do WhatsApp conectado na instância atual (ownerJid/number)."""
+def get_instance_owner_phone(instance: str = "") -> str:
+    """Número do WhatsApp conectado na instância (ownerJid/number)."""
     try:
-        wanted = resolved_instance_name().lower()
+        wanted = resolved_instance_name(instance).lower()
     except Exception:
-        wanted = normalize_text(settings.evolution_instance).lower()
+        wanted = match_configured_instance(instance or settings.evolution_primary_instance).lower()
     for item in _iter_instance_rows():
         nested = item.get("instance") if isinstance(item.get("instance"), dict) else {}
         name = normalize_text(
@@ -132,17 +156,23 @@ def get_instance_owner_phone() -> str:
     return ""
 
 
-def is_self_chat(phone: str, jid: str = "") -> bool:
-    """True se o destino é o mesmo WhatsApp conectado na Evolution."""
-    owner = get_instance_owner_phone()
+def is_self_chat(phone: str, jid: str = "", *, instance: str = "") -> bool:
+    """True se o destino é o mesmo WhatsApp conectado na Evolution (na linha indicada)."""
+    owner = get_instance_owner_phone(instance)
+    if not owner:
+        # fallback: qualquer linha configurada
+        for name in configured_instance_names() or [_instance_name()]:
+            owner = get_instance_owner_phone(name)
+            if owner:
+                break
     if not owner:
         return False
     target = _plain_phone(phone) or normalize_phone_from_jid(jid)
     return bool(target and _phone_tail_match(owner, target))
 
 
-def resolved_instance_name() -> str:
-    configured = _instance_name()
+def resolved_instance_name(preferred: str = "") -> str:
+    configured = match_configured_instance(preferred) if preferred else _instance_name()
     names = fetch_instance_names()
     if not names:
         return configured
@@ -156,22 +186,26 @@ def resolved_instance_name() -> str:
     for name in names:
         if lower in name.lower() or name.lower() in lower:
             return name
+    # Se preferred era explícito e não achou nas disponíveis, ainda tenta o nome
+    if preferred:
+        return configured
+    available = ", ".join(names)
     raise EvolutionClientError(
         f"Instância '{configured}' não encontrada na Evolution. "
-        f"Disponíveis: {', '.join(names)}. "
+        f"Disponíveis: {available}. "
         "Ajuste EVOLUTION_INSTANCE no Easypanel."
     )
 
 
-def _instance_urls(segment: str) -> list[str]:
+def _instance_urls(segment: str, *, instance: str = "") -> list[str]:
     """Gera URLs com nome da instância encoded e raw (alguns proxies diferem)."""
-    name = resolved_instance_name()
+    name = resolved_instance_name(instance)
     encoded = quote(name, safe="")
     paths = [f"{segment}/{encoded}"]
     if encoded != name:
         paths.append(f"{segment}/{name}")
     # também tenta o nome configurado cru, se diferente
-    configured = _instance_name()
+    configured = match_configured_instance(instance) if instance else _instance_name()
     if configured != name:
         paths.append(f"{segment}/{quote(configured, safe='')}")
     return [_url(p) for p in paths]
@@ -544,13 +578,13 @@ def _dig_chat_jid(chat: dict) -> str:
     return normalize_text(key.get("remoteJid") or "")
 
 
-def fetch_recent_chats(*, limit: int = 40) -> list[dict]:
+def fetch_recent_chats(*, limit: int = 40, instance: str = "") -> list[dict]:
     """Lista chats 1:1 recentes da Evolution (para puxar conversas que o webhook perdeu)."""
     if not is_configured():
         return []
     limit = max(1, min(int(limit or 40), 80))
     last_error = ""
-    for url in _instance_urls("/chat/findChats"):
+    for url in _instance_urls("/chat/findChats", instance=instance):
         try:
             response = requests.get(url, headers=_headers(), timeout=12)
         except requests.RequestException as error:
@@ -600,6 +634,7 @@ def fetch_recent_chats(*, limit: int = 40) -> list[dict]:
                 "remote_jid": cid,
                 "phone_e164": phone,
                 "contact_name": name,
+                "evolution_instance": match_configured_instance(instance) if instance else _instance_name(),
             })
             if len(out) >= limit:
                 break
@@ -609,9 +644,9 @@ def fetch_recent_chats(*, limit: int = 40) -> list[dict]:
     return []
 
 
-def get_connection_state() -> str:
+def get_connection_state(instance: str = "") -> str:
     last_error = ""
-    for url in _instance_urls("/instance/connectionState"):
+    for url in _instance_urls("/instance/connectionState", instance=instance):
         try:
             response = requests.get(url, headers=_headers(), timeout=15)
         except requests.RequestException as error:
@@ -631,7 +666,7 @@ def get_connection_state() -> str:
     return ""
 
 
-def find_messages(remote_jid: str, *, limit: int = 30) -> list[dict]:
+def find_messages(remote_jid: str, *, limit: int = 30, instance: str = "") -> list[dict]:
     """Busca mensagens recentes no Evolution (fallback quando o webhook falha)."""
     jid = normalize_text(remote_jid)
     if not jid or not is_configured():
@@ -642,7 +677,7 @@ def find_messages(remote_jid: str, *, limit: int = 30) -> list[dict]:
         "offset": max(1, min(int(limit or 30), 80)),
     }
     last_error = ""
-    for url in _instance_urls("/chat/findMessages"):
+    for url in _instance_urls("/chat/findMessages", instance=instance):
         try:
             response = requests.post(url, headers=_headers(), json=payload, timeout=8)
         except requests.RequestException as error:
@@ -668,8 +703,8 @@ def find_messages(remote_jid: str, *, limit: int = 30) -> list[dict]:
     return []
 
 
-def assert_instance_ready() -> None:
-    state = get_connection_state()
+def assert_instance_ready(instance: str = "") -> None:
+    state = get_connection_state(instance)
     if not state:
         # não bloqueia se o endpoint não existir em algumas versões
         return
@@ -988,17 +1023,17 @@ def _status_looks_delivered(status: str) -> bool:
     }
 
 
-def send_text(phone: str, text: str, *, jid: str = "") -> dict[str, Any]:
+def send_text(phone: str, text: str, *, jid: str = "", instance: str = "") -> dict[str, Any]:
     if not is_configured():
         raise EvolutionClientError("Evolution API não configurada.")
     body = str(text or "").strip()
     if not body:
         raise EvolutionClientError("Mensagem vazia.")
 
-    assert_instance_ready()
+    assert_instance_ready(instance)
 
-    if is_self_chat(phone, jid):
-        owner = get_instance_owner_phone()
+    if is_self_chat(phone, jid, instance=instance):
+        owner = get_instance_owner_phone(instance)
         raise EvolutionClientError(
             "Destino é o mesmo WhatsApp conectado na Evolution "
             f"({owner}). O WhatsApp não entrega mensagem para o próprio número. "
@@ -1021,7 +1056,9 @@ def send_text(phone: str, text: str, *, jid: str = "") -> dict[str, Any]:
     if not candidates:
         raise EvolutionClientError("Telefone/JID da conversa inválido para envio.")
 
-    urls = _instance_urls("/message/sendText")[:1] or _instance_urls("/message/sendText")
+    urls = _instance_urls("/message/sendText", instance=instance)[:1] or _instance_urls(
+        "/message/sendText", instance=instance
+    )
     errors: list[str] = []
 
     for number in candidates:
@@ -1054,7 +1091,7 @@ def send_text(phone: str, text: str, *, jid: str = "") -> dict[str, Any]:
             status = extract_message_status(data) or "UNKNOWN"
             logger.info(
                 "Evolution sendText instance=%s number=%s id=%s status=%s",
-                resolved_instance_name(),
+                resolved_instance_name(instance),
                 number,
                 msg_id,
                 status,
@@ -1068,7 +1105,7 @@ def send_text(phone: str, text: str, *, jid: str = "") -> dict[str, Any]:
     detail = " | ".join(errors[-4:]) if errors else "sem detalhes"
     raise EvolutionClientError(
         "Não foi possível enviar no WhatsApp via Evolution. "
-        f"Instância={resolved_instance_name()}. {detail}"
+        f"Instância={resolved_instance_name(instance)}. {detail}"
     )
 
 
@@ -1081,11 +1118,12 @@ def send_media(
     filename: str = "",
     mimetype: str = "",
     jid: str = "",
+    instance: str = "",
 ) -> dict[str, Any]:
     """Envia mídia via Evolution (image/document/audio)."""
     if not is_configured():
         raise EvolutionClientError("Evolution API não configurada.")
-    assert_instance_ready()
+    assert_instance_ready(instance)
     number = _pick_send_target(phone, jid)
     if not number:
         raise EvolutionClientError("Telefone/JID da conversa inválido para envio.")
@@ -1105,7 +1143,7 @@ def send_media(
     }
     if mimetype:
         payload["mimetype"] = mimetype
-    for url in _instance_urls("/message/sendMedia"):
+    for url in _instance_urls("/message/sendMedia", instance=instance):
         try:
             response = requests.post(url, json=payload, headers=_headers(), timeout=60)
         except requests.RequestException as error:
@@ -1130,11 +1168,12 @@ def send_whatsapp_audio(
     audio_base64: str,
     jid: str = "",
     mimetype: str = "audio/ogg",
+    instance: str = "",
 ) -> dict[str, Any]:
     """Envia áudio como nota de voz (PTT) via Evolution sendWhatsAppAudio."""
     if not is_configured():
         raise EvolutionClientError("Evolution API não configurada.")
-    assert_instance_ready()
+    assert_instance_ready(instance)
     number = _pick_send_target(phone, jid)
     if not number:
         raise EvolutionClientError("Telefone/JID da conversa inválido para envio.")
@@ -1175,7 +1214,7 @@ def send_whatsapp_audio(
 
     errors: list[str] = []
     for payload in payloads:
-        for url in _instance_urls("/message/sendWhatsAppAudio"):
+        for url in _instance_urls("/message/sendWhatsAppAudio", instance=instance):
             try:
                 response = requests.post(url, json=payload, headers=_headers(), timeout=90)
             except requests.RequestException as error:
@@ -1204,6 +1243,7 @@ def send_whatsapp_audio(
             filename="audio.ogg" if "ogg" in mime else "audio.webm",
             mimetype=mime,
             jid=jid,
+            instance=instance,
         )
     except EvolutionClientError as media_error:
         errors.append(str(media_error))
@@ -1218,6 +1258,7 @@ def get_base64_from_media_message(
     *,
     remote_jid: str = "",
     from_me: bool | None = None,
+    instance: str = "",
 ) -> dict[str, Any]:
     """Baixa mídia (áudio/imagem/…) via Evolution getBase64FromMediaMessage."""
     if not is_configured():
@@ -1240,7 +1281,7 @@ def get_base64_from_media_message(
     ]
     errors: list[str] = []
     for payload in payloads:
-        for url in _instance_urls("/chat/getBase64FromMediaMessage"):
+        for url in _instance_urls("/chat/getBase64FromMediaMessage", instance=instance):
             try:
                 response = requests.post(url, json=payload, headers=_headers(), timeout=90)
             except requests.RequestException as error:

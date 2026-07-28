@@ -41,7 +41,7 @@ def _seller_label(request: Request) -> str:
     return _username(request)
 
 
-def _filters(request: Request, form: dict | None = None) -> tuple[str, str, str, str]:
+def _filters(request: Request, form: dict | None = None) -> tuple[str, str, str, str, str]:
     data = form or {}
     search = normalize_text(data.get("search") or request.query_params.get("search", ""))
     # Padrão: só abertos (finalizados saem da fila)
@@ -52,7 +52,13 @@ def _filters(request: Request, form: dict | None = None) -> tuple[str, str, str,
         data.get("conversation_id") or request.query_params.get("c", "")
     )
     sector = normalize_text(data.get("sector") or request.query_params.get("sector", ""))
-    return search, status, selected, sector
+    line = normalize_text(
+        data.get("line")
+        or data.get("wa")
+        or request.query_params.get("line", "")
+        or request.query_params.get("wa", "")
+    )
+    return search, status, selected, sector, line
 
 
 def _page_ctx(
@@ -63,11 +69,12 @@ def _page_ctx(
     flash: str = "",
     error: str = "",
 ) -> dict:
-    search, status, selected, sector = _filters(request, form)
+    search, status, selected, sector, line = _filters(request, form)
     return attendances_service.page_context(
         search=search,
         status=status,
         sector_filter=sector,
+        line_filter=line,
         selected_id=selected if selected_id is None else selected_id,
         session_user=get_session_user(request),
         flash=flash,
@@ -131,6 +138,7 @@ async def attendances_start_call(
     phone: str = Form(""),
     contact_name: str = Form(""),
     first_message: str = Form(""),
+    line: str = Form(""),
 ):
     require_auth(request)
     conversation, error = attendances_service.start_whatsapp_call(
@@ -138,6 +146,7 @@ async def attendances_start_call(
         contact_name=contact_name,
         first_message=first_message,
         assignee=_seller_label(request),
+        evolution_instance=line,
     )
     selected_id = (conversation or {}).get("id") or ""
     flash = ""

@@ -29,11 +29,53 @@ def _resolve_sector_filter(session_user: dict | None, sector_filter: str) -> tup
         return None, scope
 
 
+def build_whatsapp_line_options() -> list[dict]:
+    """Linhas WhatsApp configuradas (rótulo = número conectado ou nome da instância)."""
+    lines: list[dict] = []
+    for name in settings.evolution_instances:
+        owner = ""
+        try:
+            owner = evolution_client.get_instance_owner_phone(name)
+        except Exception:
+            owner = ""
+        label = owner or name
+        if owner and len(owner) >= 12:
+            # 5511942157917 → +55 11 94215-7917
+            label = f"+{owner[:2]} {owner[2:4]} {owner[4:9]}-{owner[9:]}"
+        elif owner and len(owner) >= 10:
+            label = owner
+        unread = 0
+        try:
+            unread = store.count_unread(evolution_instance=name)
+        except Exception:
+            unread = 0
+        lines.append({
+            "id": name,
+            "label": label,
+            "phone": owner,
+            "unread": unread,
+        })
+    return lines
+
+
+def _resolve_line_filter(line_filter: str, lines: list[dict] | None = None) -> str:
+    lines = lines if lines is not None else build_whatsapp_line_options()
+    if not lines:
+        return settings.evolution_primary_instance
+    wanted = normalize_text(line_filter)
+    if wanted:
+        for line in lines:
+            if normalize_text(line.get("id")).lower() == wanted.lower():
+                return line["id"]
+    return lines[0]["id"]
+
+
 def page_context(
     *,
     search: str = "",
     status: str = "",
     sector_filter: str = "",
+    line_filter: str = "",
     selected_id: str = "",
     session_user: dict | None = None,
     flash: str = "",
@@ -53,10 +95,13 @@ def page_context(
         logger.exception("Falha ao agendar sync inbox Evolution")
 
     effective_sector, scope = _resolve_sector_filter(session_user, sector_filter)
+    whatsapp_lines = build_whatsapp_line_options()
+    active_line = _resolve_line_filter(line_filter, whatsapp_lines)
     conversations = store.list_conversations(
         search=search,
         status=status,
         sector_id=effective_sector,
+        evolution_instance=active_line,
     )
     selected = None
     messages: list[dict] = []
@@ -108,6 +153,15 @@ def page_context(
                 and int(selected.get("sector_id") or 0) != int(effective_sector)
             ):
                 # Fora do escopo do usuário/filtro — não abre a conversa
+                selected = None
+                selected_id = ""
+            elif (
+                active_line
+                and normalize_text(selected.get("evolution_instance") or "").lower()
+                and normalize_text(selected.get("evolution_instance") or "").lower()
+                != active_line.lower()
+            ):
+                # Conversa de outra linha WhatsApp
                 selected = None
                 selected_id = ""
             else:
@@ -175,8 +229,10 @@ def page_context(
         "sector_filter": ui_sector_filter,
         "sector_filter_locked": bool(scope.get("locked")),
         "user_sector_name": scope.get("sector_name") or "",
+        "line_filter": active_line,
+        "whatsapp_lines": whatsapp_lines,
         "evolution_configured": settings.evolution_configured,
-        "unread_total": store.count_unread(),
+        "unread_total": store.count_unread(evolution_instance=active_line) if active_line else store.count_unread(),
         "flash": flash,
         "error": error,
         "ai_mode_on": store.AI_MODE_ON,
@@ -258,8 +314,11 @@ def send_text_message(
     if evolution_client.is_self_chat(
         conversation.get("phone_e164") or "",
         conversation.get("remote_jid") or "",
+        instance=conversation.get("evolution_instance") or "",
     ):
-        owner = evolution_client.get_instance_owner_phone()
+        owner = evolution_client.get_instance_owner_phone(
+            conversation.get("evolution_instance") or ""
+        )
         return None, (
             "Este chat é o mesmo número conectado na Evolution"
             + (f" ({owner})" if owner else "")
@@ -272,6 +331,7 @@ def send_text_message(
             conversation["phone_e164"],
             body,
             jid=conversation.get("remote_jid") or "",
+            instance=conversation.get("evolution_instance") or "",
         )
     except EvolutionClientError as error:
         return None, str(error)
@@ -354,6 +414,7 @@ def send_media_message(
             filename=filename,
             mimetype=mimetype,
             jid=conversation.get("remote_jid") or "",
+            instance=conversation.get("evolution_instance") or "",
         )
     except EvolutionClientError as error:
         return None, str(error)
@@ -393,6 +454,7 @@ def send_voice_message(
             audio_base64=audio_base64,
             jid=conversation.get("remote_jid") or "",
             mimetype=mimetype or "audio/ogg",
+            instance=conversation.get("evolution_instance") or "",
         )
     except EvolutionClientError as error:
         return None, str(error)
@@ -556,6 +618,7 @@ def start_whatsapp_call(
     contact_name: str = "",
     first_message: str = "",
     assignee: str = "",
+    evolution_instance: str = "",
 ) -> tuple[dict | None, str]:
     """Abre chamado WhatsApp: cria/vincula lead e conversa na inbox."""
     from app.services.evolution_client import normalize_phone_from_jid
@@ -574,12 +637,14 @@ def start_whatsapp_call(
         crm = attendance_crm.build_crm_panel(sheet_row)
         name = normalize_text(crm.get("contato") or crm.get("empresa"))
 
+    instance = normalize_text(evolution_instance) or settings.evolution_primary_instance
     conversation = store.upsert_conversation_by_phone(
         phone_e164,
         contact_name=name or f"WhatsApp {phone_e164}",
         sheet_row=sheet_row,
         status=store.STATUS_EM_ATENDIMENTO if first_message or assignee else store.STATUS_NOVO_LEAD,
         remote_jid=f"{phone_e164}@s.whatsapp.net",
+        evolution_instance=instance,
     )
     if not conversation:
         return None, "Não foi possível abrir a conversa."
@@ -667,39 +732,44 @@ def sync_inbox_from_evolution(*, force: bool = False, limit: int = 40) -> int:
     if not settings.evolution_configured:
         return 0
 
-    try:
-        chats = evolution_client.fetch_recent_chats(limit=limit)
-    except Exception:
-        logger.exception("fetch_recent_chats falhou")
-        return 0
-
+    instances = settings.evolution_instances or [settings.evolution_primary_instance]
     imported = 0
-    for chat in chats:
-        remote_jid = normalize_text(chat.get("remote_jid") or "")
-        phone = normalize_text(chat.get("phone_e164") or "")
-        name = normalize_text(chat.get("contact_name") or "")
-        if not remote_jid:
-            continue
+    for instance in instances:
         try:
-            if phone:
-                conversation = store.upsert_conversation_by_phone(
-                    phone,
-                    contact_name=name,
-                    remote_jid=remote_jid,
-                )
-            else:
-                conversation = store.upsert_conversation_by_remote_jid(
-                    remote_jid,
-                    contact_name=name,
-                    phone_e164=phone,
-                )
-            if not conversation:
-                continue
-            # Puxa mensagens recentes desse chat (já tem throttle por conversa)
-            sync_messages_from_evolution(conversation["id"], limit=15, force=False)
-            imported += 1
+            chats = evolution_client.fetch_recent_chats(limit=limit, instance=instance)
         except Exception:
-            logger.exception("Falha ao importar chat %s", remote_jid)
+            logger.exception("fetch_recent_chats falhou instance=%s", instance)
+            continue
+
+        for chat in chats:
+            remote_jid = normalize_text(chat.get("remote_jid") or "")
+            phone = normalize_text(chat.get("phone_e164") or "")
+            name = normalize_text(chat.get("contact_name") or "")
+            line = normalize_text(chat.get("evolution_instance") or "") or instance
+            if not remote_jid:
+                continue
+            try:
+                if phone:
+                    conversation = store.upsert_conversation_by_phone(
+                        phone,
+                        contact_name=name,
+                        remote_jid=remote_jid,
+                        evolution_instance=line,
+                    )
+                else:
+                    conversation = store.upsert_conversation_by_remote_jid(
+                        remote_jid,
+                        contact_name=name,
+                        phone_e164=phone,
+                        evolution_instance=line,
+                    )
+                if not conversation:
+                    continue
+                # Puxa mensagens recentes desse chat (já tem throttle por conversa)
+                sync_messages_from_evolution(conversation["id"], limit=15, force=False)
+                imported += 1
+            except Exception:
+                logger.exception("Falha ao importar chat %s", remote_jid)
     return imported
 
 
@@ -775,10 +845,11 @@ def sync_messages_from_evolution(
 
         from app.routers.evolution_webhook import ingest_evolution_message_item
 
+        instance = normalize_text(conversation.get("evolution_instance") or "")
         imported = 0
         for jid in targets:
             try:
-                records = evolution_client.find_messages(jid, limit=limit)
+                records = evolution_client.find_messages(jid, limit=limit, instance=instance)
             except Exception:
                 logger.exception("findMessages falhou para %s", jid)
                 continue
@@ -787,6 +858,7 @@ def sync_messages_from_evolution(
                     if ingest_evolution_message_item(
                         item,
                         push_name=conversation.get("contact_name") or "",
+                        evolution_instance=instance,
                     ):
                         imported += 1
                 except Exception:

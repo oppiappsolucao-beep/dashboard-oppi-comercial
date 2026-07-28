@@ -23,6 +23,33 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["webhooks"])
 
 
+def _extract_instance_name(payload: dict) -> str:
+    """Nome da instância Evolution no webhook (multi-linha)."""
+    candidates = (
+        payload.get("instance"),
+        payload.get("instanceName"),
+        _dig(payload, "data", "instance"),
+        _dig(payload, "data", "instanceName"),
+        _dig(payload, "instance", "instanceName"),
+        _dig(payload, "instance", "name"),
+    )
+    for value in candidates:
+        if isinstance(value, dict):
+            name = normalize_text(
+                value.get("instanceName") or value.get("name") or value.get("id") or ""
+            )
+        else:
+            name = normalize_text(value or "")
+        if name:
+            try:
+                from app.services.evolution_client import match_configured_instance
+
+                return match_configured_instance(name)
+            except Exception:
+                return name
+    return ""
+
+
 def _token_ok(header_token: str | None, query_token: str | None) -> bool:
     expected = settings.evolution_webhook_token
     if not expected:
@@ -138,7 +165,12 @@ def _iter_upsert_messages(payload: dict) -> list[dict]:
     return []
 
 
-def ingest_evolution_message_item(item: dict, *, push_name: str = "") -> bool:
+def ingest_evolution_message_item(
+    item: dict,
+    *,
+    push_name: str = "",
+    evolution_instance: str = "",
+) -> bool:
     """Persiste um item no formato Evolution (webhook ou findMessages). Retorna True se salvou."""
     if not isinstance(item, dict):
         return False
@@ -162,18 +194,21 @@ def ingest_evolution_message_item(item: dict, *, push_name: str = "") -> bool:
         return False
 
     evolution_id = normalize_text(key.get("id") or item.get("id") or "")
+    instance = normalize_text(evolution_instance)
     conversation = None
     if phone:
         conversation = store.upsert_conversation_by_phone(
             phone,
             contact_name=name,
             remote_jid=remote_jid,
+            evolution_instance=instance,
         )
     if not conversation and remote_jid:
         conversation = store.upsert_conversation_by_remote_jid(
             remote_jid,
             contact_name=name,
             phone_e164=phone,
+            evolution_instance=instance,
         )
     if not conversation:
         return False
@@ -207,6 +242,7 @@ def ingest_evolution_message_item(item: dict, *, push_name: str = "") -> bool:
 
 def _handle_messages_upsert(payload: dict) -> int:
     count = 0
+    instance = _extract_instance_name(payload)
     for item in _iter_upsert_messages(payload):
         key = item.get("key") if isinstance(item.get("key"), dict) else {}
         remote_raw = normalize_text(key.get("remoteJid") or item.get("remoteJid") or "")
@@ -247,12 +283,14 @@ def _handle_messages_upsert(payload: dict) -> int:
                 phone,
                 contact_name=push_name,
                 remote_jid=remote_jid,
+                evolution_instance=instance,
             )
         if not conversation and remote_jid:
             conversation = store.upsert_conversation_by_remote_jid(
                 remote_jid,
                 contact_name=push_name,
                 phone_e164=phone,
+                evolution_instance=instance,
             )
         if not conversation:
             logger.info(
@@ -329,6 +367,7 @@ def _handle_presence_or_typing(payload: dict) -> bool:
     if not jid or is_whatsapp_group_jid(jid):
         return False
     phone = normalize_phone_from_jid(jid)
+    # Presença: tenta achar conversa em qualquer linha pelo telefone
     conversation = store.get_conversation_by_phone(phone)
     if not conversation:
         return False
