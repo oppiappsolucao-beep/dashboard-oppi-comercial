@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any
 from urllib.parse import quote
 
@@ -11,6 +12,11 @@ from app.config import settings
 from app.services.legacy_core import normalize_digits, normalize_text
 
 logger = logging.getLogger(__name__)
+
+# Evita fetchInstances (HTTP lento) em todo clique de filtro/linha no Atendimentos.
+_INSTANCE_ROWS_CACHE: list[dict] | None = None
+_INSTANCE_ROWS_CACHE_AT: float = 0.0
+_INSTANCE_ROWS_TTL_SEC = 120.0
 
 
 class EvolutionClientError(RuntimeError):
@@ -67,25 +73,8 @@ def match_configured_instance(name: str) -> str:
 
 
 def fetch_instance_names() -> list[str]:
-    try:
-        response = requests.get(_url("/instance/fetchInstances"), headers=_headers(), timeout=20)
-    except requests.RequestException:
-        return []
-    if response.status_code >= 400:
-        return []
-    data = _parse_json(response)
-    rows = data if isinstance(data, list) else data.get("data") or data.get("instances") or []
-    if isinstance(data, dict) and not rows and data.get("name"):
-        rows = [data]
     names: list[str] = []
-    if not isinstance(rows, list):
-        return names
-    for item in rows:
-        if isinstance(item, str):
-            names.append(item)
-            continue
-        if not isinstance(item, dict):
-            continue
+    for item in _iter_instance_rows():
         nested = item.get("instance") if isinstance(item.get("instance"), dict) else {}
         candidate = (
             item.get("name")
@@ -101,29 +90,51 @@ def fetch_instance_names() -> list[str]:
     return names
 
 
-def _iter_instance_rows() -> list[dict]:
+def _iter_instance_rows(*, force: bool = False, allow_network: bool = True) -> list[dict]:
+    global _INSTANCE_ROWS_CACHE, _INSTANCE_ROWS_CACHE_AT
+    now = time.monotonic()
+    if (
+        not force
+        and _INSTANCE_ROWS_CACHE is not None
+        and (now - _INSTANCE_ROWS_CACHE_AT) < _INSTANCE_ROWS_TTL_SEC
+    ):
+        return _INSTANCE_ROWS_CACHE
+    if not allow_network:
+        return list(_INSTANCE_ROWS_CACHE or [])
     try:
-        response = requests.get(_url("/instance/fetchInstances"), headers=_headers(), timeout=20)
+        response = requests.get(_url("/instance/fetchInstances"), headers=_headers(), timeout=8)
     except requests.RequestException:
-        return []
+        return list(_INSTANCE_ROWS_CACHE or [])
     if response.status_code >= 400:
-        return []
+        return list(_INSTANCE_ROWS_CACHE or [])
     data = _parse_json(response)
     rows = data if isinstance(data, list) else data.get("data") or data.get("instances") or []
     if isinstance(data, dict) and not rows and (data.get("name") or data.get("instanceName")):
         rows = [data]
     if not isinstance(rows, list):
-        return []
-    return [item for item in rows if isinstance(item, dict)]
+        return list(_INSTANCE_ROWS_CACHE or [])
+    parsed = [item for item in rows if isinstance(item, dict)]
+    _INSTANCE_ROWS_CACHE = parsed
+    _INSTANCE_ROWS_CACHE_AT = now
+    return parsed
 
 
-def get_instance_owner_phone(instance: str = "") -> str:
+def get_instance_owner_phone(instance: str = "", *, allow_network: bool = True) -> str:
     """Número do WhatsApp conectado na instância (ownerJid/number)."""
-    try:
-        wanted = resolved_instance_name(instance).lower()
-    except Exception:
-        wanted = match_configured_instance(instance or settings.evolution_primary_instance).lower()
-    for item in _iter_instance_rows():
+    # Sem rede: só cache (filtros HTMX). Com rede: resolved_instance_name pode
+    # chamar Evolution — evite em hot path de UI.
+    if allow_network:
+        try:
+            wanted = resolved_instance_name(instance).lower()
+        except Exception:
+            wanted = match_configured_instance(
+                instance or settings.evolution_primary_instance
+            ).lower()
+    else:
+        wanted = match_configured_instance(
+            instance or settings.evolution_primary_instance
+        ).lower()
+    for item in _iter_instance_rows(allow_network=allow_network):
         nested = item.get("instance") if isinstance(item.get("instance"), dict) else {}
         name = normalize_text(
             item.get("name")

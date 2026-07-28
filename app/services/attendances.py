@@ -29,13 +29,15 @@ def _resolve_sector_filter(session_user: dict | None, sector_filter: str) -> tup
         return None, scope
 
 
-def build_whatsapp_line_options() -> list[dict]:
+def build_whatsapp_line_options(*, refresh_owners: bool = True) -> list[dict]:
     """Linhas WhatsApp configuradas (rótulo = número conectado ou nome da instância)."""
     lines: list[dict] = []
     for name in settings.evolution_instances:
         owner = ""
         try:
-            owner = evolution_client.get_instance_owner_phone(name)
+            owner = evolution_client.get_instance_owner_phone(
+                name, allow_network=refresh_owners
+            )
         except Exception:
             owner = ""
         label = owner or name
@@ -59,15 +61,21 @@ def build_whatsapp_line_options() -> list[dict]:
 
 
 def _resolve_line_filter(line_filter: str, lines: list[dict] | None = None) -> str:
-    lines = lines if lines is not None else build_whatsapp_line_options()
-    if not lines:
+    configured = list(settings.evolution_instances or [])
+    if not configured:
         return settings.evolution_primary_instance
     wanted = normalize_text(line_filter)
     if wanted:
-        for line in lines:
-            if normalize_text(line.get("id")).lower() == wanted.lower():
-                return line["id"]
-    return lines[0]["id"]
+        for name in configured:
+            if normalize_text(name).lower() == wanted.lower():
+                return name
+        if lines:
+            for line in lines:
+                if normalize_text(line.get("id")).lower() == wanted.lower():
+                    return line["id"]
+    if lines:
+        return lines[0]["id"]
+    return configured[0]
 
 
 def page_context(
@@ -80,22 +88,23 @@ def page_context(
     session_user: dict | None = None,
     flash: str = "",
     error: str = "",
+    light: bool = False,
 ) -> dict:
-    # Remove grupos reais (@g.us) e as conversas pedidas (Luiz / Skoob)
-    try:
-        store.purge_group_conversations()
-        store.delete_conversations_by_contact_names()
-    except Exception:
-        logger.exception("Falha ao limpar conversas indesejadas da inbox")
+    # Manutenção pesada só na carga completa — filtros/HTMX precisam responder na hora
+    if not light:
+        try:
+            store.purge_group_conversations()
+            store.delete_conversations_by_contact_names()
+        except Exception:
+            logger.exception("Falha ao limpar conversas indesejadas da inbox")
 
-    # Compensa webhook perdido: puxa chats recentes sem bloquear a tela
-    try:
-        schedule_sync_inbox_from_evolution(force=False)
-    except Exception:
-        logger.exception("Falha ao agendar sync inbox Evolution")
+        try:
+            schedule_sync_inbox_from_evolution(force=False)
+        except Exception:
+            logger.exception("Falha ao agendar sync inbox Evolution")
 
     effective_sector, scope = _resolve_sector_filter(session_user, sector_filter)
-    whatsapp_lines = build_whatsapp_line_options()
+    whatsapp_lines = build_whatsapp_line_options(refresh_owners=not light)
     active_line = _resolve_line_filter(line_filter, whatsapp_lines)
     conversations = store.list_conversations(
         search=search,

@@ -68,6 +68,7 @@ def _page_ctx(
     selected_id: str | None = None,
     flash: str = "",
     error: str = "",
+    light: bool = False,
 ) -> dict:
     search, status, selected, sector, line = _filters(request, form)
     return attendances_service.page_context(
@@ -79,6 +80,7 @@ def _page_ctx(
         session_user=get_session_user(request),
         flash=flash,
         error=error,
+        light=light,
     )
 
 
@@ -172,7 +174,11 @@ def attendances_page(request: Request):
 async def attendances_filters(request: Request):
     require_auth(request)
     form = dict(await request.form())
-    return render(request, "partials/attendances_list.html", _page_ctx(request, form=form))
+    return render(
+        request,
+        "partials/attendances_list.html",
+        _page_ctx(request, form=form, light=True),
+    )
 
 
 @router.get("/atendimentos/conversa/{conversation_id}", response_class=HTMLResponse)
@@ -185,7 +191,7 @@ def attendances_conversation(request: Request, conversation_id: str):
         )
     except Exception:
         pass
-    ctx = _page_ctx(request, selected_id=conversation_id)
+    ctx = _page_ctx(request, selected_id=conversation_id, light=True)
     if not ctx.get("selected"):
         return HTMLResponse("<div class='att-empty'>Conversa não encontrada.</div>", status_code=404)
     return render(request, "partials/attendances_thread.html", ctx)
