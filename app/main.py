@@ -250,7 +250,13 @@ async def startup_maintenance() -> None:
 
 @app.get("/health")
 async def health():
-    payload = {"status": "ok", "build": APP_BUILD}
+    # Mantém leve: load balancer / Easypanel não pode depender de Postgres/Sheets.
+    return JSONResponse({"status": "ok", "build": APP_BUILD})
+
+
+@app.get("/health/crm")
+async def health_crm():
+    payload = {"status": "ok", "build": APP_BUILD, "crm_postgres": {"ready": False}}
     try:
         from app.services.crm_registrations_storage import (
             count_registrations,
@@ -263,73 +269,106 @@ async def health():
             "registrations": int(count_registrations() or 0) if ready else 0,
         }
     except Exception as error:
+        payload["status"] = "degraded"
         payload["crm_postgres"] = {"ready": False, "error": str(error)}
     return JSONResponse(payload)
 
 
+_CRM_CUTOVER_LOCK = threading.Lock()
+_CRM_CUTOVER_RUNNING = False
+_CRM_CUTOVER_LAST: dict | None = None
+
+
 @app.get("/health/crm-cutover")
 async def health_crm_cutover():
-    """Diagnóstico + tentativa forçada de cutover CRM → Postgres."""
-    import time
-
-    payload: dict = {
-        "status": "ok",
-        "build": APP_BUILD,
-        "sheet": {},
-        "migrate": None,
-        "crm_postgres": {"ready": False, "registrations": 0},
-    }
-    try:
-        from app.services.legacy_core import hydrate_sheet_cache_from_disk, load_sheet_data
-
-        hydrate_sheet_cache_from_disk()
-        soft = load_sheet_data(force_refresh=False)
-        payload["sheet"]["soft_rows"] = 0 if soft is None or soft.empty else int(len(soft))
-        if soft is not None and not soft.empty:
-            payload["sheet"]["columns_sample"] = [str(c) for c in list(soft.columns)[:15]]
-        else:
-            hard_rows = 0
-            hard_error = ""
-            for attempt in range(3):
-                try:
-                    hard = load_sheet_data(force_refresh=True)
-                    hard_rows = 0 if hard is None or hard.empty else int(len(hard))
-                    if hard_rows > 0:
-                        payload["sheet"]["columns_sample"] = [
-                            str(c) for c in list(hard.columns)[:15]
-                        ]
-                        break
-                except Exception as error:
-                    hard_error = str(error)
-                time.sleep(2)
-            payload["sheet"]["hard_rows"] = hard_rows
-            if hard_error:
-                payload["sheet"]["hard_error"] = hard_error
-    except Exception as error:
-        payload["sheet"]["error"] = str(error)
+    """Dispara cutover em background — não bloqueia o worker HTTP."""
+    global _CRM_CUTOVER_RUNNING, _CRM_CUTOVER_LAST
 
     try:
-        from app.services.crm_db_migrate import migrate_crm_to_postgres_if_needed
         from app.services.crm_registrations_storage import (
             count_registrations,
             is_crm_postgres_ready,
         )
 
-        payload["migrate"] = migrate_crm_to_postgres_if_needed(
-            force=True,
-            sheet_force_refresh=True,
-        )
-        ready = bool(is_crm_postgres_ready())
-        payload["crm_postgres"] = {
-            "ready": ready,
-            "registrations": int(count_registrations() or 0) if ready else 0,
-        }
-        if not ready:
-            payload["status"] = "waiting"
+        if is_crm_postgres_ready():
+            return JSONResponse(
+                {
+                    "status": "ok",
+                    "build": APP_BUILD,
+                    "crm_postgres": {
+                        "ready": True,
+                        "registrations": int(count_registrations() or 0),
+                    },
+                    "migrate": {"reason": "already_migrated"},
+                    "last": _CRM_CUTOVER_LAST,
+                }
+            )
     except Exception as error:
-        payload["status"] = "error"
-        payload["migrate_error"] = str(error)
-    return JSONResponse(payload)
+        return JSONResponse(
+            {
+                "status": "error",
+                "build": APP_BUILD,
+                "error": str(error),
+            },
+            status_code=500,
+        )
+
+    started = False
+    with _CRM_CUTOVER_LOCK:
+        if not _CRM_CUTOVER_RUNNING:
+            _CRM_CUTOVER_RUNNING = True
+            started = True
+
+            def _run() -> None:
+                global _CRM_CUTOVER_RUNNING, _CRM_CUTOVER_LAST
+                try:
+                    from app.services.crm_db_migrate import migrate_crm_to_postgres_if_needed
+                    from app.services.crm_registrations_storage import (
+                        count_registrations,
+                        is_crm_postgres_ready,
+                    )
+                    from app.services.legacy_core import (
+                        hydrate_sheet_cache_from_disk,
+                        load_sheet_data,
+                    )
+
+                    hydrate_sheet_cache_from_disk()
+                    try:
+                        load_sheet_data(force_refresh=False)
+                    except Exception:
+                        pass
+                    result = migrate_crm_to_postgres_if_needed(
+                        force=True,
+                        sheet_force_refresh=True,
+                    )
+                    ready = bool(is_crm_postgres_ready())
+                    _CRM_CUTOVER_LAST = {
+                        "migrate": result,
+                        "crm_postgres": {
+                            "ready": ready,
+                            "registrations": int(count_registrations() or 0)
+                            if ready
+                            else 0,
+                        },
+                    }
+                except Exception as error:
+                    _CRM_CUTOVER_LAST = {"error": str(error)}
+                finally:
+                    with _CRM_CUTOVER_LOCK:
+                        _CRM_CUTOVER_RUNNING = False
+
+            threading.Thread(
+                target=_run, daemon=True, name="crm-cutover-health"
+            ).start()
+
+    return JSONResponse(
+        {
+            "status": "started" if started else "running",
+            "build": APP_BUILD,
+            "hint": "Recarregue em alguns segundos; resultado em 'last' quando terminar.",
+            "last": _CRM_CUTOVER_LAST,
+        }
+    )
 
 
 @app.get("/health/pdf-engine")
