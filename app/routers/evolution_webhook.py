@@ -459,6 +459,18 @@ def _handle_presence_or_typing(payload: dict) -> bool:
     return True
 
 
+@router.get("/webhooks/evolution")
+async def evolution_webhook_probe():
+    """GET no navegador só confirma que a rota existe. A Evolution deve usar POST."""
+    return JSONResponse(
+        {
+            "ok": True,
+            "service": "evolution-webhook",
+            "hint": "Este endpoint recebe POST da Evolution (MESSAGES_UPSERT). Abra /health para status do app.",
+        }
+    )
+
+
 @router.post("/webhooks/evolution")
 async def evolution_webhook(
     request: Request,
