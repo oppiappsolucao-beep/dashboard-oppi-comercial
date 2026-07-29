@@ -135,9 +135,36 @@ async def startup_maintenance() -> None:
             ensure_attendance_schema_columns()
             try:
                 from app.services.crm_db_migrate import migrate_crm_to_postgres_if_needed
+                from app.services.crm_registrations_storage import is_crm_postgres_ready
 
-                crm_migrate = migrate_crm_to_postgres_if_needed()
+                crm_migrate = migrate_crm_to_postgres_if_needed(sheet_force_refresh=True)
                 log.info("CRM Postgres migrate: %s", crm_migrate)
+                if (crm_migrate or {}).get("reason") == "waiting_for_sheet_data":
+
+                    def _crm_migrate_retries() -> None:
+                        for delay in (20, 60, 120, 300):
+                            time.sleep(delay)
+                            try:
+                                if is_crm_postgres_ready():
+                                    return
+                                retry = migrate_crm_to_postgres_if_needed(
+                                    sheet_force_refresh=True
+                                )
+                                log.info("CRM Postgres migrate retry (+%ss): %s", delay, retry)
+                                if (retry or {}).get("reason") in {
+                                    "migrated",
+                                    "already_migrated",
+                                    "destination_already_has_data",
+                                }:
+                                    return
+                            except Exception as retry_error:
+                                log.error("CRM Postgres migrate retry: %s", retry_error)
+
+                    threading.Thread(
+                        target=_crm_migrate_retries,
+                        name="crm-postgres-migrate-retry",
+                        daemon=True,
+                    ).start()
             except Exception as crm_error:
                 log.error("CRM Postgres migrate: %s", crm_error)
             ensure_default_niches()
@@ -223,7 +250,21 @@ async def startup_maintenance() -> None:
 
 @app.get("/health")
 async def health():
-    return JSONResponse({"status": "ok", "build": APP_BUILD})
+    payload = {"status": "ok", "build": APP_BUILD}
+    try:
+        from app.services.crm_registrations_storage import (
+            count_registrations,
+            is_crm_postgres_ready,
+        )
+
+        ready = bool(is_crm_postgres_ready())
+        payload["crm_postgres"] = {
+            "ready": ready,
+            "registrations": int(count_registrations() or 0) if ready else 0,
+        }
+    except Exception as error:
+        payload["crm_postgres"] = {"ready": False, "error": str(error)}
+    return JSONResponse(payload)
 
 
 @app.get("/health/pdf-engine")

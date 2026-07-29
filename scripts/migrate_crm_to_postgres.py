@@ -25,7 +25,11 @@ def main() -> int:
 
     from app.services.crm_db_migrate import migrate_crm_to_postgres_if_needed
 
-    result = migrate_crm_to_postgres_if_needed(dry_run=args.dry_run, force=args.force)
+    result = migrate_crm_to_postgres_if_needed(
+        dry_run=args.dry_run,
+        force=args.force,
+        sheet_force_refresh=True,
+    )
     print(json.dumps(result, ensure_ascii=False, indent=2, default=str))
     return 0
 

@@ -870,6 +870,33 @@
         <em>Aplicar na planilha</em>.
       </p>
     </div>
+
+    <div class="panel settings-single-card">
+      <div class="section-heading">CRM → Postgres</div>
+      <div class="section-subtitle">
+        Fonte da verdade dos cadastros no banco. A planilha continua como espelho.
+        Status:
+        {% if crm_postgres_ready %}
+        <strong>ativo</strong> ({{ crm_registrations_count }} cadastros).
+        {% else %}
+        <strong>aguardando migração</strong>.
+        {% endif %}
+      </div>
+
+      {% if crm_migrate_success %}
+      <div class="settings-alert success">{{ crm_migrate_success }}</div>
+      {% endif %}
+      {% if crm_migrate_error %}
+      <div class="settings-alert error">{{ crm_migrate_error }}</div>
+      {% endif %}
+
+      <form method="post" action="/configuracoes/crm/migrar-postgres" class="settings-inline-form"
+        onsubmit="return confirm('Importar Folha1 para o Postgres e ativar o cutover?');">
+        <button type="submit" class="btn">
+          {% if crm_postgres_ready %}Reimportar Folha1{% else %}Migrar agora{% endif %}
+        </button>
+      </form>
+    </div>
     {% endif %}
   </div>
 

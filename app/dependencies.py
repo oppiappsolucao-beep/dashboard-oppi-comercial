@@ -69,6 +69,14 @@ def get_prepared_data(refresh: bool = False):
             is_crm_postgres_ready,
         )
 
+        if not is_crm_postgres_ready():
+            try:
+                from app.services.crm_db_migrate import try_lazy_crm_postgres_cutover
+
+                try_lazy_crm_postgres_cutover()
+            except Exception:
+                pass
+
         if is_crm_postgres_ready():
             if refresh:
                 invalidate_merged_prepared_cache()

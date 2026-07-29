@@ -84,7 +84,11 @@ def _load_json_file(name: str, default):
     return data if isinstance(data, type(default)) else default
 
 
-def _import_registrations_from_sheet(*, dry_run: bool = False) -> dict:
+def _import_registrations_from_sheet(
+    *,
+    dry_run: bool = False,
+    force_refresh: bool = False,
+) -> dict:
     from app.services.crm_registrations_storage import (
         DEFAULT_TENANT_ID,
         FIELD_TO_SHEET_HEADER,
@@ -98,7 +102,9 @@ def _import_registrations_from_sheet(*, dry_run: bool = False) -> dict:
 
     result = {"imported": 0, "skipped": 0, "source": "sheet"}
     try:
-        df = load_sheet_data(force_refresh=False)
+        df = load_sheet_data(force_refresh=bool(force_refresh))
+        if force_refresh and df is not None and not getattr(df, "empty", True):
+            result["source"] = "sheet_refresh"
     except Exception:
         df = None
     if df is None or getattr(df, "empty", True):
@@ -115,6 +121,15 @@ def _import_registrations_from_sheet(*, dry_run: bool = False) -> dict:
                     result["source"] = "snapshot"
         except Exception:
             pass
+    # Última tentativa: forçar Google Sheets se o cache/snapshot estiver frio.
+    if (df is None or getattr(df, "empty", True)) and not force_refresh:
+        try:
+            df = load_sheet_data(force_refresh=True)
+            if df is not None and not getattr(df, "empty", True):
+                result["source"] = "sheet_refresh"
+        except Exception:
+            logger.exception("Falha ao forçar refresh da Folha1 na migração CRM")
+            df = None
     if df is None or getattr(df, "empty", True):
         result["source"] = "empty"
         return result
@@ -485,7 +500,12 @@ def backfill_attendance_registration_ids() -> int:
     return updated
 
 
-def migrate_crm_to_postgres_if_needed(*, dry_run: bool = False, force: bool = False) -> dict:
+def migrate_crm_to_postgres_if_needed(
+    *,
+    dry_run: bool = False,
+    force: bool = False,
+    sheet_force_refresh: bool = False,
+) -> dict:
     """
     One-shot: Folha1 + JSONs locais → Postgres.
     Idempotente via AppMeta crm_postgres_migrated.
@@ -533,7 +553,10 @@ def migrate_crm_to_postgres_if_needed(*, dry_run: bool = False, force: bool = Fa
         result["skipped"] = False
         return result
 
-    result["registrations"] = _import_registrations_from_sheet(dry_run=dry_run)
+    result["registrations"] = _import_registrations_from_sheet(
+        dry_run=dry_run,
+        force_refresh=bool(sheet_force_refresh or force),
+    )
     result["activities"] = _import_activities(dry_run=dry_run)
     result["proposals"] = _import_proposals(dry_run=dry_run)
     result["settings"] = _import_app_settings(dry_run=dry_run)
@@ -549,11 +572,13 @@ def migrate_crm_to_postgres_if_needed(*, dry_run: bool = False, force: bool = Fa
     )
 
     if not dry_run:
-        # Evita marcar migrado com Folha1 vazia por 429/cache frio no boot.
-        if imported_regs <= 0 and source == "empty" and not has_aux and not force:
+        # Nunca marcar migrado com Folha1 vazia (mesmo com force) — evita cutover vazio.
+        # Aux JSON sozinho NÃO basta: Sem cadastros o CRM ficaria em branco.
+        if imported_regs <= 0 and source == "empty":
             result["reason"] = "waiting_for_sheet_data"
             result["ran"] = True
             result["skipped"] = False
+            result["has_aux"] = has_aux
             return result
 
         result["attendance_linked"] = backfill_attendance_registration_ids()
@@ -574,3 +599,34 @@ def migrate_crm_to_postgres_if_needed(*, dry_run: bool = False, force: bool = Fa
     result["skipped"] = False
     result["reason"] = "migrated" if not dry_run else "dry_run"
     return result
+
+
+_LAZY_MIGRATE_AT = 0.0
+_LAZY_MIGRATE_TTL_SEC = 90.0
+
+
+def try_lazy_crm_postgres_cutover() -> dict | None:
+    """
+    Tentativa throttled de cutover quando o flag ainda não está ligado.
+    Usado no boot (retries) e na primeira carga de dados após a planilha aquecer.
+    """
+    global _LAZY_MIGRATE_AT
+    import time
+
+    try:
+        from app.services.crm_registrations_storage import is_crm_postgres_ready
+
+        if is_crm_postgres_ready():
+            return None
+    except Exception:
+        return None
+
+    now = time.monotonic()
+    if (now - _LAZY_MIGRATE_AT) < _LAZY_MIGRATE_TTL_SEC:
+        return None
+    _LAZY_MIGRATE_AT = now
+    try:
+        return migrate_crm_to_postgres_if_needed(sheet_force_refresh=True)
+    except Exception:
+        logger.exception("Lazy CRM Postgres cutover falhou")
+        return {"reason": "error", "ran": False}

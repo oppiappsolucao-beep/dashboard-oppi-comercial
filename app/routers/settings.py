@@ -113,6 +113,20 @@ def _settings_context(request: Request, settings_params: dict):
         quick_replies_rows = []
         account_users_options = []
 
+    crm_postgres_ready = False
+    crm_registrations_count = 0
+    try:
+        from app.services.crm_registrations_storage import (
+            count_registrations,
+            is_crm_postgres_ready,
+        )
+
+        crm_postgres_ready = bool(is_crm_postgres_ready())
+        if crm_postgres_ready:
+            crm_registrations_count = int(count_registrations() or 0)
+    except Exception:
+        pass
+
     return {
         "active_page": "settings",
         "settings_params": settings_params,
@@ -160,6 +174,10 @@ def _settings_context(request: Request, settings_params: dict):
         "user_error": request.session.pop("settings_user_error", ""),
         "sheet_sync_success": request.session.pop("settings_sheet_sync_success", ""),
         "sheet_sync_error": request.session.pop("settings_sheet_sync_error", ""),
+        "crm_migrate_success": request.session.pop("settings_crm_migrate_success", ""),
+        "crm_migrate_error": request.session.pop("settings_crm_migrate_error", ""),
+        "crm_postgres_ready": crm_postgres_ready,
+        "crm_registrations_count": crm_registrations_count,
     }
 
 
@@ -796,5 +814,53 @@ async def settings_sync_sheet(request: Request, apply: str = Form("0"), limit: s
         )
     except Exception as error:
         request.session["settings_sheet_sync_error"] = f"Não consegui sincronizar a planilha: {error}"
+
+    return RedirectResponse(url="/configuracoes?tab=integracoes", status_code=303)
+
+
+@router.post("/configuracoes/crm/migrar-postgres")
+async def settings_migrate_crm_postgres(request: Request):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+
+    if not is_admin(request):
+        request.session["settings_crm_migrate_error"] = (
+            "Somente administradores podem migrar o CRM para o Postgres."
+        )
+        return RedirectResponse(url="/configuracoes?tab=integracoes", status_code=303)
+
+    try:
+        from app.services.crm_db_migrate import migrate_crm_to_postgres_if_needed
+        from app.services.crm_registrations_storage import (
+            count_registrations,
+            is_crm_postgres_ready,
+        )
+
+        result = migrate_crm_to_postgres_if_needed(force=True, sheet_force_refresh=True)
+        reason = normalize_text((result or {}).get("reason"))
+        regs = (result or {}).get("registrations") or {}
+        imported = int(regs.get("imported") or 0)
+        ready = bool(is_crm_postgres_ready())
+        total = int(count_registrations() or 0) if ready else 0
+
+        if ready:
+            request.session["settings_crm_migrate_success"] = (
+                f"CRM no Postgres ativo ({reason or 'ok'}). "
+                f"Importados agora: {imported}. Total de cadastros: {total}."
+            )
+        elif reason == "waiting_for_sheet_data":
+            request.session["settings_crm_migrate_error"] = (
+                "A Folha1 veio vazia (cache frio ou cota Google). "
+                "Aguarde 1–2 minutos e tente de novo."
+            )
+        else:
+            request.session["settings_crm_migrate_error"] = (
+                f"Migração não concluiu (motivo: {reason or 'desconhecido'})."
+            )
+    except Exception as error:
+        request.session["settings_crm_migrate_error"] = (
+            f"Não consegui migrar o CRM para o Postgres: {error}"
+        )
 
     return RedirectResponse(url="/configuracoes?tab=integracoes", status_code=303)
