@@ -312,6 +312,7 @@ def set_monthly_goal(
     *,
     commission_rate: float | None = None,
 ) -> None:
+    global _file_cache
     if month < 1 or month > 12:
         raise ValueError("Informe um mês válido.")
     if amount < 0:
@@ -335,7 +336,6 @@ def set_monthly_goal(
         if is_crm_postgres_ready():
             persist_goals_pg(store)
             with _lock:
-                global _file_cache
                 _file_cache = {key: dict(value) for key, value in store.items()}
             return
     except Exception:
@@ -346,11 +346,11 @@ def set_monthly_goal(
         raise RuntimeError("Não foi possível salvar a meta na aba Metas da planilha.")
 
     with _lock:
-        global _file_cache
         _file_cache = {key: dict(value) for key, value in store.items()}
 
 
 def delete_monthly_goal(year: int, month: int, seller: str = TEAM_SELLER_LABEL) -> None:
+    global _file_cache
     if month < 1 or month > 12:
         raise ValueError("Informe um mês válido.")
 
@@ -368,7 +368,6 @@ def delete_monthly_goal(year: int, month: int, seller: str = TEAM_SELLER_LABEL) 
         if is_crm_postgres_ready():
             persist_goals_pg(store)
             with _lock:
-                global _file_cache
                 _file_cache = {key: dict(value) for key, value in store.items()}
             return
     except Exception:
@@ -379,7 +378,6 @@ def delete_monthly_goal(year: int, month: int, seller: str = TEAM_SELLER_LABEL) 
         raise RuntimeError("Não foi possível atualizar a aba Metas da planilha.")
 
     with _lock:
-        global _file_cache
         _file_cache = {key: dict(value) for key, value in store.items()}
 
 
