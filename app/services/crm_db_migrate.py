@@ -65,6 +65,57 @@ def _sql_type_for_column(column) -> str:
     return "TEXT DEFAULT ''"
 
 
+def _widen_crm_registration_string_columns() -> None:
+    """Amplia VARCHARs curtos já criados (create checkfirst não altera tipo)."""
+    from sqlalchemy import String
+
+    try:
+        insp = inspect(engine)
+        if "crm_registrations" not in insp.get_table_names():
+            return
+        existing = {c["name"]: c for c in insp.get_columns("crm_registrations")}
+        statements: list[str] = []
+        dialect = engine.dialect.name
+        for column in CrmRegistration.__table__.columns:
+            if not isinstance(column.type, String):
+                continue
+            want = int(getattr(column.type, "length", None) or 0)
+            if want <= 0:
+                continue
+            meta = existing.get(column.name)
+            if not meta:
+                continue
+            current_type = str(meta.get("type") or "")
+            # Ex.: VARCHAR(20) / character varying(20)
+            import re
+
+            match = re.search(r"(\d+)", current_type)
+            current_len = int(match.group(1)) if match else 0
+            if current_len <= 0 or current_len >= want:
+                continue
+            if dialect == "postgresql":
+                statements.append(
+                    f"ALTER TABLE crm_registrations ALTER COLUMN {column.name} "
+                    f"TYPE VARCHAR({want})"
+                )
+            elif dialect == "sqlite":
+                # SQLite ignora length — nada a fazer.
+                continue
+            else:
+                statements.append(
+                    f"ALTER TABLE crm_registrations MODIFY COLUMN {column.name} "
+                    f"VARCHAR({want})"
+                )
+        if not statements:
+            return
+        with engine.begin() as conn:
+            for stmt in statements:
+                conn.execute(text(stmt))
+        logger.info("Schema CRM widen: %s", "; ".join(statements))
+    except Exception:
+        logger.exception("Falha ao ampliar colunas crm_registrations")
+
+
 def ensure_crm_schema() -> None:
     """Cria tabelas CRM, ALTERs de colunas faltantes e registration_id em attendance."""
     for model in CRM_TABLE_MODELS:
@@ -97,6 +148,8 @@ def ensure_crm_schema() -> None:
     except Exception:
         logger.exception("Falha ao sincronizar colunas CRM")
 
+    _widen_crm_registration_string_columns()
+
     try:
         insp = inspect(engine)
         if "attendance_conversations" not in insp.get_table_names():
@@ -114,6 +167,26 @@ def ensure_crm_schema() -> None:
         logger.info("Schema attendance: adicionada registration_id")
     except Exception:
         logger.exception("Falha ao adicionar registration_id em attendance_conversations")
+
+
+def _registration_string_limits() -> dict[str, int]:
+    from sqlalchemy import String
+
+    limits: dict[str, int] = {}
+    for column in CrmRegistration.__table__.columns:
+        if isinstance(column.type, String):
+            length = int(getattr(column.type, "length", None) or 0)
+            if length > 0:
+                limits[column.name] = length
+    return limits
+
+
+def _clip_registration_value(key: str, value: str, limits: dict[str, int]) -> str:
+    text_val = normalize_text(value)
+    max_len = limits.get(key)
+    if max_len and len(text_val) > max_len:
+        return text_val[:max_len]
+    return text_val
 
 
 def _load_json_file(name: str, default):
@@ -224,6 +297,7 @@ def _import_registrations_from_sheet(
         return result
 
     db = SessionLocal()
+    limits = _registration_string_limits()
     try:
         existing = {
             int(r.sheet_row): r
@@ -241,7 +315,13 @@ def _import_registrations_from_sheet(
 
             payload = {}
             for key in REGISTRATION_FIELD_KEYS:
-                header = columns.get(key) or FIELD_TO_SHEET_HEADER.get(key)
+                header = columns.get(key)
+                if not header and key == "email_empresa":
+                    header = columns.get("email")
+                if not header and key == "status":
+                    header = columns.get("status_whatsapp") or columns.get("status")
+                if not header:
+                    header = FIELD_TO_SHEET_HEADER.get(key)
                 value = ""
                 if header and header in series.index:
                     value = nt(series.get(header))
@@ -259,49 +339,79 @@ def _import_registrations_from_sheet(
             if not isinstance(actions, dict):
                 actions = {}
 
-            row = existing.get(sheet_row)
-            if row is None:
-                row = CrmRegistration(
-                    tenant_id=DEFAULT_TENANT_ID,
-                    sheet_row=sheet_row,
-                    created_at=_now_iso(),
+            try:
+                with db.begin_nested():
+                    row = existing.get(sheet_row)
+                    if row is None:
+                        row = CrmRegistration(
+                            tenant_id=DEFAULT_TENANT_ID,
+                            sheet_row=sheet_row,
+                            created_at=_now_iso(),
+                        )
+                        db.add(row)
+
+                    overflow_notes: list[str] = []
+                    for key in REGISTRATION_FIELD_KEYS:
+                        raw_val = nt(payload.get(key))
+                        clipped = _clip_registration_value(key, raw_val, limits)
+                        if raw_val and clipped != raw_val:
+                            overflow_notes.append(f"{key}: {raw_val}")
+                        setattr(row, key, clipped)
+
+                    tipo = nt(actions.get("cadastro_tipo")).lower()
+                    row.cadastro_tipo = _clip_registration_value(
+                        "cadastro_tipo",
+                        "empresa" if tipo == "empresa" else "lead",
+                        limits,
+                    )
+                    if "cadastro_ativo" in actions:
+                        raw = actions.get("cadastro_ativo")
+                        if isinstance(raw, bool):
+                            row.cadastro_ativo = raw
+                        else:
+                            text_val = nt(raw).lower()
+                            row.cadastro_ativo = text_val not in {
+                                "0",
+                                "false",
+                                "nao",
+                                "não",
+                                "inativo",
+                                "off",
+                                "no",
+                            }
+                    row.nicho = _clip_registration_value(
+                        "nicho", nt(actions.get("nicho")), limits
+                    )
+                    row.payment_history_json = _json_dumps(
+                        actions.get("payment_history")
+                        if isinstance(actions.get("payment_history"), list)
+                        else []
+                    )
+                    row.closed_services_json = _json_dumps(
+                        actions.get("closed_services")
+                        if isinstance(actions.get("closed_services"), list)
+                        else []
+                    )
+                    row.actions_json = _json_dumps(actions)
+                    if overflow_notes:
+                        note = " | ".join(overflow_notes)
+                        current = nt(row.observacoes)
+                        row.observacoes = (
+                            f"{current}\n[import-trunc] {note}".strip()
+                            if current
+                            else f"[import-trunc] {note}"
+                        )
+                    row.updated_at = _now_iso()
+                    db.flush()
+                    existing[sheet_row] = row
+                    result["imported"] += 1
+            except Exception:
+                result["skipped"] += 1
+                result["row_errors"] = int(result.get("row_errors") or 0) + 1
+                logger.exception(
+                    "Falha importando sheet_row=%s; seguindo para próxima linha",
+                    sheet_row,
                 )
-                db.add(row)
-
-            for key in REGISTRATION_FIELD_KEYS:
-                setattr(row, key, nt(payload.get(key)))
-
-            tipo = nt(actions.get("cadastro_tipo")).lower()
-            row.cadastro_tipo = "empresa" if tipo == "empresa" else "lead"
-            if "cadastro_ativo" in actions:
-                raw = actions.get("cadastro_ativo")
-                if isinstance(raw, bool):
-                    row.cadastro_ativo = raw
-                else:
-                    text_val = nt(raw).lower()
-                    row.cadastro_ativo = text_val not in {
-                        "0",
-                        "false",
-                        "nao",
-                        "não",
-                        "inativo",
-                        "off",
-                        "no",
-                    }
-            row.nicho = nt(actions.get("nicho"))
-            row.payment_history_json = _json_dumps(
-                actions.get("payment_history")
-                if isinstance(actions.get("payment_history"), list)
-                else []
-            )
-            row.closed_services_json = _json_dumps(
-                actions.get("closed_services")
-                if isinstance(actions.get("closed_services"), list)
-                else []
-            )
-            row.actions_json = _json_dumps(actions)
-            row.updated_at = _now_iso()
-            result["imported"] += 1
 
         db.commit()
     except Exception:
@@ -656,6 +766,17 @@ def migrate_crm_to_postgres_if_needed(
             result["ran"] = True
             result["skipped"] = False
             result["has_aux"] = has_aux
+            return result
+
+        db = SessionLocal()
+        try:
+            total_regs = db.query(CrmRegistration).count()
+        finally:
+            db.close()
+        if total_regs <= 0:
+            result["reason"] = "import_produced_no_rows"
+            result["ran"] = True
+            result["skipped"] = False
             return result
 
         result["attendance_linked"] = backfill_attendance_registration_ids()

@@ -2175,7 +2175,7 @@ def identify_columns(df: pd.DataFrame) -> dict:
         "uf": first_existing_column(df, ["UF", "Estado"]),
         "email": first_existing_column(df, ["Email", "E-mail", "Email empresa", "E-mail empresa", "email_empresa"]),
         "site": first_existing_column(df, ["Site empresa", "Site", "Website"]),
-        "telefone_b2b": first_existing_column(df, ["Celular WhatsApp", "Telefone (b2b)", "Telefone b2b", "Telefone"]),
+        "telefone_b2b": first_existing_column(df, ["Celular WhatsApp", "Telefone WhatsApp", "Telefone (b2b)", "Telefone b2b", "Telefone"]),
         "telefone_fixo": first_existing_column(df, ["Telefone fixo", "Fixo"]),
         "telefone_alternativo": first_existing_column(df, ["Telefone lemitt", "Telefone alternativo", "Outro telefone"]),
         "socio_1": first_existing_column(df, ["Sócio 1", "Socio 1", "Sócio1", "Socio1"]),
