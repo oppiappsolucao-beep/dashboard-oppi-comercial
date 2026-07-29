@@ -467,20 +467,19 @@ def attendances_finalize(request: Request, conversation_id: str):
 
 
 @router.post("/atendimentos/conversa/{conversation_id}/excluir", response_class=HTMLResponse)
-async def attendances_delete(request: Request, conversation_id: str):
+def attendances_delete(
+    request: Request,
+    conversation_id: str,
+    line: str = Form(""),
+):
+    """Exclusão rápida — sem await/form pesado e sem page_context no caminho feliz."""
     auth = require_auth(request)
     if isinstance(auth, RedirectResponse):
         return auth
     session_user = get_session_user(request)
-    form = {}
-    try:
-        form = dict(await request.form())
-    except Exception:
-        form = {}
-    line = normalize_text(
-        form.get("line") or request.query_params.get("line", "")
-    )
+    line = normalize_text(line or request.query_params.get("line", ""))
     is_htmx = (request.headers.get("HX-Request") or "").lower() == "true"
+    from urllib.parse import urlencode
 
     if not attendances_service.can_delete_attendance_conversation(
         session_user, request=request
@@ -490,8 +489,6 @@ async def attendances_delete(request: Request, conversation_id: str):
                 "<div class='att-error'>Apenas o administrador pode excluir conversas.</div>",
                 status_code=403,
             )
-        from urllib.parse import urlencode
-
         qs = urlencode({"line": line, "error": "sem_permissao"})
         return RedirectResponse(url=f"/atendimentos?{qs}", status_code=303)
 
@@ -502,27 +499,18 @@ async def attendances_delete(request: Request, conversation_id: str):
                 "<div class='att-error'>Conversa não encontrada ou já excluída.</div>",
                 status_code=404,
             )
-        from urllib.parse import urlencode
-
         qs = urlencode({"line": line, "error": "nao_encontrada"})
         return RedirectResponse(url=f"/atendimentos?{qs}", status_code=303)
 
-    # Form nativo (sem JS): recarrega a página sem a conversa
     if not is_htmx:
-        from urllib.parse import urlencode
-
         qs = urlencode({"line": line, "deleted": "1"})
         return RedirectResponse(url=f"/atendimentos?{qs}", status_code=303)
 
-    ctx = _page_ctx(
-        request,
-        form={"line": line} if line else None,
-        selected_id="",
-        flash="Conversa excluída do atendimento. O cadastro no CRM foi mantido.",
-        light=True,
+    # HTMX: resposta mínima — não monta page_context (era a demora)
+    response = HTMLResponse(
+        "<div class='att-empty'><p>Conversa excluída.</p></div>"
     )
-    response = render(request, "partials/attendances_empty_after_delete.html", ctx)
-    response.headers["HX-Trigger"] = "att-conversation-deleted"
+    response.headers["HX-Redirect"] = f"/atendimentos?{urlencode({'line': line, 'deleted': '1'})}"
     return response
 
 

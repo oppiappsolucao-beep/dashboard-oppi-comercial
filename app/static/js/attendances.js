@@ -348,11 +348,46 @@
   document.body.addEventListener("submit", function (ev) {
     var form = ev.target;
     if (!form || !form.classList || !form.classList.contains("att-delete-form")) return;
+    ev.preventDefault();
+    if (form.dataset.attDeleting === "1") return;
+    form.dataset.attDeleting = "1";
     var btn = form.querySelector(".att-delete-conv-btn");
     if (btn) {
       btn.disabled = true;
       btn.textContent = "Excluindo…";
     }
+    var action = form.getAttribute("action") || "";
+    var fd = new FormData(form);
+    var line = String(fd.get("line") || "");
+    var fallback = "/atendimentos?deleted=1" + (line ? "&line=" + encodeURIComponent(line) : "");
+    var ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
+    var timedOut = false;
+    var timer = window.setTimeout(function () {
+      timedOut = true;
+      if (ctrl) ctrl.abort();
+      window.location.href = fallback;
+    }, 6000);
+    fetch(action, {
+      method: "POST",
+      body: fd,
+      credentials: "same-origin",
+      redirect: "follow",
+      signal: ctrl ? ctrl.signal : undefined,
+      headers: { Accept: "text/html" },
+    })
+      .then(function (res) {
+        window.clearTimeout(timer);
+        if (timedOut) return;
+        if (res.redirected && res.url) {
+          window.location.href = res.url;
+          return;
+        }
+        window.location.href = fallback;
+      })
+      .catch(function () {
+        window.clearTimeout(timer);
+        if (!timedOut) window.location.href = fallback;
+      });
   });
 
   document.body.addEventListener("htmx:afterRequest", function (ev) {

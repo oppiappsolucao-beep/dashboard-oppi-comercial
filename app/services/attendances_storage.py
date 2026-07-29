@@ -612,34 +612,61 @@ def clear_chat_suppression(
 
 
 def delete_conversation(conversation_id: str) -> bool:
-    """Remove da inbox (soft-delete). Sync da Evolution não recria."""
+    """Remove da inbox (soft-delete rápido). Sync da Evolution não recria."""
     conversation_id = normalize_text(conversation_id)
     if not conversation_id:
         return False
     phone = ""
     jid = ""
     instance = ""
-    with _lock, _session() as db:
+    # Sem _lock global: exclusão não pode esperar sync Evolution / upserts.
+    db = SessionLocal()
+    try:
         row = db.get(AttendanceConversation, conversation_id)
         if not row:
             return False
+        if (row.status or "") == STATUS_EXCLUIDO:
+            return True
         phone = normalize_text(row.phone_e164 or "")
         jid = normalize_text(row.remote_jid or "")
         instance = resolve_evolution_instance(getattr(row, "evolution_instance", "") or "")
-        db.query(AttendanceMessage).filter(
-            AttendanceMessage.conversation_id == conversation_id
-        ).delete(synchronize_session=False)
         row.status = STATUS_EXCLUIDO
         row.unread_count = 0
         row.typing = False
         row.last_message_preview = ""
         row.last_message_at = ""
         row.updated_at = _now_iso()
-    try:
-        suppress_chat(phone_e164=phone, remote_jid=jid, evolution_instance=instance)
+        db.commit()
     except Exception:
-        logger.exception("Falha ao registrar conversa suprimida %s", conversation_id)
-    _notify({"type": "conversation_deleted", "conversation_id": conversation_id})
+        db.rollback()
+        logger.exception("Falha no soft-delete %s", conversation_id)
+        return False
+    finally:
+        db.close()
+
+    def _after_delete() -> None:
+        try:
+            suppress_chat(phone_e164=phone, remote_jid=jid, evolution_instance=instance)
+        except Exception:
+            logger.exception("Falha ao registrar conversa suprimida %s", conversation_id)
+        try:
+            # Limpa mensagens em background (não bloqueia o clique Excluir)
+            with _session() as db2:
+                db2.query(AttendanceMessage).filter(
+                    AttendanceMessage.conversation_id == conversation_id
+                ).delete(synchronize_session=False)
+        except Exception:
+            logger.exception("Falha ao limpar mensagens da conversa excluída %s", conversation_id)
+
+    threading.Thread(
+        target=_after_delete,
+        daemon=True,
+        name=f"att-del-{conversation_id[:10]}",
+    ).start()
+    try:
+        _notify({"type": "conversation_deleted", "conversation_id": conversation_id})
+    except Exception:
+        pass
     return True
 
 
