@@ -46,13 +46,56 @@ def _json_dumps(value) -> str:
     return json.dumps(value if value is not None else {}, ensure_ascii=False, default=str)
 
 
+def _sql_type_for_column(column) -> str:
+    """DDL simplificado para ALTER TABLE ADD COLUMN (Postgres/SQLite)."""
+    from sqlalchemy import Boolean, Float, Integer, String, Text
+
+    col_type = column.type
+    if isinstance(col_type, Boolean):
+        return "BOOLEAN DEFAULT FALSE"
+    if isinstance(col_type, Integer):
+        return "INTEGER"
+    if isinstance(col_type, Float):
+        return "FLOAT"
+    if isinstance(col_type, Text):
+        return "TEXT DEFAULT ''"
+    if isinstance(col_type, String):
+        length = int(getattr(col_type, "length", None) or 255)
+        return f"VARCHAR({length}) DEFAULT ''"
+    return "TEXT DEFAULT ''"
+
+
 def ensure_crm_schema() -> None:
-    """Cria tabelas CRM e ALTERs leves (registration_id em attendance)."""
+    """Cria tabelas CRM, ALTERs de colunas faltantes e registration_id em attendance."""
     for model in CRM_TABLE_MODELS:
         try:
             model.__table__.create(bind=engine, checkfirst=True)
         except Exception:
             logger.exception("Falha ao criar tabela %s", model.__tablename__)
+
+    # create(checkfirst=True) NÃO adiciona colunas novas — sincroniza aqui.
+    try:
+        insp = inspect(engine)
+        table_names = set(insp.get_table_names())
+        for model in CRM_TABLE_MODELS:
+            table = model.__tablename__
+            if table not in table_names:
+                continue
+            existing = {c["name"] for c in insp.get_columns(table)}
+            statements: list[str] = []
+            for column in model.__table__.columns:
+                if column.name in existing:
+                    continue
+                ddl = _sql_type_for_column(column)
+                statements.append(f"ALTER TABLE {table} ADD COLUMN {column.name} {ddl}")
+            if not statements:
+                continue
+            with engine.begin() as conn:
+                for stmt in statements:
+                    conn.execute(text(stmt))
+            logger.info("Schema CRM %s: %s", table, "; ".join(statements))
+    except Exception:
+        logger.exception("Falha ao sincronizar colunas CRM")
 
     try:
         insp = inspect(engine)
@@ -124,15 +167,29 @@ def _import_registrations_from_sheet(
         except Exception:
             pass
 
-    # 3) Só bate na API Google se ainda estiver vazio (force_refresh = permitir essa tentativa).
+    # 3) API Google com retries (429/cache frio no boot).
     if df is None or getattr(df, "empty", True):
-        try:
-            df = load_sheet_data(force_refresh=True)
-            if df is not None and not getattr(df, "empty", True):
-                result["source"] = "sheet_refresh"
-        except Exception:
-            logger.exception("Falha ao forçar refresh da Folha1 na migração CRM")
-            df = None
+        import time
+
+        last_error = ""
+        for attempt in range(3):
+            try:
+                df = load_sheet_data(force_refresh=True)
+                if df is not None and not getattr(df, "empty", True):
+                    result["source"] = "sheet_refresh"
+                    result["api_attempts"] = attempt + 1
+                    break
+            except Exception as error:
+                last_error = str(error)
+                logger.exception(
+                    "Falha ao forçar refresh da Folha1 na migração CRM (tentativa %s)",
+                    attempt + 1,
+                )
+                df = None
+            if attempt < 2:
+                time.sleep(2 * (attempt + 1))
+        if last_error:
+            result["api_error"] = last_error
     elif force_refresh:
         # Cache já tem dados — mantém; não arrisca esvaziar com 429.
         result["source"] = "sheet_cache"
@@ -141,6 +198,7 @@ def _import_registrations_from_sheet(
         result["source"] = "empty"
         return result
 
+    result["sheet_rows"] = int(len(df))
     columns = identify_columns(df)
     if "_sheet_row" not in df.columns:
         df = df.copy()
@@ -184,10 +242,14 @@ def _import_registrations_from_sheet(
             payload = {}
             for key in REGISTRATION_FIELD_KEYS:
                 header = columns.get(key) or FIELD_TO_SHEET_HEADER.get(key)
+                value = ""
                 if header and header in series.index:
-                    payload[key] = nt(series.get(header))
-                else:
-                    payload[key] = ""
+                    value = nt(series.get(header))
+                if not value and f"_{key}" in series.index:
+                    value = nt(series.get(f"_{key}"))
+                if not value and key in series.index:
+                    value = nt(series.get(key))
+                payload[key] = value
 
             if not nt(payload.get("empresa")):
                 result["skipped"] += 1
@@ -560,10 +622,18 @@ def migrate_crm_to_postgres_if_needed(
         result["skipped"] = False
         return result
 
-    result["registrations"] = _import_registrations_from_sheet(
-        dry_run=dry_run,
-        force_refresh=bool(sheet_force_refresh or force),
-    )
+    try:
+        result["registrations"] = _import_registrations_from_sheet(
+            dry_run=dry_run,
+            force_refresh=bool(sheet_force_refresh or force),
+        )
+    except Exception as error:
+        logger.exception("Import crm_registrations abortou o cutover")
+        result["ran"] = True
+        result["skipped"] = False
+        result["reason"] = "import_error"
+        result["error"] = str(error)
+        return result
     result["activities"] = _import_activities(dry_run=dry_run)
     result["proposals"] = _import_proposals(dry_run=dry_run)
     result["settings"] = _import_app_settings(dry_run=dry_run)

@@ -267,6 +267,71 @@ async def health():
     return JSONResponse(payload)
 
 
+@app.get("/health/crm-cutover")
+async def health_crm_cutover():
+    """Diagnóstico + tentativa forçada de cutover CRM → Postgres."""
+    import time
+
+    payload: dict = {
+        "status": "ok",
+        "build": APP_BUILD,
+        "sheet": {},
+        "migrate": None,
+        "crm_postgres": {"ready": False, "registrations": 0},
+    }
+    try:
+        from app.services.legacy_core import hydrate_sheet_cache_from_disk, load_sheet_data
+
+        hydrate_sheet_cache_from_disk()
+        soft = load_sheet_data(force_refresh=False)
+        payload["sheet"]["soft_rows"] = 0 if soft is None or soft.empty else int(len(soft))
+        if soft is not None and not soft.empty:
+            payload["sheet"]["columns_sample"] = [str(c) for c in list(soft.columns)[:15]]
+        else:
+            hard_rows = 0
+            hard_error = ""
+            for attempt in range(3):
+                try:
+                    hard = load_sheet_data(force_refresh=True)
+                    hard_rows = 0 if hard is None or hard.empty else int(len(hard))
+                    if hard_rows > 0:
+                        payload["sheet"]["columns_sample"] = [
+                            str(c) for c in list(hard.columns)[:15]
+                        ]
+                        break
+                except Exception as error:
+                    hard_error = str(error)
+                time.sleep(2)
+            payload["sheet"]["hard_rows"] = hard_rows
+            if hard_error:
+                payload["sheet"]["hard_error"] = hard_error
+    except Exception as error:
+        payload["sheet"]["error"] = str(error)
+
+    try:
+        from app.services.crm_db_migrate import migrate_crm_to_postgres_if_needed
+        from app.services.crm_registrations_storage import (
+            count_registrations,
+            is_crm_postgres_ready,
+        )
+
+        payload["migrate"] = migrate_crm_to_postgres_if_needed(
+            force=True,
+            sheet_force_refresh=True,
+        )
+        ready = bool(is_crm_postgres_ready())
+        payload["crm_postgres"] = {
+            "ready": ready,
+            "registrations": int(count_registrations() or 0) if ready else 0,
+        }
+        if not ready:
+            payload["status"] = "waiting"
+    except Exception as error:
+        payload["status"] = "error"
+        payload["migrate_error"] = str(error)
+    return JSONResponse(payload)
+
+
 @app.get("/health/pdf-engine")
 async def health_pdf_engine():
     from app.services.proposal_pdf import check_pdf_engine_status
