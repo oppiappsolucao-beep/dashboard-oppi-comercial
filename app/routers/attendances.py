@@ -172,8 +172,10 @@ def attendances_page(request: Request):
     require_auth(request)
     flash = ""
     error = ""
+    light = False
     if request.query_params.get("deleted") == "1":
         flash = "Conversa excluída do atendimento. O cadastro no CRM foi mantido."
+        light = True  # sem sync Evolution — evita demora e ressurreição imediata
     err = normalize_text(request.query_params.get("error") or "")
     if err == "sem_permissao":
         error = "Apenas o administrador pode excluir conversas."
@@ -182,7 +184,13 @@ def attendances_page(request: Request):
     return render(
         request,
         "attendances/index.html",
-        _page_ctx(request, flash=flash, error=error),
+        _page_ctx(
+            request,
+            selected_id="" if light else None,
+            flash=flash,
+            error=error,
+            light=light,
+        ),
     )
 
 

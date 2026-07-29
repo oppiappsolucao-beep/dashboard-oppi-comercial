@@ -298,8 +298,8 @@ def _handle_messages_upsert(payload: dict) -> int:
             continue
 
         evolution_id = normalize_text(key.get("id") or item.get("id") or "")
-        # Inbound do lead sempre entra (reabre se estava excluída).
-        # Outbound para chat excluído é ignorado.
+        # Inbound do lead só reabre exclusão se a mensagem for recente (evita
+        # replay histórico / sync reabrir chat apagado). Outbound em excluído: drop.
         suppressed = False
         try:
             suppressed = store.is_chat_suppressed(
@@ -316,15 +316,36 @@ def _handle_messages_upsert(payload: dict) -> int:
                 from_me,
             )
             continue
-        if suppressed and not from_me:
+
+        msg_is_fresh = True
+        try:
+            ts_raw = item.get("messageTimestamp") or key.get("messageTimestamp") or 0
+            ts = int(str(ts_raw).strip() or 0)
+            if ts > 10_000_000_000:  # ms → s
+                ts //= 1000
+            if ts > 0:
+                import time as _time
+
+                msg_is_fresh = (_time.time() - ts) <= 600  # 10 min
+        except Exception:
+            msg_is_fresh = True
+
+        if suppressed and not from_me and not msg_is_fresh:
+            logger.info(
+                "webhook drop suppressed_stale phone=%s jid=%s",
+                phone,
+                remote_jid,
+            )
+            continue
+        if suppressed and not from_me and msg_is_fresh:
             try:
                 store.clear_chat_suppression(
                     phone_e164=phone, remote_jid=remote_jid, evolution_instance=instance
                 )
             except Exception:
                 logger.exception("clear_chat_suppression falhou no webhook")
-        # Mensagem do lead: nunca bloquear por exclusão anterior
-        ignore_suppression = not from_me
+        # Mensagem nova do lead: pode reabrir; histórica/sync não
+        ignore_suppression = bool(not from_me and msg_is_fresh)
         conversation = None
         if phone:
             conversation = store.upsert_conversation_by_phone(

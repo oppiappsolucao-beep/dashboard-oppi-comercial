@@ -234,7 +234,8 @@ def get_conversation_by_phone(
     variants = phone_match_variants(phone) or [phone]
     with _session(commit=False) as db:
         q = db.query(AttendanceConversation).filter(
-            AttendanceConversation.phone_e164.in_(variants)
+            AttendanceConversation.phone_e164.in_(variants),
+            AttendanceConversation.status != STATUS_EXCLUIDO,
         )
         if evolution_instance is not None:
             instance = resolve_evolution_instance(evolution_instance)
@@ -255,7 +256,8 @@ def get_conversation_by_remote_jid(
         return None
     with _session(commit=False) as db:
         q = db.query(AttendanceConversation).filter(
-            AttendanceConversation.remote_jid == jid
+            AttendanceConversation.remote_jid == jid,
+            AttendanceConversation.status != STATUS_EXCLUIDO,
         )
         if evolution_instance is not None:
             instance = resolve_evolution_instance(evolution_instance)
@@ -447,66 +449,46 @@ def is_chat_suppressed(
     remote_jid: str = "",
     evolution_instance: str = "",
 ) -> bool:
-    """True só se ESTE contato foi excluído pelo admin (match estrito)."""
+    """True se este contato foi excluído pelo admin (telefone/jid; qualquer linha)."""
     phone = normalize_text(phone_e164)
     jid = normalize_text(remote_jid)
-    instance = resolve_evolution_instance(evolution_instance)
     if not phone and not jid:
         return False
 
-    # Soft-delete: match estrito por telefone OU por jid (nunca OR frouxo entre os dois
-    # de linhas diferentes). Instância: igualdade exata (sem wildcard de vazio).
+    phone_variants: list[str] = []
+    if phone:
+        try:
+            from app.services.evolution_client import phone_match_variants
+
+            phone_variants = [v for v in (phone_match_variants(phone) or [phone]) if v]
+        except Exception:
+            phone_variants = [phone]
+
+    # Soft-delete: não depende de instância — evita sync recriar o mesmo WhatsApp
     try:
         with _session(commit=False) as db:
             q = db.query(AttendanceConversation.id).filter(
                 AttendanceConversation.status == STATUS_EXCLUIDO
             )
-            if instance:
-                q = q.filter(
-                    func.lower(AttendanceConversation.evolution_instance) == instance.lower()
-                )
-            if phone:
-                try:
-                    from app.services.evolution_client import phone_match_variants
-
-                    variants = [v for v in (phone_match_variants(phone) or [phone]) if v]
-                except Exception:
-                    variants = [phone]
-                if variants and q.filter(
-                    AttendanceConversation.phone_e164.in_(variants)
-                ).first() is not None:
-                    return True
-            elif jid:
-                if q.filter(AttendanceConversation.remote_jid == jid).first() is not None:
-                    return True
+            if phone_variants and q.filter(
+                AttendanceConversation.phone_e164.in_(phone_variants)
+            ).first():
+                return True
+            if jid and q.filter(AttendanceConversation.remote_jid == jid).first():
+                return True
     except Exception:
         logger.exception("Falha ao checar soft-delete de conversa")
 
-    # Tabela auxiliar (se existir) — também match estrito
+    # Tabela auxiliar
     try:
         with _session(commit=False) as db:
             q = db.query(AttendanceSuppressedChat.id)
-            if instance:
-                q = q.filter(
-                    func.lower(AttendanceSuppressedChat.evolution_instance) == instance.lower()
-                )
-            if phone:
-                try:
-                    from app.services.evolution_client import phone_match_variants
-
-                    variants = [v for v in (phone_match_variants(phone) or [phone]) if v]
-                except Exception:
-                    variants = [phone]
-                if not variants:
-                    return False
-                return (
-                    q.filter(AttendanceSuppressedChat.phone_e164.in_(variants)).first()
-                    is not None
-                )
-            if jid:
-                return (
-                    q.filter(AttendanceSuppressedChat.remote_jid == jid).first() is not None
-                )
+            if phone_variants and q.filter(
+                AttendanceSuppressedChat.phone_e164.in_(phone_variants)
+            ).first():
+                return True
+            if jid and q.filter(AttendanceSuppressedChat.remote_jid == jid).first():
+                return True
             return False
     except Exception:
         return False
@@ -524,9 +506,23 @@ def suppress_chat(
     if not phone and not jid:
         return
     try:
-        if is_chat_suppressed(phone_e164=phone, remote_jid=jid, evolution_instance=instance):
-            return
         with _lock, _session() as db:
+            q = db.query(AttendanceSuppressedChat)
+            if phone:
+                q = q.filter(AttendanceSuppressedChat.phone_e164 == phone)
+            elif jid:
+                q = q.filter(AttendanceSuppressedChat.remote_jid == jid)
+            if instance:
+                q = q.filter(
+                    or_(
+                        func.lower(AttendanceSuppressedChat.evolution_instance)
+                        == instance.lower(),
+                        AttendanceSuppressedChat.evolution_instance == "",
+                        AttendanceSuppressedChat.evolution_instance.is_(None),
+                    )
+                )
+            if q.first():
+                return
             db.add(
                 AttendanceSuppressedChat(
                     phone_e164=phone,
@@ -779,6 +775,18 @@ def upsert_conversation_by_phone(
             result = _conversation_to_dict(existing)
             _notify({"type": "conversation_upsert", "conversation_id": conversation_id})
             return result
+        # Mesmo WhatsApp excluído em outra linha / instância vazia — não recria
+        if not existing and not ignore_suppression:
+            excluido = (
+                db.query(AttendanceConversation)
+                .filter(
+                    AttendanceConversation.phone_e164.in_(phone_variants),
+                    AttendanceConversation.status == STATUS_EXCLUIDO,
+                )
+                .first()
+            )
+            if excluido:
+                return {}
         if existing:
             changed = phone_linked_from_jid
             if contact_name and not (existing.contact_name or "").strip():

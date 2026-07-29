@@ -345,6 +345,16 @@
     refreshList({ clearSelection: true });
   });
 
+  document.body.addEventListener("submit", function (ev) {
+    var form = ev.target;
+    if (!form || !form.classList || !form.classList.contains("att-delete-form")) return;
+    var btn = form.querySelector(".att-delete-conv-btn");
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "Excluindo…";
+    }
+  });
+
   document.body.addEventListener("htmx:afterRequest", function (ev) {
     var path = (ev.detail && ev.detail.pathInfo && ev.detail.pathInfo.requestPath) || "";
     if (path.indexOf("/atendimentos/conversa/") === -1) return;
