@@ -1330,3 +1330,85 @@ def get_base64_from_media_message(
         "Não foi possível baixar a mídia na Evolution. "
         + (" | ".join(errors[-3:]) if errors else "")
     )
+
+
+def webhook_callback_url() -> str:
+    """URL que a Evolution deve chamar (inclui token se configurado)."""
+    base = (settings.public_app_url or "https://comercial.oppitech.com.br").rstrip("/")
+    url = f"{base}/webhooks/evolution"
+    token = normalize_text(settings.evolution_webhook_token)
+    if token:
+        url = f"{url}?token={quote(token)}"
+    return url
+
+
+def ensure_instance_webhook(instance: str = "") -> dict:
+    """Configura webhook MESSAGES_UPSERT na instância (Evolution v1/v2)."""
+    name = match_configured_instance(instance) if instance else _instance_name()
+    if not name or not is_configured():
+        return {"instance": name or "", "ok": False, "error": "not_configured"}
+
+    url = webhook_callback_url()
+    events = [
+        "MESSAGES_UPSERT",
+        "MESSAGES_UPDATE",
+        "CONNECTION_UPDATE",
+    ]
+    payloads = (
+        {
+            "enabled": True,
+            "url": url,
+            "webhookByEvents": False,
+            "webhookBase64": False,
+            "events": events,
+        },
+        {
+            "webhook": {
+                "enabled": True,
+                "url": url,
+                "webhookByEvents": False,
+                "webhookBase64": False,
+                "events": events,
+            }
+        },
+    )
+    last_error = ""
+    for path in (
+        f"/webhook/set/{quote(name, safe='')}",
+        f"/webhook/instance/{quote(name, safe='')}",
+    ):
+        for payload in payloads:
+            try:
+                response = requests.post(
+                    _url(path),
+                    headers=_headers(),
+                    json=payload,
+                    timeout=12,
+                )
+            except requests.RequestException as error:
+                last_error = str(error)
+                continue
+            if response.status_code < 400:
+                logger.info(
+                    "Evolution webhook ok instance=%s url=%s status=%s",
+                    name,
+                    url,
+                    response.status_code,
+                )
+                return {
+                    "instance": name,
+                    "ok": True,
+                    "status": response.status_code,
+                    "url": url,
+                }
+            last_error = (response.text or "")[:200] or f"HTTP {response.status_code}"
+    logger.warning(
+        "Evolution webhook falhou instance=%s error=%s", name, last_error
+    )
+    return {"instance": name, "ok": False, "error": last_error, "url": url}
+
+
+def ensure_webhooks_for_all_instances() -> list[dict]:
+    """Garante webhook nas linhas configuradas em EVOLUTION_INSTANCE."""
+    names = configured_instance_names() or ([_instance_name()] if _instance_name() else [])
+    return [ensure_instance_webhook(name) for name in names if name]

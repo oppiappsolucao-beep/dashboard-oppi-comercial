@@ -541,10 +541,13 @@ def clear_chat_suppression(
     remote_jid: str = "",
     evolution_instance: str = "",
 ) -> int:
-    """Remove bloqueio (ex.: lead mandou mensagem nova após exclusão)."""
+    """Remove bloqueio (ex.: lead mandou mensagem nova após exclusão).
+
+    Limpa por telefone/jid em QUALQUER linha — suppress é global; filtrar por
+    instância deixava o chat bloqueado quando o webhook vinha com outro nome.
+    """
     phone = normalize_text(phone_e164)
     jid = normalize_text(remote_jid)
-    instance = resolve_evolution_instance(evolution_instance)
     if not phone and not jid:
         return 0
     removed = 0
@@ -554,10 +557,6 @@ def clear_chat_suppression(
             q = db.query(AttendanceConversation).filter(
                 AttendanceConversation.status == STATUS_EXCLUIDO
             )
-            if instance:
-                q = q.filter(
-                    func.lower(AttendanceConversation.evolution_instance) == instance.lower()
-                )
             if phone:
                 try:
                     from app.services.evolution_client import phone_match_variants
@@ -583,10 +582,6 @@ def clear_chat_suppression(
     try:
         with _lock, _session() as db:
             q = db.query(AttendanceSuppressedChat)
-            if instance:
-                q = q.filter(
-                    func.lower(AttendanceSuppressedChat.evolution_instance) == instance.lower()
-                )
             if phone:
                 try:
                     from app.services.evolution_client import phone_match_variants

@@ -233,6 +233,13 @@ async def startup_maintenance() -> None:
                     fromlist=["ensure_fake_test_company_on_startup"],
                 ).ensure_fake_test_company_on_startup(),
             ),
+            (
+                "evolution_webhooks",
+                lambda: __import__(
+                    "app.services.evolution_client",
+                    fromlist=["ensure_webhooks_for_all_instances"],
+                ).ensure_webhooks_for_all_instances(),
+            ),
         ]
         for name, step in steps:
             try:

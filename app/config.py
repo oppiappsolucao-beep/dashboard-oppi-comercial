@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-APP_BUILD = os.getenv("APP_BUILD", "20260729-health-fast-v114").strip() or "20260729-health-fast-v114"
+APP_BUILD = os.getenv("APP_BUILD", "20260729-webhook-inbound-v115").strip() or "20260729-webhook-inbound-v115"
 
 class Settings:
     sheet_id: str = "1GAbrca0NSiJfPXaSte1qGxXCsGkQPacoRsm0PVB51gE"
@@ -72,6 +72,10 @@ class Settings:
         self.evolution_api_key = os.getenv("EVOLUTION_API_KEY", "").strip()
         self.evolution_instance = os.getenv("EVOLUTION_INSTANCE", "").strip()
         self.evolution_webhook_token = os.getenv("EVOLUTION_WEBHOOK_TOKEN", "").strip()
+        self.public_app_url = (
+            os.getenv("PUBLIC_APP_URL", "https://comercial.oppitech.com.br").strip().rstrip("/")
+            or "https://comercial.oppitech.com.br"
+        )
         self.ai_attendance_prompt = os.getenv("AI_ATTENDANCE_PROMPT", "").strip()
         self.ai_attendance_enabled = os.getenv("AI_ATTENDANCE_ENABLED", "").strip().lower() in {
             "1", "true", "sim", "yes", "on",

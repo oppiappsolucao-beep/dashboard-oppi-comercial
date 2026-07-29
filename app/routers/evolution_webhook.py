@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import logging
 import threading
+import time
+from collections import deque
 from typing import Any
 
 from fastapi import APIRouter, Header, Query, Request
@@ -21,6 +23,49 @@ from app.services.legacy_core import normalize_text
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["webhooks"])
+
+_WEBHOOK_STATS_LOCK = threading.Lock()
+_WEBHOOK_STATS = {
+    "received": 0,
+    "authorized": 0,
+    "unauthorized": 0,
+    "messages_saved": 0,
+    "last_at": "",
+    "last_event": "",
+    "last_instance": "",
+    "last_messages": 0,
+    "last_error": "",
+}
+_WEBHOOK_RECENT: deque[dict] = deque(maxlen=20)
+
+
+def webhook_stats_snapshot() -> dict:
+    with _WEBHOOK_STATS_LOCK:
+        return {
+            **dict(_WEBHOOK_STATS),
+            "recent": list(_WEBHOOK_RECENT),
+        }
+
+
+def _record_webhook_hit(**fields) -> None:
+    with _WEBHOOK_STATS_LOCK:
+        for key, value in fields.items():
+            if key in _WEBHOOK_STATS:
+                if isinstance(_WEBHOOK_STATS[key], int) and isinstance(value, int) and key not in {
+                    "last_messages",
+                }:
+                    _WEBHOOK_STATS[key] = int(_WEBHOOK_STATS[key]) + value
+                else:
+                    _WEBHOOK_STATS[key] = value
+        _WEBHOOK_RECENT.appendleft(
+            {
+                "at": fields.get("last_at") or "",
+                "event": fields.get("last_event") or "",
+                "instance": fields.get("last_instance") or "",
+                "messages": fields.get("last_messages") or 0,
+                "error": fields.get("last_error") or "",
+            }
+        )
 
 
 def _extract_instance_name(payload: dict) -> str:
@@ -50,13 +95,29 @@ def _extract_instance_name(payload: dict) -> str:
     return ""
 
 
-def _token_ok(header_token: str | None, query_token: str | None) -> bool:
-    expected = settings.evolution_webhook_token
+def _token_ok(
+    header_token: str | None,
+    query_token: str | None,
+    *,
+    payload: dict | None = None,
+) -> bool:
+    expected = normalize_text(settings.evolution_webhook_token)
+    provided = normalize_text(header_token) or normalize_text(query_token)
+    if expected:
+        if provided == expected:
+            return True
+    # Evolution costuma mandar apikey no body/header — aceita a mesma API key do CRM.
+    api_key = normalize_text(settings.evolution_api_key)
+    if api_key:
+        body_key = ""
+        if isinstance(payload, dict):
+            body_key = normalize_text(payload.get("apikey") or payload.get("apiKey") or "")
+        if provided == api_key or body_key == api_key:
+            return True
+    # Sem token configurado e sem API key exigida → libera (compat).
     if not expected:
         return True
-    provided = normalize_text(header_token) or normalize_text(query_token)
-    return provided == expected
-
+    return False
 
 def _dig(data: Any, *keys, default=None):
     cur = data
@@ -462,13 +523,43 @@ def _handle_presence_or_typing(payload: dict) -> bool:
 @router.get("/webhooks/evolution")
 async def evolution_webhook_probe():
     """GET no navegador só confirma que a rota existe. A Evolution deve usar POST."""
+    try:
+        from app.services.evolution_client import webhook_callback_url
+
+        callback = webhook_callback_url()
+    except Exception:
+        callback = "https://comercial.oppitech.com.br/webhooks/evolution"
     return JSONResponse(
         {
             "ok": True,
             "service": "evolution-webhook",
-            "hint": "Este endpoint recebe POST da Evolution (MESSAGES_UPSERT). Abra /health para status do app.",
+            "callback_url": callback,
+            "stats": webhook_stats_snapshot(),
+            "hint": "Este endpoint recebe POST da Evolution (MESSAGES_UPSERT).",
         }
     )
+
+
+@router.get("/health/webhook")
+async def health_webhook(ensure: str = Query(default="0")):
+    """Diagnóstico de inbound + opcionalmente reconfigura webhooks nas instâncias."""
+    payload: dict[str, Any] = {
+        "ok": True,
+        "stats": webhook_stats_snapshot(),
+    }
+    try:
+        from app.services.evolution_client import (
+            ensure_webhooks_for_all_instances,
+            webhook_callback_url,
+        )
+
+        payload["callback_url"] = webhook_callback_url()
+        if normalize_text(ensure) in {"1", "true", "yes", "sim"}:
+            payload["ensure"] = ensure_webhooks_for_all_instances()
+    except Exception as error:
+        payload["ok"] = False
+        payload["error"] = str(error)
+    return JSONResponse(payload)
 
 
 @router.post("/webhooks/evolution")
@@ -476,19 +567,45 @@ async def evolution_webhook(
     request: Request,
     token: str | None = Query(default=None),
     x_evolution_token: str | None = Header(default=None, alias="X-Evolution-Token"),
+    x_api_key: str | None = Header(default=None, alias="apikey"),
 ):
-    if not _token_ok(x_evolution_token, token):
-        return JSONResponse({"ok": False, "error": "unauthorized"}, status_code=401)
-
+    now_iso = time.strftime("%Y-%m-%dT%H:%M:%S")
     try:
         payload = await request.json()
     except Exception:
+        _record_webhook_hit(
+            received=1,
+            last_at=now_iso,
+            last_event="invalid_json",
+            last_error="invalid_json",
+        )
         return JSONResponse({"ok": False, "error": "invalid_json"}, status_code=400)
 
     if not isinstance(payload, dict):
+        _record_webhook_hit(
+            received=1,
+            last_at=now_iso,
+            last_event="invalid_payload",
+            last_error="invalid_payload",
+        )
         return JSONResponse({"ok": False, "error": "invalid_payload"}, status_code=400)
 
+    auth_header = x_evolution_token or x_api_key
+    if not _token_ok(auth_header, token, payload=payload):
+        instance = _extract_instance_name(payload)
+        _record_webhook_hit(
+            received=1,
+            unauthorized=1,
+            last_at=now_iso,
+            last_event="unauthorized",
+            last_instance=instance,
+            last_error="unauthorized",
+        )
+        logger.warning("webhook evolution unauthorized instance=%s", instance)
+        return JSONResponse({"ok": False, "error": "unauthorized"}, status_code=401)
+
     event = _extract_event_name(payload)
+    instance = _extract_instance_name(payload)
     handled = 0
     typing_ok = False
     error = ""
@@ -507,9 +624,21 @@ async def evolution_webhook(
         logger.exception("webhook evolution falhou event=%s", event or "unknown")
         error = str(exc)[:200]
 
+    _record_webhook_hit(
+        received=1,
+        authorized=1,
+        messages_saved=int(handled or 0),
+        last_at=now_iso,
+        last_event=event or "unknown",
+        last_instance=instance,
+        last_messages=int(handled or 0),
+        last_error=error or "",
+    )
+
     return JSONResponse({
         "ok": not bool(error),
         "event": event or "unknown",
+        "instance": instance,
         "messages": handled,
         "typing": typing_ok,
         "error": error or None,
