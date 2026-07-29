@@ -30,11 +30,15 @@ _WEBHOOK_STATS = {
     "authorized": 0,
     "unauthorized": 0,
     "messages_saved": 0,
+    "dropped": 0,
     "last_at": "",
     "last_event": "",
     "last_instance": "",
     "last_messages": 0,
     "last_error": "",
+    "last_drop_reason": "",
+    "last_payload_keys": "",
+    "drop_counts": {},
 }
 _WEBHOOK_RECENT: deque[dict] = deque(maxlen=20)
 
@@ -150,10 +154,56 @@ def _message_type_and_body(message: dict) -> tuple[str, str, str, str, str]:
     if not isinstance(msg, dict):
         return "text", "", "", "", ""
 
+    # Desembrulha envelopes comuns do Baileys/Evolution (senão body fica vazio).
+    for _ in range(4):
+        unwrapped = False
+        for wrap in (
+            "ephemeralMessage",
+            "viewOnceMessage",
+            "viewOnceMessageV2",
+            "viewOnceMessageV2Extension",
+            "documentWithCaptionMessage",
+            "editedMessage",
+        ):
+            inner = msg.get(wrap)
+            if isinstance(inner, dict) and isinstance(inner.get("message"), dict):
+                msg = inner["message"]
+                unwrapped = True
+                break
+        if not unwrapped:
+            break
+
     if msg.get("conversation"):
         return "text", normalize_text(msg.get("conversation")), "", "", ""
     if isinstance(msg.get("extendedTextMessage"), dict):
         return "text", normalize_text(msg["extendedTextMessage"].get("text")), "", "", ""
+    if isinstance(msg.get("buttonsResponseMessage"), dict):
+        return (
+            "text",
+            normalize_text(
+                msg["buttonsResponseMessage"].get("selectedDisplayText")
+                or msg["buttonsResponseMessage"].get("selectedButtonId")
+            ),
+            "",
+            "",
+            "",
+        )
+    if isinstance(msg.get("listResponseMessage"), dict):
+        single = msg["listResponseMessage"].get("singleSelectReply")
+        if isinstance(single, dict):
+            return "text", normalize_text(single.get("selectedRowId")), "", "", ""
+        return "text", normalize_text(msg["listResponseMessage"].get("title")), "", "", ""
+    if isinstance(msg.get("templateButtonReplyMessage"), dict):
+        return (
+            "text",
+            normalize_text(
+                msg["templateButtonReplyMessage"].get("selectedDisplayText")
+                or msg["templateButtonReplyMessage"].get("selectedId")
+            ),
+            "",
+            "",
+            "",
+        )
 
     image = msg.get("imageMessage") if isinstance(msg.get("imageMessage"), dict) else None
     if image:
@@ -199,10 +249,19 @@ def _message_type_and_body(message: dict) -> tuple[str, str, str, str, str]:
     for stub_key, stub_type in (
         ("stickerMessage", "image"),
         ("contactMessage", "text"),
+        ("contactsArrayMessage", "text"),
         ("locationMessage", "text"),
+        ("liveLocationMessage", "text"),
+        ("reactionMessage", "text"),
     ):
         if msg.get(stub_key):
-            return stub_type, f"[{stub_type}]", "", "", ""
+            label = stub_type if stub_key != "reactionMessage" else "reaction"
+            return stub_type, f"[{label}]", "", "", ""
+
+    # Fallback: messageType no item pai (Evolution v2)
+    parent_type = normalize_text(message.get("messageType") or "").lower()
+    if parent_type and parent_type not in {"", "unknown", "protocolmessage", "senderkeydistributionmessage"}:
+        return "text", f"[{parent_type}]", "", "", ""
 
     return "text", "", "", "", ""
 
@@ -213,18 +272,20 @@ def _iter_upsert_messages(payload: dict) -> list[dict]:
         if "messages" in data:
             return [m for m in _as_list(data.get("messages")) if isinstance(m, dict)]
         # Alguns payloads aninham em data.message / data.key
-        if "key" in data or "message" in data:
+        if "key" in data or "message" in data or "messageType" in data:
             return [data]
         nested = data.get("message")
         if isinstance(nested, dict) and (nested.get("key") or nested.get("message")):
             return [nested]
+        # Evolution às vezes manda data.message = conteúdo sem key; key no root de data
+        if any(k in data for k in ("pushName", "messageTimestamp", "status", "source")):
+            return [data]
     if isinstance(data, list):
         return [m for m in data if isinstance(m, dict)]
     # formato plano
-    if payload.get("key") or payload.get("message"):
+    if payload.get("key") or payload.get("message") or payload.get("messageType"):
         return [payload]
     return []
-
 
 def ingest_evolution_message_item(
     item: dict,
@@ -322,14 +383,58 @@ def ingest_evolution_message_item(
     return True
 
 
+def _note_drop(reason: str, **extra) -> None:
+    with _WEBHOOK_STATS_LOCK:
+        _WEBHOOK_STATS["dropped"] = int(_WEBHOOK_STATS.get("dropped") or 0) + 1
+        counts = _WEBHOOK_STATS.get("drop_counts")
+        if not isinstance(counts, dict):
+            counts = {}
+        counts[reason] = int(counts.get(reason) or 0) + 1
+        _WEBHOOK_STATS["drop_counts"] = counts
+        _WEBHOOK_STATS["last_drop_reason"] = reason
+        if extra:
+            bits = [f"{k}={v}" for k, v in extra.items() if v not in (None, "")]
+            if bits:
+                _WEBHOOK_STATS["last_drop_reason"] = f"{reason} ({', '.join(bits)})"
+
+
 def _handle_messages_upsert(payload: dict) -> int:
     count = 0
     instance = _extract_instance_name(payload)
-    for item in _iter_upsert_messages(payload):
+    items = _iter_upsert_messages(payload)
+    data = payload.get("data")
+    with _WEBHOOK_STATS_LOCK:
+        keys = []
+        if isinstance(payload, dict):
+            keys.extend(sorted(str(k) for k in payload.keys())[:12])
+        if isinstance(data, dict):
+            keys.append("data:" + ",".join(sorted(str(k) for k in data.keys())[:12]))
+        _WEBHOOK_STATS["last_payload_keys"] = " | ".join(keys)
+    if not items:
+        _note_drop("no_items", instance=instance)
+        logger.info(
+            "webhook drop no_items instance=%s keys=%s",
+            instance,
+            _WEBHOOK_STATS.get("last_payload_keys"),
+        )
+        return 0
+
+    for item in items:
         key = item.get("key") if isinstance(item.get("key"), dict) else {}
         remote_raw = normalize_text(key.get("remoteJid") or item.get("remoteJid") or "")
+        message_type = normalize_text(item.get("messageType") or "").lower()
+        if message_type in {
+            "protocolmessage",
+            "senderkeydistributionmessage",
+            "reactionmessage",
+        }:
+            # reaction agora vira stub no parser; protocol/skmsg ainda ignora
+            if message_type != "reactionmessage":
+                _note_drop("protocol", type=message_type, jid=remote_raw)
+                continue
         # Bloqueia grupos ANTES de resolver identidade (participant vira "lead" falso)
         if message_looks_like_group(key, item):
+            _note_drop("group", jid=remote_raw)
             logger.info(
                 "webhook drop group remoteJid=%s alt=%s",
                 remote_raw,
@@ -338,9 +443,11 @@ def _handle_messages_upsert(payload: dict) -> int:
             continue
         phone, remote_jid = resolve_contact_identity(key, item)
         if not remote_jid:
+            _note_drop("no_jid", raw=remote_raw)
             logger.info("webhook drop no_jid raw=%s", remote_raw)
             continue
         if is_whatsapp_group_jid(remote_jid) or (phone and is_whatsapp_group_jid(phone)):
+            _note_drop("group_jid", phone=phone, jid=remote_jid)
             logger.info("webhook drop group_jid phone=%s jid=%s", phone, remote_jid)
             continue
 
@@ -355,6 +462,7 @@ def _handle_messages_upsert(payload: dict) -> int:
         msg_type, body, media_url, media_mime, media_filename = _message_type_and_body(item)
         if not body and not media_url and msg_type == "text":
             # mensagem sem conteúdo útil (ex.: reaction-only)
+            _note_drop("empty_body", jid=remote_jid, type=message_type or msg_type)
             logger.info("webhook drop empty_body jid=%s type=%s", remote_jid, msg_type)
             continue
 
@@ -370,6 +478,7 @@ def _handle_messages_upsert(payload: dict) -> int:
             logger.exception("is_chat_suppressed falhou no webhook")
             suppressed = False
         if suppressed and from_me:
+            _note_drop("suppressed_out", phone=phone, jid=remote_jid)
             logger.info(
                 "webhook drop suppressed_chat phone=%s jid=%s from_me=%s",
                 phone,
@@ -392,6 +501,7 @@ def _handle_messages_upsert(payload: dict) -> int:
             msg_is_fresh = True
 
         if suppressed and not from_me and not msg_is_fresh:
+            _note_drop("suppressed_stale", phone=phone, jid=remote_jid)
             logger.info(
                 "webhook drop suppressed_stale phone=%s jid=%s",
                 phone,
@@ -425,6 +535,12 @@ def _handle_messages_upsert(payload: dict) -> int:
                 ignore_suppression=ignore_suppression,
             )
         if not conversation:
+            _note_drop(
+                "no_conversation",
+                phone=phone,
+                jid=remote_jid,
+                from_me=from_me,
+            )
             logger.info(
                 "webhook drop no_conversation phone=%s jid=%s from_me=%s",
                 phone,
@@ -483,7 +599,6 @@ def _handle_messages_upsert(payload: dict) -> int:
 
         threading.Thread(target=_post_save, daemon=True, name=f"wh-post-{conversation_id[:8]}").start()
     return count
-
 
 def _handle_presence_or_typing(payload: dict) -> bool:
     """Presença / typing indicators (fase 2)."""

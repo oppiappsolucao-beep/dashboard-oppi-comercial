@@ -595,21 +595,15 @@ def fetch_recent_chats(*, limit: int = 40, instance: str = "") -> list[dict]:
         return []
     limit = max(1, min(int(limit or 40), 80))
     last_error = ""
-    for url in _instance_urls("/chat/findChats", instance=instance):
-        try:
-            response = requests.get(url, headers=_headers(), timeout=12)
-        except requests.RequestException as error:
-            last_error = str(error)
-            continue
-        data = _parse_json(response)
-        if response.status_code >= 400:
-            last_error = _response_looks_like_error(data) or response.text[:200]
-            continue
+
+    def _parse_chats(data) -> list[dict]:
         chats = data if isinstance(data, list) else (
             data.get("data") or data.get("chats") or data.get("response") or []
+            if isinstance(data, dict)
+            else []
         )
         if not isinstance(chats, list):
-            continue
+            return []
         out: list[dict] = []
         for chat in chats:
             if not isinstance(chat, dict):
@@ -650,10 +644,29 @@ def fetch_recent_chats(*, limit: int = 40, instance: str = "") -> list[dict]:
             if len(out) >= limit:
                 break
         return out
+
+    for url in _instance_urls("/chat/findChats", instance=instance):
+        for method in ("post", "get"):
+            try:
+                if method == "post":
+                    response = requests.post(
+                        url, headers=_headers(), json={"limit": limit}, timeout=12
+                    )
+                else:
+                    response = requests.get(url, headers=_headers(), timeout=12)
+            except requests.RequestException as error:
+                last_error = str(error)
+                continue
+            data = _parse_json(response)
+            if response.status_code >= 400:
+                last_error = _response_looks_like_error(data) or response.text[:200]
+                continue
+            parsed = _parse_chats(data)
+            if parsed:
+                return parsed
     if last_error:
         logger.warning("findChats falhou: %s", last_error)
     return []
-
 
 def get_connection_state(instance: str = "") -> str:
     last_error = ""
