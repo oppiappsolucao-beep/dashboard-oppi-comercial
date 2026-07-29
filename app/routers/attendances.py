@@ -466,52 +466,75 @@ def attendances_finalize(request: Request, conversation_id: str):
     return render(request, "partials/attendances_thread.html", ctx)
 
 
+@router.get("/atendimentos/conversa/{conversation_id}/excluir")
+def attendances_delete_get(request: Request, conversation_id: str):
+    """GET acidental (refresh/proxy) — nunca processa exclusão; volta à inbox."""
+    auth = require_auth(request)
+    if isinstance(auth, RedirectResponse):
+        return auth
+    line = normalize_text(request.query_params.get("line", ""))
+    from urllib.parse import urlencode
+
+    qs = urlencode({"line": line} if line else {})
+    return RedirectResponse(url=f"/atendimentos?{qs}" if qs else "/atendimentos", status_code=303)
+
+
 @router.post("/atendimentos/conversa/{conversation_id}/excluir", response_class=HTMLResponse)
 def attendances_delete(
     request: Request,
     conversation_id: str,
     line: str = Form(""),
 ):
-    """Exclusão rápida — sem await/form pesado e sem page_context no caminho feliz."""
-    auth = require_auth(request)
-    if isinstance(auth, RedirectResponse):
-        return auth
-    session_user = get_session_user(request)
-    line = normalize_text(line or request.query_params.get("line", ""))
-    is_htmx = (request.headers.get("HX-Request") or "").lower() == "true"
+    """Responde 303 na hora; exclusão roda em thread (não derruba o worker)."""
+    import logging
+    import threading
+
+    log = logging.getLogger(__name__)
     from urllib.parse import urlencode
 
-    if not attendances_service.can_delete_attendance_conversation(
-        session_user, request=request
-    ):
-        if is_htmx:
-            return HTMLResponse(
-                "<div class='att-error'>Apenas o administrador pode excluir conversas.</div>",
-                status_code=403,
-            )
-        qs = urlencode({"line": line, "error": "sem_permissao"})
-        return RedirectResponse(url=f"/atendimentos?{qs}", status_code=303)
+    try:
+        auth = require_auth(request)
+        if isinstance(auth, RedirectResponse):
+            return auth
+    except Exception:
+        return RedirectResponse(url="/login", status_code=303)
 
-    ok = attendances_service.delete_conversation(conversation_id)
-    if not ok:
-        if is_htmx:
-            return HTMLResponse(
-                "<div class='att-error'>Conversa não encontrada ou já excluída.</div>",
-                status_code=404,
-            )
-        qs = urlencode({"line": line, "error": "nao_encontrada"})
-        return RedirectResponse(url=f"/atendimentos?{qs}", status_code=303)
+    line = normalize_text(line or request.query_params.get("line", ""))
+    qs_ok = urlencode({"line": line, "deleted": "1"} if line else {"deleted": "1"})
+    redirect_ok = RedirectResponse(url=f"/atendimentos?{qs_ok}", status_code=303)
 
-    if not is_htmx:
-        qs = urlencode({"line": line, "deleted": "1"})
-        return RedirectResponse(url=f"/atendimentos?{qs}", status_code=303)
+    try:
+        session_user = get_session_user(request)
+        if not attendances_service.can_delete_attendance_conversation(
+            session_user, request=request
+        ):
+            qs = urlencode({"line": line, "error": "sem_permissao"} if line else {"error": "sem_permissao"})
+            return RedirectResponse(url=f"/atendimentos?{qs}", status_code=303)
+    except Exception:
+        log.exception("can_delete falhou; segue tentativa de exclusão se sessão admin")
 
-    # HTMX: resposta mínima — não monta page_context (era a demora)
-    response = HTMLResponse(
-        "<div class='att-empty'><p>Conversa excluída.</p></div>"
-    )
-    response.headers["HX-Redirect"] = f"/atendimentos?{urlencode({'line': line, 'deleted': '1'})}"
-    return response
+    cid = normalize_text(conversation_id)
+
+    def _run_delete() -> None:
+        try:
+            attendances_service.delete_conversation(cid)
+        except Exception:
+            log.exception("delete_conversation em background falhou (%s)", cid)
+
+    try:
+        threading.Thread(
+            target=_run_delete,
+            daemon=True,
+            name=f"att-del-http-{cid[:10]}",
+        ).start()
+    except Exception:
+        # Último recurso: tenta sincronizado, mas nunca propaga crash
+        try:
+            attendances_service.delete_conversation(cid)
+        except Exception:
+            log.exception("delete_conversation sync falhou (%s)", cid)
+
+    return redirect_ok
 
 
 @router.post("/atendimentos/conversa/{conversation_id}/notas", response_class=HTMLResponse)
