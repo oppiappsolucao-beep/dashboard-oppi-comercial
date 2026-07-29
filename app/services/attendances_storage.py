@@ -444,65 +444,68 @@ def is_chat_suppressed(
     remote_jid: str = "",
     evolution_instance: str = "",
 ) -> bool:
-    """True se o admin excluiu esta conversa da inbox (sync não deve recriar)."""
+    """True só se ESTE contato foi excluído pelo admin (match estrito)."""
     phone = normalize_text(phone_e164)
     jid = normalize_text(remote_jid)
     instance = resolve_evolution_instance(evolution_instance)
     if not phone and not jid:
         return False
 
-    # Soft-delete (status=excluido) — não depende de tabela extra
+    # Soft-delete: match estrito por telefone OU por jid (nunca OR frouxo entre os dois
+    # de linhas diferentes). Instância: igualdade exata (sem wildcard de vazio).
     try:
         with _session(commit=False) as db:
             q = db.query(AttendanceConversation.id).filter(
                 AttendanceConversation.status == STATUS_EXCLUIDO
             )
             if instance:
-                q = q.filter(_sql_instance_match(instance))
-            clauses = []
+                q = q.filter(
+                    func.lower(AttendanceConversation.evolution_instance) == instance.lower()
+                )
             if phone:
                 try:
                     from app.services.evolution_client import phone_match_variants
 
-                    variants = phone_match_variants(phone) or [phone]
+                    variants = [v for v in (phone_match_variants(phone) or [phone]) if v]
                 except Exception:
                     variants = [phone]
-                clauses.append(AttendanceConversation.phone_e164.in_(variants))
-            if jid:
-                clauses.append(AttendanceConversation.remote_jid == jid)
-            if clauses and q.filter(or_(*clauses)).first() is not None:
-                return True
+                if variants and q.filter(
+                    AttendanceConversation.phone_e164.in_(variants)
+                ).first() is not None:
+                    return True
+            elif jid:
+                if q.filter(AttendanceConversation.remote_jid == jid).first() is not None:
+                    return True
     except Exception:
         logger.exception("Falha ao checar soft-delete de conversa")
 
+    # Tabela auxiliar (se existir) — também match estrito
     try:
         with _session(commit=False) as db:
             q = db.query(AttendanceSuppressedChat.id)
             if instance:
                 q = q.filter(
-                    or_(
-                        func.lower(AttendanceSuppressedChat.evolution_instance)
-                        == instance.lower(),
-                        AttendanceSuppressedChat.evolution_instance == "",
-                    )
+                    func.lower(AttendanceSuppressedChat.evolution_instance) == instance.lower()
                 )
-            clauses = []
             if phone:
-                clauses.append(AttendanceSuppressedChat.phone_e164 == phone)
                 try:
                     from app.services.evolution_client import phone_match_variants
 
-                    variants = phone_match_variants(phone) or [phone]
-                    clauses.append(AttendanceSuppressedChat.phone_e164.in_(variants))
+                    variants = [v for v in (phone_match_variants(phone) or [phone]) if v]
                 except Exception:
-                    pass
+                    variants = [phone]
+                if not variants:
+                    return False
+                return (
+                    q.filter(AttendanceSuppressedChat.phone_e164.in_(variants)).first()
+                    is not None
+                )
             if jid:
-                clauses.append(AttendanceSuppressedChat.remote_jid == jid)
-            if not clauses:
-                return False
-            return q.filter(or_(*clauses)).first() is not None
+                return (
+                    q.filter(AttendanceSuppressedChat.remote_jid == jid).first() is not None
+                )
+            return False
     except Exception:
-        # Tabela ainda não existe no banco — soft-delete acima já cobre
         return False
 
 
@@ -553,20 +556,25 @@ def clear_chat_suppression(
                 AttendanceConversation.status == STATUS_EXCLUIDO
             )
             if instance:
-                q = q.filter(_sql_instance_match(instance))
-            clauses = []
+                q = q.filter(
+                    func.lower(AttendanceConversation.evolution_instance) == instance.lower()
+                )
             if phone:
                 try:
                     from app.services.evolution_client import phone_match_variants
 
-                    variants = phone_match_variants(phone) or [phone]
+                    variants = [v for v in (phone_match_variants(phone) or [phone]) if v]
                 except Exception:
                     variants = [phone]
-                clauses.append(AttendanceConversation.phone_e164.in_(variants))
-            if jid:
-                clauses.append(AttendanceConversation.remote_jid == jid)
-            if clauses:
-                for row in q.filter(or_(*clauses)).all():
+                if variants:
+                    for row in q.filter(
+                        AttendanceConversation.phone_e164.in_(variants)
+                    ).all():
+                        row.status = STATUS_NOVO_LEAD
+                        row.updated_at = _now_iso()
+                        removed += 1
+            elif jid:
+                for row in q.filter(AttendanceConversation.remote_jid == jid).all():
                     row.status = STATUS_NOVO_LEAD
                     row.updated_at = _now_iso()
                     removed += 1
@@ -578,28 +586,27 @@ def clear_chat_suppression(
             q = db.query(AttendanceSuppressedChat)
             if instance:
                 q = q.filter(
-                    or_(
-                        func.lower(AttendanceSuppressedChat.evolution_instance)
-                        == instance.lower(),
-                        AttendanceSuppressedChat.evolution_instance == "",
-                    )
+                    func.lower(AttendanceSuppressedChat.evolution_instance) == instance.lower()
                 )
-            clauses = []
             if phone:
-                clauses.append(AttendanceSuppressedChat.phone_e164 == phone)
                 try:
                     from app.services.evolution_client import phone_match_variants
 
-                    variants = phone_match_variants(phone) or [phone]
-                    clauses.append(AttendanceSuppressedChat.phone_e164.in_(variants))
+                    variants = [v for v in (phone_match_variants(phone) or [phone]) if v]
                 except Exception:
-                    pass
-            if jid:
-                clauses.append(AttendanceSuppressedChat.remote_jid == jid)
-            if clauses:
-                for row in q.filter(or_(*clauses)).all():
-                    db.delete(row)
-                    removed += 1
+                    variants = [phone]
+                rows = (
+                    q.filter(AttendanceSuppressedChat.phone_e164.in_(variants)).all()
+                    if variants
+                    else []
+                )
+            elif jid:
+                rows = q.filter(AttendanceSuppressedChat.remote_jid == jid).all()
+            else:
+                rows = []
+            for row in rows:
+                db.delete(row)
+                removed += 1
     except Exception:
         pass
     return removed
