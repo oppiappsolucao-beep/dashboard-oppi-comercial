@@ -101,14 +101,16 @@ def _import_registrations_from_sheet(
     )
 
     result = {"imported": 0, "skipped": 0, "source": "sheet"}
+    df = None
+
+    # 1) Sempre preferir cache quente (evita 429 / worker frio no force_refresh).
     try:
-        df = load_sheet_data(force_refresh=bool(force_refresh))
-        if force_refresh and df is not None and not getattr(df, "empty", True):
-            result["source"] = "sheet_refresh"
+        df = load_sheet_data(force_refresh=False)
     except Exception:
         df = None
+
+    # 2) Snapshot em disco / prepared cache
     if df is None or getattr(df, "empty", True):
-        # Fallback: snapshot em disco (sobrevive a 429/rebuild)
         try:
             from app.services.legacy_core import hydrate_sheet_cache_from_disk, get_cached_prepared_data
 
@@ -121,8 +123,9 @@ def _import_registrations_from_sheet(
                     result["source"] = "snapshot"
         except Exception:
             pass
-    # Última tentativa: forçar Google Sheets se o cache/snapshot estiver frio.
-    if (df is None or getattr(df, "empty", True)) and not force_refresh:
+
+    # 3) Só bate na API Google se ainda estiver vazio (force_refresh = permitir essa tentativa).
+    if df is None or getattr(df, "empty", True):
         try:
             df = load_sheet_data(force_refresh=True)
             if df is not None and not getattr(df, "empty", True):
@@ -130,6 +133,10 @@ def _import_registrations_from_sheet(
         except Exception:
             logger.exception("Falha ao forçar refresh da Folha1 na migração CRM")
             df = None
+    elif force_refresh:
+        # Cache já tem dados — mantém; não arrisca esvaziar com 429.
+        result["source"] = "sheet_cache"
+
     if df is None or getattr(df, "empty", True):
         result["source"] = "empty"
         return result
@@ -602,13 +609,13 @@ def migrate_crm_to_postgres_if_needed(
 
 
 _LAZY_MIGRATE_AT = 0.0
-_LAZY_MIGRATE_TTL_SEC = 90.0
+_LAZY_MIGRATE_TTL_SEC = 45.0
 
 
-def try_lazy_crm_postgres_cutover() -> dict | None:
+def try_lazy_crm_postgres_cutover(*, bypass_throttle: bool = False) -> dict | None:
     """
     Tentativa throttled de cutover quando o flag ainda não está ligado.
-    Usado no boot (retries) e na primeira carga de dados após a planilha aquecer.
+    Preferir chamar DEPOIS da Folha1 aquecer o cache em memória.
     """
     global _LAZY_MIGRATE_AT
     import time
@@ -622,10 +629,11 @@ def try_lazy_crm_postgres_cutover() -> dict | None:
         return None
 
     now = time.monotonic()
-    if (now - _LAZY_MIGRATE_AT) < _LAZY_MIGRATE_TTL_SEC:
+    if not bypass_throttle and (now - _LAZY_MIGRATE_AT) < _LAZY_MIGRATE_TTL_SEC:
         return None
     _LAZY_MIGRATE_AT = now
     try:
+        # Usa cache quente primeiro (sheet_force_refresh só libera API se cache vazio).
         return migrate_crm_to_postgres_if_needed(sheet_force_refresh=True)
     except Exception:
         logger.exception("Lazy CRM Postgres cutover falhou")

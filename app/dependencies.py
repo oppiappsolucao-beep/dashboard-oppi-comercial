@@ -69,14 +69,6 @@ def get_prepared_data(refresh: bool = False):
             is_crm_postgres_ready,
         )
 
-        if not is_crm_postgres_ready():
-            try:
-                from app.services.crm_db_migrate import try_lazy_crm_postgres_cutover
-
-                try_lazy_crm_postgres_cutover()
-            except Exception:
-                pass
-
         if is_crm_postgres_ready():
             if refresh:
                 invalidate_merged_prepared_cache()
@@ -99,6 +91,25 @@ def get_prepared_data(refresh: bool = False):
     except Exception:
         pass
 
+    def _maybe_cutover_to_postgres(merged_df, merged_cols):
+        """Após Folha1 quente no cache, tenta cutover e passa a servir Postgres."""
+        try:
+            from app.services.crm_db_migrate import try_lazy_crm_postgres_cutover
+            from app.services.crm_registrations_storage import (
+                build_prepared_dataframe,
+                is_crm_postgres_ready,
+            )
+
+            if merged_df is not None and not getattr(merged_df, "empty", True):
+                try_lazy_crm_postgres_cutover(bypass_throttle=True)
+            if is_crm_postgres_ready():
+                prepared, columns = build_prepared_dataframe()
+                pg_df, pg_cols = _merge_pending(prepared, columns or {})
+                return pg_df, pg_cols
+        except Exception:
+            pass
+        return merged_df, merged_cols
+
     if refresh:
         invalidate_sheet_cache()
         invalidate_merged_prepared_cache()
@@ -109,13 +120,20 @@ def get_prepared_data(refresh: bool = False):
             and (now - _MERGED_PREPARED_AT) < _MERGED_PREPARED_TTL_SEC
         ):
             ensure_sheet_refresh_if_stale()
-            return _MERGED_PREPARED_DF.copy(), dict(_MERGED_PREPARED_COLUMNS or {})
+            out_df, out_cols = _maybe_cutover_to_postgres(
+                _MERGED_PREPARED_DF, _MERGED_PREPARED_COLUMNS
+            )
+            _MERGED_PREPARED_DF = out_df
+            _MERGED_PREPARED_COLUMNS = dict(out_cols or {})
+            _MERGED_PREPARED_AT = time.monotonic()
+            return out_df.copy(), dict(out_cols or {})
 
         cached = get_cached_prepared_data()
         if cached is not None:
             ensure_sheet_refresh_if_stale()
             prepared, columns = cached
             merged_df, merged_cols = _merge_pending(prepared, columns or {})
+            merged_df, merged_cols = _maybe_cutover_to_postgres(merged_df, merged_cols)
             _MERGED_PREPARED_DF = merged_df
             _MERGED_PREPARED_COLUMNS = dict(merged_cols or {})
             _MERGED_PREPARED_AT = time.monotonic()
@@ -139,6 +157,7 @@ def get_prepared_data(refresh: bool = False):
         # Cacheia só a base da planilha (sem pendentes locais).
         set_cached_prepared_data(prepared if prepared is not None else pd.DataFrame(), columns or {})
         merged_df, merged_cols = _merge_pending(prepared, columns or {})
+        merged_df, merged_cols = _maybe_cutover_to_postgres(merged_df, merged_cols)
         _MERGED_PREPARED_DF = merged_df
         _MERGED_PREPARED_COLUMNS = dict(merged_cols or {})
         _MERGED_PREPARED_AT = time.monotonic()
