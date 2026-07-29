@@ -247,6 +247,20 @@ def _get_goal_record(year: int, month: int, seller: str = TEAM_SELLER_LABEL) -> 
 
 def load_monthly_goals(force_refresh: bool = False) -> dict[str, dict]:
     global _file_cache
+    try:
+        from app.services.crm_registrations_storage import is_crm_postgres_ready
+        from app.services.crm_aux_storage import load_goals_pg
+
+        if is_crm_postgres_ready():
+            with _lock:
+                if not force_refresh and _file_cache is not None:
+                    return {key: dict(value) for key, value in _file_cache.items()}
+                merged = load_goals_pg()
+                _file_cache = merged
+                return {key: dict(value) for key, value in merged.items()}
+    except Exception:
+        pass
+
     with _lock:
         if not force_refresh and _file_cache is not None:
             return {key: dict(value) for key, value in _file_cache.items()}
@@ -314,6 +328,19 @@ def set_monthly_goal(
         "commission_rate": rate,
     }
 
+    try:
+        from app.services.crm_registrations_storage import is_crm_postgres_ready
+        from app.services.crm_aux_storage import persist_goals_pg
+
+        if is_crm_postgres_ready():
+            persist_goals_pg(store)
+            with _lock:
+                global _file_cache
+                _file_cache = {key: dict(value) for key, value in store.items()}
+            return
+    except Exception:
+        pass
+
     _save_to_file(store)
     if settings.sheets_configured and not _save_to_sheet(store):
         raise RuntimeError("Não foi possível salvar a meta na aba Metas da planilha.")
@@ -334,6 +361,19 @@ def delete_monthly_goal(year: int, month: int, seller: str = TEAM_SELLER_LABEL) 
         raise ValueError("Meta não encontrada.")
 
     del store[key]
+    try:
+        from app.services.crm_registrations_storage import is_crm_postgres_ready
+        from app.services.crm_aux_storage import persist_goals_pg
+
+        if is_crm_postgres_ready():
+            persist_goals_pg(store)
+            with _lock:
+                global _file_cache
+                _file_cache = {key: dict(value) for key, value in store.items()}
+            return
+    except Exception:
+        pass
+
     _save_to_file(store)
     if settings.sheets_configured and not _save_to_sheet(store):
         raise RuntimeError("Não foi possível atualizar a aba Metas da planilha.")

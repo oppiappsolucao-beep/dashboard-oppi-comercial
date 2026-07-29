@@ -133,6 +133,13 @@ async def startup_maintenance() -> None:
 
             Base.metadata.create_all(bind=engine)
             ensure_attendance_schema_columns()
+            try:
+                from app.services.crm_db_migrate import migrate_crm_to_postgres_if_needed
+
+                crm_migrate = migrate_crm_to_postgres_if_needed()
+                log.info("CRM Postgres migrate: %s", crm_migrate)
+            except Exception as crm_error:
+                log.error("CRM Postgres migrate: %s", crm_error)
             ensure_default_niches()
             ensure_default_sectors()
             ensure_default_attendance_tags()

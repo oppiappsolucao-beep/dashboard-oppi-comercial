@@ -40,7 +40,7 @@ def get_pricing_store(request: Request) -> PricingSessionStore:
 
 
 def get_prepared_data(refresh: bool = False):
-    """Carrega a planilha com cache. Nunca derruba a tela por limite 429."""
+    """Carrega cadastros com cache. Prefere Postgres SoT após migração."""
     global _MERGED_PREPARED_DF, _MERGED_PREPARED_COLUMNS, _MERGED_PREPARED_AT
 
     def _merge_pending(prepared: pd.DataFrame, columns: dict):
@@ -61,6 +61,35 @@ def get_prepared_data(refresh: bool = False):
             return pd.DataFrame(), columns or {}
         cols = columns or identify_columns(base)
         return base, cols
+
+    # Postgres SoT (após migração CRM)
+    try:
+        from app.services.crm_registrations_storage import (
+            build_prepared_dataframe,
+            is_crm_postgres_ready,
+        )
+
+        if is_crm_postgres_ready():
+            if refresh:
+                invalidate_merged_prepared_cache()
+                from app.services.crm_registrations_storage import invalidate_registrations_cache
+
+                invalidate_registrations_cache()
+            else:
+                now = time.monotonic()
+                if (
+                    _MERGED_PREPARED_DF is not None
+                    and (now - _MERGED_PREPARED_AT) < _MERGED_PREPARED_TTL_SEC
+                ):
+                    return _MERGED_PREPARED_DF.copy(), dict(_MERGED_PREPARED_COLUMNS or {})
+            prepared, columns = build_prepared_dataframe()
+            merged_df, merged_cols = _merge_pending(prepared, columns or {})
+            _MERGED_PREPARED_DF = merged_df
+            _MERGED_PREPARED_COLUMNS = dict(merged_cols or {})
+            _MERGED_PREPARED_AT = time.monotonic()
+            return merged_df.copy(), dict(merged_cols or {})
+    except Exception:
+        pass
 
     if refresh:
         invalidate_sheet_cache()

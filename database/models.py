@@ -339,6 +339,7 @@ class AttendanceConversation(Base):
     contact_name = Column(String(255), nullable=False, default="")
     profile_pic_url = Column(String(1000), nullable=False, default="")
     sheet_row = Column(Integer, nullable=True)
+    registration_id = Column(Integer, nullable=True, index=True)
     status = Column(String(40), nullable=False, default="novo_lead")
     assignee = Column(String(120), nullable=False, default="")
     ai_mode = Column(String(20), nullable=False, default="on")
@@ -470,3 +471,143 @@ class CrmQuickReply(Base):
     active = Column(Boolean, nullable=False, default=True)
     sort_order = Column(Integer, nullable=False, default=0)
     created_at = Column(String(40), nullable=False, default="")
+
+
+class CrmRegistration(Base):
+    """Cadastro Empresas/Leads — Postgres SoT; sheet_row espelha Folha1."""
+
+    __tablename__ = "crm_registrations"
+    __table_args__ = (
+        Index("uq_crm_registrations_sheet_row", "sheet_row", unique=True),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    tenant_id = Column(String(80), nullable=False, default="default", index=True)
+    sheet_row = Column(Integer, nullable=True, index=True)
+    cadastro_tipo = Column(String(20), nullable=False, default="lead", index=True)
+    cadastro_ativo = Column(Boolean, nullable=False, default=True)
+    empresa = Column(String(255), nullable=False, default="")
+    cnpj = Column(String(32), nullable=False, default="", index=True)
+    data_abertura = Column(String(40), nullable=False, default="")
+    capital = Column(String(80), nullable=False, default="")
+    endereco = Column(String(255), nullable=False, default="")
+    endereco_numero = Column(String(40), nullable=False, default="")
+    endereco_complemento = Column(String(120), nullable=False, default="")
+    cep = Column(String(20), nullable=False, default="")
+    bairro = Column(String(120), nullable=False, default="")
+    municipio = Column(String(120), nullable=False, default="")
+    uf = Column(String(8), nullable=False, default="")
+    email_empresa = Column(String(255), nullable=False, default="")
+    site = Column(String(255), nullable=False, default="")
+    telefone_b2b = Column(String(40), nullable=False, default="", index=True)
+    telefone_fixo = Column(String(40), nullable=False, default="")
+    telefone_alternativo = Column(String(40), nullable=False, default="")
+    socio_1 = Column(String(255), nullable=False, default="")
+    cpf_socio_1 = Column(String(40), nullable=False, default="")
+    email_socio_1 = Column(String(255), nullable=False, default="")
+    telefone_socio_1 = Column(String(40), nullable=False, default="")
+    socio_2 = Column(String(255), nullable=False, default="")
+    telefone_socio_2 = Column(String(40), nullable=False, default="")
+    cpf_socio_2 = Column(String(40), nullable=False, default="")
+    socio_3 = Column(String(255), nullable=False, default="")
+    telefone_socio_3 = Column(String(40), nullable=False, default="")
+    cpf_socio_3 = Column(String(40), nullable=False, default="")
+    instagram = Column(String(255), nullable=False, default="")
+    linkedin = Column(String(255), nullable=False, default="")
+    vendedor = Column(String(120), nullable=False, default="")
+    status = Column(String(80), nullable=False, default="Novo Lead", index=True)
+    data_chamado = Column(String(40), nullable=False, default="")
+    ultima_atualizacao = Column(String(40), nullable=False, default="")
+    observacoes = Column(Text, nullable=False, default="")
+    servico = Column(Text, nullable=False, default="")
+    valor_proposta = Column(String(80), nullable=False, default="")
+    colaboradores = Column(String(40), nullable=False, default="")
+    nicho = Column(String(150), nullable=False, default="")
+    extras_json = Column(Text, nullable=False, default="{}")
+    actions_json = Column(Text, nullable=False, default="{}")
+    payment_history_json = Column(Text, nullable=False, default="[]")
+    closed_services_json = Column(Text, nullable=False, default="[]")
+    created_at = Column(String(40), nullable=False, default="")
+    updated_at = Column(String(40), nullable=False, default="")
+
+
+class CrmActivity(Base):
+    """Atividades do CRM — Postgres SoT."""
+
+    __tablename__ = "crm_activities"
+
+    id = Column(String(64), primary_key=True)
+    tenant_id = Column(String(80), nullable=False, default="default", index=True)
+    registration_id = Column(Integer, nullable=True, index=True)
+    sheet_row = Column(Integer, nullable=True, index=True)
+    payload_json = Column(Text, nullable=False, default="{}")
+    deleted = Column(Boolean, nullable=False, default=False)
+    created_at = Column(String(40), nullable=False, default="")
+    updated_at = Column(String(40), nullable=False, default="")
+
+
+class CrmProposal(Base):
+    """Histórico de propostas geradas — Postgres SoT."""
+
+    __tablename__ = "crm_proposals"
+
+    id = Column(String(64), primary_key=True)
+    registration_id = Column(Integer, nullable=True, index=True)
+    sheet_row = Column(Integer, nullable=True, index=True)
+    cliente = Column(String(255), nullable=False, default="", index=True)
+    cnpj_cpf = Column(String(40), nullable=False, default="")
+    payload_json = Column(Text, nullable=False, default="{}")
+    created_at = Column(String(40), nullable=False, default="", index=True)
+
+
+class CrmAppSetting(Base):
+    """Configurações da app (espelha aba Configuracoes)."""
+
+    __tablename__ = "crm_app_settings"
+
+    key = Column(String(120), primary_key=True)
+    value = Column(Text, nullable=False, default="")
+    updated_at = Column(String(40), nullable=False, default="")
+
+
+class CrmAccountUser(Base):
+    """Usuários da conta FastAPI (espelha aba Usuarios)."""
+
+    __tablename__ = "crm_account_users"
+
+    id = Column(String(64), primary_key=True)
+    name = Column(String(255), nullable=False, default="")
+    email = Column(String(255), nullable=False, default="", index=True)
+    username = Column(String(80), nullable=False, default="", unique=True, index=True)
+    password_hash = Column(String(255), nullable=False, default="")
+    role = Column(String(50), nullable=False, default="Vendedor")
+    active = Column(Boolean, nullable=False, default=True)
+    department_id = Column(String(40), nullable=False, default="")
+    department_name = Column(String(150), nullable=False, default="")
+    last_access = Column(String(40), nullable=False, default="")
+    created_at = Column(String(40), nullable=False, default="")
+    updated_at = Column(String(40), nullable=False, default="")
+    extras_json = Column(Text, nullable=False, default="{}")
+
+
+class CrmMonthlyGoal(Base):
+    """Metas mensais (espelha aba Metas)."""
+
+    __tablename__ = "crm_monthly_goals"
+    __table_args__ = (
+        Index(
+            "uq_crm_monthly_goals_period_seller",
+            "reference_year",
+            "reference_month",
+            "seller",
+            unique=True,
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    reference_year = Column(Integer, nullable=False)
+    reference_month = Column(Integer, nullable=False)
+    seller = Column(String(120), nullable=False, default="Todos os vendedores")
+    amount = Column(Float, nullable=False, default=0)
+    commission_rate = Column(Float, nullable=False, default=8.0)
+    updated_at = Column(String(40), nullable=False, default="")

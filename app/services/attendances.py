@@ -304,12 +304,31 @@ def ensure_crm_link(
     phone = conversation.get("phone_e164", "")
     current_row = conversation.get("sheet_row")
     if current_row and attendance_crm.sheet_row_matches_phone(current_row, phone):
+        if not conversation.get("registration_id"):
+            try:
+                from app.services.crm_registrations_storage import get_registration_by_sheet_row
+
+                reg = get_registration_by_sheet_row(int(current_row))
+                if reg:
+                    return (
+                        store.update_conversation(
+                            conversation["id"],
+                            registration_id=int(reg.id),
+                        )
+                        or conversation
+                    )
+            except Exception:
+                pass
         return conversation
 
     # Vínculo ausente ou de outro contato — limpa e resolve de novo pelo telefone
     if current_row:
-        store.update_conversation(conversation["id"], sheet_row=None)
-        conversation = {**conversation, "sheet_row": None}
+        store.update_conversation(
+            conversation["id"],
+            sheet_row=None,
+            registration_id=None,
+        )
+        conversation = {**conversation, "sheet_row": None, "registration_id": None}
 
     sheet_row = attendance_crm.resolve_or_create_lead(
         phone=phone,
@@ -317,7 +336,23 @@ def ensure_crm_link(
         vendedor=vendedor or conversation.get("assignee", ""),
     )
     if sheet_row:
-        return store.update_conversation(conversation["id"], sheet_row=int(sheet_row)) or conversation
+        registration_id = None
+        try:
+            from app.services.crm_registrations_storage import get_registration_by_sheet_row
+
+            reg = get_registration_by_sheet_row(int(sheet_row))
+            if reg:
+                registration_id = int(reg.id)
+        except Exception:
+            pass
+        return (
+            store.update_conversation(
+                conversation["id"],
+                sheet_row=int(sheet_row),
+                registration_id=registration_id,
+            )
+            or conversation
+        )
     return conversation
 
 

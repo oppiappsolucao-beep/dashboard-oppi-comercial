@@ -135,6 +135,22 @@ def _save_to_sheet(values: dict) -> bool:
 
 def load_app_settings(force_refresh: bool = False) -> dict:
     global _cache
+    try:
+        from app.services.crm_registrations_storage import is_crm_postgres_ready
+        from app.services.crm_aux_storage import load_settings_pg
+
+        if is_crm_postgres_ready():
+            with _lock:
+                if not force_refresh and _cache is not None:
+                    return dict(_cache)
+                defaults = _default_settings()
+                stored = load_settings_pg()
+                merged = {**defaults, **stored}
+                _cache = merged
+                return dict(merged)
+    except Exception:
+        pass
+
     with _lock:
         if not force_refresh and _cache is not None:
             return dict(_cache)
@@ -170,6 +186,20 @@ def load_app_settings(force_refresh: bool = False) -> dict:
 def save_app_settings(values: dict) -> None:
     global _cache
     invalidate_app_settings_cache()
+    try:
+        from app.services.crm_registrations_storage import is_crm_postgres_ready
+        from app.services.crm_aux_storage import load_settings_pg, save_settings_pg
+
+        if is_crm_postgres_ready():
+            current = {**_default_settings(), **load_settings_pg()}
+            current.update(values)
+            save_settings_pg(current)
+            with _lock:
+                _cache = dict(current)
+            return
+    except Exception:
+        pass
+
     current = load_app_settings(force_refresh=True)
     current.update(values)
     path = _settings_path()

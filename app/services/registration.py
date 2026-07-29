@@ -228,12 +228,42 @@ def save_new_company(form: dict) -> int:
         raise ValueError(error)
     payload = build_registration_payload(form)
     assert_whatsapp_not_registered(payload.get("telefone_b2b") or "")
+    try:
+        from app.services.crm_registrations_storage import (
+            is_crm_postgres_ready,
+            upsert_registration_from_payload,
+        )
+
+        if is_crm_postgres_ready():
+            return upsert_registration_from_payload(payload, mirror_sheet=True)
+    except Exception:
+        pass
     return append_company_to_sheet(payload)
 
 
 def _existing_edit_field_values(sheet_row: int) -> dict[str, str]:
     from app.dependencies import get_prepared_data
     from app.services.legacy_core import status_group
+
+    try:
+        from app.services.crm_registrations_storage import (
+            get_registration_by_sheet_row,
+            is_crm_postgres_ready,
+            registration_to_payload,
+        )
+
+        if is_crm_postgres_ready():
+            row = get_registration_by_sheet_row(int(sheet_row))
+            if row:
+                payload = registration_to_payload(row)
+                return {
+                    "status": status_group(payload.get("status") or "Novo Lead"),
+                    "data_chamado": normalize_text(payload.get("data_chamado")),
+                    "servico": normalize_text(payload.get("servico")),
+                    "valor_proposta": normalize_text(payload.get("valor_proposta")),
+                }
+    except Exception:
+        pass
 
     df, columns = get_prepared_data()
     matches = df[df["_sheet_row"] == int(sheet_row)]
@@ -270,12 +300,39 @@ def save_company_edit(sheet_row: int, form: dict) -> None:
             payload.get("telefone_b2b") or "",
             ignore_sheet_row=int(sheet_row),
         )
+    try:
+        from app.services.crm_registrations_storage import (
+            is_crm_postgres_ready,
+            upsert_registration_from_payload,
+        )
+
+        if is_crm_postgres_ready():
+            upsert_registration_from_payload(
+                payload,
+                sheet_row=int(sheet_row),
+                mirror_sheet=True,
+            )
+            return
+    except Exception:
+        pass
     update_company_in_sheet(sheet_row, payload)
 
 
 def delete_company_registration(tenant_id: str | None, sheet_row: int) -> None:
     from app.services.legacy_core import delete_company_from_sheet
     from app.services.lead_actions_storage import delete_lead_action
+
+    try:
+        from app.services.crm_registrations_storage import (
+            delete_registration,
+            is_crm_postgres_ready,
+        )
+
+        if is_crm_postgres_ready():
+            delete_registration(int(sheet_row), tenant_id=tenant_id, mirror_sheet=True)
+            return
+    except Exception:
+        pass
 
     delete_company_from_sheet(sheet_row)
     delete_lead_action(tenant_id, sheet_row)

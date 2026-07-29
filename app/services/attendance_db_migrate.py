@@ -25,6 +25,12 @@ def ensure_attendance_schema_columns() -> None:
     except Exception:
         logger.exception("Falha ao criar tabela attendance_suppressed_chats")
     try:
+        from app.services.crm_db_migrate import ensure_crm_schema
+
+        ensure_crm_schema()
+    except Exception:
+        logger.exception("Falha ao garantir schema CRM Postgres")
+    try:
         insp = inspect(engine)
         if "attendance_conversations" not in insp.get_table_names():
             return
@@ -41,6 +47,10 @@ def ensure_attendance_schema_columns() -> None:
         if "evolution_instance" not in cols:
             statements.append(
                 "ALTER TABLE attendance_conversations ADD COLUMN evolution_instance VARCHAR(120) DEFAULT ''"
+            )
+        if "registration_id" not in cols:
+            statements.append(
+                "ALTER TABLE attendance_conversations ADD COLUMN registration_id INTEGER"
             )
         if not statements:
             return

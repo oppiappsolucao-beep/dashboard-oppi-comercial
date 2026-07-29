@@ -336,6 +336,15 @@ def user_exists_in_sheet(username: str) -> bool:
 
 
 def _persist_users(users: list[dict]) -> None:
+    try:
+        from app.services.crm_registrations_storage import is_crm_postgres_ready
+        from app.services.crm_aux_storage import persist_users_pg
+
+        if is_crm_postgres_ready():
+            persist_users_pg(users)
+            return
+    except Exception:
+        pass
     _save_to_file(users)
     if settings.sheets_configured and not _save_to_sheet(users):
         raise RuntimeError("Não foi possível salvar os usuários na aba Usuarios da planilha.")
@@ -343,6 +352,27 @@ def _persist_users(users: list[dict]) -> None:
 
 def load_account_users(force_refresh: bool = False) -> list[dict]:
     global _cache
+    try:
+        from app.services.crm_registrations_storage import is_crm_postgres_ready
+        from app.services.crm_aux_storage import load_users_pg
+
+        if is_crm_postgres_ready():
+            with _lock:
+                if not force_refresh and _cache is not None:
+                    return [dict(user) for user in _cache]
+                merged = load_users_pg()
+                # Enrich UI fields via serializer when possible
+                enriched = []
+                for user in merged:
+                    try:
+                        enriched.append(_serialize_user(user))
+                    except Exception:
+                        enriched.append(dict(user))
+                _cache = enriched
+                return [dict(user) for user in enriched]
+    except Exception:
+        pass
+
     with _lock:
         if not force_refresh and _cache is not None:
             return [dict(user) for user in _cache]

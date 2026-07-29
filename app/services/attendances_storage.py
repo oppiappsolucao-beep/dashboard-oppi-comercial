@@ -169,6 +169,9 @@ def _conversation_to_dict(row: AttendanceConversation | None) -> dict:
         "contact_name": row.contact_name or "",
         "profile_pic_url": row.profile_pic_url or "",
         "sheet_row": int(row.sheet_row) if row.sheet_row else None,
+        "registration_id": int(row.registration_id)
+        if getattr(row, "registration_id", None)
+        else None,
         "status": status,
         "status_label": STATUS_LABELS.get(status, status),
         "assignee": row.assignee or "",
@@ -849,6 +852,7 @@ def _update_conversation(conversation_id: str, fields: dict) -> None:
         "contact_name",
         "profile_pic_url",
         "sheet_row",
+        "registration_id",
         "status",
         "assignee",
         "ai_mode",
@@ -874,7 +878,7 @@ def _update_conversation(conversation_id: str, fields: dict) -> None:
                 continue
             if key == "typing":
                 setattr(row, key, bool(value))
-            elif key == "sector_id":
+            elif key in {"sector_id", "sheet_row", "registration_id"}:
                 try:
                     setattr(row, key, int(value) if value not in (None, "") else None)
                 except (TypeError, ValueError):
