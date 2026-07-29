@@ -1342,6 +1342,29 @@ def webhook_callback_url() -> str:
     return url
 
 
+def find_instance_webhook(instance: str = "") -> dict:
+    """Lê a configuração atual do webhook na Evolution."""
+    name = match_configured_instance(instance) if instance else _instance_name()
+    if not name or not is_configured():
+        return {"instance": name or "", "ok": False, "error": "not_configured"}
+    last_error = ""
+    for path in (
+        f"/webhook/find/{quote(name, safe='')}",
+        f"/webhook/{quote(name, safe='')}",
+    ):
+        try:
+            response = requests.get(_url(path), headers=_headers(), timeout=10)
+        except requests.RequestException as error:
+            last_error = str(error)
+            continue
+        data = _parse_json(response)
+        if response.status_code >= 400:
+            last_error = (response.text or "")[:200] or f"HTTP {response.status_code}"
+            continue
+        return {"instance": name, "ok": True, "config": data}
+    return {"instance": name, "ok": False, "error": last_error or "not_found"}
+
+
 def ensure_instance_webhook(instance: str = "") -> dict:
     """Configura webhook MESSAGES_UPSERT na instância (Evolution v1/v2)."""
     name = match_configured_instance(instance) if instance else _instance_name()
@@ -1352,14 +1375,16 @@ def ensure_instance_webhook(instance: str = "") -> dict:
     events = [
         "MESSAGES_UPSERT",
         "MESSAGES_UPDATE",
+        "MESSAGES_SET",
         "CONNECTION_UPDATE",
+        "SEND_MESSAGE",
     ]
     payloads = (
         {
             "enabled": True,
             "url": url,
             "webhookByEvents": False,
-            "webhookBase64": False,
+            "webhookBase64": True,
             "events": events,
         },
         {
@@ -1367,12 +1392,21 @@ def ensure_instance_webhook(instance: str = "") -> dict:
                 "enabled": True,
                 "url": url,
                 "webhookByEvents": False,
-                "webhookBase64": False,
+                "webhookBase64": True,
                 "events": events,
             }
         },
+        {
+            "enabled": True,
+            "url": url,
+            "webhookByEvents": True,
+            "webhookBase64": True,
+            "events": events,
+        },
     )
     last_error = ""
+    set_ok = False
+    set_status = 0
     for path in (
         f"/webhook/set/{quote(name, safe='')}",
         f"/webhook/instance/{quote(name, safe='')}",
@@ -1389,23 +1423,38 @@ def ensure_instance_webhook(instance: str = "") -> dict:
                 last_error = str(error)
                 continue
             if response.status_code < 400:
+                set_ok = True
+                set_status = response.status_code
                 logger.info(
                     "Evolution webhook ok instance=%s url=%s status=%s",
                     name,
                     url,
                     response.status_code,
                 )
-                return {
-                    "instance": name,
-                    "ok": True,
-                    "status": response.status_code,
-                    "url": url,
-                }
+                break
             last_error = (response.text or "")[:200] or f"HTTP {response.status_code}"
+        if set_ok:
+            break
+
+    found = find_instance_webhook(name)
+    if set_ok:
+        return {
+            "instance": name,
+            "ok": True,
+            "status": set_status,
+            "url": url,
+            "found": found,
+        }
     logger.warning(
         "Evolution webhook falhou instance=%s error=%s", name, last_error
     )
-    return {"instance": name, "ok": False, "error": last_error, "url": url}
+    return {
+        "instance": name,
+        "ok": False,
+        "error": last_error,
+        "url": url,
+        "found": found,
+    }
 
 
 def ensure_webhooks_for_all_instances() -> list[dict]:

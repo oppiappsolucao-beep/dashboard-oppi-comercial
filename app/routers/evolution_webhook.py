@@ -541,8 +541,11 @@ async def evolution_webhook_probe():
 
 
 @router.get("/health/webhook")
-async def health_webhook(ensure: str = Query(default="0")):
-    """Diagnóstico de inbound + opcionalmente reconfigura webhooks nas instâncias."""
+async def health_webhook(
+    ensure: str = Query(default="0"),
+    sync: str = Query(default="0"),
+):
+    """Diagnóstico de inbound + reconfigura webhooks e/ou puxa chats da Evolution."""
     payload: dict[str, Any] = {
         "ok": True,
         "stats": webhook_stats_snapshot(),
@@ -550,15 +553,28 @@ async def health_webhook(ensure: str = Query(default="0")):
     try:
         from app.services.evolution_client import (
             ensure_webhooks_for_all_instances,
+            find_instance_webhook,
+            configured_instance_names,
             webhook_callback_url,
         )
 
         payload["callback_url"] = webhook_callback_url()
         if normalize_text(ensure) in {"1", "true", "yes", "sim"}:
             payload["ensure"] = ensure_webhooks_for_all_instances()
+        else:
+            payload["found"] = [
+                find_instance_webhook(name)
+                for name in (configured_instance_names() or [])
+            ]
+        if normalize_text(sync) in {"1", "true", "yes", "sim"}:
+            from app.services.attendances import sync_inbox_from_evolution
+
+            imported = sync_inbox_from_evolution(force=True, limit=50)
+            payload["sync"] = {"imported_chats": int(imported or 0)}
     except Exception as error:
         payload["ok"] = False
         payload["error"] = str(error)
+    payload["stats"] = webhook_stats_snapshot()
     return JSONResponse(payload)
 
 
