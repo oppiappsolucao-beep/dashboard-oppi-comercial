@@ -210,16 +210,20 @@
         return r.json();
       })
       .then(function (j) {
+        var prevUnread = lastUnread;
         updateUnreadBadge(j.unread);
 
-        var inboxChanged = lastInboxToken && j.inbox_token && j.inbox_token !== lastInboxToken;
+        var inboxChanged =
+          lastInboxToken && j.inbox_token && j.inbox_token !== lastInboxToken;
+        var unreadUp =
+          lastInboxToken && (Number(j.unread) || 0) > prevUnread && prevUnread >= 0;
         var convChanged =
           id &&
           lastConversationToken &&
           j.conversation_token &&
           j.conversation_token !== lastConversationToken;
 
-        if (inboxChanged) {
+        if (inboxChanged || unreadUp) {
           refreshList();
         }
         if (convChanged) {

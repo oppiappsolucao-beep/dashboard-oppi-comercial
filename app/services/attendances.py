@@ -780,13 +780,13 @@ def maybe_ai_reply(conversation_id: str, inbound_text: str) -> None:
 
 
 _SYNC_LAST_AT: dict[str, float] = {}
-_SYNC_MIN_INTERVAL_SEC = 30.0
+_SYNC_MIN_INTERVAL_SEC = 10.0
 _SYNC_IN_FLIGHT: set[str] = set()
 _SYNC_GUARD = threading.Lock()
 
 
 _INBOX_SYNC_LAST = 0.0
-_INBOX_SYNC_MIN_INTERVAL_SEC = 45.0
+_INBOX_SYNC_MIN_INTERVAL_SEC = 20.0
 _INBOX_SYNC_LOCK = threading.Lock()
 
 

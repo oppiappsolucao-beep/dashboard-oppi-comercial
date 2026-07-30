@@ -561,14 +561,19 @@ def attendances_unread(request: Request):
 
 @router.get("/atendimentos/sync")
 def attendances_sync(request: Request, conversation_id: str = ""):
-    """Poll leve baseado no SQLite — mensagens novas aparecem sem F5."""
+    """Poll leve — puxa Evolution em background e devolve snapshot do banco."""
     require_auth(request)
     try:
-        # NÃO chama Evolution aqui: o poll a cada 4s travava o worker e o webhook parava.
+        # Inbox: chats novos que o webhook perdeu (throttle no service).
+        try:
+            attendances_service.schedule_sync_inbox_from_evolution(force=False)
+        except Exception:
+            pass
+        # Conversa aberta: mensagens recentes (throttle ~10s).
         if conversation_id:
             try:
                 attendances_service.schedule_sync_messages_from_evolution(
-                    conversation_id, limit=20, force=False
+                    conversation_id, limit=25, force=False
                 )
             except Exception:
                 pass
