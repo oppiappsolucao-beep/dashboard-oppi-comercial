@@ -20,10 +20,6 @@ from app.services.legacy_core import (
 )
 from app.services.proposal_pricing import (
     EXTRA_MENSAL,
-    PLAN_ANUAL,
-    PLAN_BOLETO,
-    PLAN_CARTAO,
-    PLAN_LABELS,
     SelectedProposalPricing,
     calcular_planos_ponto,
     format_money_br,
@@ -31,6 +27,7 @@ from app.services.proposal_pricing import (
 )
 
 _LOGO_PATH = Path(__file__).resolve().parent.parent / "static" / "img" / "oppi-logo.png"
+_LETTERHEAD_PATH = Path(__file__).resolve().parent.parent / "static" / "img" / "proposal-letterhead.png"
 
 OPPI_CONTRATADA = {
     "nome": "OPPI TECH LTDA",
@@ -212,36 +209,55 @@ def _resolve_logo_path() -> Path | None:
     return None
 
 
+def _resolve_letterhead_path() -> Path | None:
+    if _LETTERHEAD_PATH.is_file():
+        return _LETTERHEAD_PATH
+    return None
+
+
 def _draw_page_chrome(canvas, doc) -> None:
-    """Logo Oppi no topo de todas as páginas (modelo comercial)."""
+    """Letterhead do modelo Oppi (faixa preta + logo) em todas as páginas."""
     from reportlab.lib.pagesizes import A4
-    from reportlab.lib.units import mm
 
     canvas.saveState()
     page_w, page_h = A4
-    logo = _resolve_logo_path()
-    logo_h = 18 * mm
-    logo_w = 18 * mm
-    top_y = page_h - 10 * mm - logo_h
-    if logo is not None:
+    letterhead = _resolve_letterhead_path()
+    if letterhead is not None:
         try:
-            # Canto superior esquerdo — alinhado à margem do conteúdo
             canvas.drawImage(
-                str(logo),
-                doc.leftMargin,
-                top_y,
-                width=logo_w,
-                height=logo_h,
-                preserveAspectRatio=True,
+                str(letterhead),
+                0,
+                0,
+                width=page_w,
+                height=page_h,
+                preserveAspectRatio=False,
                 mask="auto",
             )
         except Exception:
-            pass
-    # Linha sob o cabeçalho
-    line_y = page_h - 30 * mm
-    canvas.setStrokeColorRGB(0.75, 0.75, 0.78)
-    canvas.setLineWidth(0.6)
-    canvas.line(doc.leftMargin, line_y, page_w - doc.rightMargin, line_y)
+            letterhead = None
+    if letterhead is None:
+        # Fallback: faixa preta + logo (se letterhead não existir no deploy)
+        canvas.setFillColorRGB(0, 0, 0)
+        canvas.rect(0, page_h - 42, page_w, 42, fill=1, stroke=0)
+        canvas.rect(0, 0, page_w, 42, fill=1, stroke=0)
+        logo = _resolve_logo_path()
+        if logo is not None:
+            try:
+                canvas.drawImage(
+                    str(logo),
+                    page_w - 52,
+                    page_h - 36,
+                    width=28,
+                    height=28,
+                    preserveAspectRatio=True,
+                    mask="auto",
+                )
+            except Exception:
+                pass
+        canvas.setFillColorRGB(1, 1, 1)
+        canvas.setFont("Helvetica", 7)
+        canvas.drawCentredString(page_w / 2, 24, "Rua Francisco Furtado, 117 A CEP: 08280-200")
+        canvas.drawCentredString(page_w / 2, 12, "Cidade Líder - São Paulo")
     canvas.restoreState()
 
 
@@ -313,19 +329,19 @@ def generate_commercial_proposal_pdf(
     doc = SimpleDocTemplate(
         buffer,
         pagesize=A4,
-        leftMargin=18 * mm,
-        rightMargin=18 * mm,
-        topMargin=34 * mm,
-        bottomMargin=14 * mm,
+        leftMargin=22 * mm,
+        rightMargin=24 * mm,
+        topMargin=28 * mm,
+        bottomMargin=28 * mm,
     )
     styles = getSampleStyleSheet()
     title = ParagraphStyle(
         "OppiTitle",
         parent=styles["Heading1"],
         fontName="Helvetica-Bold",
-        fontSize=15,
-        leading=19,
-        alignment=TA_CENTER,
+        fontSize=12,
+        leading=15,
+        alignment=TA_LEFT,
         spaceAfter=2,
         textColor="#111111",
     )
@@ -333,19 +349,19 @@ def generate_commercial_proposal_pdf(
         "OppiSubtitle",
         parent=styles["Normal"],
         fontName="Helvetica-Bold",
-        fontSize=11,
-        leading=14,
-        alignment=TA_CENTER,
-        spaceAfter=12,
+        fontSize=12,
+        leading=15,
+        alignment=TA_LEFT,
+        spaceAfter=10,
         textColor="#111111",
     )
     heading = ParagraphStyle(
         "OppiH",
         parent=styles["Heading2"],
         fontName="Helvetica-Bold",
-        fontSize=11,
-        leading=14,
-        spaceBefore=12,
+        fontSize=12,
+        leading=15,
+        spaceBefore=10,
         spaceAfter=2,
         textColor="#111111",
     )
@@ -353,23 +369,27 @@ def generate_commercial_proposal_pdf(
         "OppiBody",
         parent=styles["Normal"],
         fontName="Helvetica",
-        fontSize=9.5,
-        leading=13,
+        fontSize=11,
+        leading=14,
         alignment=TA_JUSTIFY,
         spaceAfter=4,
         textColor="#111111",
     )
     body_left = ParagraphStyle("OppiBodyLeft", parent=body, alignment=TA_LEFT, spaceAfter=2)
-    highlight = ParagraphStyle(
-        "OppiHighlight", parent=body_left, backColor="#F3F4F6", borderPadding=4, spaceBefore=2, spaceAfter=2
+    feature_title = ParagraphStyle(
+        "OppiFeatureTitle",
+        parent=body_left,
+        fontName="Helvetica-Bold",
+        spaceBefore=4,
+        spaceAfter=1,
     )
     small = ParagraphStyle(
         "OppiSmall",
         parent=styles["Normal"],
         fontName="Helvetica",
-        fontSize=9,
-        leading=12,
-        alignment=TA_CENTER,
+        fontSize=11,
+        leading=14,
+        alignment=TA_LEFT,
         spaceBefore=8,
         textColor="#111111",
     )
@@ -377,7 +397,7 @@ def generate_commercial_proposal_pdf(
 
     def add_heading(text: str) -> None:
         story.append(Paragraph(_escape(text), heading))
-        story.append(HRFlowable(width="100%", thickness=0.7, color="#111111", spaceBefore=1, spaceAfter=6))
+        story.append(HRFlowable(width="100%", thickness=0.6, color="#888888", spaceBefore=1, spaceAfter=6))
 
     def add_text(text: str, style=body) -> None:
         for line in _paragraphs(text):
@@ -386,36 +406,29 @@ def generate_commercial_proposal_pdf(
     def add_labeled_block(lines: list[str | None], style=body_left) -> None:
         for line in lines:
             if line:
-                # linhas já vêm com <b>label:</b> value ou texto puro escapado
                 story.append(Paragraph(line if "<b>" in line else _escape(line), style))
 
     def add_feature(name: str, desc: str) -> None:
-        # Modelo Word: título em negrito com ":" na própria linha + descrição abaixo
-        story.append(Paragraph(f"<b>{_escape(name)}:</b>", body_left))
+        # Modelo: nome em negrito sem ":" + descrição na linha seguinte
+        story.append(Paragraph(_escape(name), feature_title))
         story.append(Paragraph(_escape(desc), body_left))
-        story.append(Spacer(1, 4))
 
     story.append(Paragraph("PROPOSTA COMERCIAL", title))
-    story.append(Paragraph("PONTO ELETRÔNICO OPPI", subtitle))
-    story.append(Spacer(1, 6))
+    story.append(Paragraph("IMPLANTAÇÃO OPERACIONAL E COMERCIAL — OPPI", subtitle))
 
-    # Modelo visual enviado: campos do contratante nesta ordem
-    add_heading("Contratante")
+    # Blocos no formato do modelo (sem títulos de seção "Contratante/Contratada")
     add_labeled_block(
         [
             _field_line("CONTRATANTE", client.get("razao_social") or client.get("empresa")),
-            _field_line("CNPJ/CPF", client.get("documento")),
-            _field_line("ENDEREÇO", client.get("endereco")),
-            _field_line("E-MAIL", client.get("email")),
-            _field_line("TELEFONE", client.get("telefone")),
-            _field_line("RESPONSÁVEL", client.get("responsavel")),
+            _field_line("CNPJ", client.get("documento")),
+            _field_line("Rua", client.get("endereco")),
+            _field_line("E-mail", client.get("email") or ""),
         ]
     )
-
-    add_heading("Contratada")
+    story.append(Spacer(1, 6))
     add_labeled_block(
         [
-            f"<b>CONTRATADA:</b> {_escape(OPPI_CONTRATADA['nome'])}",
+            f"<b>CONTRATADO:</b> {_escape(OPPI_CONTRATADA['nome'])}",
             f"<b>CNPJ:</b> {_escape(OPPI_CONTRATADA['cnpj'])}",
             _escape(OPPI_CONTRATADA["endereco"]),
             _escape(OPPI_CONTRATADA["cidade"]),
@@ -426,138 +439,145 @@ def generate_commercial_proposal_pdf(
     add_text(OBJETIVO)
 
     add_heading("Funcionalidades inclusas")
+    story.append(Paragraph("A plataforma oferece:", body_left))
     for name, desc in FUNCIONALIDADES:
         add_feature(name, desc)
 
     add_heading("Proposta de valor")
-    add_text(PROPOSTA_VALOR)
-
-    add_heading("Planos disponíveis")
+    # Modelo: bullets sem hífen, frases curtas
     add_text(
-        "Plano Mensal no Boleto\n"
-        f"- Quantidade de colaboradores: {planos.quantidade_total}\n"
-        f"- Valor mensal: {format_money_br(planos.total_mensal_boleto)}\n"
-        + (
-            f"- Valor dos adicionais: {format_money_br(planos.adicional_mensal)}\n"
-            if planos.quantidade_adicional
-            else ""
-        )
-        + "- Forma de pagamento: boleto mensal.\n\n"
-        "Plano Mensal Recorrente no Cartão\n"
-        f"- Quantidade de colaboradores: {planos.quantidade_total}\n"
-        f"- Valor mensal: {format_money_br(planos.total_mensal_cartao)}\n"
-        + (
-            f"- Valor dos adicionais: {format_money_br(planos.adicional_mensal)}\n"
-            if planos.quantidade_adicional
-            else ""
-        )
-        + "- Forma de pagamento: cartão recorrente.\n\n"
-        "Plano Anual\n"
-        f"- Quantidade de colaboradores: {planos.quantidade_total}\n"
-        f"- Valor anual: {format_money_br(planos.total_anual)}\n"
-        f"- Valor mensal equivalente: {format_money_br(planos.mensal_equivalente_anual)}\n"
-        + (
-            f"- Valor anual dos adicionais: {format_money_br(planos.adicional_anual)}\n"
-            if planos.quantidade_adicional
-            else ""
-        )
-        + "- Forma de pagamento: anual à vista.\n\n"
-        f"Colaboradores adicionais: {format_money_br(EXTRA_MENSAL)} por colaborador por mês.",
-        body_left,
+        "A Oppi entrega uma solução simples e acessível para empresas que desejam "
+        "profissionalizar o controle de ponto sem burocracia.\n\n"
+        "Com a plataforma, sua empresa ganha:\n"
+        "Mais controle sobre os horários dos colaboradores.\n"
+        "Menos retrabalho com cálculos manuais.\n"
+        "Mais organização nos documentos internos.\n"
+        "Mais segurança na comprovação da jornada.\n"
+        "Mais praticidade para gestores e colaboradores.\n"
+        "Relatórios completos para acompanhamento da operação.\n"
+        "Redução do uso de papel e processos manuais.\n\n"
+        "A proposta é transformar a gestão de ponto em um processo simples, digital e seguro."
     )
 
-    recommended_label = PLAN_LABELS.get(planos.plano_recomendado, "Anual à vista")
-    selected_label = selected.plan_label
-    if planos.plano_recomendado == selected.plan_key:
-        story.append(Paragraph(f"<b>Destaque:</b> plano recomendado e selecionado — { _escape(selected_label) }.", highlight))
-    else:
-        story.append(Paragraph(f"<b>Plano recomendado:</b> {_escape(recommended_label)}.", highlight))
-        story.append(Paragraph(f"<b>Plano selecionado:</b> {_escape(selected_label)}.", highlight))
-
-    add_heading("Plano selecionado")
-    selected_lines = [
-        f"Quantidade de colaboradores: {planos.quantidade_total}",
-        f"Quantidade incluída: {planos.quantidade_incluida}",
-        f"Quantidade adicional: {planos.quantidade_adicional}",
-        f"Forma de pagamento: {selected.payment_label}",
-    ]
-    if selected.plan_key == PLAN_BOLETO:
-        selected_lines.append(f"Valor-base: {format_money_br(planos.valor_base_boleto)}")
-        if planos.quantidade_adicional:
-            selected_lines.append(f"Valor dos adicionais: {format_money_br(planos.adicional_mensal)}")
-        selected_lines.append(f"Valor mensal final: {format_money_br(selected.valor_mensal)}")
-    elif selected.plan_key == PLAN_CARTAO:
-        selected_lines.append(f"Valor-base: {format_money_br(planos.valor_base_cartao)}")
-        if planos.quantidade_adicional:
-            selected_lines.append(f"Valor dos adicionais: {format_money_br(planos.adicional_mensal)}")
-        selected_lines.append(f"Valor mensal final: {format_money_br(selected.valor_mensal)}")
-    else:
-        selected_lines.append(f"Valor-base: {format_money_br(planos.valor_base_anual)}")
-        if planos.quantidade_adicional:
-            selected_lines.append(f"Valor dos adicionais: {format_money_br(planos.adicional_anual)}")
-        selected_lines.append(f"Valor anual final: {format_money_br(selected.valor_anual or planos.total_anual)}")
-        selected_lines.append(
-            f"Valor mensal equivalente: {format_money_br(selected.valor_mensal_equivalente or planos.mensal_equivalente_anual)}"
+    add_heading("Planos disponíveis")
+    # Formato do PDF modelo (nome → preço → inclui)
+    story.append(Paragraph("<b>Plano Mensal no Boleto</b>", body_left))
+    story.append(
+        Paragraph(
+            _escape(
+                f"{format_money_br(planos.total_mensal_boleto)} por mês até {planos.quantidade_total} colaboradores"
+            ),
+            body_left,
         )
-    if selected.desconto_valor and selected.desconto_valor > 0:
-        selected_lines.append(f"Desconto: {format_money_br(selected.desconto_valor)}")
-    if selected.desconto_percentual and selected.desconto_percentual > 0:
-        selected_lines.append(f"Desconto: {selected.desconto_percentual}%")
-    selected_lines.append(f"Valor final: {format_money_br(selected.valor_final)}")
-    if selected.observacao:
-        selected_lines.append(f"Observação comercial: {selected.observacao}")
-    add_labeled_block(selected_lines)
+    )
+    story.append(
+        Paragraph(
+            _escape(f"Inclui acesso à plataforma para até {planos.quantidade_total} colaboradores."),
+            body_left,
+        )
+    )
+    story.append(Spacer(1, 6))
+    story.append(Paragraph("<b>Plano Mensal Recorrente no Cartão</b>", body_left))
+    story.append(
+        Paragraph(
+            _escape(f"{format_money_br(planos.total_mensal_cartao)} por mês"),
+            body_left,
+        )
+    )
+    story.append(
+        Paragraph(
+            _escape(f"Inclui acesso à plataforma para até {planos.quantidade_total} colaboradores."),
+            body_left,
+        )
+    )
+    story.append(Spacer(1, 6))
+    story.append(Paragraph("<b>Plano Anual</b>", body_left))
+    story.append(Paragraph(_escape(f"{format_money_br(planos.total_anual)} à vista"), body_left))
+    story.append(
+        Paragraph(
+            _escape(
+                f"Equivalente a {format_money_br(planos.mensal_equivalente_anual)} por mês durante 12 meses."
+            ),
+            body_left,
+        )
+    )
+    story.append(
+        Paragraph(
+            _escape(f"Inclui acesso à plataforma para até {planos.quantidade_total} colaboradores."),
+            body_left,
+        )
+    )
+    story.append(Spacer(1, 4))
+    story.append(
+        Paragraph(
+            _escape(f"Colaboradores adicionais: {format_money_br(EXTRA_MENSAL)} por colaborador/mês."),
+            body_left,
+        )
+    )
+    if selected.plan_label:
+        story.append(Spacer(1, 4))
+        story.append(
+            Paragraph(
+                f"<b>Plano selecionado nesta proposta:</b> {_escape(selected.plan_label)} "
+                f"— valor final {format_money_br(selected.valor_final)}.",
+                body_left,
+            )
+        )
 
     add_heading("Ativação da plataforma")
-    add_text(ATIVACAO, body_left)
+    add_text(
+        "A ativação é realizada após o envio dos dados da empresa e confirmação do plano escolhido.\n\n"
+        "Para cadastro, solicitamos:\n"
+        "Nome completo do responsável\n"
+        "Cargo do responsável\n"
+        "CNPJ da empresa\n"
+        "Razão social\n"
+        "Nome fantasia\n"
+        "Telefone / WhatsApp da empresa\n"
+        "E-mail de login do gestor\n"
+        "E-mail para confirmação do administrador\n"
+        "E-mail para cobrança\n"
+        "Plano escolhido\n"
+        "Forma de pagamento\n\n"
+        "Após o envio das informações, nossa equipe realiza o cadastro e libera o acesso à plataforma.",
+        body_left,
+    )
 
     add_heading("Suporte")
     add_text(SUPORTE)
 
     add_heading("Prazos de atendimento")
-    add_text(PRAZOS, body_left)
+    add_text(
+        "Retorno inicial: até 24 horas úteis.\n"
+        "Correção de erro simples: até 2 dias úteis.\n"
+        "Ajuste visual ou alteração de texto: de 2 a 5 dias úteis.\n"
+        "Inclusão ou alteração de campo simples: de 3 a 7 dias úteis.\n"
+        "Ajustes em relatórios, filtros ou gráficos: de 5 a 10 dias úteis.\n"
+        "Novas funcionalidades ou integrações: prazo definido mediante orçamento.",
+        body_left,
+    )
 
     add_heading("Investimento acessível para sua empresa")
-    investimento = (
-        f"Para uma empresa com {planos.quantidade_total} colaboradores, o plano selecionado possui "
-        f"o investimento de {format_money_br(selected.valor_final)}, na modalidade {selected.payment_label}.\n\n"
-        "Com a Oppi, sua empresa passa a contar com uma solução digital para controle de ponto, "
-        "documentos e relatórios."
-    )
-    if selected.plan_key == PLAN_ANUAL:
-        investimento += (
-            f"\n\nO investimento anual é de {format_money_br(selected.valor_anual or planos.total_anual)} "
-            f"à vista, equivalente a "
-            f"{format_money_br(selected.valor_mensal_equivalente or planos.mensal_equivalente_anual)} por mês."
-        )
-    add_text(investimento)
-
-    add_heading("Validade da proposta")
     add_text(
-        f"Esta proposta possui validade de {selected.validade_dias} dias corridos a partir da data de emissão."
-    )
-
-    add_heading("Encerramento")
-    add_text(
-        "A Oppi foi criada para empresas que buscam praticidade, organização e mais segurança "
-        "na gestão dos colaboradores.\n\n"
+        f"Com planos a partir de {format_money_br(planos.mensal_equivalente_anual)} por mês no plano anual, "
+        "sua empresa passa a contar com uma solução digital para controle de ponto, documentos e relatórios.\n\n"
+        "A Oppi foi criada para empresas que buscam praticidade, organização e mais "
+        "segurança na gestão dos colaboradores.\n\n"
         "Agradecemos pela oportunidade de apresentar nossa proposta comercial.\n\n"
-        "OPPI – Gestão • Operação • Performance"
+        "OPPI - Gestão • Operação • Performance"
     )
     story.append(Paragraph(_escape(date_label), small))
-    story.append(Spacer(1, 18))
-    story.append(HRFlowable(width="100%", thickness=0.5, color="#999999", spaceBefore=8, spaceAfter=12))
+    story.append(Spacer(1, 20))
 
-    story.append(Paragraph("______________________________", body_left))
+    story.append(Paragraph("______________________", body_left))
     add_labeled_block(
         [
-            _field_line("CONTRATANTE", client.get("razao_social") or client.get("empresa")),
-            _field_line("RESPONSÁVEL", client.get("responsavel")),
-            _field_line("CNPJ/CPF", client.get("documento")),
+            "<b>CONTRATANTE:</b>",
+            _field_line("CNPJ", client.get("documento")),
         ]
     )
     story.append(Spacer(1, 16))
-    story.append(Paragraph("______________________________", body_left))
+    story.append(Paragraph("______________________", body_left))
     add_labeled_block(
         [
             f"<b>{_escape(OPPI_CONTRATADA['nome'])}</b>",

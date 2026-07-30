@@ -192,7 +192,7 @@ def _proposal_cache_key(
         normalize_text(colaboradores),
         normalize_text(services_description),
         normalize_text(plans_text),
-        "commercial-logo-v1",
+        "commercial-logo-v2",
         normalize_text(os.environ.get("APP_BUILD", "")),
     ])
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
@@ -890,7 +890,7 @@ def generate_proposal_pdf(
         snapshot_servico,
         snapshot_colaboradores,
         services_description,
-        "commercial-logo-v1|" + (plans_text or "") + "|" + snapshot_key,
+        "commercial-logo-v2|" + (plans_text or "") + "|" + snapshot_key,
     )
     if use_cache:
         cached = get_cached_proposal_pdf(cache_key)
