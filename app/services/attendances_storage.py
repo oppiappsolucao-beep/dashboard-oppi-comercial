@@ -276,16 +276,30 @@ def upsert_conversation_by_remote_jid(
     ignore_suppression: bool = False,
 ) -> dict:
     """Cria/atualiza conversa a partir do JID — cobre contato novo que só chega como @lid."""
-    from app.services.evolution_client import is_whatsapp_group_jid, normalize_phone_from_jid
+    from app.services.evolution_client import (
+        is_placeholder_whatsapp_phone,
+        is_usable_whatsapp_identity,
+        is_whatsapp_group_jid,
+        normalize_phone_from_jid,
+    )
 
     remote_jid = normalize_text(remote_jid)
     contact_name = normalize_text(contact_name)
     phone = normalize_text(phone_e164)
     instance = resolve_evolution_instance(evolution_instance)
+    if is_placeholder_whatsapp_phone(phone):
+        phone = ""
     # Nunca derive telefone a partir de @lid (vira número inventado enorme)
     if not phone and remote_jid and "@lid" not in remote_jid.lower():
         phone = normalize_phone_from_jid(remote_jid)
     if not remote_jid or is_whatsapp_group_jid(remote_jid):
+        return {}
+    # Sem JID real (@…) e sem telefone válido → não cria "wa:490…" fantasma
+    if "@" not in remote_jid and not (
+        phone and len(normalize_digits(phone)) >= 10 and len(normalize_digits(phone)) <= 15
+    ):
+        return {}
+    if not is_usable_whatsapp_identity(phone=phone, remote_jid=remote_jid):
         return {}
     if phone and is_whatsapp_group_jid(phone):
         phone = ""
@@ -325,18 +339,19 @@ def upsert_conversation_by_remote_jid(
             updates["contact_name"] = contact_name
         if instance and not normalize_text(existing.get("evolution_instance") or ""):
             updates["evolution_instance"] = instance
+        if is_placeholder_whatsapp_phone(existing.get("phone_e164") or ""):
+            updates["phone_e164"] = ""
         if updates:
             return update_conversation(existing["id"], **updates) or existing
         return existing
 
-    # Placeholder estável (não parece id de grupo) para satisfazer NOT NULL
-    placeholder = f"wa:{normalize_digits(remote_jid.split('@', 1)[0])[-16:]}" or f"wa:{_new_id('p')}"
+    # phone vazio + remote_jid @lid — envio usa o JID, nunca inventa wa:ID
     now = _now_iso()
     with _lock, _session() as db:
         conversation_id = _new_id("c_")
         row = AttendanceConversation(
             id=conversation_id,
-            phone_e164=placeholder,
+            phone_e164="",
             contact_name=contact_name or "WhatsApp",
             profile_pic_url="",
             sheet_row=None,
@@ -363,17 +378,32 @@ def upsert_conversation_by_remote_jid(
 
 
 def purge_group_conversations() -> dict:
-    """Apaga do banco só conversas de grupo WhatsApp reais (@g.us / broadcast / id)."""
-    from app.services.evolution_client import is_whatsapp_group_jid
+    """Apaga do banco conversas de grupo e placeholders inválidos (wa:…)."""
+    from app.services.evolution_client import (
+        is_placeholder_whatsapp_phone,
+        is_usable_whatsapp_identity,
+        is_whatsapp_group_jid,
+    )
 
     removed_ids: list[str] = []
     removed_names: list[str] = []
     with _lock, _session() as db:
         rows = db.query(AttendanceConversation).all()
         for row in rows:
-            if not (
-                is_whatsapp_group_jid(row.remote_jid or "")
-                or is_whatsapp_group_jid(row.phone_e164 or "")
+            phone = row.phone_e164 or ""
+            jid = row.remote_jid or ""
+            bad_group = is_whatsapp_group_jid(jid) or is_whatsapp_group_jid(phone)
+            bad_placeholder = is_placeholder_whatsapp_phone(phone)
+            bad_identity = not is_usable_whatsapp_identity(phone=phone, remote_jid=jid)
+            if not (bad_group or bad_placeholder or bad_identity):
+                continue
+            # Não apaga lead com telefone BR válido só porque jid está vazio
+            digits = normalize_digits(phone)
+            if (
+                not bad_group
+                and not bad_placeholder
+                and digits.startswith("55")
+                and len(digits) in (12, 13)
             ):
                 continue
             removed_ids.append(row.id)
@@ -384,7 +414,7 @@ def purge_group_conversations() -> dict:
             db.delete(row)
     if removed_ids:
         logger.info(
-            "Removidas %s conversas de grupo: %s (%s)",
+            "Removidas %s conversas inválidas/grupo: %s (%s)",
             len(removed_ids),
             removed_ids,
             removed_names,
@@ -728,8 +758,12 @@ def list_conversations(
             .all()
         )
         conversations = []
+        from app.services.evolution_client import is_placeholder_whatsapp_phone
+
         for row in rows:
             if is_whatsapp_group_jid(row.remote_jid or "") or is_whatsapp_group_jid(row.phone_e164 or ""):
+                continue
+            if is_placeholder_whatsapp_phone(row.phone_e164 or ""):
                 continue
             name_key = _normalize_contact_key(row.contact_name or "")
             if name_key in UNWANTED_INBOX_CONTACT_KEYS:
@@ -749,12 +783,18 @@ def upsert_conversation_by_phone(
     evolution_instance: str = "",
     ignore_suppression: bool = False,
 ) -> dict:
-    from app.services.evolution_client import is_whatsapp_group_jid, phone_match_variants
+    from app.services.evolution_client import (
+        is_placeholder_whatsapp_phone,
+        is_whatsapp_group_jid,
+        phone_match_variants,
+    )
 
     phone = normalize_text(phone_e164)
     remote_jid = normalize_text(remote_jid)
     contact_name = normalize_text(contact_name)
     instance = resolve_evolution_instance(evolution_instance)
+    if is_placeholder_whatsapp_phone(phone):
+        return {}
     if is_whatsapp_group_jid(phone) or is_whatsapp_group_jid(remote_jid):
         return {}
     if _normalize_contact_key(contact_name) in UNWANTED_INBOX_CONTACT_KEYS:

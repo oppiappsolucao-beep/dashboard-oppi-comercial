@@ -337,6 +337,35 @@ def normalize_phone_from_jid(jid: str) -> str:
     return digits
 
 
+def is_placeholder_whatsapp_phone(value: str) -> bool:
+    """Telefone sintético wa:… — não é destino válido na Evolution."""
+    text = normalize_text(value).lower()
+    return text.startswith("wa:") or text.startswith("lid:")
+
+
+def is_usable_whatsapp_identity(phone: str = "", remote_jid: str = "") -> bool:
+    """True se há telefone BR válido ou JID (@lid / @s.whatsapp.net) para inbox/envio."""
+    if is_placeholder_whatsapp_phone(phone):
+        return False
+    jid = normalize_text(remote_jid).lower()
+    if jid and is_whatsapp_group_jid(jid):
+        return False
+    if jid and ("@lid" in jid or "@s.whatsapp.net" in jid or "@c.us" in jid):
+        left = jid.split("@", 1)[0]
+        # @lid precisa ter id; PN precisa parecer telefone
+        if "@lid" in jid:
+            return bool(normalize_digits(left)) and len(normalize_digits(left)) >= 6
+        digits = normalize_phone_from_jid(jid)
+        return bool(digits) and len(digits) >= 10 and not is_whatsapp_group_jid(digits)
+    digits = normalize_digits(phone)
+    if digits.startswith("55") and len(digits) in (12, 13):
+        return True
+    if not digits.startswith("55") and len(digits) >= 10:
+        # será normalizado com 55 no fluxo de envio/cadastro
+        return len(digits) <= 13
+    return False
+
+
 def is_whatsapp_group_jid(value: str) -> bool:
     """True para grupos/broadcast — não entram no inbox de leads.
 

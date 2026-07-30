@@ -446,6 +446,19 @@ def _handle_messages_upsert(payload: dict) -> int:
             _note_drop("no_jid", raw=remote_raw)
             logger.info("webhook drop no_jid raw=%s", remote_raw)
             continue
+        try:
+            from app.services.evolution_client import is_usable_whatsapp_identity
+
+            if not is_usable_whatsapp_identity(phone=phone, remote_jid=remote_jid):
+                _note_drop("invalid_identity", phone=phone, jid=remote_jid)
+                logger.info(
+                    "webhook drop invalid_identity phone=%s jid=%s",
+                    phone,
+                    remote_jid,
+                )
+                continue
+        except Exception:
+            pass
         if is_whatsapp_group_jid(remote_jid) or (phone and is_whatsapp_group_jid(phone)):
             _note_drop("group_jid", phone=phone, jid=remote_jid)
             logger.info("webhook drop group_jid phone=%s jid=%s", phone, remote_jid)
