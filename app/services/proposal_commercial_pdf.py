@@ -6,6 +6,7 @@ import re
 import unicodedata
 from datetime import date
 from decimal import Decimal
+from pathlib import Path
 
 from app.services.legacy_core import (
     find_prepared_company_row,
@@ -28,6 +29,8 @@ from app.services.proposal_pricing import (
     format_money_br,
     select_plan,
 )
+
+_LOGO_PATH = Path(__file__).resolve().parent.parent / "static" / "img" / "oppi-logo.png"
 
 OPPI_CONTRATADA = {
     "nome": "OPPI TECH LTDA",
@@ -203,6 +206,45 @@ def proposal_pdf_filename(company_name: str, emission: date | None = None) -> st
     return f"Proposta_Ponto_Oppi_{ascii_name}_{emission.strftime('%d-%m-%Y')}.pdf"
 
 
+def _resolve_logo_path() -> Path | None:
+    if _LOGO_PATH.is_file():
+        return _LOGO_PATH
+    return None
+
+
+def _draw_page_chrome(canvas, doc) -> None:
+    """Logo Oppi no topo de todas as páginas (modelo comercial)."""
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.units import mm
+
+    canvas.saveState()
+    page_w, page_h = A4
+    logo = _resolve_logo_path()
+    logo_h = 18 * mm
+    logo_w = 18 * mm
+    top_y = page_h - 10 * mm - logo_h
+    if logo is not None:
+        try:
+            # Canto superior esquerdo — alinhado à margem do conteúdo
+            canvas.drawImage(
+                str(logo),
+                doc.leftMargin,
+                top_y,
+                width=logo_w,
+                height=logo_h,
+                preserveAspectRatio=True,
+                mask="auto",
+            )
+        except Exception:
+            pass
+    # Linha sob o cabeçalho
+    line_y = page_h - 30 * mm
+    canvas.setStrokeColorRGB(0.75, 0.75, 0.78)
+    canvas.setLineWidth(0.6)
+    canvas.line(doc.leftMargin, line_y, page_w - doc.rightMargin, line_y)
+    canvas.restoreState()
+
+
 def _selected_from_payload(payload: dict | None, colaboradores: int) -> SelectedProposalPricing:
     planos = calcular_planos_ponto(colaboradores)
     if not payload:
@@ -273,7 +315,7 @@ def generate_commercial_proposal_pdf(
         pagesize=A4,
         leftMargin=18 * mm,
         rightMargin=18 * mm,
-        topMargin=14 * mm,
+        topMargin=34 * mm,
         bottomMargin=14 * mm,
     )
     styles = getSampleStyleSheet()
@@ -523,5 +565,5 @@ def generate_commercial_proposal_pdf(
         ]
     )
 
-    doc.build(story)
+    doc.build(story, onFirstPage=_draw_page_chrome, onLaterPages=_draw_page_chrome)
     return buffer.getvalue()

@@ -192,7 +192,7 @@ def _proposal_cache_key(
         normalize_text(colaboradores),
         normalize_text(services_description),
         normalize_text(plans_text),
-        "commercial-v2" if normalize_text(services_description) else normalize_text(get_proposal_template_doc_id()),
+        "commercial-logo-v1",
         normalize_text(os.environ.get("APP_BUILD", "")),
     ])
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
@@ -890,56 +890,29 @@ def generate_proposal_pdf(
         snapshot_servico,
         snapshot_colaboradores,
         services_description,
-        "docs-first-v3|" + (plans_text or "") + "|" + snapshot_key,
+        "commercial-logo-v1|" + (plans_text or "") + "|" + snapshot_key,
     )
     if use_cache:
         cached = get_cached_proposal_pdf(cache_key)
         if cached:
             return cached
 
-    template_id = normalize_text(get_proposal_template_doc_id())
-    pdf_bytes: bytes | None = None
-    docs_error: Exception | None = None
+    # 1) PDF comercial local com logo (caminho estável — não depende do Google Docs)
+    from app.services.proposal_commercial_pdf import generate_commercial_proposal_pdf
 
-    # 1) Modelo Google Docs (layout que o usuário enviou)
-    if template_id:
-        try:
-            pdf_bytes = generate_proposal_pdf_from_template(
-                resolved_company,
-                df,
-                columns,
-                value=snapshot_value,
-                servico=snapshot_servico,
-                colaboradores=snapshot_colaboradores,
-            )
-        except Exception as error:
-            docs_error = error
-            import logging
-
-            logging.getLogger(__name__).warning(
-                "Falha ao gerar PDF pelo modelo Google Docs (%s). Usando PDF comercial local.",
-                error,
-            )
-
-    # 2) Fallback: PDF comercial ReportLab (conteúdo Ponto Eletrônico)
-    if pdf_bytes is None:
-        from app.services.proposal_commercial_pdf import generate_commercial_proposal_pdf
-
-        description = normalize_text(services_description) or normalize_text(plans_text) or (
-            f"Proposta comercial Oppi — {snapshot_servico}"
-            + (f" — {snapshot_colaboradores} colaboradores" if snapshot_colaboradores else "")
-            + (f" — valor {snapshot_value}" if snapshot_value else "")
-        )
-        pdf_bytes = generate_commercial_proposal_pdf(
-            resolved_company,
-            df,
-            columns,
-            services_description=description,
-            plans_text=plans_text,
-            proposal_snapshot=proposal_snapshot,
-        )
-        if docs_error and not template_id:
-            pass
+    description = normalize_text(services_description) or normalize_text(plans_text) or (
+        f"Proposta comercial Oppi — {snapshot_servico}"
+        + (f" — {snapshot_colaboradores} colaboradores" if snapshot_colaboradores else "")
+        + (f" — valor {snapshot_value}" if snapshot_value else "")
+    )
+    pdf_bytes = generate_commercial_proposal_pdf(
+        resolved_company,
+        df,
+        columns,
+        services_description=description,
+        plans_text=plans_text,
+        proposal_snapshot=proposal_snapshot,
+    )
 
     store_proposal_pdf_cache(cache_key, pdf_bytes)
     return pdf_bytes
