@@ -1,7 +1,9 @@
 """Webhook Evolution API → Atendimentos."""
 from __future__ import annotations
 
+import asyncio
 import logging
+import queue
 import threading
 import time
 from collections import deque
@@ -23,6 +25,11 @@ from app.services.legacy_core import normalize_text
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["webhooks"])
+
+# Fila limitada + workers: ACK rápido sem travar o event loop nem estourar threads
+_WEBHOOK_QUEUE: queue.Queue = queue.Queue(maxsize=300)
+_WEBHOOK_WORKERS_STARTED = False
+_WEBHOOK_WORKERS_LOCK = threading.Lock()
 
 _WEBHOOK_STATS_LOCK = threading.Lock()
 _WEBHOOK_STATS = {
@@ -48,6 +55,7 @@ def webhook_stats_snapshot() -> dict:
         return {
             **dict(_WEBHOOK_STATS),
             "recent": list(_WEBHOOK_RECENT),
+            "queue_size": _WEBHOOK_QUEUE.qsize(),
         }
 
 
@@ -70,6 +78,68 @@ def _record_webhook_hit(**fields) -> None:
                 "error": fields.get("last_error") or "",
             }
         )
+
+
+def _process_webhook_job(payload: dict, event: str, instance: str, now_iso: str) -> None:
+    handled = 0
+    error = ""
+    try:
+        if "messages_upsert" in event or "message_upsert" in event or not event:
+            handled = _handle_messages_upsert(payload)
+            if not event and handled == 0:
+                _handle_presence_or_typing(payload)
+        elif "presence" in event or "typing" in event or "chats_update" in event:
+            _handle_presence_or_typing(payload)
+        else:
+            handled = _handle_messages_upsert(payload)
+    except Exception as exc:
+        logger.exception("webhook evolution falhou event=%s", event or "unknown")
+        error = str(exc)[:200]
+    _record_webhook_hit(
+        received=1,
+        authorized=1,
+        messages_saved=int(handled or 0),
+        last_at=now_iso,
+        last_event=event or "unknown",
+        last_instance=instance,
+        last_messages=int(handled or 0),
+        last_error=error or "",
+    )
+
+
+def _webhook_worker_loop() -> None:
+    while True:
+        try:
+            job = _WEBHOOK_QUEUE.get()
+        except Exception:
+            time.sleep(0.2)
+            continue
+        try:
+            payload, event, instance, now_iso = job
+            _process_webhook_job(payload, event, instance, now_iso)
+        except Exception:
+            logger.exception("webhook worker job falhou")
+        finally:
+            try:
+                _WEBHOOK_QUEUE.task_done()
+            except Exception:
+                pass
+
+
+def _ensure_webhook_workers() -> None:
+    global _WEBHOOK_WORKERS_STARTED
+    if _WEBHOOK_WORKERS_STARTED:
+        return
+    with _WEBHOOK_WORKERS_LOCK:
+        if _WEBHOOK_WORKERS_STARTED:
+            return
+        for idx in range(2):
+            threading.Thread(
+                target=_webhook_worker_loop,
+                daemon=True,
+                name=f"wh-worker-{idx}",
+            ).start()
+        _WEBHOOK_WORKERS_STARTED = True
 
 
 def _extract_instance_name(payload: dict) -> str:
@@ -688,12 +758,15 @@ async def health_webhook(
 
         payload["callback_url"] = webhook_callback_url()
         if normalize_text(ensure) in {"1", "true", "yes", "sim"}:
-            payload["ensure"] = ensure_webhooks_for_all_instances()
+            # HTTP Evolution fora do event loop — senão /health e o site travam
+            payload["ensure"] = await asyncio.to_thread(ensure_webhooks_for_all_instances)
         else:
-            payload["found"] = [
-                find_instance_webhook(name)
-                for name in (configured_instance_names() or [])
-            ]
+            payload["found"] = await asyncio.to_thread(
+                lambda: [
+                    find_instance_webhook(name)
+                    for name in (configured_instance_names() or [])
+                ]
+            )
         if normalize_text(sync) in {"1", "true", "yes", "sim"}:
             # Nunca bloqueia o worker — sync pesado em background
             from app.services.attendances import schedule_sync_inbox_from_evolution
@@ -751,40 +824,30 @@ async def evolution_webhook(
 
     event = _extract_event_name(payload)
     instance = _extract_instance_name(payload)
-    handled = 0
-    typing_ok = False
-    error = ""
 
+    # ACK imediato fora do event loop: flood sync no async route matava /health e o site.
+    _ensure_webhook_workers()
     try:
-        if "messages_upsert" in event or "message_upsert" in event or not event:
-            handled = _handle_messages_upsert(payload)
-            if not event and handled == 0:
-                typing_ok = _handle_presence_or_typing(payload)
-        elif "presence" in event or "typing" in event or "chats_update" in event:
-            typing_ok = _handle_presence_or_typing(payload)
-        else:
-            handled = _handle_messages_upsert(payload)
-    except Exception as exc:
-        # Sempre responde 200 rápido — senão a Evolution para de entregar inbound
-        logger.exception("webhook evolution falhou event=%s", event or "unknown")
-        error = str(exc)[:200]
-
-    _record_webhook_hit(
-        received=1,
-        authorized=1,
-        messages_saved=int(handled or 0),
-        last_at=now_iso,
-        last_event=event or "unknown",
-        last_instance=instance,
-        last_messages=int(handled or 0),
-        last_error=error or "",
-    )
+        _WEBHOOK_QUEUE.put_nowait((payload, event, instance, now_iso))
+    except queue.Full:
+        _record_webhook_hit(
+            received=1,
+            authorized=1,
+            last_at=now_iso,
+            last_event=event or "unknown",
+            last_instance=instance,
+            last_error="queue_full",
+        )
+        logger.warning("webhook queue_full instance=%s — Evolution deve retentar", instance)
+        return JSONResponse(
+            {"ok": False, "error": "queue_full", "instance": instance},
+            status_code=503,
+        )
 
     return JSONResponse({
-        "ok": not bool(error),
+        "ok": True,
         "event": event or "unknown",
         "instance": instance,
-        "messages": handled,
-        "typing": typing_ok,
-        "error": error or None,
+        "queued": True,
+        "queue_size": _WEBHOOK_QUEUE.qsize(),
     })
