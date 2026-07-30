@@ -343,6 +343,39 @@ def is_placeholder_whatsapp_phone(value: str) -> bool:
     return text.startswith("wa:") or text.startswith("lid:")
 
 
+# DDDs brasileiros válidos (Anatel) — rejeita lixo tipo 5530… vindo de grupo.
+_BR_VALID_DDDS = {
+    11, 12, 13, 14, 15, 16, 17, 18, 19,
+    21, 22, 24, 27, 28,
+    31, 32, 33, 34, 35, 37, 38,
+    41, 42, 43, 44, 45, 46, 47, 48, 49,
+    51, 53, 54, 55,
+    61, 62, 63, 64, 65, 66, 67, 68, 69,
+    71, 73, 74, 75, 77, 79,
+    81, 82, 83, 84, 85, 86, 87, 88, 89,
+    91, 92, 93, 94, 95, 96, 97, 98, 99,
+}
+
+
+def is_valid_br_whatsapp_phone(value: str) -> bool:
+    """Celular/fixo BR com DDD real (evita ID de grupo virando 55…)."""
+    digits = normalize_digits(value)
+    if digits.startswith("55") and len(digits) >= 12:
+        digits = digits[2:]
+    if len(digits) not in (10, 11):
+        return False
+    try:
+        ddd = int(digits[:2])
+    except ValueError:
+        return False
+    if ddd not in _BR_VALID_DDDS:
+        return False
+    # Celular 11 dígitos começa com 9; fixo 10 dígitos
+    if len(digits) == 11 and digits[2] != "9":
+        return False
+    return True
+
+
 def is_usable_whatsapp_identity(phone: str = "", remote_jid: str = "") -> bool:
     """True se há telefone BR válido ou JID (@lid / @s.whatsapp.net) para inbox/envio."""
     if is_placeholder_whatsapp_phone(phone):
@@ -356,13 +389,9 @@ def is_usable_whatsapp_identity(phone: str = "", remote_jid: str = "") -> bool:
         if "@lid" in jid:
             return bool(normalize_digits(left)) and len(normalize_digits(left)) >= 6
         digits = normalize_phone_from_jid(jid)
-        return bool(digits) and len(digits) >= 10 and not is_whatsapp_group_jid(digits)
-    digits = normalize_digits(phone)
-    if digits.startswith("55") and len(digits) in (12, 13):
+        return bool(digits) and is_valid_br_whatsapp_phone(digits)
+    if phone and is_valid_br_whatsapp_phone(phone):
         return True
-    if not digits.startswith("55") and len(digits) >= 10:
-        # será normalizado com 55 no fluxo de envio/cadastro
-        return len(digits) <= 13
     return False
 
 
@@ -386,6 +415,11 @@ def is_whatsapp_group_jid(value: str) -> bool:
     if digits.startswith("120") and len(digits) >= 15:
         return True
     if len(digits) >= 17 and not digits.startswith("55"):
+        return True
+    # Número "BR" com DDD inválido — quase sempre lixo/grupo mal mapeado
+    if digits.startswith("55") and len(digits) in (12, 13) and not is_valid_br_whatsapp_phone(digits):
+        return True
+    if not digits.startswith("55") and len(digits) >= 12 and not is_valid_br_whatsapp_phone(digits):
         return True
     return False
 

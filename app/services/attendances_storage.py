@@ -303,7 +303,7 @@ def upsert_conversation_by_remote_jid(
         return {}
     if phone and is_whatsapp_group_jid(phone):
         phone = ""
-    if _normalize_contact_key(contact_name) in UNWANTED_INBOX_CONTACT_KEYS:
+    if _is_unwanted_inbox_contact(contact_name):
         return {}
     if not ignore_suppression and is_chat_suppressed(
         phone_e164=phone, remote_jid=remote_jid, evolution_instance=instance
@@ -397,13 +397,13 @@ def purge_group_conversations() -> dict:
             bad_identity = not is_usable_whatsapp_identity(phone=phone, remote_jid=jid)
             if not (bad_group or bad_placeholder or bad_identity):
                 continue
-            # Não apaga lead com telefone BR válido só porque jid está vazio
-            digits = normalize_digits(phone)
+            # Não apaga lead com telefone BR válido (DDD real) só porque jid está vazio
+            from app.services.evolution_client import is_valid_br_whatsapp_phone
+
             if (
                 not bad_group
                 and not bad_placeholder
-                and digits.startswith("55")
-                and len(digits) in (12, 13)
+                and is_valid_br_whatsapp_phone(phone)
             ):
                 continue
             removed_ids.append(row.id)
@@ -438,23 +438,38 @@ UNWANTED_INBOX_CONTACT_KEYS = {
     _normalize_contact_key("Luiz Carlos Zanini"),
     _normalize_contact_key("Skoob Pet Indaiatuba"),
     _normalize_contact_key("SkoobPet Indaiatuba"),
+    _normalize_contact_key("Skoob filhotes disponíveis"),
+    _normalize_contact_key("Skoob filhotes disponiveis"),
 }
+
+
+def _is_unwanted_inbox_contact(name: str) -> bool:
+    key = _normalize_contact_key(name)
+    if not key:
+        return False
+    if key in UNWANTED_INBOX_CONTACT_KEYS:
+        return True
+    # Qualquer variação "Skoob …" que vaze de grupo/lista
+    return key.startswith("skoob")
+
 
 
 def delete_conversations_by_contact_names(names: list[str] | None = None) -> dict:
     """Apaga conversas cujo nome bate com a lista (ex.: Luiz / Skoob)."""
     if names:
         keys = {_normalize_contact_key(n) for n in names if _normalize_contact_key(n)}
+        def _match(name: str) -> bool:
+            return _normalize_contact_key(name) in keys
     else:
-        keys = set(UNWANTED_INBOX_CONTACT_KEYS)
+        def _match(name: str) -> bool:
+            return _is_unwanted_inbox_contact(name)
 
     removed_ids: list[str] = []
     removed_names: list[str] = []
     with _lock, _session() as db:
         rows = db.query(AttendanceConversation).all()
         for row in rows:
-            name_key = _normalize_contact_key(row.contact_name or "")
-            if not name_key or name_key not in keys:
+            if not _match(row.contact_name or ""):
                 continue
             removed_ids.append(row.id)
             removed_names.append(row.contact_name or row.phone_e164 or row.id)
@@ -765,8 +780,7 @@ def list_conversations(
                 continue
             if is_placeholder_whatsapp_phone(row.phone_e164 or ""):
                 continue
-            name_key = _normalize_contact_key(row.contact_name or "")
-            if name_key in UNWANTED_INBOX_CONTACT_KEYS:
+            if _is_unwanted_inbox_contact(row.contact_name or ""):
                 continue
             conversations.append(_conversation_to_dict(row))
         return conversations
@@ -785,6 +799,7 @@ def upsert_conversation_by_phone(
 ) -> dict:
     from app.services.evolution_client import (
         is_placeholder_whatsapp_phone,
+        is_valid_br_whatsapp_phone,
         is_whatsapp_group_jid,
         phone_match_variants,
     )
@@ -797,7 +812,13 @@ def upsert_conversation_by_phone(
         return {}
     if is_whatsapp_group_jid(phone) or is_whatsapp_group_jid(remote_jid):
         return {}
-    if _normalize_contact_key(contact_name) in UNWANTED_INBOX_CONTACT_KEYS:
+    if not is_valid_br_whatsapp_phone(phone) and not (
+        remote_jid and ("@lid" in remote_jid.lower() or "@s.whatsapp.net" in remote_jid.lower())
+    ):
+        # Ex.: 5530214500323 (DDD inválido) — grupo/lixo mapeado como telefone
+        return {}
+    if _is_unwanted_inbox_contact(contact_name):
+        return {}
         return {}
     if not phone:
         raise ValueError("Telefone obrigatório")
