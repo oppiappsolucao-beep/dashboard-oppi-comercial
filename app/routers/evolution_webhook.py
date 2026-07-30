@@ -695,10 +695,11 @@ async def health_webhook(
                 for name in (configured_instance_names() or [])
             ]
         if normalize_text(sync) in {"1", "true", "yes", "sim"}:
-            from app.services.attendances import sync_inbox_from_evolution
+            # Nunca bloqueia o worker — sync pesado em background
+            from app.services.attendances import schedule_sync_inbox_from_evolution
 
-            imported = sync_inbox_from_evolution(force=True, limit=50)
-            payload["sync"] = {"imported_chats": int(imported or 0)}
+            schedule_sync_inbox_from_evolution(force=True)
+            payload["sync"] = {"scheduled": True}
     except Exception as error:
         payload["ok"] = False
         payload["error"] = str(error)

@@ -392,6 +392,9 @@ def is_usable_whatsapp_identity(phone: str = "", remote_jid: str = "") -> bool:
         return bool(digits) and is_valid_br_whatsapp_phone(digits)
     if phone and is_valid_br_whatsapp_phone(phone):
         return True
+    # remote_jid às vezes vem só com dígitos (sem @)
+    if jid and "@" not in jid and is_valid_br_whatsapp_phone(jid):
+        return True
     return False
 
 
@@ -416,11 +419,7 @@ def is_whatsapp_group_jid(value: str) -> bool:
         return True
     if len(digits) >= 17 and not digits.startswith("55"):
         return True
-    # Número "BR" com DDD inválido — quase sempre lixo/grupo mal mapeado
-    if digits.startswith("55") and len(digits) in (12, 13) and not is_valid_br_whatsapp_phone(digits):
-        return True
-    if not digits.startswith("55") and len(digits) >= 12 and not is_valid_br_whatsapp_phone(digits):
-        return True
+    # NÃO tratar DDD inválido como grupo aqui — remoteJidAlt lixo derrubava DM 1:1.
     return False
 
 
@@ -436,28 +435,18 @@ def conversation_looks_like_group(
 
 
 def message_looks_like_group(key: dict | None = None, item: dict | None = None) -> bool:
-    """Detecta mensagem de grupo mesmo quando o participant traz número individual."""
+    """Só o remoteJid principal decide grupo — alt/participant não podem derrubar DM."""
     key = key if isinstance(key, dict) else {}
     item = item if isinstance(item, dict) else {}
     if item.get("isGroup") is True or key.get("isGroup") is True:
         return True
-    for candidate in (
-        key.get("remoteJid"),
-        item.get("remoteJid"),
-        key.get("remoteJidAlt"),
-        item.get("remoteJidAlt"),
-    ):
-        text = normalize_text(str(candidate or "")).lower()
-        if not text or "@lid" in text:
-            continue
-        if is_whatsapp_group_jid(text):
-            return True
-    # Em grupos o Baileys/Evolution costuma preencher participant
-    participant = normalize_text(key.get("participant") or item.get("participant") or "")
     remote = normalize_text(key.get("remoteJid") or item.get("remoteJid") or "")
-    if participant and "@lid" not in remote.lower() and is_whatsapp_group_jid(remote):
-        return True
-    return False
+    if not remote:
+        return False
+    # Linked ID = contato individual
+    if "@lid" in remote.lower():
+        return False
+    return is_whatsapp_group_jid(remote)
 
 
 def resolve_contact_identity(key: dict | None, item: dict | None = None) -> tuple[str, str]:
