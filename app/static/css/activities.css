@@ -98,7 +98,8 @@
 
 .activities-kanban-board {
   display: grid;
-  grid-template-columns: repeat(8, minmax(180px, 1fr));
+  /* 9 etapas do pipeline — com 8 a coluna Perdido ia sozinha para a linha de baixo */
+  grid-template-columns: repeat(9, minmax(180px, 1fr));
   gap: 12px;
   overflow-x: auto;
   padding-bottom: 8px;
@@ -1182,7 +1183,7 @@ body.activity-drawer-open {
   }
 
   .activities-kanban-board {
-    grid-template-columns: repeat(8, minmax(220px, 1fr));
+    grid-template-columns: repeat(9, minmax(220px, 1fr));
   }
 
   .activities-search-wrap input {
