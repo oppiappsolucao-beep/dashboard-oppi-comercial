@@ -166,8 +166,56 @@ body.activity-kanban-dragging .activities-kanban-board {
   flex-direction: column;
   gap: 10px;
   min-height: 120px;
-  padding: 4px;
+  max-height: min(58vh, 520px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px 2px 4px 4px;
   transition: background 0.15s ease, outline 0.15s ease;
+  /* barra clássica: trilho escuro + polegar claro (como no print) */
+  scrollbar-width: auto;
+  scrollbar-color: #c8c8c8 #3d3d3d;
+  touch-action: pan-y;
+}
+
+.activities-kanban-column-body::-webkit-scrollbar {
+  width: 14px;
+}
+
+.activities-kanban-column-body::-webkit-scrollbar-track {
+  background: #3d3d3d;
+  border-radius: 2px;
+}
+
+.activities-kanban-column-body::-webkit-scrollbar-thumb {
+  background: #c8c8c8;
+  border-radius: 8px;
+  border: 2px solid #3d3d3d;
+  min-height: 36px;
+}
+
+.activities-kanban-column-body::-webkit-scrollbar-thumb:hover {
+  background: #e0e0e0;
+}
+
+.activities-kanban-column-body::-webkit-scrollbar-button:single-button {
+  background: #3d3d3d;
+  display: block;
+  height: 14px;
+}
+
+.activities-kanban-column-body::-webkit-scrollbar-button:single-button:vertical:decrement {
+  border-width: 0 5px 6px 5px;
+  border-style: solid;
+  border-color: transparent transparent #c8c8c8 transparent;
+  background-color: #3d3d3d;
+}
+
+.activities-kanban-column-body::-webkit-scrollbar-button:single-button:vertical:increment {
+  border-width: 6px 5px 0 5px;
+  border-style: solid;
+  border-color: #c8c8c8 transparent transparent transparent;
+  background-color: #3d3d3d;
 }
 
 .activities-kanban-column-body.is-drop-target,
