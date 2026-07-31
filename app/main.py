@@ -378,6 +378,72 @@ async def health_crm_cutover():
     )
 
 
+_CRM_RESET_LOCK = threading.Lock()
+_CRM_RESET_RUNNING = False
+_CRM_RESET_LAST: dict = {}
+
+
+@app.get("/health/crm-reset-folha1")
+async def health_crm_reset_folha1(confirm: str = ""):
+    """Apaga cadastros/atividades e reimporta Folha1. Exige ?confirm=APAGAR."""
+    global _CRM_RESET_RUNNING, _CRM_RESET_LAST
+    from app.services.legacy_core import normalize_text as _nt
+
+    if _nt(confirm) != "APAGAR":
+        return JSONResponse(
+            {
+                "ok": False,
+                "build": APP_BUILD,
+                "error": "passe ?confirm=APAGAR para executar",
+                "last": _CRM_RESET_LAST,
+            },
+            status_code=400,
+        )
+
+    started = False
+    with _CRM_RESET_LOCK:
+        if not _CRM_RESET_RUNNING:
+            _CRM_RESET_RUNNING = True
+            started = True
+
+            def _run() -> None:
+                global _CRM_RESET_RUNNING, _CRM_RESET_LAST
+                try:
+                    from app.services.crm_db_migrate import reset_and_reimport_crm_from_folha1
+                    from app.services.crm_registrations_storage import count_registrations
+                    from app.services.legacy_core import (
+                        hydrate_sheet_cache_from_disk,
+                        load_sheet_data,
+                    )
+
+                    hydrate_sheet_cache_from_disk()
+                    try:
+                        load_sheet_data(force_refresh=True)
+                    except Exception:
+                        pass
+                    result = reset_and_reimport_crm_from_folha1(dry_run=False)
+                    _CRM_RESET_LAST = {
+                        "result": result,
+                        "registrations": int(count_registrations() or 0),
+                    }
+                except Exception as error:
+                    _CRM_RESET_LAST = {"error": str(error)}
+                finally:
+                    with _CRM_RESET_LOCK:
+                        _CRM_RESET_RUNNING = False
+
+            threading.Thread(target=_run, daemon=True, name="crm-reset-folha1").start()
+
+    return JSONResponse(
+        {
+            "status": "started" if started else "running",
+            "build": APP_BUILD,
+            "hint": "Recarregue em ~30s; veja 'last'.",
+            "last": _CRM_RESET_LAST,
+        }
+    )
+
+
 @app.get("/health/pdf-engine")
 async def health_pdf_engine():
     from app.services.proposal_pdf import check_pdf_engine_status

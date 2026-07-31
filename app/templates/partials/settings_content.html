@@ -896,6 +896,18 @@
           {% if crm_postgres_ready %}Reimportar Folha1{% else %}Migrar agora{% endif %}
         </button>
       </form>
+
+      <form method="post" action="/configuracoes/crm/reset-folha1" class="settings-inline-form"
+        style="margin-top:10px"
+        onsubmit="return confirm('APAGA todos os cadastros e atividades do CRM e cadastra de novo só pela Folha1. Atendimentos WhatsApp não são apagados. Continuar?');">
+        <button type="submit" class="btn btn-secondary">
+          Apagar e cadastrar de novo (Folha1)
+        </button>
+      </form>
+      <p class="section-subtitle" style="margin-top:8px">
+        Use o botão acima quando os leads/empresas/atividades estiverem com campos errados.
+        A fonte é a planilha base Folha1 — não usa a cópia auxiliar do Drive.
+      </p>
     </div>
     {% endif %}
   </div>

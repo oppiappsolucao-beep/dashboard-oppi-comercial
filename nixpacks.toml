@@ -6,4 +6,4 @@ aptPkgs = ["...", "libreoffice-writer-nogui", "fontconfig", "fonts-dejavu-core"]
 cmd = "uvicorn app.main:app --host 0.0.0.0 --port 8501 --workers 2 --proxy-headers --timeout-keep-alive 5 --limit-concurrency 100"
 
 [variables]
-APP_BUILD = "20260730-proposal-model-v127"
+APP_BUILD = "20260731-crm-reset-folha1-v128"

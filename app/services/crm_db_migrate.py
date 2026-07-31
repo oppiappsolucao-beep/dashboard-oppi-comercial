@@ -803,6 +803,103 @@ _LAZY_MIGRATE_AT = 0.0
 _LAZY_MIGRATE_TTL_SEC = 45.0
 
 
+def reset_and_reimport_crm_from_folha1(*, dry_run: bool = False) -> dict:
+    """
+    Apaga cadastros e atividades no Postgres e recria os cadastros
+    somente a partir da Folha1 (campos corretos da planilha base).
+
+    Não apaga Atendimentos WhatsApp. Não reaproveita activities.json poluído.
+    """
+    ensure_crm_schema()
+    result: dict = {
+        "ok": False,
+        "dry_run": dry_run,
+        "deleted_registrations": 0,
+        "deleted_activities": 0,
+        "imported": 0,
+        "source": "",
+        "reason": "",
+    }
+
+    # 1) Confirma Folha1 antes de apagar
+    preview = _import_registrations_from_sheet(dry_run=True, force_refresh=True)
+    preview_count = int(preview.get("imported") or preview.get("sheet_rows") or 0)
+    result["source"] = normalize_text(preview.get("source"))
+    result["folha1_rows"] = preview_count
+    if preview_count <= 0 or result["source"] == "empty":
+        result["reason"] = "folha1_empty"
+        result["preview"] = preview
+        return result
+
+    if dry_run:
+        result["ok"] = True
+        result["reason"] = "dry_run"
+        result["would_import"] = preview_count
+        return result
+
+    # 2) Wipe Postgres (cadastros + atividades)
+    db = SessionLocal()
+    try:
+        result["deleted_activities"] = int(db.query(CrmActivity).delete() or 0)
+        result["deleted_registrations"] = int(db.query(CrmRegistration).delete() or 0)
+        # Limpa flag para o cutover refletir o reimport limpo
+        meta = db.get(AppMeta, MIGRATION_KEY)
+        if meta is not None:
+            db.delete(meta)
+        db.commit()
+    except Exception:
+        db.rollback()
+        logger.exception("Falha ao apagar CRM no reset Folha1")
+        result["reason"] = "wipe_failed"
+        raise
+    finally:
+        db.close()
+
+    # 3) Zera activities.json (evita reimportar cards errados de LEAD/WhatsApp)
+    try:
+        activities_path = get_storage_dir() / "activities.json"
+        activities_path.parent.mkdir(parents=True, exist_ok=True)
+        activities_path.write_text("{}", encoding="utf-8")
+    except Exception:
+        logger.exception("Falha ao limpar activities.json no reset")
+
+    # 4) Reimporta só Folha1 → crm_registrations
+    regs = _import_registrations_from_sheet(dry_run=False, force_refresh=True)
+    result["registrations"] = regs
+    result["imported"] = int(regs.get("imported") or 0)
+    result["source"] = normalize_text(regs.get("source") or result["source"])
+
+    if result["imported"] <= 0:
+        result["reason"] = "import_produced_no_rows"
+        return result
+
+    # 5) Marca cutover + caches
+    db = SessionLocal()
+    try:
+        db.merge(AppMeta(key=MIGRATION_KEY, value="1"))
+        db.commit()
+    finally:
+        db.close()
+
+    try:
+        from app.services.crm_registrations_storage import invalidate_registrations_cache
+
+        invalidate_registrations_cache()
+    except Exception:
+        pass
+    try:
+        from app.services.activities_storage import invalidate_activities_cache
+
+        invalidate_activities_cache()
+    except Exception:
+        pass
+
+    result["attendance_linked"] = backfill_attendance_registration_ids()
+    result["ok"] = True
+    result["reason"] = "reset_reimported"
+    return result
+
+
 def try_lazy_crm_postgres_cutover(*, bypass_throttle: bool = False) -> dict | None:
     """
     Tentativa throttled de cutover quando o flag ainda não está ligado.

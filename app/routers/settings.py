@@ -864,3 +864,40 @@ async def settings_migrate_crm_postgres(request: Request):
         )
 
     return RedirectResponse(url="/configuracoes?tab=integracoes", status_code=303)
+
+
+@router.post("/configuracoes/crm/reset-folha1")
+async def settings_reset_crm_folha1(request: Request):
+    """Apaga cadastros/atividades no Postgres e reimporta só da Folha1."""
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+
+    if not is_admin(request):
+        request.session["settings_crm_migrate_error"] = (
+            "Somente administradores podem resetar o CRM a partir da Folha1."
+        )
+        return RedirectResponse(url="/configuracoes?tab=integracoes", status_code=303)
+
+    try:
+        from app.services.crm_db_migrate import reset_and_reimport_crm_from_folha1
+        from app.services.crm_registrations_storage import count_registrations
+
+        result = reset_and_reimport_crm_from_folha1(dry_run=False)
+        if result.get("ok"):
+            total = int(count_registrations() or 0)
+            request.session["settings_crm_migrate_success"] = (
+                f"CRM resetado pela Folha1: apaguei {result.get('deleted_registrations') or 0} "
+                f"cadastros e {result.get('deleted_activities') or 0} atividades; "
+                f"reimportei {result.get('imported') or 0}. Total agora: {total}."
+            )
+        else:
+            request.session["settings_crm_migrate_error"] = (
+                f"Reset Folha1 não concluiu (motivo: {result.get('reason') or 'desconhecido'})."
+            )
+    except Exception as error:
+        request.session["settings_crm_migrate_error"] = (
+            f"Não consegui resetar o CRM pela Folha1: {error}"
+        )
+
+    return RedirectResponse(url="/configuracoes?tab=integracoes", status_code=303)
