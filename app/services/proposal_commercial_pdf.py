@@ -221,6 +221,7 @@ def _draw_page_chrome(canvas, doc) -> None:
 
     canvas.saveState()
     page_w, page_h = A4
+    footer_h = 64  # cobre a faixa do PNG (~7% da página) e elimina rebarba do texto antigo
     letterhead = _resolve_letterhead_path()
     if letterhead is not None:
         try:
@@ -239,7 +240,7 @@ def _draw_page_chrome(canvas, doc) -> None:
         # Fallback: faixa preta + logo (se letterhead não existir no deploy)
         canvas.setFillColorRGB(0, 0, 0)
         canvas.rect(0, page_h - 42, page_w, 42, fill=1, stroke=0)
-        canvas.rect(0, 0, page_w, 42, fill=1, stroke=0)
+        canvas.rect(0, 0, page_w, footer_h, fill=1, stroke=0)
         logo = _resolve_logo_path()
         if logo is not None:
             try:
@@ -255,13 +256,13 @@ def _draw_page_chrome(canvas, doc) -> None:
             except Exception:
                 pass
 
-    # Sempre reforça o rodapé com o endereço correto (evita typo no PNG).
+    # Repinta o rodapé inteiro e redesenha o endereço (sem restos do PNG).
     canvas.setFillColorRGB(0, 0, 0)
-    canvas.rect(0, 0, page_w, 42, fill=1, stroke=0)
+    canvas.rect(0, 0, page_w, footer_h, fill=1, stroke=0)
     canvas.setFillColorRGB(1, 1, 1)
-    canvas.setFont("Helvetica", 7)
-    canvas.drawCentredString(page_w / 2, 24, "Rua Francisco Furtado, 117 A CEP: 08280-200")
-    canvas.drawCentredString(page_w / 2, 12, "Cidade Líder - São Paulo")
+    canvas.setFont("Helvetica", 9)
+    canvas.drawCentredString(page_w / 2, 34, "Rua Francisco Furtado, 117 A CEP: 08280-200")
+    canvas.drawCentredString(page_w / 2, 18, "Cidade Líder - São Paulo")
     canvas.restoreState()
 
 
