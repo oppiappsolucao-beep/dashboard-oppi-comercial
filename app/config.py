@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-APP_BUILD = os.getenv("APP_BUILD", "20260731-crm-reset-folha1-v128").strip() or "20260731-crm-reset-folha1-v128"
+APP_BUILD = os.getenv("APP_BUILD", "20260731-crm-reset-folha1-v129").strip() or "20260731-crm-reset-folha1-v129"
 
 class Settings:
     sheet_id: str = "1GAbrca0NSiJfPXaSte1qGxXCsGkQPacoRsm0PVB51gE"
