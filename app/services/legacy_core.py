@@ -425,18 +425,29 @@ def as_datetime_series(series: pd.Series) -> pd.Series:
     return normalized
 
 
-def as_python_date(value) -> date | None:
-    """Converte valores da planilha para date, retornando None quando inválido/NaT."""
+def _is_missing_timestamp(value) -> bool:
+    """True for None/NaT/NA. Em alguns pandas, NaT é isinstance(datetime) e truthy."""
     if value is None:
-        return None
-
+        return True
     try:
         if pd.isna(value):
-            return None
+            return True
     except (TypeError, ValueError):
         pass
+    # NaTType: hasattr(strftime)=True mas strftime() levanta ValueError
+    if type(value).__name__ in {"NaTType", "NaT"}:
+        return True
+    return False
+
+
+def as_python_date(value) -> date | None:
+    """Converte valores da planilha para date, retornando None quando inválido/NaT."""
+    if _is_missing_timestamp(value):
+        return None
 
     if isinstance(value, datetime):
+        if isinstance(value, pd.Timestamp):
+            return value.to_pydatetime().date()
         return value.date()
 
     if isinstance(value, date):
@@ -444,7 +455,7 @@ def as_python_date(value) -> date | None:
 
     try:
         parsed = pd.to_datetime(value, errors="coerce", dayfirst=True)
-        if pd.isna(parsed):
+        if _is_missing_timestamp(parsed):
             return None
         return parsed.date()
     except Exception:
@@ -453,21 +464,18 @@ def as_python_date(value) -> date | None:
 
 def as_python_datetime(value) -> datetime | None:
     """Converte valores da planilha para datetime, retornando None quando inválido/NaT."""
-    if value is None:
+    if _is_missing_timestamp(value):
         return None
 
-    try:
-        if pd.isna(value):
-            return None
-    except (TypeError, ValueError):
-        pass
-
     if isinstance(value, datetime):
+        # pd.Timestamp é subclass de datetime; normaliza e rejeita NaT residual.
+        if isinstance(value, pd.Timestamp):
+            return value.to_pydatetime()
         return value
 
     try:
         parsed = pd.to_datetime(value, errors="coerce", dayfirst=True)
-        if pd.isna(parsed):
+        if _is_missing_timestamp(parsed):
             return None
         return parsed.to_pydatetime()
     except Exception:

@@ -1470,13 +1470,18 @@ def _format_timeline_at(value) -> str:
     elif raw_text and len(raw_text) <= 10 and "T" not in raw_text and " " not in raw_text:
         date_only = True
 
-    dt = as_python_datetime(value) if value else None
-    if not dt and value:
+    dt = as_python_datetime(value)
+    if dt is None and value is not None and value != "":
+        try:
+            if pd.isna(value) or type(value).__name__ in {"NaTType", "NaT"}:
+                return "—"
+        except (TypeError, ValueError):
+            pass
         try:
             dt = _parse_datetime(str(value))
         except (TypeError, ValueError):
             dt = None
-    if not dt:
+    if dt is None:
         return "—"
 
     tz = ZoneInfo(settings.timezone)

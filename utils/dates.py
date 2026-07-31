@@ -7,8 +7,22 @@ def today() -> date:
     return date.today()
 
 
+def _is_missing(value) -> bool:
+    if value is None or value == "":
+        return True
+    try:
+        if pd.isna(value):
+            return True
+    except (TypeError, ValueError):
+        pass
+    if type(value).__name__ in {"NaTType", "NaT"}:
+        return True
+    return False
+
+
 def format_date(value) -> str:
-    if not value:
+    # NaT é truthy e isinstance(datetime) em alguns pandas — não usar `if not value`.
+    if _is_missing(value):
         return "—"
     if isinstance(value, str):
         try:
@@ -16,6 +30,8 @@ def format_date(value) -> str:
         except ValueError:
             return value
     if isinstance(value, datetime):
+        if isinstance(value, pd.Timestamp):
+            value = value.to_pydatetime()
         return value.strftime("%d/%m/%Y")
     if isinstance(value, date):
         return value.strftime("%d/%m/%Y")
@@ -23,7 +39,7 @@ def format_date(value) -> str:
 
 
 def format_datetime(value) -> str:
-    if not value:
+    if _is_missing(value):
         return "—"
     if isinstance(value, str):
         try:
@@ -31,6 +47,8 @@ def format_datetime(value) -> str:
         except ValueError:
             return value
     if isinstance(value, datetime):
+        if isinstance(value, pd.Timestamp):
+            value = value.to_pydatetime()
         return value.strftime("%d/%m/%Y %H:%M")
     return str(value)
 

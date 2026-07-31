@@ -201,8 +201,10 @@ def build_registration_payload(form: dict) -> dict:
     now_text = pd.Timestamp.now(tz="America/Sao_Paulo").strftime("%d/%m/%Y %H:%M")
     data_chamado = form.get("data_chamado") or date.today().strftime("%d/%m/%Y")
 
-    if hasattr(data_chamado, "strftime"):
-        data_chamado = data_chamado.strftime("%d/%m/%Y")
+    # Não usar hasattr(..., "strftime"): NaT tem strftime e levanta ValueError.
+    parsed_chamado = as_python_date(data_chamado)
+    if parsed_chamado is not None:
+        data_chamado = parsed_chamado.strftime("%d/%m/%Y")
     else:
         raw = normalize_text(data_chamado)
         # Converte ISO (input date) para o padrão da planilha.

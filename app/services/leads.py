@@ -9,7 +9,14 @@ from app.services.crm_validation_service import get_next_action_options, normali
 from app.services.followup_service import _email_for_row, _phone_for_row, _whatsapp_href
 from app.services.lead_actions_storage import append_interaction, get_lead_action, save_lead_action
 from app.services.registration import is_cadastro_ativo, resolve_cadastro_tipo
-from app.services.legacy_core import deal_value_from_row, normalize_text, row_field_value, safe_series, status_group
+from app.services.legacy_core import (
+    as_python_datetime,
+    deal_value_from_row,
+    normalize_text,
+    row_field_value,
+    safe_series,
+    status_group,
+)
 
 ETAPA_STAGES = PIPELINE_STAGE_OPTIONS
 ETAPA_BADGE = PIPELINE_STAGE_BADGE
@@ -49,24 +56,13 @@ def _format_money(value) -> str:
 
 
 def _as_datetime(value):
-    if value is None or (isinstance(value, float) and pd.isna(value)):
-        return None
-    if isinstance(value, datetime):
-        return value
-    try:
-        if pd.isna(value):
-            return None
-    except Exception:
-        pass
-    try:
-        return pd.to_datetime(value).to_pydatetime()
-    except Exception:
-        return None
+    # Não usar isinstance(datetime) antes de isna: em pandas, NaT é datetime e truthy.
+    return as_python_datetime(value)
 
 
 def _format_contact_date(value) -> str:
     dt = _as_datetime(value)
-    if not dt:
+    if dt is None:
         return "—"
     today = datetime.now().date()
     d = dt.date()
@@ -79,7 +75,7 @@ def _format_contact_date(value) -> str:
 
 def _format_relative_days(value) -> str:
     dt = _as_datetime(value)
-    if not dt:
+    if dt is None:
         return "—"
     days = max(0, (datetime.now().date() - dt.date()).days)
     if days == 0:

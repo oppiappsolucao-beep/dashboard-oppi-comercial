@@ -90,14 +90,14 @@ def _as_datetime(value) -> datetime | None:
 
 def _minutes_since(value) -> int | None:
     dt = _as_datetime(value)
-    if not dt:
+    if dt is None:
         return None
     return max(0, int((_now() - dt).total_seconds() // 60))
 
 
 def _days_since(value) -> int | None:
     d = _as_date(value)
-    if not d:
+    if d is None:
         return None
     return max(0, (date.today() - d).days)
 
@@ -116,7 +116,7 @@ def _format_relative_minutes(minutes: int | None) -> str:
 
 def _format_last_interaction(value) -> str:
     dt = _as_datetime(value)
-    if not dt:
+    if dt is None:
         return "Nenhuma"
     today = date.today()
     d = dt.date()

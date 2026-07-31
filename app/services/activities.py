@@ -87,7 +87,7 @@ def _activity_status(grouped: str, activity_date: date | None, today: date) -> s
 
 def _format_activity_datetime(value) -> tuple[str, str]:
     dt = _as_datetime(value)
-    if not dt:
+    if dt is None:
         return "—", "—"
     today = date.today()
     d = dt.date()
