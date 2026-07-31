@@ -116,6 +116,24 @@
   overflow: hidden;
 }
 
+.proposals-table-card .activities-pagination {
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px 28px;
+  text-align: center;
+}
+
+.proposals-table-card .activities-pagination-info,
+.proposals-table-card .activities-per-page {
+  text-align: center;
+  justify-content: center;
+}
+
+.proposals-table-card .activities-pagination-controls {
+  justify-content: center;
+}
+
 .proposals-contacts-header {
   padding: 14px 14px 10px;
   border-bottom: 1px solid rgba(80, 69, 105, 0.12);
