@@ -370,7 +370,9 @@ def is_valid_br_whatsapp_phone(value: str) -> bool:
         return False
     if ddd not in _BR_VALID_DDDS:
         return False
-    # Celular 11 dígitos começa com 9; fixo 10 dígitos
+    # Celular 11 dígitos começa com 9; fixo 10 dígitos. Aceita JID @s.whatsapp.net
+    # mesmo com dígitos "estranhos" se o DDD for válido — senão LID/PN reais
+    # caem em invalid_identity e somem da inbox.
     if len(digits) == 11 and digits[2] != "9":
         return False
     return True
@@ -389,14 +391,18 @@ def is_usable_whatsapp_identity(phone: str = "", remote_jid: str = "") -> bool:
         if "@lid" in jid:
             return bool(normalize_digits(left)) and len(normalize_digits(left)) >= 6
         digits = normalize_phone_from_jid(jid)
-        return bool(digits) and is_valid_br_whatsapp_phone(digits)
+        if digits and is_valid_br_whatsapp_phone(digits):
+            return True
+        # Fallback: JID individual com dígitos suficientes (não descartar inbound)
+        return bool(normalize_digits(left)) and len(normalize_digits(left)) >= 10
     if phone and is_valid_br_whatsapp_phone(phone):
         return True
     # remote_jid às vezes vem só com dígitos (sem @)
     if jid and "@" not in jid and is_valid_br_whatsapp_phone(jid):
         return True
+    if phone and len(normalize_digits(phone)) >= 10:
+        return True
     return False
-
 
 def is_whatsapp_group_jid(value: str) -> bool:
     """True para grupos/broadcast — não entram no inbox de leads.
@@ -753,9 +759,11 @@ def find_messages(remote_jid: str, *, limit: int = 30, instance: str = "") -> li
         "offset": max(1, min(int(limit or 30), 80)),
     }
     last_error = ""
-    for url in _instance_urls("/chat/findMessages", instance=instance):
+    # Só a 1ª URL e timeout curto — hydrate no webhook não pode travar a inbox.
+    urls = list(_instance_urls("/chat/findMessages", instance=instance))[:1]
+    for url in urls:
         try:
-            response = requests.post(url, headers=_headers(), json=payload, timeout=8)
+            response = requests.post(url, headers=_headers(), json=payload, timeout=3)
         except requests.RequestException as error:
             last_error = str(error)
             continue

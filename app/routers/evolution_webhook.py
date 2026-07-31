@@ -102,8 +102,13 @@ def _process_webhook_job(payload: dict, event: str, instance: str, now_iso: str)
         elif "presence" in event or "typing" in event or "chats_update" in event:
             _handle_presence_or_typing(payload)
         elif "messages_update" in event or "messages_set" in event:
-            # UPDATE/SET quase nunca traz body — hidrata direto (evita no_items + hang).
-            handled = _hydrate_chat_from_update(payload, instance)
+            # Hydrate é fallback; se já tem fila, não empilha mais (travava a inbox).
+            with _WEBHOOK_INFLIGHT_LOCK:
+                busy = int(_WEBHOOK_INFLIGHT[0]) > 3
+            if busy:
+                handled = 0
+            else:
+                handled = _hydrate_chat_from_update(payload, instance)
         else:
             handled = _handle_messages_upsert(payload)
     except Exception as exc:
@@ -384,7 +389,7 @@ def _iter_upsert_messages(payload: dict) -> list[dict]:
 
 _HYDRATE_LOCK = threading.Lock()
 _HYDRATE_LAST: dict[str, float] = {}
-_HYDRATE_MIN_INTERVAL_SEC = 8.0
+_HYDRATE_MIN_INTERVAL_SEC = 20.0
 
 
 def _hydrate_chat_from_update(payload: dict, instance: str) -> int:
@@ -950,7 +955,26 @@ async def evolution_webhook(
 
     def _run_job() -> None:
         try:
-            _process_webhook_job(payload, event, instance, now_iso)
+            import concurrent.futures
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                fut = pool.submit(_process_webhook_job, payload, event, instance, now_iso)
+                try:
+                    fut.result(timeout=15)
+                except concurrent.futures.TimeoutError:
+                    logger.error(
+                        "webhook job timeout event=%s instance=%s",
+                        event,
+                        instance,
+                    )
+                    _record_webhook_hit(
+                        received=1,
+                        authorized=1,
+                        last_at=now_iso,
+                        last_event=event or "unknown",
+                        last_instance=instance,
+                        last_error="job_timeout",
+                    )
         finally:
             with _WEBHOOK_INFLIGHT_LOCK:
                 _WEBHOOK_INFLIGHT[0] = max(0, int(_WEBHOOK_INFLIGHT[0]) - 1)
