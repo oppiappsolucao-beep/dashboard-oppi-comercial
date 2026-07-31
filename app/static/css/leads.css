@@ -197,7 +197,7 @@
 
 .leads-table th:last-child,
 .leads-table td:last-child {
-  width: 120px;
+  width: 148px;
   padding-right: 18px;
   text-align: right;
 }
@@ -218,7 +218,7 @@
 .leads-table th:nth-child(5),
 .leads-table td:nth-child(5) { width: 16%; }
 .leads-table th:nth-child(6),
-.leads-table td:nth-child(6) { width: 120px; }
+.leads-table td:nth-child(6) { width: 148px; }
 
 .leads-table td {
   overflow: hidden;
@@ -435,18 +435,35 @@ a.table-company-link:hover {
   white-space: nowrap;
 }
 
+/* Não usar display:flex no <td> — quebra a linha/borda da tabela. */
 .table-actions {
+  text-align: right;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.table-actions-inner {
   display: inline-flex;
   align-items: center;
   justify-content: flex-end;
   gap: 6px;
   white-space: nowrap;
-  width: 100%;
 }
 
 .leads-wa-btn {
   min-width: 34px;
+  width: 34px;
   padding: 0 8px;
+  flex-shrink: 0;
+}
+
+.leads-wa-placeholder {
+  display: inline-block;
+  width: 34px;
+  height: 32px;
+  flex-shrink: 0;
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .leads-pagination {
