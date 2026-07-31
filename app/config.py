@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-APP_BUILD = os.getenv("APP_BUILD", "20260731-webhook-hydrate-v143").strip() or "20260731-webhook-hydrate-v143"
+APP_BUILD = os.getenv("APP_BUILD", "20260731-webhook-bg-v144").strip() or "20260731-webhook-bg-v144"
 
 class Settings:
     sheet_id: str = "1GAbrca0NSiJfPXaSte1qGxXCsGkQPacoRsm0PVB51gE"

@@ -9,7 +9,7 @@ import time
 from collections import deque
 from typing import Any
 
-from fastapi import APIRouter, Header, Query, Request
+from fastapi import APIRouter, BackgroundTasks, Header, Query, Request
 from fastapi.responses import JSONResponse
 
 from app.config import settings
@@ -26,7 +26,12 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["webhooks"])
 
-# Fila limitada + workers: ACK rápido sem travar o event loop nem estourar threads
+# Processamento pós-ACK via BackgroundTasks (daemon queue falhava: queued sem save).
+_WEBHOOK_INFLIGHT_LOCK = threading.Lock()
+_WEBHOOK_INFLIGHT = [0]
+_WEBHOOK_INFLIGHT_MAX = 80
+
+# Mantidos por compat (não são mais o caminho principal do POST).
 _WEBHOOK_QUEUE: queue.Queue = queue.Queue(maxsize=300)
 _WEBHOOK_WORKERS_STARTED = False
 _WEBHOOK_WORKERS_LOCK = threading.Lock()
@@ -52,10 +57,13 @@ _WEBHOOK_RECENT: deque[dict] = deque(maxlen=20)
 
 def webhook_stats_snapshot() -> dict:
     with _WEBHOOK_STATS_LOCK:
+        with _WEBHOOK_INFLIGHT_LOCK:
+            inflight = int(_WEBHOOK_INFLIGHT[0])
         return {
             **dict(_WEBHOOK_STATS),
             "recent": list(_WEBHOOK_RECENT),
             "queue_size": _WEBHOOK_QUEUE.qsize(),
+            "inflight": inflight,
         }
 
 
@@ -857,12 +865,20 @@ async def health_webhook(
         payload["ok"] = False
         payload["error"] = str(error)
     payload["stats"] = webhook_stats_snapshot()
+    try:
+        payload["inbox"] = {
+            "unread": int(store.count_unread() or 0),
+            "conversations": len(store.list_conversations(search="", status="") or []),
+        }
+    except Exception as inbox_error:
+        payload["inbox_error"] = str(inbox_error)[:200]
     return JSONResponse(payload)
 
 
 @router.post("/webhooks/evolution")
 async def evolution_webhook(
     request: Request,
+    background_tasks: BackgroundTasks,
     token: str | None = Query(default=None),
     x_evolution_token: str | None = Header(default=None, alias="X-Evolution-Token"),
     x_api_key: str | None = Header(default=None, alias="apikey"),
@@ -905,29 +921,39 @@ async def evolution_webhook(
     event = _extract_event_name(payload)
     instance = _extract_instance_name(payload)
 
-    # ACK imediato fora do event loop: flood sync no async route matava /health e o site.
-    _ensure_webhook_workers()
-    try:
-        _WEBHOOK_QUEUE.put_nowait((payload, event, instance, now_iso))
-    except queue.Full:
-        _record_webhook_hit(
-            received=1,
-            authorized=1,
-            last_at=now_iso,
-            last_event=event or "unknown",
-            last_instance=instance,
-            last_error="queue_full",
-        )
-        logger.warning("webhook queue_full instance=%s — Evolution deve retentar", instance)
-        return JSONResponse(
-            {"ok": False, "error": "queue_full", "instance": instance},
-            status_code=503,
-        )
+    # ACK rápido: processa DEPOIS da resposta (BackgroundTasks).
+    # A fila+daemon thread falhava em produção (queued=true, saved=0).
+    with _WEBHOOK_INFLIGHT_LOCK:
+        inflight = int(_WEBHOOK_INFLIGHT[0])
+        if inflight >= _WEBHOOK_INFLIGHT_MAX:
+            _record_webhook_hit(
+                received=1,
+                authorized=1,
+                last_at=now_iso,
+                last_event=event or "unknown",
+                last_instance=instance,
+                last_error="inflight_max",
+            )
+            logger.warning("webhook inflight_max instance=%s", instance)
+            return JSONResponse(
+                {"ok": False, "error": "busy", "instance": instance},
+                status_code=503,
+            )
+        _WEBHOOK_INFLIGHT[0] = inflight + 1
+
+    def _run_job() -> None:
+        try:
+            _process_webhook_job(payload, event, instance, now_iso)
+        finally:
+            with _WEBHOOK_INFLIGHT_LOCK:
+                _WEBHOOK_INFLIGHT[0] = max(0, int(_WEBHOOK_INFLIGHT[0]) - 1)
+
+    background_tasks.add_task(_run_job)
 
     return JSONResponse({
         "ok": True,
         "event": event or "unknown",
         "instance": instance,
         "queued": True,
-        "queue_size": _WEBHOOK_QUEUE.qsize(),
+        "inflight": inflight + 1,
     })
