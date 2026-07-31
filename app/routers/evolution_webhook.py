@@ -84,12 +84,21 @@ def _process_webhook_job(payload: dict, event: str, instance: str, now_iso: str)
     handled = 0
     error = ""
     try:
-        if "messages_upsert" in event or "message_upsert" in event or not event:
+        if "connection_update" in event or "send_message" in event:
+            # Eventos de conexão/envio — não são mensagem inbound.
+            handled = 0
+        elif "messages_upsert" in event or "message_upsert" in event or not event:
             handled = _handle_messages_upsert(payload)
             if not event and handled == 0:
                 _handle_presence_or_typing(payload)
         elif "presence" in event or "typing" in event or "chats_update" in event:
             _handle_presence_or_typing(payload)
+        elif "messages_update" in event or "messages_set" in event:
+            # UPDATE/SET costuma vir sem body (só status). Tenta upsert se houver
+            # conteúdo; senão puxa o chat na Evolution (compensa UPSERT perdido).
+            handled = _handle_messages_upsert(payload)
+            if handled == 0:
+                handled = _hydrate_chat_from_update(payload, instance)
         else:
             handled = _handle_messages_upsert(payload)
     except Exception as exc:
@@ -341,14 +350,24 @@ def _iter_upsert_messages(payload: dict) -> list[dict]:
     if isinstance(data, dict):
         if "messages" in data:
             return [m for m in _as_list(data.get("messages")) if isinstance(m, dict)]
+        # MESSAGES_UPDATE flat: remoteJid + status + keyId — sem conteúdo de mensagem
+        if (
+            "status" in data
+            and "message" not in data
+            and "messageType" not in data
+            and not isinstance(data.get("key"), dict)
+        ):
+            return []
         # Alguns payloads aninham em data.message / data.key
-        if "key" in data or "message" in data or "messageType" in data:
+        if isinstance(data.get("key"), dict) or "message" in data or "messageType" in data:
             return [data]
         nested = data.get("message")
         if isinstance(nested, dict) and (nested.get("key") or nested.get("message")):
             return [nested]
-        # Evolution às vezes manda data.message = conteúdo sem key; key no root de data
-        if any(k in data for k in ("pushName", "messageTimestamp", "status", "source")):
+        # Evolution às vezes manda conteúdo sem key aninhada
+        if any(k in data for k in ("pushName", "messageTimestamp", "source")) and (
+            "message" in data or "conversation" in data or "extendedTextMessage" in data
+        ):
             return [data]
     if isinstance(data, list):
         return [m for m in data if isinstance(m, dict)]
@@ -356,6 +375,67 @@ def _iter_upsert_messages(payload: dict) -> list[dict]:
     if payload.get("key") or payload.get("message") or payload.get("messageType"):
         return [payload]
     return []
+
+
+_HYDRATE_LOCK = threading.Lock()
+_HYDRATE_LAST: dict[str, float] = {}
+_HYDRATE_MIN_INTERVAL_SEC = 8.0
+
+
+def _hydrate_chat_from_update(payload: dict, instance: str) -> int:
+    """Quando só chega UPDATE (sem body), puxa mensagens recentes daquele chat."""
+    data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
+    remote_jid = normalize_text(
+        data.get("remoteJid")
+        or _dig(data, "key", "remoteJid")
+        or payload.get("remoteJid")
+        or ""
+    )
+    if not remote_jid or is_whatsapp_group_jid(remote_jid):
+        return 0
+
+    throttle_key = f"{normalize_text(instance)}|{remote_jid}"
+    now = time.monotonic()
+    with _HYDRATE_LOCK:
+        last = float(_HYDRATE_LAST.get(throttle_key) or 0)
+        if (now - last) < _HYDRATE_MIN_INTERVAL_SEC:
+            return 0
+        _HYDRATE_LAST[throttle_key] = now
+        # Limpa chaves antigas para não crescer sem limite
+        if len(_HYDRATE_LAST) > 400:
+            cutoff = now - 600
+            for key in [k for k, ts in _HYDRATE_LAST.items() if ts < cutoff]:
+                _HYDRATE_LAST.pop(key, None)
+
+    try:
+        from app.services.evolution_client import find_messages
+
+        records = find_messages(remote_jid, limit=20, instance=instance)
+    except Exception:
+        logger.exception("hydrate find_messages falhou jid=%s", remote_jid)
+        return 0
+
+    saved = 0
+    for item in records:
+        try:
+            if ingest_evolution_message_item(
+                item,
+                evolution_instance=instance,
+                allow_reopen=True,
+            ):
+                saved += 1
+        except Exception:
+            logger.exception("hydrate ingest falhou jid=%s", remote_jid)
+    if saved:
+        logger.info(
+            "hydrate ok instance=%s jid=%s saved=%s",
+            instance,
+            remote_jid,
+            saved,
+        )
+    else:
+        _note_drop("hydrate_empty", instance=instance, jid=remote_jid)
+    return saved
 
 def ingest_evolution_message_item(
     item: dict,

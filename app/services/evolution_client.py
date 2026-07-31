@@ -1461,13 +1461,6 @@ def ensure_instance_webhook(instance: str = "") -> dict:
                 "events": events,
             }
         },
-        {
-            "enabled": True,
-            "url": url,
-            "webhookByEvents": True,
-            "webhookBase64": True,
-            "events": events,
-        },
     )
     last_error = ""
     set_ok = False
