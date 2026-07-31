@@ -539,12 +539,25 @@ def get_all_actions(tenant_id: str | None = None) -> dict[str, dict]:
 
 
 def find_sheet_row_by_phone(phone: str, *, tenant_id: str | None = None) -> int | None:
+    hit = find_registration_by_phone(phone, tenant_id=tenant_id)
+    if not hit:
+        return None
+    return int(hit["sheet_row"]) if hit.get("sheet_row") else None
+
+
+def find_registration_by_phone(
+    phone: str,
+    *,
+    ignore_sheet_row: int | None = None,
+    tenant_id: str | None = None,
+) -> dict[str, Any] | None:
     from app.services.legacy_core import normalize_phone_for_duplicate, phones_match_for_duplicate
 
     target = normalize_phone_for_duplicate(phone)
     if not target:
         return None
     tenant = normalize_text(tenant_id) or DEFAULT_TENANT_ID
+    ignore = int(ignore_sheet_row) if ignore_sheet_row else None
     db = SessionLocal()
     try:
         rows = (
@@ -553,14 +566,59 @@ def find_sheet_row_by_phone(phone: str, *, tenant_id: str | None = None) -> int 
             .all()
         )
         for row in rows:
+            sheet_row = int(row.sheet_row) if row.sheet_row else 0
+            if ignore and sheet_row == ignore:
+                continue
             for candidate in (
                 row.telefone_b2b,
                 row.telefone_fixo,
                 row.telefone_alternativo,
                 row.telefone_socio_1,
+                row.telefone_socio_2,
+                row.telefone_socio_3,
             ):
-                if phones_match_for_duplicate(candidate, phone):
-                    return int(row.sheet_row) if row.sheet_row else None
+                if phones_match_for_duplicate(candidate, target):
+                    return {
+                        "sheet_row": sheet_row or None,
+                        "empresa": normalize_text(row.empresa),
+                        "telefone": normalize_phone_for_duplicate(candidate) or target,
+                    }
+    finally:
+        db.close()
+    return None
+
+
+def find_registration_by_cnpj(
+    cnpj: str,
+    *,
+    ignore_sheet_row: int | None = None,
+    tenant_id: str | None = None,
+) -> dict[str, Any] | None:
+    from app.services.legacy_core import normalize_cnpj_for_duplicate
+
+    target = normalize_cnpj_for_duplicate(cnpj)
+    if not target:
+        return None
+    tenant = normalize_text(tenant_id) or DEFAULT_TENANT_ID
+    ignore = int(ignore_sheet_row) if ignore_sheet_row else None
+    db = SessionLocal()
+    try:
+        rows = (
+            db.query(CrmRegistration)
+            .filter(CrmRegistration.tenant_id == tenant)
+            .all()
+        )
+        for row in rows:
+            sheet_row = int(row.sheet_row) if row.sheet_row else 0
+            if ignore and sheet_row == ignore:
+                continue
+            existing = normalize_cnpj_for_duplicate(row.cnpj)
+            if existing and existing == target:
+                return {
+                    "sheet_row": sheet_row or None,
+                    "empresa": normalize_text(row.empresa),
+                    "cnpj": existing,
+                }
     finally:
         db.close()
     return None

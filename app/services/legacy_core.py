@@ -1684,7 +1684,7 @@ def validate_unique_company_registration(
 
     if duplicate_phones:
         phones_text = ", ".join(sorted(duplicate_phones))
-        messages.append(f"Número de WhatsApp/telefone já cadastrado: {phones_text}")
+        messages.append(f"Telefone já cadastrado: {phones_text}")
 
     if duplicate_cpfs:
         cpfs_text = ", ".join(sorted(duplicate_cpfs))
@@ -1694,9 +1694,7 @@ def validate_unique_company_registration(
         cnpjs_text = ", ".join(sorted(duplicate_cnpjs))
         messages.append(f"CNPJ já cadastrado: {cnpjs_text}")
 
-    raise DuplicateRegistrationError(
-        "Não foi possível salvar porque já existe outro cadastro com os mesmos dados. " + " | ".join(messages)
-    )
+    raise DuplicateRegistrationError(" | ".join(messages))
 
 
 
