@@ -102,11 +102,8 @@ def _process_webhook_job(payload: dict, event: str, instance: str, now_iso: str)
         elif "presence" in event or "typing" in event or "chats_update" in event:
             _handle_presence_or_typing(payload)
         elif "messages_update" in event or "messages_set" in event:
-            # UPDATE/SET costuma vir sem body (só status). Tenta upsert se houver
-            # conteúdo; senão puxa o chat na Evolution (compensa UPSERT perdido).
-            handled = _handle_messages_upsert(payload)
-            if handled == 0:
-                handled = _hydrate_chat_from_update(payload, instance)
+            # UPDATE/SET quase nunca traz body — hidrata direto (evita no_items + hang).
+            handled = _hydrate_chat_from_update(payload, instance)
         else:
             handled = _handle_messages_upsert(payload)
     except Exception as exc:
@@ -418,7 +415,7 @@ def _hydrate_chat_from_update(payload: dict, instance: str) -> int:
     try:
         from app.services.evolution_client import find_messages
 
-        records = find_messages(remote_jid, limit=20, instance=instance)
+        records = find_messages(remote_jid, limit=12, instance=instance)
     except Exception:
         logger.exception("hydrate find_messages falhou jid=%s", remote_jid)
         return 0
@@ -847,9 +844,15 @@ async def health_webhook(
 
         payload["callback_url"] = webhook_callback_url()
         if normalize_text(unsuppress) in {"1", "true", "yes", "sim"}:
-            payload["unsuppress"] = await asyncio.to_thread(
-                store.clear_all_chat_suppressions, True
-            )
+            try:
+                payload["unsuppress"] = await asyncio.to_thread(
+                    lambda: store.clear_all_chat_suppressions(reopen_excluded=True)
+                )
+            except Exception as unsuppress_error:
+                payload["unsuppress"] = {
+                    "ok": False,
+                    "error": str(unsuppress_error)[:200],
+                }
         if normalize_text(ensure) in {"1", "true", "yes", "sim"}:
             # HTTP Evolution fora do event loop — senão /health e o site travam
             payload["ensure"] = await asyncio.to_thread(ensure_webhooks_for_all_instances)
@@ -925,7 +928,8 @@ async def evolution_webhook(
     event = _extract_event_name(payload)
     instance = _extract_instance_name(payload)
 
-    # Processa em thread ANTES do ACK — BackgroundTasks/fila davam queued sem save.
+    # ACK imediato: processa em thread daemon (to_thread síncrono travava a Evolution
+    # quando findMessages/hydrate demorava; BackgroundTasks/fila também falhavam).
     with _WEBHOOK_INFLIGHT_LOCK:
         inflight = int(_WEBHOOK_INFLIGHT[0])
         if inflight >= _WEBHOOK_INFLIGHT_MAX:
@@ -944,17 +948,23 @@ async def evolution_webhook(
             )
         _WEBHOOK_INFLIGHT[0] = inflight + 1
 
-    try:
-        await asyncio.to_thread(_process_webhook_job, payload, event, instance, now_iso)
-    finally:
-        with _WEBHOOK_INFLIGHT_LOCK:
-            _WEBHOOK_INFLIGHT[0] = max(0, int(_WEBHOOK_INFLIGHT[0]) - 1)
+    def _run_job() -> None:
+        try:
+            _process_webhook_job(payload, event, instance, now_iso)
+        finally:
+            with _WEBHOOK_INFLIGHT_LOCK:
+                _WEBHOOK_INFLIGHT[0] = max(0, int(_WEBHOOK_INFLIGHT[0]) - 1)
 
-    snap = webhook_stats_snapshot()
+    threading.Thread(
+        target=_run_job,
+        daemon=True,
+        name=f"wh-{normalize_text(event)[:16] or 'job'}",
+    ).start()
+
     return JSONResponse({
         "ok": True,
         "event": event or "unknown",
         "instance": instance,
-        "saved": int(snap.get("last_messages") or 0),
-        "drop": snap.get("last_drop_reason") or "",
+        "queued": True,
+        "inflight": inflight + 1,
     })

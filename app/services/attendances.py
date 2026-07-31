@@ -883,6 +883,7 @@ def sync_inbox_from_evolution(*, force: bool = False, limit: int = 20) -> int:
                             contact_name=name,
                             remote_jid=remote_jid,
                             evolution_instance=line,
+                            ignore_suppression=True,
                         )
                     else:
                         conversation = store.upsert_conversation_by_remote_jid(
@@ -890,6 +891,7 @@ def sync_inbox_from_evolution(*, force: bool = False, limit: int = 20) -> int:
                             contact_name=name,
                             phone_e164=phone,
                             evolution_instance=line,
+                            ignore_suppression=True,
                         )
                     if not conversation:
                         continue
