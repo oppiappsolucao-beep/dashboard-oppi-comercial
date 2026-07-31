@@ -254,10 +254,14 @@ def _draw_page_chrome(canvas, doc) -> None:
                 )
             except Exception:
                 pass
-        canvas.setFillColorRGB(1, 1, 1)
-        canvas.setFont("Helvetica", 7)
-        canvas.drawCentredString(page_w / 2, 24, "Rua Francisco Furtado, 117 A CEP: 08280-200")
-        canvas.drawCentredString(page_w / 2, 12, "Cidade Líder - São Paulo")
+
+    # Sempre reforça o rodapé com o endereço correto (evita typo no PNG).
+    canvas.setFillColorRGB(0, 0, 0)
+    canvas.rect(0, 0, page_w, 42, fill=1, stroke=0)
+    canvas.setFillColorRGB(1, 1, 1)
+    canvas.setFont("Helvetica", 7)
+    canvas.drawCentredString(page_w / 2, 24, "Rua Francisco Furtado, 117 A CEP: 08280-200")
+    canvas.drawCentredString(page_w / 2, 12, "Cidade Líder - São Paulo")
     canvas.restoreState()
 
 
