@@ -105,25 +105,25 @@
     <tbody>
       {% for row in table.rows %}
       <tr>
-        <td class="proposal-code">{{ row.code }}</td>
-        <td>
+        <td class="proposal-code" data-label="Código">{{ row.code }}</td>
+        <td data-label="Empresa">
           <div class="table-company">
             <span class="table-company-icon">{{ row.empresa_initials }}</span>
             <div class="table-company-name">{{ row.empresa }}</div>
           </div>
         </td>
-        <td>
+        <td data-label="Responsável">
           <div class="owner-cell">
             <span class="owner-avatar">{{ row.vendedor_initials }}</span>
             <span>{{ row.vendedor }}</span>
           </div>
         </td>
-        <td class="value-cell">{{ row.valor }}</td>
-        <td>
+        <td class="value-cell" data-label="Valor">{{ row.valor }}</td>
+        <td data-label="Status">
           <span class="proposal-status-badge {{ row.status_class }}">{{ row.status_label }}</span>
         </td>
-        <td>{{ row.vencimento }}</td>
-        <td class="table-actions">
+        <td data-label="Vencimento">{{ row.vencimento }}</td>
+        <td class="table-actions" data-label="Ação">
           {% if row.sheet_row %}
           <a href="/cadastro/todos/{{ row.sheet_row }}/editar" class="table-menu-btn" title="Ver cadastro">⋯</a>
           {% else %}

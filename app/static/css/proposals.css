@@ -61,7 +61,7 @@
 
 .proposals-workbench {
   display: grid;
-  grid-template-columns: 250px minmax(340px, 1.15fr) minmax(300px, 1fr);
+  grid-template-columns: minmax(0, 250px) minmax(0, 1.15fr) minmax(0, 1fr);
   gap: 0;
   min-height: 640px;
   margin-bottom: 16px;
@@ -70,6 +70,9 @@
   overflow: hidden;
   background: #E8EBF2;
   box-shadow: var(--shadow);
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .proposals-contacts {
@@ -723,14 +726,111 @@
 
 .funnel-kpi-icon.tone-orange { background: #FFEDD5; color: #EA580C; }
 
+/* Bolhas do assistente (classes geradas em render_proposal_chat_messages) */
+.proposals-chat-messages,
+.oppi-chat-messages {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.oppi-chat-day {
+  display: flex;
+  justify-content: center;
+  margin: 4px 0 8px;
+}
+
+.oppi-chat-day span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: rgba(80, 69, 105, 0.08);
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.oppi-chat-message-row {
+  display: flex;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.oppi-chat-message-row.assistant {
+  justify-content: center;
+}
+
+.oppi-chat-message-row.user {
+  justify-content: flex-end;
+}
+
+.oppi-chat-bubble {
+  max-width: min(100%, 560px);
+  width: fit-content;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 12px 14px 22px;
+  border-radius: 16px;
+  background: #fff;
+  border: 1px solid rgba(80, 69, 105, 0.1);
+  box-shadow: 0 4px 14px rgba(80, 69, 105, 0.06);
+  color: var(--text);
+  font-size: 0.88rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  position: relative;
+}
+
+.oppi-chat-message-row.assistant .oppi-chat-bubble {
+  width: 100%;
+  max-width: min(100%, 560px);
+  margin: 0 auto;
+}
+
+.oppi-chat-message-row.user .oppi-chat-bubble {
+  background: linear-gradient(135deg, #F3E8FF 0%, #FCE7F3 100%);
+  border-color: rgba(168, 85, 247, 0.2);
+}
+
+.oppi-chat-bubble-time {
+  position: absolute;
+  right: 12px;
+  bottom: 6px;
+  font-size: 0.68rem;
+  color: var(--muted);
+  font-weight: 600;
+}
+
 @media (max-width: 1200px) {
   .proposals-kpi-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
+  #proposals-root,
+  .proposals-workbench,
+  .proposals-contacts,
+  .proposals-chat-panel,
+  .proposals-preview,
+  .proposals-table-card {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
   .proposals-workbench {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     min-height: auto;
+    overflow: hidden;
   }
 
   .proposals-contacts {
@@ -746,6 +846,31 @@
     border-right: none;
     border-bottom: 1px solid var(--border);
     min-height: 520px;
+    overflow: hidden;
+  }
+
+  .proposals-chat-header,
+  .proposals-chat-body,
+  .proposals-progress,
+  .proposals-chat-input {
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  .proposals-chat-header {
+    flex-wrap: wrap;
+    padding: 12px 14px;
+  }
+
+  .proposals-chat-body {
+    padding: 14px;
+  }
+
+  .proposals-progress,
+  .proposals-chat-input {
+    padding-left: 14px;
+    padding-right: 14px;
   }
 
   .proposals-workbench[data-proposal-active="1"] .proposals-contacts-list {
@@ -770,12 +895,23 @@
   .proposals-kpi-grid {
     grid-template-columns: 1fr 1fr;
   }
+
+  .proposals-chat-title {
+    font-size: 0.9rem;
+  }
+
+  .proposals-chat-header .btn-small {
+    min-height: 34px;
+    padding: 0 10px;
+    font-size: 0.76rem;
+  }
 }
 
 @media (max-width: 900px) {
   .proposals-table-header {
     flex-direction: column;
     align-items: stretch;
+    text-align: center;
   }
 
   .proposals-table-controls {
@@ -801,7 +937,111 @@
   }
 
   .proposals-chat-body {
-    max-height: 280px;
+    max-height: none;
+  }
+
+  /* Tabela → cards centralizados no mobile (sem scroll horizontal) */
+  .proposals-table-card {
+    overflow: visible;
+  }
+
+  .proposals-table.data-table,
+  table.proposals-table {
+    min-width: 0 !important;
+    width: 100%;
+    display: block;
+  }
+
+  .proposals-table thead {
+    display: none;
+  }
+
+  .proposals-table tbody {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 0 12px 12px;
+  }
+
+  .proposals-table tbody tr {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+    width: 100%;
+    max-width: 100%;
+    margin: 0 auto;
+    box-sizing: border-box;
+    padding: 14px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: var(--shadow);
+  }
+
+  .proposals-table tbody td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    padding: 0;
+    border: none;
+    text-align: right;
+    vertical-align: middle;
+  }
+
+  .proposals-table tbody td::before {
+    content: attr(data-label);
+    flex: 0 0 auto;
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--muted);
+    text-align: left;
+  }
+
+  .proposals-table tbody td.proposal-code,
+  .proposals-table tbody td:first-child {
+    padding-left: 0;
+    justify-content: space-between;
+  }
+
+  .proposals-table tbody td .table-company,
+  .proposals-table tbody td .owner-cell {
+    justify-content: flex-end;
+    text-align: right;
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+
+  .proposals-table tbody td .table-company-name {
+    text-align: right;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .proposals-table tbody td.table-actions {
+    justify-content: flex-end;
+  }
+
+  .proposals-table tbody td.table-actions::before {
+    content: "Ação";
+  }
+
+  .activities-pagination {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .activities-pagination-info,
+  .activities-per-page {
+    text-align: center;
   }
 }
 

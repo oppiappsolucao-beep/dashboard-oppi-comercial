@@ -1275,7 +1275,7 @@ def default_proposal_chat_messages() -> list[dict]:
             "1) Clique no cliente na lista de **Empresas**.\n"
             "2) Me diga **quais serviços deseja incluir** — ou a quantidade de colaboradores.\n"
             "3) Mostro boleto, recorrente e anual (com a sugestão da Oppi).\n"
-            "4) Confirme o resumo e clique em **Gerar proposta em PDF** — o preview aparece ao lado."
+            "4) Confirme o resumo e clique em **Gerar proposta em PDF** — o preview aparece em seguida."
         ),
         "time": _now_time(),
     }]

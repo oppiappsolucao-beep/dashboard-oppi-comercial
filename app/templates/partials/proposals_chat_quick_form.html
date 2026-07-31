@@ -9,7 +9,7 @@
   {% set step = (proposal_draft.step if proposal_draft else '') %}
 
   {% if not pending_company %}
-  <p class="proposals-quick-hint">Selecione um cliente na lista de empresas ao lado para começar.</p>
+  <p class="proposals-quick-hint">Selecione um cliente na lista de Empresas acima para começar.</p>
   {% elif step == 'ask_collaborators' or not step or step == 'pick_company' %}
   <input type="hidden" name="empresa" value="{{ pending_company }}">
   <label class="proposals-quick-field">
