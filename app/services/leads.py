@@ -309,9 +309,10 @@ def _build_row(row, columns: dict, tab: str, tenant_id: str | None) -> dict:
     etapa = map_etapa(status_raw, stored)
     vendedor = str(row.get("_vendedor", "") or "Sem vendedor").strip() or "Sem vendedor"
     sheet_row = int(row.get("_sheet_row", 0) or 0)
-    empresa = str(row.get("_empresa", "") or "—")
-    socio = row_field_value(row, columns, "socio_1")
-    nome_display = socio or empresa
+    empresa = normalize_text(row.get("_empresa")) or "—"
+    socio = normalize_text(row_field_value(row, columns, "socio_1"))
+    # Título da lista = nome da empresa (não do sócio).
+    nome_display = empresa if empresa != "—" else (socio or "—")
     telefone = _phone_for_row(row, columns) or "—"
     email = _email_for_row(row, columns) or "—"
     last_contact_raw = row.get("_ultima_atualizacao") or row.get("_data_chamado")
@@ -332,6 +333,7 @@ def _build_row(row, columns: dict, tab: str, tenant_id: str | None) -> dict:
         "nome": nome_display,
         "empresa": empresa,
         "empresa_initials": _initials(nome_display),
+        "contato": socio or "—",
         "tipo_label": tipo_label,
         "telefone": telefone,
         "email": email,
