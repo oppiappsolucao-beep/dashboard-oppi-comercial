@@ -119,6 +119,7 @@
 .proposals-contacts-header {
   padding: 14px 14px 10px;
   border-bottom: 1px solid rgba(80, 69, 105, 0.12);
+  text-align: center;
 }
 
 .proposals-contacts-title {
@@ -145,32 +146,44 @@
   padding: 0 14px;
   font-size: 0.82rem;
   background: #fff;
+  box-sizing: border-box;
 }
 
 .proposals-contacts-list {
   flex: 1;
   overflow-y: auto;
-  padding: 0 8px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px 14px;
   max-height: 520px;
+  box-sizing: border-box;
 }
 
 .proposals-contact-form {
-  margin: 0 0 6px;
+  margin: 0;
+  width: 100%;
+  max-width: 420px;
 }
 
 .proposals-contact {
   width: 100%;
+  max-width: 420px;
   display: flex;
   align-items: center;
-  gap: 10px;
+  justify-content: flex-start;
+  gap: 12px;
   text-align: left;
-  padding: 10px 12px;
+  padding: 12px 14px;
   border-radius: 12px;
   border: 1px solid rgba(80, 69, 105, 0.12);
   background: rgba(255, 255, 255, 0.75);
   color: var(--text);
   cursor: pointer;
   font: inherit;
+  box-sizing: border-box;
+  margin: 0 auto;
 }
 
 .proposals-contact:hover {
@@ -184,8 +197,8 @@
 }
 
 .proposals-contact-avatar {
-  width: 34px;
-  height: 34px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   display: inline-flex;
   align-items: center;
@@ -199,13 +212,17 @@
 
 .proposals-contact-text {
   min-width: 0;
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
+  justify-content: center;
   gap: 2px;
+  text-align: left;
 }
 
 .proposals-contact-text strong {
-  font-size: 0.82rem;
+  font-size: 0.84rem;
+  line-height: 1.25;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -213,6 +230,7 @@
 
 .proposals-contact-text small {
   font-size: 0.7rem;
+  line-height: 1.2;
   color: var(--muted);
 }
 
@@ -221,6 +239,7 @@
   font-size: 0.8rem;
   color: var(--muted);
   text-align: center;
+  width: 100%;
 }
 
 .proposals-progress {
@@ -904,6 +923,28 @@
     min-height: 34px;
     padding: 0 10px;
     font-size: 0.76rem;
+  }
+
+  .proposals-contacts-list {
+    padding: 10px 16px 16px;
+    gap: 10px;
+  }
+
+  .proposals-contact,
+  .proposals-contact-form {
+    max-width: 100%;
+  }
+
+  .proposals-contact {
+    padding: 14px 16px;
+    min-height: 56px;
+  }
+
+  .proposals-contact-text strong {
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
   }
 }
 
