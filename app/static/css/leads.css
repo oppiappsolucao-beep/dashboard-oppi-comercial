@@ -79,6 +79,18 @@
   box-sizing: border-box;
 }
 
+.leads-toolbar-card .filter-field-sm:has(select[name="seller"]) {
+  flex: 1 1 220px;
+  max-width: 260px;
+  min-width: 200px;
+}
+
+.leads-toolbar-card select[name="seller"] {
+  text-align: center;
+  text-align-last: center;
+  padding-inline: 28px 32px;
+}
+
 .leads-toolbar {
   display: flex;
   align-items: center;
