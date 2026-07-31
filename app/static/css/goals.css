@@ -312,6 +312,18 @@
 }
 
 @media (max-width: 900px) {
+  .goals-toolbar-left {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+
+  .goals-toolbar-left .filter-field-sm,
+  .goals-toolbar-left .filter-field-sm:last-child {
+    flex: 1 1 140px;
+    min-width: 0;
+    max-width: none;
+  }
+
   .goals-kpi-grid {
     grid-template-columns: 1fr;
   }
