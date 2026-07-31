@@ -111,7 +111,7 @@
                 {% else %}
                 <div class="table-company-name">{{ row.nome }}</div>
                 {% endif %}
-                <div class="table-company-meta">{{ row.tipo_label }}</div>
+                <div class="table-company-meta">{{ row.meta_label or row.tipo_label }}</div>
               </div>
             </div>
           </td>

@@ -310,9 +310,15 @@ def _build_row(row, columns: dict, tab: str, tenant_id: str | None) -> dict:
     vendedor = str(row.get("_vendedor", "") or "Sem vendedor").strip() or "Sem vendedor"
     sheet_row = int(row.get("_sheet_row", 0) or 0)
     empresa = normalize_text(row.get("_empresa")) or "—"
+    fantasia = normalize_text(row_field_value(row, columns, "nome_fantasia"))
     socio = normalize_text(row_field_value(row, columns, "socio_1"))
-    # Título da lista = nome da empresa (não do sócio).
-    nome_display = empresa if empresa != "—" else (socio or "—")
+    # Título da lista = sempre empresa (nunca sócio). Fantasia só se empresa vazia.
+    if empresa != "—":
+        nome_display = empresa
+    elif fantasia:
+        nome_display = fantasia
+    else:
+        nome_display = "—"
     telefone = _phone_for_row(row, columns) or "—"
     email = _email_for_row(row, columns) or "—"
     last_contact_raw = row.get("_ultima_atualizacao") or row.get("_data_chamado")
@@ -328,13 +334,19 @@ def _build_row(row, columns: dict, tab: str, tenant_id: str | None) -> dict:
     )
 
     tipo_label = "Empresa" if cadastro_tipo == "empresa" else "Lead"
+    contato = socio or "—"
+    if cadastro_tipo == "lead" and contato != "—" and contato != nome_display:
+        meta_label = f"{tipo_label} · {contato}"
+    else:
+        meta_label = tipo_label
 
     return {
         "nome": nome_display,
-        "empresa": empresa,
+        "empresa": empresa if empresa != "—" else nome_display,
         "empresa_initials": _initials(nome_display),
-        "contato": socio or "—",
+        "contato": contato,
         "tipo_label": tipo_label,
+        "meta_label": meta_label,
         "telefone": telefone,
         "email": email,
         "vendedor": vendedor,
