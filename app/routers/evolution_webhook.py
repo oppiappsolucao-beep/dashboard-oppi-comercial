@@ -9,7 +9,7 @@ import time
 from collections import deque
 from typing import Any
 
-from fastapi import APIRouter, BackgroundTasks, Header, Query, Request
+from fastapi import APIRouter, Header, Query, Request
 from fastapi.responses import JSONResponse
 
 from app.config import settings
@@ -667,7 +667,7 @@ def _handle_messages_upsert(payload: dict) -> int:
             if ts > 0:
                 import time as _time
 
-                msg_is_fresh = (_time.time() - ts) <= 600  # 10 min
+                msg_is_fresh = (_time.time() - ts) <= 86_400  # 24h — reabre exclusão
         except Exception:
             msg_is_fresh = True
 
@@ -830,6 +830,7 @@ async def evolution_webhook_probe():
 async def health_webhook(
     ensure: str = Query(default="0"),
     sync: str = Query(default="0"),
+    unsuppress: str = Query(default="0"),
 ):
     """Diagnóstico de inbound + reconfigura webhooks e/ou puxa chats da Evolution."""
     payload: dict[str, Any] = {
@@ -845,6 +846,10 @@ async def health_webhook(
         )
 
         payload["callback_url"] = webhook_callback_url()
+        if normalize_text(unsuppress) in {"1", "true", "yes", "sim"}:
+            payload["unsuppress"] = await asyncio.to_thread(
+                store.clear_all_chat_suppressions, True
+            )
         if normalize_text(ensure) in {"1", "true", "yes", "sim"}:
             # HTTP Evolution fora do event loop — senão /health e o site travam
             payload["ensure"] = await asyncio.to_thread(ensure_webhooks_for_all_instances)
@@ -878,7 +883,6 @@ async def health_webhook(
 @router.post("/webhooks/evolution")
 async def evolution_webhook(
     request: Request,
-    background_tasks: BackgroundTasks,
     token: str | None = Query(default=None),
     x_evolution_token: str | None = Header(default=None, alias="X-Evolution-Token"),
     x_api_key: str | None = Header(default=None, alias="apikey"),
@@ -921,8 +925,7 @@ async def evolution_webhook(
     event = _extract_event_name(payload)
     instance = _extract_instance_name(payload)
 
-    # ACK rápido: processa DEPOIS da resposta (BackgroundTasks).
-    # A fila+daemon thread falhava em produção (queued=true, saved=0).
+    # Processa em thread ANTES do ACK — BackgroundTasks/fila davam queued sem save.
     with _WEBHOOK_INFLIGHT_LOCK:
         inflight = int(_WEBHOOK_INFLIGHT[0])
         if inflight >= _WEBHOOK_INFLIGHT_MAX:
@@ -941,19 +944,17 @@ async def evolution_webhook(
             )
         _WEBHOOK_INFLIGHT[0] = inflight + 1
 
-    def _run_job() -> None:
-        try:
-            _process_webhook_job(payload, event, instance, now_iso)
-        finally:
-            with _WEBHOOK_INFLIGHT_LOCK:
-                _WEBHOOK_INFLIGHT[0] = max(0, int(_WEBHOOK_INFLIGHT[0]) - 1)
+    try:
+        await asyncio.to_thread(_process_webhook_job, payload, event, instance, now_iso)
+    finally:
+        with _WEBHOOK_INFLIGHT_LOCK:
+            _WEBHOOK_INFLIGHT[0] = max(0, int(_WEBHOOK_INFLIGHT[0]) - 1)
 
-    background_tasks.add_task(_run_job)
-
+    snap = webhook_stats_snapshot()
     return JSONResponse({
         "ok": True,
         "event": event or "unknown",
         "instance": instance,
-        "queued": True,
-        "inflight": inflight + 1,
+        "saved": int(snap.get("last_messages") or 0),
+        "drop": snap.get("last_drop_reason") or "",
     })

@@ -580,6 +580,29 @@ def suppress_chat(
         logger.exception("suppress_chat falhou (soft-delete já aplicado)")
 
 
+def clear_all_chat_suppressions(*, reopen_excluded: bool = True) -> dict:
+    """Emergência: limpa bloqueios de exclusão para a inbox voltar a receber."""
+    removed_rows = 0
+    reopened = 0
+    try:
+        with _lock, _session() as db:
+            removed_rows = db.query(AttendanceSuppressedChat).delete()
+            if reopen_excluded:
+                rows = (
+                    db.query(AttendanceConversation)
+                    .filter(AttendanceConversation.status == STATUS_EXCLUIDO)
+                    .all()
+                )
+                for row in rows:
+                    row.status = STATUS_NOVO_LEAD
+                    row.updated_at = _now_iso()
+                    reopened += 1
+    except Exception:
+        logger.exception("clear_all_chat_suppressions falhou")
+        return {"ok": False, "removed": removed_rows, "reopened": reopened}
+    return {"ok": True, "removed": int(removed_rows or 0), "reopened": int(reopened or 0)}
+
+
 def clear_chat_suppression(
     *,
     phone_e164: str = "",

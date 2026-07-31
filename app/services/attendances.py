@@ -993,6 +993,7 @@ def sync_messages_from_evolution(
                         item,
                         push_name=conversation.get("contact_name") or "",
                         evolution_instance=instance,
+                        allow_reopen=True,
                     ):
                         imported += 1
                 except Exception:
