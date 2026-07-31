@@ -261,8 +261,11 @@ def _draw_page_chrome(canvas, doc) -> None:
     canvas.rect(0, 0, page_w, footer_h, fill=1, stroke=0)
     canvas.setFillColorRGB(1, 1, 1)
     canvas.setFont("Helvetica", 9)
-    canvas.drawCentredString(page_w / 2, 34, "Rua Francisco Furtado, 117 A CEP: 08280-200")
-    canvas.drawCentredString(page_w / 2, 18, "Cidade Líder - São Paulo")
+    # Centraliza o bloco de 2 linhas na faixa (y=0 = base da página).
+    line_gap = 15
+    mid_y = footer_h / 2 + 1  # leve ajuste óptico (glifos ficam acima da baseline)
+    canvas.drawCentredString(page_w / 2, mid_y + line_gap / 2, "Rua Francisco Furtado, 117 A CEP: 08280-200")
+    canvas.drawCentredString(page_w / 2, mid_y - line_gap / 2, "Cidade Líder - São Paulo")
     canvas.restoreState()
 
 
