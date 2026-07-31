@@ -81,7 +81,8 @@ AI_MODE_ON = "on"
 AI_MODE_PAUSED = "paused"
 AI_MODE_OFF = "off"
 
-_lock = threading.Lock()
+_lock = threading.RLock()  # RLock: _notify() pode ser chamado dentro de seções com lock
+
 _event_seq = 0
 _event_listeners: list = []
 
@@ -842,7 +843,6 @@ def upsert_conversation_by_phone(
         # Ex.: 5530214500323 (DDD inválido) — grupo/lixo mapeado como telefone
         return {}
     if _is_unwanted_inbox_contact(contact_name):
-        return {}
         return {}
     if not phone:
         raise ValueError("Telefone obrigatório")
