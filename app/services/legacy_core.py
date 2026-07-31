@@ -1555,6 +1555,7 @@ def validate_unique_company_registration(
     worksheet=None,
     ignore_sheet_row: Optional[int] = None,
     values: Optional[list[list[str]]] = None,
+    allow_duplicate_contact: bool = False,
 ) -> None:
     """
     Bloqueia cadastro ou edição quando qualquer telefone, CPF ou CNPJ informado já existe
@@ -1599,18 +1600,34 @@ def validate_unique_company_registration(
         or _header_matches_any(header, ["cnpj da empresa", "cnpj empresa"])
     ]
 
-    submitted_phones = {
-        normalize_phone_for_duplicate(payload.get(field))
-        for field in [
-            "telefone_b2b",
-            "telefone_fixo",
-            "telefone_alternativo",
-            "telefone_socio_1",
-            "telefone_socio_2",
-            "telefone_socio_3",
-        ]
-    }
-    submitted_phones.discard("")
+    skip_contact_duplicates = bool(allow_duplicate_contact)
+    if not skip_contact_duplicates:
+        try:
+            from app.services.registration import allows_duplicate_contact
+
+            skip_contact_duplicates = allows_duplicate_contact(payload or {})
+        except Exception:
+            skip_contact_duplicates = False
+
+    submitted_phones = set()
+    submitted_cnpjs = set()
+    if not skip_contact_duplicates:
+        submitted_phones = {
+            normalize_phone_for_duplicate(payload.get(field))
+            for field in [
+                "telefone_b2b",
+                "telefone_fixo",
+                "telefone_alternativo",
+                "telefone_socio_1",
+                "telefone_socio_2",
+                "telefone_socio_3",
+            ]
+        }
+        submitted_phones.discard("")
+        submitted_cnpjs = {
+            normalize_cnpj_for_duplicate(payload.get("cnpj"))
+        }
+        submitted_cnpjs.discard("")
 
     submitted_cpfs = {
         normalize_cpf_for_duplicate(payload.get(field))
@@ -1621,11 +1638,6 @@ def validate_unique_company_registration(
         ]
     }
     submitted_cpfs.discard("")
-
-    submitted_cnpjs = {
-        normalize_cnpj_for_duplicate(payload.get("cnpj"))
-    }
-    submitted_cnpjs.discard("")
 
     duplicate_phones = set()
     duplicate_cpfs = set()
@@ -1942,7 +1954,11 @@ def append_company_to_sheet(payload: dict) -> int:
             else:
                 raise
 
-    validate_unique_company_registration(payload, values=cached_values)
+    validate_unique_company_registration(
+        payload,
+        values=cached_values,
+        allow_duplicate_contact=bool(payload.get("is_filial") and payload.get("empresa_matriz_sheet_row")),
+    )
 
     if not headers:
         raise RuntimeError("A primeira linha da planilha precisa conter os cabeçalhos.")
@@ -2092,6 +2108,7 @@ def update_company_in_sheet(sheet_row: int, payload: dict) -> None:
         payload,
         worksheet,
         ignore_sheet_row=int(sheet_row),
+        allow_duplicate_contact=bool(payload.get("is_filial") and payload.get("empresa_matriz_sheet_row")),
     )
 
     current_row = worksheet.row_values(int(sheet_row))

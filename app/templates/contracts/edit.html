@@ -14,6 +14,10 @@
             </span>
             <span class="client-edit-meta-sep" aria-hidden="true"></span>
             <span class="client-edit-id-badge">{{ header_id }}</span>
+            {% if values.is_filial %}
+            <span class="client-edit-meta-sep" aria-hidden="true"></span>
+            <span class="client-edit-registered">Filial{% if values.empresa_matriz_nome %} · Matriz {{ values.empresa_matriz_nome }}{% endif %}</span>
+            {% endif %}
           </div>
         </div>
       </div>

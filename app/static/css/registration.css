@@ -1905,6 +1905,79 @@
   }
 }
 
+.registration-filial-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #f8fafc;
+  font-weight: 600;
+  cursor: pointer;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.registration-filial-check input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+}
+
+.registration-filial-matriz-search {
+  position: relative;
+}
+
+.registration-filial-matriz-results {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 6px);
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.12);
+  max-height: 280px;
+  overflow: auto;
+  z-index: 8;
+}
+
+.registration-filial-matriz-results[hidden] {
+  display: none !important;
+}
+
+.registration-filial-matriz-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  padding: 12px 14px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.88rem;
+}
+
+.registration-filial-matriz-item:hover {
+  background: #f3f4f6;
+}
+
+.registration-filial-matriz-item small {
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.registration-filial-matriz-hint {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
 @media (max-width: 768px) {
   .registration-activities-head {
     flex-direction: column;

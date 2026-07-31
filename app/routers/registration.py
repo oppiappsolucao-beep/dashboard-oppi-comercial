@@ -1,7 +1,7 @@
 from datetime import date
 
 from fastapi import APIRouter, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from app.dependencies import get_prepared_data, is_admin, require_auth
 from app.services.activities_storage import DEFAULT_TENANT_ID
@@ -110,6 +110,30 @@ def _registration_page_context(request: Request, df, *, error: str = "", values:
         "error": error or request.session.pop("registration_error", ""),
         **page_ctx,
     }
+
+
+@router.get("/cadastro/api/empresas-matriz")
+async def api_empresas_matriz(request: Request, q: str = "", exclude: int | None = None):
+    redirect = require_auth(request)
+    if redirect:
+        return JSONResponse({"items": []}, status_code=401)
+    try:
+        from app.services.crm_registrations_storage import (
+            is_crm_postgres_ready,
+            search_matriz_companies,
+        )
+
+        if not is_crm_postgres_ready():
+            return JSONResponse({"items": []})
+        items = search_matriz_companies(
+            q or "",
+            exclude_sheet_row=exclude,
+            limit=20,
+            tenant_id=DEFAULT_TENANT_ID,
+        )
+        return JSONResponse({"items": items})
+    except Exception:
+        return JSONResponse({"items": []})
 
 
 @router.get("/cadastro/novo", response_class=HTMLResponse)

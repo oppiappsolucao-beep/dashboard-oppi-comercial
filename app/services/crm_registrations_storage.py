@@ -195,6 +195,51 @@ def get_registration_by_sheet_row(
         db.close()
 
 
+def search_matriz_companies(
+    query: str = "",
+    *,
+    exclude_sheet_row: int | None = None,
+    limit: int = 20,
+    tenant_id: str | None = None,
+) -> list[dict[str, Any]]:
+    """Empresas elegíveis como matriz: cadastro empresa ativo que não é filial."""
+    db = SessionLocal()
+    try:
+        tenant = normalize_text(tenant_id) or DEFAULT_TENANT_ID
+        q = db.query(CrmRegistration).filter(
+            CrmRegistration.tenant_id == tenant,
+            CrmRegistration.cadastro_tipo == "empresa",
+            CrmRegistration.cadastro_ativo.is_(True),
+            CrmRegistration.is_filial.is_(False),
+        )
+        if exclude_sheet_row is not None:
+            try:
+                q = q.filter(CrmRegistration.sheet_row != int(exclude_sheet_row))
+            except (TypeError, ValueError):
+                pass
+        term = normalize_text(query).lower()
+        rows = q.order_by(CrmRegistration.updated_at.desc()).limit(200).all()
+        items: list[dict[str, Any]] = []
+        for row in rows:
+            nome = normalize_text(row.empresa)
+            if not nome:
+                continue
+            if term and term not in nome.lower() and term not in normalize_text(row.cnpj):
+                continue
+            items.append(
+                {
+                    "sheet_row": int(row.sheet_row),
+                    "empresa": nome,
+                    "cnpj": normalize_text(row.cnpj),
+                }
+            )
+            if len(items) >= max(1, int(limit)):
+                break
+        return items
+    finally:
+        db.close()
+
+
 def get_registration_by_id(registration_id: int) -> CrmRegistration | None:
     if not registration_id:
         return None
@@ -225,6 +270,21 @@ def _apply_payload(row: CrmRegistration, payload: dict[str, Any]) -> None:
             setattr(row, key, normalize_text(payload.get(key)))
     if "nicho" in payload:
         row.nicho = normalize_text(payload.get("nicho"))
+    if "is_filial" in payload:
+        raw = payload.get("is_filial")
+        if isinstance(raw, bool):
+            row.is_filial = raw
+        else:
+            text = normalize_text(raw).lower()
+            row.is_filial = text in {"1", "true", "sim", "yes", "on"}
+        if not row.is_filial:
+            row.empresa_matriz_sheet_row = None
+    if "empresa_matriz_sheet_row" in payload and getattr(row, "is_filial", False):
+        try:
+            matriz = int(payload.get("empresa_matriz_sheet_row") or 0)
+        except (TypeError, ValueError):
+            matriz = 0
+        row.empresa_matriz_sheet_row = matriz if matriz > 0 else None
     if "cadastro_tipo" in payload:
         tipo = normalize_text(payload.get("cadastro_tipo")).lower()
         row.cadastro_tipo = "empresa" if tipo == "empresa" else "lead"
@@ -261,6 +321,9 @@ def registration_to_payload(row: CrmRegistration) -> dict[str, Any]:
     data["nicho"] = normalize_text(row.nicho)
     data["cadastro_tipo"] = normalize_text(row.cadastro_tipo) or "lead"
     data["cadastro_ativo"] = bool(row.cadastro_ativo)
+    data["is_filial"] = bool(getattr(row, "is_filial", False))
+    matriz = getattr(row, "empresa_matriz_sheet_row", None)
+    data["empresa_matriz_sheet_row"] = int(matriz) if matriz else None
     data["sheet_row"] = int(row.sheet_row) if row.sheet_row else None
     data["id"] = int(row.id)
     data["payment_history"] = _json_loads(row.payment_history_json, [])

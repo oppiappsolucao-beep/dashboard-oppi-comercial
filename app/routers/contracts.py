@@ -230,6 +230,31 @@ async def contract_edit_page(request: Request, sheet_row: int):
         empresa=values.get("empresa", ""),
         fallback=normalize_text(row.get("_nicho", "")),
     )
+    values["is_filial"] = False
+    values["empresa_matriz_sheet_row"] = ""
+    values["empresa_matriz_nome"] = ""
+    try:
+        from app.services.crm_registrations_storage import (
+            get_registration_by_sheet_row,
+            is_crm_postgres_ready,
+            registration_to_payload,
+        )
+
+        if is_crm_postgres_ready():
+            pg_row = get_registration_by_sheet_row(int(sheet_row))
+            if pg_row is not None:
+                pg = registration_to_payload(pg_row)
+                values["is_filial"] = bool(pg.get("is_filial"))
+                matriz_row = pg.get("empresa_matriz_sheet_row")
+                if matriz_row:
+                    values["empresa_matriz_sheet_row"] = str(int(matriz_row))
+                    matriz = get_registration_by_sheet_row(int(matriz_row))
+                    if matriz is not None:
+                        values["empresa_matriz_nome"] = normalize_text(
+                            registration_to_payload(matriz).get("empresa")
+                        )
+    except Exception:
+        pass
     from app.services.lead_actions_storage import get_lead_action
     from app.services.sectors import list_sector_options
 

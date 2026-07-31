@@ -93,7 +93,33 @@ def validate_registration_form(form: dict, *, require_whatsapp: bool = False) ->
         if phone and not normalize_phone_for_duplicate(phone):
             return f"Digite um número válido no campo {label}."
 
+    if parse_is_filial(form.get("is_filial")):
+        matriz = parse_empresa_matriz_sheet_row(form.get("empresa_matriz_sheet_row"))
+        if not matriz:
+            return "Selecione a empresa matriz para cadastro de filial."
+
     return None
+
+
+def parse_is_filial(value) -> bool:
+    if isinstance(value, bool):
+        return value
+    return normalize_text(value).lower() in {"1", "true", "sim", "yes", "on"}
+
+
+def parse_empresa_matriz_sheet_row(value) -> int | None:
+    try:
+        row = int(value or 0)
+    except (TypeError, ValueError):
+        return None
+    return row if row > 0 else None
+
+
+def allows_duplicate_contact(form_or_payload: dict) -> bool:
+    """Filial com matriz selecionada pode repetir telefone/WhatsApp/CNPJ."""
+    if not parse_is_filial(form_or_payload.get("is_filial")):
+        return False
+    return bool(parse_empresa_matriz_sheet_row(form_or_payload.get("empresa_matriz_sheet_row")))
 
 
 def find_existing_by_whatsapp(
@@ -221,6 +247,10 @@ def build_registration_payload(form: dict) -> dict:
     payload["ultima_atualizacao"] = now_text
     tipo = normalize_text(form.get("cadastro_tipo")).lower()
     payload["cadastro_tipo"] = "empresa" if tipo == "empresa" else "lead"
+    is_filial = parse_is_filial(form.get("is_filial"))
+    payload["is_filial"] = is_filial
+    matriz = parse_empresa_matriz_sheet_row(form.get("empresa_matriz_sheet_row")) if is_filial else None
+    payload["empresa_matriz_sheet_row"] = matriz
     return payload
 
 
@@ -229,7 +259,8 @@ def save_new_company(form: dict) -> int:
     if error:
         raise ValueError(error)
     payload = build_registration_payload(form)
-    assert_whatsapp_not_registered(payload.get("telefone_b2b") or "")
+    if not allows_duplicate_contact(payload):
+        assert_whatsapp_not_registered(payload.get("telefone_b2b") or "")
     try:
         from app.services.crm_registrations_storage import (
             is_crm_postgres_ready,
@@ -297,7 +328,7 @@ def save_company_edit(sheet_row: int, form: dict) -> None:
     for field in EDIT_FIELDS_PRESERVE_WHEN_ABSENT:
         if field not in form:
             payload[field] = normalize_text(existing.get(field, ""))
-    if payload.get("telefone_b2b"):
+    if payload.get("telefone_b2b") and not allows_duplicate_contact(payload):
         assert_whatsapp_not_registered(
             payload.get("telefone_b2b") or "",
             ignore_sheet_row=int(sheet_row),

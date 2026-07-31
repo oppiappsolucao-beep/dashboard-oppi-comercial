@@ -523,6 +523,8 @@ class CrmRegistration(Base):
     valor_proposta = Column(String(120), nullable=False, default="")
     colaboradores = Column(String(120), nullable=False, default="")
     nicho = Column(String(150), nullable=False, default="")
+    is_filial = Column(Boolean, nullable=False, default=False)
+    empresa_matriz_sheet_row = Column(Integer, nullable=True, index=True)
     extras_json = Column(Text, nullable=False, default="{}")
     actions_json = Column(Text, nullable=False, default="{}")
     payment_history_json = Column(Text, nullable=False, default="[]")
