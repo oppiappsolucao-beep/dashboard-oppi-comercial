@@ -102,13 +102,8 @@ def _process_webhook_job(payload: dict, event: str, instance: str, now_iso: str)
         elif "presence" in event or "typing" in event or "chats_update" in event:
             _handle_presence_or_typing(payload)
         elif "messages_update" in event or "messages_set" in event:
-            # Hydrate é fallback; se já tem fila, não empilha mais (travava a inbox).
-            with _WEBHOOK_INFLIGHT_LOCK:
-                busy = int(_WEBHOOK_INFLIGHT[0]) > 3
-            if busy:
-                handled = 0
-            else:
-                handled = _hydrate_chat_from_update(payload, instance)
+            # Não hidratar aqui: findMessages na Evolution estava travando a inbox.
+            handled = 0
         else:
             handled = _handle_messages_upsert(payload)
     except Exception as exc:
@@ -859,15 +854,28 @@ async def health_webhook(
                     "error": str(unsuppress_error)[:200],
                 }
         if normalize_text(ensure) in {"1", "true", "yes", "sim"}:
-            # HTTP Evolution fora do event loop — senão /health e o site travam
-            payload["ensure"] = await asyncio.to_thread(ensure_webhooks_for_all_instances)
+            # Nunca await HTTP Evolution aqui — travava /health/webhook por minutos.
+            def _ensure_bg() -> None:
+                try:
+                    ensure_webhooks_for_all_instances()
+                except Exception:
+                    logger.exception("ensure_webhooks background falhou")
+
+            threading.Thread(target=_ensure_bg, daemon=True, name="wh-ensure").start()
+            payload["ensure"] = {"scheduled": True}
         else:
-            payload["found"] = await asyncio.to_thread(
-                lambda: [
-                    find_instance_webhook(name)
-                    for name in (configured_instance_names() or [])
-                ]
-            )
+            try:
+                payload["found"] = await asyncio.wait_for(
+                    asyncio.to_thread(
+                        lambda: [
+                            find_instance_webhook(name)
+                            for name in (configured_instance_names() or [])
+                        ]
+                    ),
+                    timeout=8,
+                )
+            except Exception as found_error:
+                payload["found_error"] = str(found_error)[:200]
         if normalize_text(sync) in {"1", "true", "yes", "sim"}:
             # Nunca bloqueia o worker — sync pesado em background
             from app.services.attendances import schedule_sync_inbox_from_evolution

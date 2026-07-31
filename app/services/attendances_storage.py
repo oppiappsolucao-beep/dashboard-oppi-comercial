@@ -584,8 +584,9 @@ def clear_all_chat_suppressions(*, reopen_excluded: bool = True) -> dict:
     """Emergência: limpa bloqueios de exclusão para a inbox voltar a receber."""
     removed_rows = 0
     reopened = 0
+    # Sem _lock global — evita deadlock com webhook/sync segurando a mesma lock.
     try:
-        with _lock, _session() as db:
+        with _session() as db:
             removed_rows = db.query(AttendanceSuppressedChat).delete()
             if reopen_excluded:
                 rows = (
