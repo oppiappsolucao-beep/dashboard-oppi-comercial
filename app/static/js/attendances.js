@@ -139,7 +139,7 @@
       setTimeout(function () {
         bumpConversationToTop(opts.bumpId);
       }, 120);
-    } else if (list) {
+    } else if (opts.scrollTop && list) {
       list.scrollTop = 0;
     }
   }
@@ -166,7 +166,8 @@
   }
 
   function switchWhatsappLine(lineId) {
-    if (!lineId) return;
+    if (lineId === undefined || lineId === null) return;
+    lineId = String(lineId || "todos");
     var input = $("#att-line");
     var shell = $("#att-shell");
     if (input) input.value = lineId;
@@ -185,7 +186,7 @@
       chat.innerHTML =
         '<div class="att-empty-state"><div class="att-empty-icon">💬</div>' +
         "<h2>Selecione uma conversa</h2>" +
-        "<p>Mensagens desta linha WhatsApp aparecem aqui.</p></div>";
+        "<p>Mensagens do WhatsApp aparecem aqui.</p></div>";
     }
     var hiddenConv = document.querySelector('.att-filters input[name="conversation_id"]');
     if (hiddenConv) hiddenConv.remove();
@@ -195,7 +196,7 @@
       url.searchParams.delete("c");
       window.history.replaceState({}, "", url.toString());
     } catch (e) {}
-    refreshList({ clearSelection: true });
+    refreshList({ clearSelection: true, scrollTop: true });
   }
 
   function handleEvent(data) {
@@ -211,7 +212,7 @@
     if (data.type === "conversations_finalized_bulk") {
       lastInboxToken = "";
       lastConversationToken = "";
-      refreshList({ clearSelection: true });
+      refreshList({ clearSelection: true, scrollTop: true });
       fetch("/atendimentos/unread", { credentials: "same-origin" })
         .then(function (r) { return r.json(); })
         .then(function (j) { updateUnreadBadge(j.unread, j.lines); })
@@ -221,14 +222,16 @@
     if (data.type === "typing") {
       var el = document.getElementById("att-typing-" + data.conversation_id);
       if (el) el.hidden = !data.typing;
-      if (data.typing) bumpConversationToTop(data.conversation_id);
       return;
     }
-    if (data.type === "message" || data.type === "conversation_upsert" || data.type === "conversation_read") {
-      if (data.type === "message" || data.type === "conversation_upsert") {
+    if (data.type === "message" || data.type === "conversation_upsert" || data.type === "conversation_read" || data.type === "conversation_meta") {
+      // Só sobe na lista quando chega mensagem / atividade real — não ao salvar tag/nome
+      if (data.type === "message") {
         bumpConversationToTop(data.conversation_id);
+        refreshList({ bumpId: data.conversation_id });
+      } else {
+        refreshList();
       }
-      refreshList({ bumpId: data.conversation_id });
       if (data.conversation_id && data.conversation_id === selectedId()) {
         refreshThread();
       }
@@ -437,7 +440,7 @@
       shell.setAttribute("data-selected", "");
       shell.classList.remove("att-shell--chat-open");
     }
-    refreshList({ clearSelection: true });
+    refreshList({ clearSelection: true, scrollTop: true });
   });
 
   document.body.addEventListener("submit", function (ev) {
@@ -479,7 +482,6 @@
       && path.indexOf("/atalho") === -1
       && path.indexOf("/excluir") === -1
       && path.indexOf("/finalizar") === -1
-      && path.indexOf("/cadastro-nome") === -1
     ) {
       return;
     }

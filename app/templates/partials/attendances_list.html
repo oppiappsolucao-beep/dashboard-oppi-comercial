@@ -35,7 +35,11 @@
 {% else %}
   <div class="att-list-empty">
     {% if evolution_configured %}
-      Nenhuma conversa nesta linha ainda.
+      {% if line_filter and line_filter != 'todos' %}
+        Nenhuma conversa nesta linha ainda.
+      {% else %}
+        Nenhuma conversa em aberto no momento.
+      {% endif %}
     {% else %}
       Configure <code>EVOLUTION_API_*</code> e o webhook<br>
       <code>https://comercial.oppitech.com.br/webhooks/evolution</code>

@@ -49,8 +49,27 @@ def _resolve_sector_filter(session_user: dict | None, sector_filter: str) -> tup
         return None, scope
 
 
+def _instance_display_name(name: str) -> str:
+    """oppi-comercial → Oppi Comercial; mantém nomes já legíveis (Oppi Tech)."""
+    raw = normalize_text(name)
+    if not raw:
+        return "WhatsApp"
+    spaced = raw.replace("-", " ").replace("_", " ")
+    parts: list[str] = []
+    for part in spaced.split():
+        if not part:
+            continue
+        if part.isupper() and len(part) <= 5:
+            parts.append(part)
+        elif any(ch.isupper() for ch in part[1:]):
+            parts.append(part)  # já camel/Title
+        else:
+            parts.append(part[:1].upper() + part[1:].lower())
+    return " ".join(parts) or raw
+
+
 def build_whatsapp_line_options(*, refresh_owners: bool = True) -> list[dict]:
-    """Linhas WhatsApp configuradas (rótulo = número conectado ou nome da instância)."""
+    """Linhas WhatsApp (rótulo = nome da instância Evolution)."""
     lines: list[dict] = []
     for name in settings.evolution_instances:
         owner = ""
@@ -60,12 +79,6 @@ def build_whatsapp_line_options(*, refresh_owners: bool = True) -> list[dict]:
             )
         except Exception:
             owner = ""
-        label = owner or name
-        if owner and len(owner) >= 12:
-            # 5511942157917 → +55 11 94215-7917
-            label = f"+{owner[:2]} {owner[2:4]} {owner[4:9]}-{owner[9:]}"
-        elif owner and len(owner) >= 10:
-            label = owner
         unread = 0
         try:
             unread = store.count_unread(evolution_instance=name)
@@ -73,7 +86,7 @@ def build_whatsapp_line_options(*, refresh_owners: bool = True) -> list[dict]:
             unread = 0
         lines.append({
             "id": name,
-            "label": label,
+            "label": _instance_display_name(name),
             "phone": owner,
             "unread": unread,
         })
@@ -81,21 +94,19 @@ def build_whatsapp_line_options(*, refresh_owners: bool = True) -> list[dict]:
 
 
 def _resolve_line_filter(line_filter: str, lines: list[dict] | None = None) -> str:
+    """Padrão: todas as linhas. Valor específico = nome da instância."""
     configured = list(settings.evolution_instances or [])
-    if not configured:
-        return settings.evolution_primary_instance
-    wanted = normalize_text(line_filter)
-    if wanted:
-        for name in configured:
-            if normalize_text(name).lower() == wanted.lower():
-                return name
-        if lines:
-            for line in lines:
-                if normalize_text(line.get("id")).lower() == wanted.lower():
-                    return line["id"]
+    wanted = normalize_text(line_filter).lower()
+    if wanted in ("", "todos", "all", "*"):
+        return "todos"
+    for name in configured:
+        if normalize_text(name).lower() == wanted:
+            return name
     if lines:
-        return lines[0]["id"]
-    return configured[0]
+        for line in lines:
+            if normalize_text(line.get("id")).lower() == wanted:
+                return line["id"]
+    return "todos"
 
 
 _PAGE_MAINT_LAST = 0.0
@@ -154,11 +165,12 @@ def page_context(
     active_tag = normalize_text(tag_filter)
     if active_tag.lower() in ("", "todos", "all"):
         active_tag = ""
+    list_instance = "" if active_line == "todos" else active_line
     conversations = store.list_conversations(
         search=search,
         status=status,
         sector_id=effective_sector,
-        evolution_instance=active_line,
+        evolution_instance=list_instance,
         tag="",
     )
     # Tags do cadastro → lista (ao lado de Novo Lead / Em Atendimento)
@@ -257,9 +269,9 @@ def page_context(
                 selected = None
                 selected_id = ""
             else:
-                # Clique explícito: alinha a linha à conversa (não devolve 404 silencioso)
+                # Clique explícito: só alinha linha se o filtro já for uma linha específica
                 conv_line = normalize_text(selected.get("evolution_instance") or "")
-                if conv_line:
+                if conv_line and active_line not in ("todos", "", "all"):
                     active_line = _resolve_line_filter(conv_line, whatsapp_lines)
 
                 store.mark_conversation_read(selected_id)
@@ -325,8 +337,13 @@ def page_context(
         "user_sector_name": scope.get("sector_name") or "",
         "line_filter": active_line,
         "whatsapp_lines": whatsapp_lines,
+        "lines_unread_total": sum(int(l.get("unread") or 0) for l in whatsapp_lines),
         "evolution_configured": settings.evolution_configured,
-        "unread_total": store.count_unread(evolution_instance=active_line) if active_line else store.count_unread(),
+        "unread_total": (
+            store.count_unread()
+            if active_line in ("todos", "", "all")
+            else store.count_unread(evolution_instance=active_line)
+        ),
         "flash": flash,
         "error": error,
         "ai_mode_on": store.AI_MODE_ON,

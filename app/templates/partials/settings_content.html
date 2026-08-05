@@ -245,6 +245,35 @@
 {% if settings_params.tab == 'atendimentos' %}
 <div class="settings-goals-layout settings-services-tab">
   <div class="panel settings-single-card">
+    <div class="section-heading">Fila do WhatsApp</div>
+    <div class="section-subtitle">Finaliza todas as conversas abertas da linha escolhida e zera as não lidas. Use com cuidado — a inbox começa do zero.</div>
+    {% if finalize_queue_success %}<div class="settings-alert success">{{ finalize_queue_success }}</div>{% endif %}
+    {% if finalize_queue_error %}<div class="settings-alert error">{{ finalize_queue_error }}</div>{% endif %}
+    {% if is_admin %}
+    <form method="post"
+          action="/configuracoes/atendimentos/finalizar-fila"
+          class="settings-goals-form settings-service-form"
+          onsubmit="return confirm('Finalizar TODAS as conversas abertas desta linha e zerar as não lidas?\n\nA fila começa do zero.');">
+      <input type="hidden" name="tab" value="atendimentos">
+      <label>
+        <span class="settings-company-label">Linha</span>
+        <select name="line" class="att-input att-select" required>
+          <option value="">Todas as linhas</option>
+          {% for line in whatsapp_line_options or [] %}
+          <option value="{{ line.id }}">{{ line.label }}{% if line.phone %} · {{ line.phone }}{% endif %}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <button type="submit" class="btn btn-secondary">Finalizar todas desta linha</button>
+    </form>
+    {% else %}
+    <div class="settings-empty">Somente administradores podem reiniciar a fila.</div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="settings-goals-layout settings-services-tab" style="margin-top:16px">
+  <div class="panel settings-single-card">
     <div class="section-heading">Tags de atendimento</div>
     <div class="section-subtitle">Cadastre, edite o nome e escolha uma das 6 cores. As tags ficam no cadastro do cliente e aparecem na lista de Atendimentos.</div>
     {% if tag_success %}<div class="settings-alert success">{{ tag_success }}</div>{% endif %}

@@ -58,6 +58,8 @@ def _filters(request: Request, form: dict | None = None) -> tuple[str, str, str,
         or request.query_params.get("line", "")
         or request.query_params.get("wa", "")
     )
+    if not line:
+        line = "todos"
     tag = normalize_text(data.get("tag") or request.query_params.get("tag", ""))
     if tag.lower() in ("todos", "all"):
         tag = ""

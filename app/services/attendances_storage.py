@@ -768,7 +768,9 @@ def list_conversations(
             # Padrão / "todos": só fila ativa (Novo Lead + Em Atendimento).
             # Finalizados só aparecem quando o filtro "Finalizado" é selecionado.
             q = q.filter(AttendanceConversation.status != STATUS_FINALIZADO)
-        if instance:
+        # evolution_instance vazio / "todos" = todas as linhas
+        wanted_line = normalize_text(evolution_instance).lower()
+        if wanted_line and wanted_line not in ("todos", "all", "*") and instance:
             q = q.filter(_sql_instance_match(instance))
         if sector_id not in (None, "", "todos", "all"):
             try:
@@ -793,15 +795,14 @@ def list_conversations(
                     func.lower(AttendanceConversation.last_message_preview).like(like),
                 )
             )
-        # Ordena por last_message_at quando preenchido; senão updated_at
+        # Ordem da inbox = última interação WhatsApp (não updated_at de tag/nome)
         rows = (
             q.order_by(
                 func.coalesce(
                     func.nullif(AttendanceConversation.last_message_at, ""),
-                    AttendanceConversation.updated_at,
+                    AttendanceConversation.created_at,
                 ).desc(),
-                AttendanceConversation.unread_count.desc(),
-                AttendanceConversation.updated_at.desc(),
+                AttendanceConversation.id.desc(),
             )
             .limit(max(1, min(int(limit or 100), 500)))
             .all()
@@ -1026,7 +1027,22 @@ def _update_conversation(conversation_id: str, fields: dict) -> None:
                 setattr(row, key, value)
 
 
+# Campos que NÃO representam nova interação no WhatsApp — não mudam ordem da inbox
+_METADATA_FIELDS = frozenset({
+    "contact_name",
+    "profile_pic_url",
+    "sheet_row",
+    "registration_id",
+    "tags",
+    "tags_json",
+    "notes",
+    "sector_id",
+    "sector_name",
+})
+
+
 def update_conversation(conversation_id: str, **fields) -> dict | None:
+    """Atualiza conversa. Tag/nome/notas NÃO alteram updated_at nem empurram a fila."""
     payload = dict(fields)
     if "tags" in payload:
         tags = payload.pop("tags") or []
@@ -1034,17 +1050,23 @@ def update_conversation(conversation_id: str, **fields) -> dict | None:
             [normalize_text(t) for t in tags if normalize_text(t)],
             ensure_ascii=False,
         )
-    payload["updated_at"] = _now_iso()
+    keys = set(payload.keys())
+    metadata_only = bool(keys) and keys.issubset(_METADATA_FIELDS)
+    if metadata_only:
+        payload.pop("updated_at", None)
+    elif "updated_at" not in payload:
+        payload["updated_at"] = _now_iso()
     _update_conversation(conversation_id, payload)
     conversation = get_conversation(conversation_id)
     if conversation:
-        _notify({"type": "conversation_upsert", "conversation_id": conversation_id})
+        event_type = "conversation_meta" if metadata_only else "conversation_upsert"
+        _notify({"type": event_type, "conversation_id": conversation_id})
     return conversation
 
 
 def set_typing(conversation_id: str, typing: bool) -> None:
     _update_conversation(
-        conversation_id, {"typing": bool(typing), "updated_at": _now_iso()}
+        conversation_id, {"typing": bool(typing)}
     )
     _notify({"type": "typing", "conversation_id": conversation_id, "typing": bool(typing)})
 

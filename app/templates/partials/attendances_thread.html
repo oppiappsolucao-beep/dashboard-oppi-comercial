@@ -26,7 +26,7 @@
           class="att-delete-form"
           onsubmit="return confirm('Excluir esta conversa do Atendimentos?\n\nRemove só o chat.\nO cadastro no CRM NÃO será apagado.');">
       <input type="hidden" name="line" value="{{ line_filter }}">
-      <button type="submit" class="btn att-btn-danger att-delete-conv-btn">Excluir</button>
+      <button type="submit" class="btn att-btn-danger att-delete-conv-btn" title="Excluir conversa (admin)">Excluir</button>
     </form>
     {% endif %}
   </header>

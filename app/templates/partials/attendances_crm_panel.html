@@ -15,7 +15,8 @@
           hidden
           hx-post="/atendimentos/conversa/{{ selected.id }}/cadastro-nome"
           hx-target="#att-crm-inner"
-          hx-swap="innerHTML">
+          hx-swap="innerHTML"
+          hx-on::after-request="document.querySelector('.att-filters') && htmx.trigger(document.querySelector('.att-filters'), 'submit')">
       <input type="text" name="nome" class="att-input" id="att-crm-name-input"
              value="{{ selected.contact_name or crm.whatsapp_name or crm.contato or crm.empresa or '' }}"
              placeholder="Nome do cliente"
@@ -85,11 +86,11 @@
   {% if can_delete_conversation %}
   <form method="post"
         action="/atendimentos/conversa/{{ selected.id }}/excluir"
-        class="att-delete-form"
-        style="margin-bottom:14px"
+        class="att-delete-form att-delete-form--crm"
         onsubmit="return confirm('Excluir esta conversa do Atendimentos?\n\nO cadastro no CRM NÃO será apagado.');">
     <input type="hidden" name="line" value="{{ line_filter }}">
-    <button type="submit" class="btn att-btn-danger att-delete-conv-btn">Excluir conversa</button>
+    <button type="submit" class="btn att-btn-danger att-delete-conv-btn">🗑 Excluir conversa</button>
+    <small class="att-hint">Só administradores veem esta opção. Remove o chat da inbox; o cadastro permanece.</small>
   </form>
   {% endif %}
 

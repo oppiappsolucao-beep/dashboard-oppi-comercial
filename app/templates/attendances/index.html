@@ -34,12 +34,12 @@
         <span>Linha WhatsApp</span>
         <select name="line" class="att-input att-select">
           {% for line in whatsapp_lines %}
-          <option value="{{ line.id }}" {% if line_filter == line.id %}selected{% endif %}>{{ line.label }}</option>
+          <option value="{{ line.id }}" {% if line_filter == line.id %}selected{% endif %}>{{ line.label }}{% if line.phone %} ({{ line.phone }}){% endif %}</option>
           {% endfor %}
         </select>
       </label>
       {% else %}
-      <input type="hidden" name="line" value="{{ line_filter }}">
+      <input type="hidden" name="line" value="{{ line_filter if line_filter != 'todos' else (whatsapp_lines[0].id if whatsapp_lines else '') }}">
       {% endif %}
       <label class="att-new-call-field att-new-call-field-wide">
         <span>Mensagem inicial</span>
@@ -58,27 +58,6 @@
      data-evolution="{{ '1' if evolution_configured else '0' }}"
      data-line="{{ line_filter }}">
   <aside class="att-col att-col-list">
-    {% if whatsapp_lines and whatsapp_lines|length > 1 %}
-    <div class="att-line-switcher" id="att-line-switcher" role="tablist" aria-label="Linha WhatsApp">
-      {% for line in whatsapp_lines %}
-      <button type="button"
-              class="att-line-pill {% if line_filter == line.id %}active{% endif %}"
-              data-line="{{ line.id }}"
-              role="tab"
-              aria-selected="{{ 'true' if line_filter == line.id else 'false' }}">
-        <span class="att-line-pill-label">{{ line.label }}</span>
-        {% if line.unread %}<span class="att-line-pill-unread">{{ line.unread }}</span>{% endif %}
-      </button>
-      {% endfor %}
-    </div>
-    {% endif %}
-    <form method="post"
-          action="/atendimentos/finalizar-todas"
-          class="att-finalize-all-form"
-          onsubmit="return confirm('Finalizar TODAS as conversas abertas desta linha e zerar as não lidas?\n\nVocê começa a fila do zero a partir de agora.');">
-      <input type="hidden" name="line" value="{{ line_filter }}">
-      <button type="submit" class="btn btn-secondary att-finalize-all-btn">Finalizar todas desta linha</button>
-    </form>
     <form class="att-filters"
           hx-post="/atendimentos/filtros"
           hx-target="#att-conversation-list"
@@ -112,6 +91,34 @@
       </select>
       {% if selected %}<input type="hidden" name="conversation_id" value="{{ selected.id }}">{% endif %}
     </form>
+
+    {% if whatsapp_lines and whatsapp_lines|length >= 1 %}
+    <div class="att-line-switcher" id="att-line-switcher" role="tablist" aria-label="Linha WhatsApp">
+      {% if whatsapp_lines|length > 1 %}
+      <button type="button"
+              class="att-line-pill {% if line_filter == 'todos' %}active{% endif %}"
+              data-line="todos"
+              role="tab"
+              aria-selected="{{ 'true' if line_filter == 'todos' else 'false' }}"
+              title="Todas as linhas">
+        <span class="att-line-pill-label">Todas</span>
+        {% if lines_unread_total %}<span class="att-line-pill-unread">{{ lines_unread_total }}</span>{% endif %}
+      </button>
+      {% endif %}
+      {% for line in whatsapp_lines %}
+      <button type="button"
+              class="att-line-pill {% if line_filter == line.id %}active{% endif %}"
+              data-line="{{ line.id }}"
+              role="tab"
+              aria-selected="{{ 'true' if line_filter == line.id else 'false' }}"
+              title="{{ line.phone or line.id }}">
+        <span class="att-line-pill-label">{{ line.label }}</span>
+        {% if line.unread %}<span class="att-line-pill-unread">{{ line.unread }}</span>{% endif %}
+      </button>
+      {% endfor %}
+    </div>
+    {% endif %}
+
     <div id="att-conversation-list" class="att-conversation-list">
       {% include "partials/attendances_list.html" %}
     </div>
