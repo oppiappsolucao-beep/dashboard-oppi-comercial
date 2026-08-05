@@ -267,7 +267,9 @@
     <div class="settings-service-list settings-service-list-full">
       {% for tag in attendance_tags %}
       <div class="settings-service-row">
-        <span>{{ tag.name }}{% if tag.is_system %} <small class="settings-field-hint">(padrão)</small>{% endif %}</span>
+        <span class="settings-tag-preview"
+              style="background: {{ tag.preview_bg }}; color: {{ tag.preview_fg }}">{{ tag.name }}</span>
+        {% if tag.is_system %} <small class="settings-field-hint">(padrão)</small>{% endif %}
         <div class="settings-service-actions">
           <span class="settings-service-badge {{ tag.status_class }}">{{ tag.status_label }}</span>
           {% if is_admin %}

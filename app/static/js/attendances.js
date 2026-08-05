@@ -1,8 +1,8 @@
 (function () {
   "use strict";
 
-  // Poll no SQLite (leve). SSE desligado: costuma travar/estressar o proxy do painel.
-  var POLL_MS = 8000;
+  // Poll leve no SQLite. 2.5s ≈ atraso máximo na UI após o webhook.
+  var POLL_MS = 2500;
   var pollTimer = null;
   var lastUnread = 0;
   var lastInboxToken = "";
@@ -35,16 +35,26 @@
       var Ctx = window.AudioContext || window.webkitAudioContext;
       if (!Ctx) return;
       var ctx = playNotify._ctx || (playNotify._ctx = new Ctx());
-      var osc = ctx.createOscillator();
-      var gain = ctx.createGain();
-      osc.type = "sine";
-      osc.frequency.value = 880;
-      gain.gain.value = 0.04;
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start();
-      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.18);
-      osc.stop(ctx.currentTime + 0.2);
+      if (ctx.state === "suspended") {
+        ctx.resume().catch(function () {});
+      }
+      // Dois tons curtos — próximo do “pop” do WhatsApp Web
+      function tone(freq, start, dur, vol) {
+        var osc = ctx.createOscillator();
+        var gain = ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.0001, start);
+        gain.gain.exponentialRampToValueAtTime(vol, start + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + dur);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(start);
+        osc.stop(start + dur + 0.02);
+      }
+      var t0 = ctx.currentTime;
+      tone(830, t0, 0.12, 0.055);
+      tone(1100, t0 + 0.11, 0.14, 0.045);
     } catch (e) { /* ignore */ }
   }
 
@@ -119,6 +129,7 @@
         search: ($("#att-search") || {}).value || "",
         status: ($("#att-status") || {}).value || "abertos",
         sector: ($("#att-sector") || {}).value || "todos",
+        tag: ($("#att-tag") || {}).value || "todos",
         line: ($("#att-line") || {}).value || "",
         conversation_id: opts.clearSelection ? "" : selectedId(),
       },
@@ -138,6 +149,7 @@
     var search = ($("#att-search") || {}).value || "";
     var status = ($("#att-status") || {}).value || "abertos";
     var sector = ($("#att-sector") || {}).value || "todos";
+    var tag = ($("#att-tag") || {}).value || "todos";
     var line = ($("#att-line") || {}).value || "";
     window.htmx.ajax(
       "GET",
@@ -145,6 +157,7 @@
         "?search=" + encodeURIComponent(search) +
         "&status=" + encodeURIComponent(status) +
         "&sector=" + encodeURIComponent(sector) +
+        "&tag=" + encodeURIComponent(tag) +
         "&line=" + encodeURIComponent(line) +
         "&soft=1",
       { target: "#att-chat-root", swap: "innerHTML" }
@@ -290,6 +303,20 @@
     pollSync();
     pollTimer = setInterval(pollSync, POLL_MS);
   }
+
+  // Browsers bloqueiam áudio até haver gesto do usuário
+  function unlockAudio() {
+    try {
+      var Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      var ctx = playNotify._ctx || (playNotify._ctx = new Ctx());
+      if (ctx.state === "suspended") ctx.resume();
+    } catch (e) {}
+    document.removeEventListener("pointerdown", unlockAudio);
+    document.removeEventListener("keydown", unlockAudio);
+  }
+  document.addEventListener("pointerdown", unlockAudio, { once: true });
+  document.addEventListener("keydown", unlockAudio, { once: true });
 
   function autoGrow(el) {
     if (!el) return;

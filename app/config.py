@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-APP_BUILD = os.getenv("APP_BUILD", "20260805-fix-move-crm-v156").strip() or "20260805-fix-move-crm-v156"
+APP_BUILD = os.getenv("APP_BUILD", "20260805-20-tags-filter-ui-v158").strip() or "20260805-20-tags-filter-ui-v158"
 
 class Settings:
     sheet_id: str = "1GAbrca0NSiJfPXaSte1qGxXCsGkQPacoRsm0PVB51gE"

@@ -840,6 +840,7 @@ async def health_webhook(
     ensure: str = Query(default="0"),
     sync: str = Query(default="0"),
     unsuppress: str = Query(default="0"),
+    diag: str = Query(default="0"),
 ):
     """Diagnóstico de inbound + reconfigura webhooks e/ou puxa chats da Evolution."""
     payload: dict[str, Any] = {
@@ -852,9 +853,48 @@ async def health_webhook(
             find_instance_webhook,
             configured_instance_names,
             webhook_callback_url,
+            get_connection_state,
+            get_instance_owner_phone,
         )
 
         payload["callback_url"] = webhook_callback_url()
+        if normalize_text(diag) in {"1", "true", "yes", "sim"}:
+            # Estado por linha (útil quando uma linha para de receber)
+            def _diag_instances() -> list[dict]:
+                rows = []
+                for name in configured_instance_names() or []:
+                    state = ""
+                    owner = ""
+                    try:
+                        state = get_connection_state(name)
+                    except Exception as err:
+                        state = f"error:{err}"[:80]
+                    try:
+                        owner = get_instance_owner_phone(name)
+                    except Exception:
+                        owner = ""
+                    rows.append(
+                        {
+                            "instance": name,
+                            "state": state or None,
+                            "owner_phone": owner or None,
+                            "receiving_recently": (
+                                normalize_text(
+                                    (payload.get("stats") or {}).get("last_instance") or ""
+                                ).lower()
+                                == name.lower()
+                            ),
+                        }
+                    )
+                return rows
+
+            try:
+                payload["instances"] = await asyncio.wait_for(
+                    asyncio.to_thread(_diag_instances),
+                    timeout=12,
+                )
+            except Exception as diag_error:
+                payload["instances_error"] = str(diag_error)[:200]
         if normalize_text(unsuppress) in {"1", "true", "yes", "sim"}:
             try:
                 payload["unsuppress"] = await asyncio.to_thread(

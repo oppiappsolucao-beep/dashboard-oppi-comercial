@@ -120,6 +120,7 @@ def page_context(
     status: str = "",
     sector_filter: str = "",
     line_filter: str = "",
+    tag_filter: str = "",
     selected_id: str = "",
     session_user: dict | None = None,
     flash: str = "",
@@ -162,11 +163,15 @@ def page_context(
 
         threading.Thread(target=_warm_owners, daemon=True, name="att-warm-owners").start()
     active_line = _resolve_line_filter(line_filter, whatsapp_lines)
+    active_tag = normalize_text(tag_filter)
+    if active_tag.lower() in ("", "todos", "all"):
+        active_tag = ""
     conversations = store.list_conversations(
         search=search,
         status=status,
         sector_id=effective_sector,
         evolution_instance=active_line,
+        tag=active_tag,
     )
     selected = None
     messages: list[dict] = []
@@ -174,6 +179,7 @@ def page_context(
     sector_options: list[dict] = []
     responsible_options: list[str] = []
     tag_options: list[str] = []
+    tag_styles: dict = {}
     quick_replies: list[dict] = []
     try:
         from app.services.sectors import list_sectors, responsible_options_for_sector
@@ -185,11 +191,20 @@ def page_context(
         sector_options = []
 
     try:
-        from app.services.attendance_tags import list_attendance_tag_options
+        from app.services.attendance_tags import list_attendance_tag_options, tag_style_map
 
         tag_options = list_attendance_tag_options()
+        # Inclui tags já aplicadas nas conversas (mesmo se saírem das opções ativas)
+        extra_tags: list[str] = []
+        for conv in conversations:
+            for t in conv.get("tags") or []:
+                name = normalize_text(t)
+                if name and name not in tag_options and name not in extra_tags:
+                    extra_tags.append(name)
+        tag_styles = tag_style_map(tag_options + extra_tags)
     except Exception:
         tag_options = []
+        tag_styles = {}
 
     try:
         from app.services.attendance_quick_replies import list_quick_reply_options
@@ -295,6 +310,8 @@ def page_context(
         "sector_options": sector_options,
         "responsible_options": responsible_options,
         "tag_options": tag_options,
+        "tag_styles": tag_styles,
+        "tag_filter": active_tag or "todos",
         "quick_replies": quick_replies,
         "is_admin": (session_user or {}).get("role") == "Administrador",
         "can_delete_conversation": can_delete_attendance_conversation(
@@ -464,13 +481,19 @@ def send_text_message(
     used = used_number or (
         conversation.get("remote_jid") or conversation.get("phone_e164") or ""
     )
-    if response.get("_oppi_delivery_pending"):
+    pending = bool(response.get("_oppi_delivery_pending")) or status.upper() in {
+        "PENDING",
+        "ERROR",
+        "0",
+        "",
+    }
+    if pending:
         has_lid = "@lid" in used.lower() or "@lid" in (resolved_lid or "").lower()
         if has_lid:
             warning = (
                 f"⚠ Entrega PENDING mesmo com @lid · destino {used}. "
-                "Provável Baileys desatualizado no servidor Evolution — "
-                "atualize baileys@7.0.0-rc13 no Easypanel e reconecte o QR."
+                "Confira se a instância Evolution está open e o Baileys atualizado; "
+                "peça uma mensagem nova do cliente e tente de novo."
             )
         else:
             warning = (
@@ -479,7 +502,8 @@ def send_text_message(
                 "em CRM → Atualizar @lid, depois envie de novo."
             )
     else:
-        warning = f"Enviado à Evolution · status {status} · destino {used}"
+        # Sucesso real — flash curto (evita assustar com "PENDING")
+        warning = ""
     return message, warning
 
 

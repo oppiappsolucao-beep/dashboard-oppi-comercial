@@ -336,9 +336,15 @@ def upsert_conversation_by_remote_jid(
                 or existing
             )
         updates: dict = {}
-        # Sempre preferir o nome salvo no WhatsApp (pushName) quando vier no evento
-        if contact_name and normalize_text(existing.get("contact_name") or "") != contact_name:
-            updates["contact_name"] = contact_name
+        # Só preenche nome vazio/placeholder — não troca Vicente por "Oppi Tech"
+        try:
+            from app.services.attendance_crm import should_adopt_contact_name
+
+            if should_adopt_contact_name(existing.get("contact_name") or "", contact_name):
+                updates["contact_name"] = contact_name
+        except Exception:
+            if contact_name and not normalize_text(existing.get("contact_name") or ""):
+                updates["contact_name"] = contact_name
         if instance and not normalize_text(existing.get("evolution_instance") or ""):
             updates["evolution_instance"] = instance
         if is_placeholder_whatsapp_phone(existing.get("phone_e164") or ""):
@@ -742,11 +748,13 @@ def list_conversations(
     status: str = "",
     sector_id: int | str | None = None,
     evolution_instance: str = "",
+    tag: str = "",
     limit: int = 100,
 ) -> list[dict]:
     from app.services.evolution_client import is_whatsapp_group_jid
 
     instance = resolve_evolution_instance(evolution_instance)
+    tag_filter = normalize_text(tag)
     with _session(commit=False) as db:
         q = db.query(AttendanceConversation)
         # Nunca listar conversas excluídas pelo admin
@@ -808,7 +816,14 @@ def list_conversations(
                 continue
             if _is_unwanted_inbox_contact(row.contact_name or ""):
                 continue
-            conversations.append(_conversation_to_dict(row))
+            item = _conversation_to_dict(row)
+            if tag_filter:
+                tags = [normalize_text(t) for t in (item.get("tags") or [])]
+                if tag_filter not in tags and tag_filter.lower() not in {
+                    t.lower() for t in tags
+                }:
+                    continue
+            conversations.append(item)
         return conversations
 
 
@@ -897,10 +912,17 @@ def upsert_conversation_by_phone(
                 return {}
         if existing:
             changed = phone_linked_from_jid
-            # Sempre preferir o nome salvo no WhatsApp (pushName) quando vier no evento
-            if contact_name and normalize_text(existing.contact_name or "") != contact_name:
-                existing.contact_name = contact_name
-                changed = True
+            # Só preenche nome vazio/placeholder — não troca um nome bom no sync/webhook
+            try:
+                from app.services.attendance_crm import should_adopt_contact_name
+
+                if should_adopt_contact_name(existing.contact_name or "", contact_name):
+                    existing.contact_name = contact_name
+                    changed = True
+            except Exception:
+                if contact_name and not normalize_text(existing.contact_name or ""):
+                    existing.contact_name = contact_name
+                    changed = True
             if profile_pic_url:
                 existing.profile_pic_url = normalize_text(profile_pic_url)
                 changed = True

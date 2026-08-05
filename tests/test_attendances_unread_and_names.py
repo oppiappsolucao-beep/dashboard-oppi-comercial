@@ -77,27 +77,46 @@ class AttendancesUnreadAndNamesTest(unittest.TestCase):
         store.update_conversation(c1["id"], unread_count=999)
         self.assertEqual(store.count_unread(evolution_instance="linha-teste"), 0)
 
-    def test_whatsapp_name_overwrites_previous_contact_name(self):
+    def test_whatsapp_name_keeps_existing_good_name(self):
         first = store.upsert_conversation_by_phone(
             "5511999998888",
-            contact_name="Nome Antigo",
+            contact_name="Vicente Lemos",
             evolution_instance="linha-teste",
             ignore_suppression=True,
         )
-        self.assertEqual(first["contact_name"], "Nome Antigo")
+        self.assertEqual(first["contact_name"], "Vicente Lemos")
 
         second = store.upsert_conversation_by_phone(
             "5511999998888",
-            contact_name="Nome do WhatsApp",
+            contact_name="Oppi Tech",
             evolution_instance="linha-teste",
             ignore_suppression=True,
         )
-        self.assertEqual(second["contact_name"], "Nome do WhatsApp")
+        # Nome bom não deve ser sobrescrito por pushName/sync posterior
+        self.assertEqual(second["contact_name"], "Vicente Lemos")
+
+        blank = store.upsert_conversation_by_phone(
+            "5511987654321",
+            contact_name="WhatsApp",
+            evolution_instance="linha-teste",
+            ignore_suppression=True,
+        )
+        self.assertTrue(blank)
+        named = store.upsert_conversation_by_phone(
+            "5511987654321",
+            contact_name="Maria Silva",
+            evolution_instance="linha-teste",
+            ignore_suppression=True,
+        )
+        self.assertEqual(named.get("contact_name"), "Maria Silva")
 
     def test_placeholder_helpers(self):
         self.assertTrue(attendance_crm._looks_like_whatsapp_placeholder("Lead WhatsApp (11) 99999-0000"))
         self.assertTrue(attendance_crm._looks_like_whatsapp_placeholder("WhatsApp 5511"))
         self.assertFalse(attendance_crm._looks_like_whatsapp_placeholder("Oppi Tech"))
+        self.assertFalse(attendance_crm.should_adopt_contact_name("Vicente Lemos", "Oppi Tech"))
+        self.assertTrue(attendance_crm.should_adopt_contact_name("", "Vicente Lemos"))
+        self.assertTrue(attendance_crm.should_adopt_contact_name("Lead WhatsApp 11", "Vicente Lemos"))
 
 
 if __name__ == "__main__":

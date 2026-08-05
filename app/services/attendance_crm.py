@@ -167,6 +167,21 @@ def _looks_like_whatsapp_placeholder(name: str) -> bool:
         return True
     if n.startswith("lead whatsapp") or n.startswith("whatsapp "):
         return True
+    # Só dígitos / telefone cru
+    digits = "".join(ch for ch in n if ch.isdigit())
+    if digits and len(digits) >= 10 and digits == "".join(ch for ch in n if ch.isdigit() or ch in " +()-"):
+        return True
+    return False
+
+
+def should_adopt_contact_name(existing: str, incoming: str) -> bool:
+    """Só preenche nome vazio/placeholder — nunca sobrescreve um nome bom (ex.: Vicente → Oppi)."""
+    new_name = normalize_text(incoming)
+    if not new_name or _looks_like_whatsapp_placeholder(new_name):
+        return False
+    current = normalize_text(existing)
+    if not current or _looks_like_whatsapp_placeholder(current):
+        return True
     return False
 
 
@@ -330,13 +345,18 @@ def apply_whatsapp_name_to_crm(
     *,
     whatsapp_name: str,
 ) -> None:
-    """Grava o nome do WhatsApp no cadastro (Empresa/Contato) quando chega mensagem."""
+    """Preenche Empresa/Contato só quando o cadastro ainda está genérico."""
     name = normalize_text(whatsapp_name)
-    if not sheet_row or not name:
+    if not sheet_row or not name or _looks_like_whatsapp_placeholder(name):
         return
-    # Sempre atualiza com o nome do WhatsApp do cliente
+    panel = build_crm_panel(int(sheet_row), fallback_name=name)
+    empresa = normalize_text(panel.get("empresa") or "")
+    contato = normalize_text(panel.get("contato") or "")
+    # Não apaga nome real de empresa (ex.: Oppi Tech) com pushName do WhatsApp
+    if not _looks_like_whatsapp_placeholder(empresa) and not _looks_like_whatsapp_placeholder(contato):
+        return
     update_cadastro_names(
         sheet_row,
-        empresa=name,
-        contato=name,
+        empresa=name if _looks_like_whatsapp_placeholder(empresa) else "",
+        contato=name if _looks_like_whatsapp_placeholder(contato) else "",
     )

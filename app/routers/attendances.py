@@ -41,7 +41,7 @@ def _seller_label(request: Request) -> str:
     return _username(request)
 
 
-def _filters(request: Request, form: dict | None = None) -> tuple[str, str, str, str, str]:
+def _filters(request: Request, form: dict | None = None) -> tuple[str, str, str, str, str, str]:
     data = form or {}
     search = normalize_text(data.get("search") or request.query_params.get("search", ""))
     # Padrão: só abertos (finalizados saem da fila)
@@ -58,7 +58,10 @@ def _filters(request: Request, form: dict | None = None) -> tuple[str, str, str,
         or request.query_params.get("line", "")
         or request.query_params.get("wa", "")
     )
-    return search, status, selected, sector, line
+    tag = normalize_text(data.get("tag") or request.query_params.get("tag", ""))
+    if tag.lower() in ("todos", "all"):
+        tag = ""
+    return search, status, selected, sector, line, tag
 
 
 def _page_ctx(
@@ -71,12 +74,13 @@ def _page_ctx(
     light: bool = False,
     soft: bool = False,
 ) -> dict:
-    search, status, selected, sector, line = _filters(request, form)
+    search, status, selected, sector, line, tag = _filters(request, form)
     return attendances_service.page_context(
         search=search,
         status=status,
         sector_filter=sector,
         line_filter=line,
+        tag_filter=tag,
         selected_id=selected if selected_id is None else selected_id,
         session_user=get_session_user(request),
         flash=flash,
@@ -651,6 +655,7 @@ def attendances_test_send(request: Request, conversation_id: str):
             conversation.get("phone_e164") or "",
             body,
             jid=conversation.get("remote_jid") or "",
+            instance=conversation.get("evolution_instance") or "",
         )
         msg_id = evolution_client.extract_message_id(data)
         status = evolution_client.extract_message_status(data) or data.get("_oppi_send_status") or "UNKNOWN"
@@ -725,10 +730,29 @@ def attendances_evolution_diag(request: Request, conversation_id: str = ""):
     state_error = ""
     resolved = ""
     names: list[str] = []
+    instances_diag: list[dict] = []
     try:
         names = evolution_client.fetch_instance_names()
         resolved = evolution_client.resolved_instance_name()
         state = evolution_client.get_connection_state()
+        for name in settings.evolution_instances or []:
+            inst_state = ""
+            owner = ""
+            try:
+                inst_state = evolution_client.get_connection_state(name)
+            except Exception as err:
+                inst_state = f"error:{err}"[:80]
+            try:
+                owner = evolution_client.get_instance_owner_phone(name)
+            except Exception:
+                owner = ""
+            instances_diag.append(
+                {
+                    "instance": name,
+                    "state": inst_state or None,
+                    "owner_phone": owner or None,
+                }
+            )
     except Exception as error:
         state_error = str(error)
 
@@ -764,6 +788,7 @@ def attendances_evolution_diag(request: Request, conversation_id: str = ""):
             "instance_resolved": resolved or None,
             "instance_owner_phone": owner_phone or None,
             "instances_available": names,
+            "instances": instances_diag,
             "api_key_masked": masked,
             "connection_state": state or None,
             "connection_error": state_error or None,

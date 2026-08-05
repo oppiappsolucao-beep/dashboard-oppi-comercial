@@ -1124,19 +1124,27 @@ def send_text(phone: str, text: str, *, jid: str = "", instance: str = "") -> di
             "Teste enviando para outro celular (cliente real)."
         )
 
-    # Caminho rápido (igual ao que já entregou 1x): @lid salvo OU número puro.
-    # Evita findChats/presence/delay em todo envio — isso travava o chat após a 1ª msg.
+    # Preferir @lid (evita PENDING no PN). Se só houver número, tenta descobrir @lid 1x.
     stored = normalize_text(jid)
     digits = _plain_phone(phone)
     candidates: list[str] = []
+
+    def _add_candidate(item: str) -> None:
+        value = normalize_send_number(item)
+        if value and value not in candidates:
+            candidates.append(value)
+
     if stored and "@lid" in stored.lower():
-        candidates.append(stored)
+        _add_candidate(stored)
+    try:
+        discovered = discover_lid_for_phone(phone, stored)
+        _add_candidate(discovered)
+    except Exception:
+        pass
     if digits:
-        candidates.append(digits)
+        _add_candidate(digits)
     if stored and "@lid" not in stored.lower():
-        normalized = normalize_send_number(stored)
-        if normalized and normalized not in candidates:
-            candidates.append(normalized)
+        _add_candidate(stored)
     if not candidates:
         raise EvolutionClientError("Telefone/JID da conversa inválido para envio.")
 
@@ -1144,6 +1152,7 @@ def send_text(phone: str, text: str, *, jid: str = "", instance: str = "") -> di
         "/message/sendText", instance=instance
     )
     errors: list[str] = []
+    pending_fallback: dict[str, Any] | None = None
 
     for number in candidates:
         number = normalize_send_number(number)
@@ -1173,18 +1182,28 @@ def send_text(phone: str, text: str, *, jid: str = "", instance: str = "") -> di
                 continue
 
             status = extract_message_status(data) or "UNKNOWN"
+            pending = is_delivery_pending(data)
             logger.info(
-                "Evolution sendText instance=%s number=%s id=%s status=%s",
+                "Evolution sendText instance=%s number=%s id=%s status=%s pending=%s",
                 resolved_instance_name(instance),
                 number,
                 msg_id,
                 status,
+                pending,
             )
             data["_oppi_send_number"] = number
             data["_oppi_send_status"] = status
             data["_oppi_resolved_lid"] = number if "@lid" in number.lower() else ""
-            data["_oppi_delivery_pending"] = False
+            data["_oppi_delivery_pending"] = bool(pending)
+            if pending:
+                # Guarda o 1º PENDING e tenta o próximo candidato (@lid).
+                if pending_fallback is None:
+                    pending_fallback = data
+                continue
             return data
+
+    if pending_fallback is not None:
+        return pending_fallback
 
     detail = " | ".join(errors[-4:]) if errors else "sem detalhes"
     raise EvolutionClientError(

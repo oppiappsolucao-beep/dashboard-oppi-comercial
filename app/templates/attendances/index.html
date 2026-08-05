@@ -4,14 +4,8 @@
 <div class="page-header att-page-header">
   <div>
     <div class="page-title">Atendimentos</div>
-    <div class="page-subtitle">Inbox WhatsApp integrado ao CRM — responda leads e pause a IA quando assumir.</div>
   </div>
   <div class="page-actions att-page-actions">
-    {% if not evolution_configured %}
-    <span class="att-config-badge" title="Defina EVOLUTION_API_URL, EVOLUTION_API_KEY e EVOLUTION_INSTANCE">Evolution não configurada</span>
-    {% else %}
-    <span class="att-config-badge att-config-ok">Evolution conectada</span>
-    {% endif %}
     <span class="att-unread-pill" id="att-unread-pill" data-count="{{ unread_total }}" {% if unread_total <= 0 %}hidden{% endif %}>
       {{ unread_total }} nova{{ 's' if unread_total != 1 else '' }}
     </span>
@@ -89,7 +83,7 @@
           hx-post="/atendimentos/filtros"
           hx-target="#att-conversation-list"
           hx-swap="innerHTML"
-          hx-trigger="submit, keyup changed delay:300ms from:#att-search, change from:#att-status, change from:#att-sector, change from:#att-line">
+          hx-trigger="submit, keyup changed delay:300ms from:#att-search, change from:#att-status, change from:#att-sector, change from:#att-tag, change from:#att-line">
       <input type="hidden" id="att-line" name="line" value="{{ line_filter }}">
       <input type="search" id="att-search" name="search" value="{{ search }}" placeholder="Buscar nome ou telefone…" class="att-input" autocomplete="off">
       <select id="att-status" name="status" class="att-input att-select">
@@ -110,6 +104,12 @@
       <input type="hidden" name="sector" value="{{ sector_filter }}">
       <small class="att-filter-hint">Fila do setor: {{ user_sector_name or 'seu departamento' }}</small>
       {% endif %}
+      <select id="att-tag" name="tag" class="att-input att-select">
+        <option value="todos" {% if tag_filter == 'todos' or not tag_filter %}selected{% endif %}>Todas as tags</option>
+        {% for tag in tag_options or [] %}
+        <option value="{{ tag }}" {% if tag_filter == tag %}selected{% endif %}>{{ tag }}</option>
+        {% endfor %}
+      </select>
       {% if selected %}<input type="hidden" name="conversation_id" value="{{ selected.id }}">{% endif %}
     </form>
     <div id="att-conversation-list" class="att-conversation-list">

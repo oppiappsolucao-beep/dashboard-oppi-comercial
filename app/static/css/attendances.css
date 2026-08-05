@@ -252,6 +252,7 @@
 .att-conv-meta {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 6px;
   margin-top: 4px;
 }
@@ -268,6 +269,22 @@
 .att-status-badge.status-novo_lead { background: #DBEAFE; color: #1D4ED8; }
 .att-status-badge.status-em_atendimento { background: #FEF3C7; color: #B45309; }
 .att-status-badge.status-finalizado { background: #E5E7EB; color: #4B5563; }
+
+.att-tag-pill {
+  display: inline-flex;
+  align-items: center;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.2;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #F3F4F6;
+  color: #374151;
+}
 
 .att-unread-dot {
   margin-left: auto;
@@ -920,24 +937,50 @@
 }
 
 .att-tag-chip {
+  --att-tag-bg: #F3F4F6;
+  --att-tag-fg: #374151;
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
-  border: 1px solid var(--border);
+  gap: 0;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--att-tag-fg) 18%, transparent);
   border-radius: 999px;
   font-size: 12px;
+  font-weight: 600;
   background: #fff;
+  color: var(--att-tag-fg);
   cursor: pointer;
+  user-select: none;
+  transition: background 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
 }
 
 .att-tag-chip input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
   margin: 0;
+  pointer-events: none;
 }
 
-.att-tag-chip:has(input:checked) {
-  border-color: #25D366;
-  background: #ecfdf3;
+.att-tag-chip span {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: inherit;
+}
+
+.att-tag-chip:hover {
+  border-color: color-mix(in srgb, var(--att-tag-fg) 35%, transparent);
+}
+
+.att-tag-chip:has(input:checked),
+.att-tag-chip.is-on {
+  background: var(--att-tag-bg);
+  border-color: color-mix(in srgb, var(--att-tag-fg) 28%, transparent);
+  color: var(--att-tag-fg);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--att-tag-fg) 8%, transparent);
 }
 
 @media (max-width: 800px) {

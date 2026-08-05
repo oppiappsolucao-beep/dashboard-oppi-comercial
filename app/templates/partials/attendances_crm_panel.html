@@ -96,11 +96,14 @@
   <form class="att-notes-form"
         hx-post="/atendimentos/conversa/{{ selected.id }}/notas"
         hx-target="#att-crm-inner"
-        hx-swap="innerHTML">
+        hx-swap="innerHTML"
+        hx-on::after-request="document.querySelector('.att-filters') && htmx.trigger(document.querySelector('.att-filters'), 'submit')">
     <label class="att-label">Tags</label>
     <div class="att-tags-list">
       {% for tag in tag_options or [] %}
-      <label class="att-tag-chip">
+      {% set style = (tag_styles or {}).get(tag) %}
+      <label class="att-tag-chip {% if tag in (selected.tags or []) %}is-on{% endif %}"
+             {% if style %}style="--att-tag-bg: {{ style.bg }}; --att-tag-fg: {{ style.fg }}"{% endif %}>
         <input type="checkbox" name="tags" value="{{ tag }}"
                {% if tag in (selected.tags or []) %}checked{% endif %}>
         <span>{{ tag }}</span>

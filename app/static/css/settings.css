@@ -366,6 +366,16 @@
 .settings-service-badge.test { background: #DBEAFE; color: #2563EB; }
 .settings-service-badge.optional { background: #F3F4F6; color: #64748B; }
 
+.settings-tag-preview {
+  display: inline-flex;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+  line-height: 1.2;
+}
+
 .settings-service-form {
   margin-top: 16px;
 }
