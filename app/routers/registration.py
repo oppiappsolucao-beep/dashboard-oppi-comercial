@@ -70,11 +70,11 @@ def _registration_page_context(request: Request, df, *, error: str = "", values:
     back_href = {
         "leads": "/leads-e-empresas",
         "activities": "/atividades",
-    }.get(from_page, "/cadastro/todos")
+    }.get(from_page, "/leads-e-empresas")
     back_label = {
         "leads": "Empresas",
         "activities": "Atividades",
-    }.get(from_page, "Todos os cadastros")
+    }.get(from_page, "Empresas")
 
     page_ctx = build_cadastro_new_page_context(
         values=values,

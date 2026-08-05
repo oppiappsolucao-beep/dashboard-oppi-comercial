@@ -246,16 +246,27 @@
 <div class="settings-goals-layout settings-services-tab">
   <div class="panel settings-single-card">
     <div class="section-heading">Tags de atendimento</div>
-    <div class="section-subtitle">Padrão: Novo contato, Parceiros e Atendimento interno. Use nas conversas da inbox. Setores ficam em Usuários e Permissões.</div>
+    <div class="section-subtitle">Cadastre, edite o nome e escolha uma das 6 cores. As tags ficam no cadastro do cliente e aparecem na lista de Atendimentos.</div>
     {% if tag_success %}<div class="settings-alert success">{{ tag_success }}</div>{% endif %}
     {% if tag_error %}<div class="settings-alert error">{{ tag_error }}</div>{% endif %}
     {% if is_admin %}
-    <form method="post" action="/configuracoes/tags/adicionar" class="settings-goals-form settings-service-form">
+    <form method="post" action="/configuracoes/tags/adicionar" class="settings-goals-form settings-service-form settings-tag-form">
       <input type="hidden" name="tab" value="atendimentos">
       <label>
         <span class="settings-company-label">Nova tag</span>
         <input type="text" name="tag_name" placeholder="Ex.: VIP" required maxlength="120" autocomplete="off">
       </label>
+      <fieldset class="settings-tag-colors">
+        <legend class="settings-company-label">Cor</legend>
+        <div class="settings-tag-color-grid">
+          {% for color in tag_color_presets or [] %}
+          <label class="settings-tag-color-option" title="{{ color.label }}">
+            <input type="radio" name="tag_color" value="{{ color.id }}" {% if loop.first %}checked{% endif %}>
+            <span class="settings-tag-swatch" style="background:{{ color.bg }};color:{{ color.fg }}">{{ color.label }}</span>
+          </label>
+          {% endfor %}
+        </div>
+      </fieldset>
       <button type="submit" class="btn">Cadastrar tag</button>
     </form>
     {% else %}
@@ -266,21 +277,35 @@
     <div class="section-heading">Tags cadastradas</div>
     <div class="settings-service-list settings-service-list-full">
       {% for tag in attendance_tags %}
-      <div class="settings-service-row">
+      <div class="settings-service-row settings-tag-row">
+        {% if is_admin %}
+        <form method="post" action="/configuracoes/tags/editar" class="settings-tag-edit-form">
+          <input type="hidden" name="tab" value="atendimentos">
+          <input type="hidden" name="tag_name" value="{{ tag.name }}">
+          <input type="text" name="new_name" value="{{ tag.name }}" maxlength="120" required class="settings-tag-name-input" aria-label="Nome da tag">
+          <div class="settings-tag-color-grid compact">
+            {% for color in tag_color_presets or [] %}
+            <label class="settings-tag-color-option" title="{{ color.label }}">
+              <input type="radio" name="tag_color" value="{{ color.id }}" {% if tag.color == color.id %}checked{% endif %}>
+              <span class="settings-tag-swatch sm" style="background:{{ color.bg }};color:{{ color.fg }}"></span>
+            </label>
+            {% endfor %}
+          </div>
+          <div class="settings-service-actions">
+            <span class="settings-service-badge {{ tag.status_class }}">{{ tag.status_label }}</span>
+            <button type="submit" class="settings-link-btn">Salvar</button>
+            <button type="submit" formaction="/configuracoes/tags/remover" class="settings-link-btn danger"
+                    onclick="return confirm('Remover/desativar esta tag?');">Remover</button>
+          </div>
+        </form>
+        {% else %}
         <span class="settings-tag-preview"
               style="background: {{ tag.preview_bg }}; color: {{ tag.preview_fg }}">{{ tag.name }}</span>
         {% if tag.is_system %} <small class="settings-field-hint">(padrão)</small>{% endif %}
         <div class="settings-service-actions">
           <span class="settings-service-badge {{ tag.status_class }}">{{ tag.status_label }}</span>
-          {% if is_admin %}
-          <form method="post" action="/configuracoes/tags/remover" class="settings-inline-form"
-            onsubmit="return confirm('Remover/desativar esta tag?');">
-            <input type="hidden" name="tab" value="atendimentos">
-            <input type="hidden" name="tag_name" value="{{ tag.name }}">
-            <button type="submit" class="settings-link-btn danger">Remover</button>
-          </form>
-          {% endif %}
         </div>
+        {% endif %}
       </div>
       {% else %}
       <div class="settings-empty">Nenhuma tag cadastrada.</div>

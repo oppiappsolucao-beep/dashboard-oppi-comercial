@@ -556,7 +556,9 @@ def attendances_delete(
             qs = urlencode({"line": line, "error": "sem_permissao"} if line else {"error": "sem_permissao"})
             return RedirectResponse(url=f"/atendimentos?{qs}", status_code=303)
     except Exception:
-        log.exception("can_delete falhou; segue tentativa de exclusão se sessão admin")
+        log.exception("can_delete falhou — bloqueando exclusão")
+        qs = urlencode({"line": line, "error": "sem_permissao"} if line else {"error": "sem_permissao"})
+        return RedirectResponse(url=f"/atendimentos?{qs}", status_code=303)
 
     cid = normalize_text(conversation_id)
 
@@ -594,7 +596,7 @@ async def attendances_notes(request: Request, conversation_id: str):
     else:
         tags = [normalize_text(t) for t in raw_tags if normalize_text(t)]
     attendances_service.update_notes_tags(conversation_id, notes=notes, tags=tags)
-    ctx = _page_ctx(request, selected_id=conversation_id, flash="Observações salvas.")
+    ctx = _page_ctx(request, selected_id=conversation_id, flash="")
     return render(request, "partials/attendances_crm_panel.html", ctx)
 
 

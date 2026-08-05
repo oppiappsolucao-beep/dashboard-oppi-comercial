@@ -775,3 +775,102 @@ def _mirror_all_lead_actions(*, tenant_id: str | None = None) -> None:
     worksheet.clear()
     worksheet.update(rows, value_input_option="USER_ENTERED")
     invalidate_worksheet_cache("LeadAcoes")
+
+
+def get_registration_attendance_tags(
+    *,
+    sheet_row: int | None = None,
+    registration_id: int | None = None,
+) -> list[str]:
+    row = None
+    if registration_id:
+        row = get_registration_by_id(int(registration_id))
+    elif sheet_row:
+        row = get_registration_by_sheet_row(int(sheet_row))
+    if not row:
+        return []
+    extras = _json_loads(row.extras_json, {})
+    raw = extras.get("attendance_tags") if isinstance(extras, dict) else None
+    if not isinstance(raw, list):
+        return []
+    return [normalize_text(t) for t in raw if normalize_text(t)]
+
+
+def save_registration_attendance_tags(
+    tags: list[str],
+    *,
+    sheet_row: int | None = None,
+    registration_id: int | None = None,
+) -> list[str]:
+    clean = [normalize_text(t) for t in (tags or []) if normalize_text(t)]
+    # unique preserve order
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for tag in clean:
+        key = tag.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        ordered.append(tag)
+
+    db = SessionLocal()
+    try:
+        row = None
+        if registration_id:
+            row = db.get(CrmRegistration, int(registration_id))
+        elif sheet_row:
+            row = (
+                db.query(CrmRegistration)
+                .filter(CrmRegistration.sheet_row == int(sheet_row))
+                .first()
+            )
+        if not row:
+            return ordered
+        extras = _json_loads(row.extras_json, {})
+        if not isinstance(extras, dict):
+            extras = {}
+        extras["attendance_tags"] = ordered
+        row.extras_json = _json_dumps(extras)
+        row.updated_at = _now_iso()
+        db.commit()
+        return ordered
+    finally:
+        db.close()
+
+
+def rename_attendance_tag_in_registrations(old_name: str, new_name: str) -> int:
+    old = normalize_text(old_name)
+    new = normalize_text(new_name)
+    if not old or not new or old.lower() == new.lower():
+        return 0
+    db = SessionLocal()
+    try:
+        changed = 0
+        for row in db.query(CrmRegistration).all():
+            extras = _json_loads(row.extras_json, {})
+            if not isinstance(extras, dict):
+                continue
+            raw = extras.get("attendance_tags")
+            if not isinstance(raw, list):
+                continue
+            next_tags = []
+            touched = False
+            for tag in raw:
+                text_tag = normalize_text(tag)
+                if text_tag.lower() == old.lower():
+                    next_tags.append(new)
+                    touched = True
+                elif text_tag:
+                    next_tags.append(text_tag)
+            if touched:
+                extras["attendance_tags"] = next_tags
+                row.extras_json = _json_dumps(extras)
+                row.updated_at = _now_iso()
+                changed += 1
+        if changed:
+            db.commit()
+        else:
+            db.rollback()
+        return changed
+    finally:
+        db.close()

@@ -12,16 +12,12 @@ from app.services.legacy_core import normalize_text
 
 logger = logging.getLogger(__name__)
 
-# Setores/perfis operacionais: nunca excluem conversa da inbox
-_DELETE_BLOCKED_DEPARTMENTS = frozenset({"atendimento", "cadastro"})
-
-
 def can_delete_attendance_conversation(
     session_user: dict | None,
     *,
     request=None,
 ) -> bool:
-    """Só Administrador (ou login master APP_USERNAME). Atendimento/Cadastro não podem."""
+    """Só perfil Administrador (e login master APP_USERNAME) pode excluir conversa."""
     try:
         if request is not None:
             uname = normalize_text(getattr(request, "session", {}).get("username") or "")
@@ -29,20 +25,12 @@ def can_delete_attendance_conversation(
                 return True
             role_sess = normalize_text(getattr(request, "session", {}).get("user_role") or "")
             if role_sess == "Administrador":
-                dept = normalize_text((session_user or {}).get("department_name") or "").lower()
-                if dept not in _DELETE_BLOCKED_DEPARTMENTS:
-                    return True
+                return True
     except Exception:
         pass
     if not session_user:
         return False
-    role = normalize_text(session_user.get("role") or "")
-    if role != "Administrador":
-        return False
-    dept = normalize_text(session_user.get("department_name") or "").lower()
-    if dept in _DELETE_BLOCKED_DEPARTMENTS:
-        return False
-    return True
+    return normalize_text(session_user.get("role") or "") == "Administrador"
 
 
 def _resolve_sector_filter(session_user: dict | None, sector_filter: str) -> tuple[int | str | None, dict]:
@@ -171,8 +159,40 @@ def page_context(
         status=status,
         sector_id=effective_sector,
         evolution_instance=active_line,
-        tag=active_tag,
+        tag="",
     )
+    # Tags do cadastro → lista (ao lado de Novo Lead / Em Atendimento)
+    try:
+        from app.services.crm_registrations_storage import get_registration_attendance_tags
+
+        hydrated: list[dict] = []
+        for conv in conversations:
+            if not conv.get("sheet_row") and not conv.get("registration_id"):
+                hydrated.append(conv)
+                continue
+            cadastro_tags = get_registration_attendance_tags(
+                sheet_row=int(conv["sheet_row"]) if conv.get("sheet_row") else None,
+                registration_id=int(conv["registration_id"]) if conv.get("registration_id") else None,
+            )
+            if not cadastro_tags:
+                hydrated.append(conv)
+                continue
+            current = [normalize_text(t) for t in (conv.get("tags") or [])]
+            if [t.lower() for t in current] != [t.lower() for t in cadastro_tags]:
+                updated = store.update_conversation(conv["id"], tags=cadastro_tags) or conv
+                hydrated.append(updated)
+            else:
+                hydrated.append(conv)
+        conversations = hydrated
+    except Exception:
+        logger.exception("Falha ao hidratar tags do cadastro na lista")
+    if active_tag:
+        wanted = active_tag.lower()
+        conversations = [
+            c
+            for c in conversations
+            if wanted in {normalize_text(t).lower() for t in (c.get("tags") or [])}
+        ]
     selected = None
     messages: list[dict] = []
     crm = attendance_crm.build_crm_panel(None)
@@ -244,6 +264,10 @@ def page_context(
 
                 store.mark_conversation_read(selected_id)
                 selected = store.get_conversation(selected_id)
+                try:
+                    selected = apply_registration_tags_to_conversation(selected) or selected
+                except Exception:
+                    logger.exception("apply tags do cadastro falhou")
                 messages = store.list_messages(selected_id)
                 # CRM / mídia nunca no request — travava o worker e o chat “não abria”
                 if not soft:
@@ -338,7 +362,7 @@ def ensure_crm_link(
 
                 reg = get_registration_by_sheet_row(int(current_row))
                 if reg:
-                    return (
+                    conversation = (
                         store.update_conversation(
                             conversation["id"],
                             registration_id=int(reg.id),
@@ -347,7 +371,7 @@ def ensure_crm_link(
                     )
             except Exception:
                 pass
-        return conversation
+        return apply_registration_tags_to_conversation(conversation) or conversation
 
     # Vínculo ausente ou de outro contato — limpa e resolve de novo pelo telefone
     if current_row:
@@ -373,7 +397,7 @@ def ensure_crm_link(
                 registration_id = int(reg.id)
         except Exception:
             pass
-        return (
+        conversation = (
             store.update_conversation(
                 conversation["id"],
                 sheet_row=int(sheet_row),
@@ -381,6 +405,7 @@ def ensure_crm_link(
             )
             or conversation
         )
+        return apply_registration_tags_to_conversation(conversation) or conversation
     return conversation
 
 
@@ -1105,4 +1130,62 @@ def update_notes_tags(
         fields["tags"] = tags
     if not fields:
         return store.get_conversation(conversation_id)
-    return store.update_conversation(conversation_id, **fields)
+    conversation = store.update_conversation(conversation_id, **fields)
+    if tags is not None and conversation:
+        try:
+            sync_conversation_tags_to_registration(conversation, tags)
+        except Exception:
+            logger.exception(
+                "Falha ao gravar tags no cadastro conversa=%s", conversation_id
+            )
+    return conversation
+
+
+def sync_conversation_tags_to_registration(
+    conversation: dict,
+    tags: list[str] | None = None,
+) -> None:
+    """Persiste tags no cadastro do cliente (extras.attendance_tags)."""
+    if not conversation:
+        return
+    from app.services.crm_registrations_storage import save_registration_attendance_tags
+
+    clean = [normalize_text(t) for t in (tags if tags is not None else conversation.get("tags") or []) if normalize_text(t)]
+    sheet_row = conversation.get("sheet_row")
+    registration_id = conversation.get("registration_id")
+    if not sheet_row and not registration_id:
+        return
+    save_registration_attendance_tags(
+        clean,
+        sheet_row=int(sheet_row) if sheet_row else None,
+        registration_id=int(registration_id) if registration_id else None,
+    )
+
+
+def apply_registration_tags_to_conversation(conversation: dict | None) -> dict | None:
+    """Copia tags do cadastro para a conversa (toda vez que o cliente chamar)."""
+    if not conversation or not conversation.get("id"):
+        return conversation
+    sheet_row = conversation.get("sheet_row")
+    registration_id = conversation.get("registration_id")
+    if not sheet_row and not registration_id:
+        return conversation
+    try:
+        from app.services.crm_registrations_storage import get_registration_attendance_tags
+
+        cadastro_tags = get_registration_attendance_tags(
+            sheet_row=int(sheet_row) if sheet_row else None,
+            registration_id=int(registration_id) if registration_id else None,
+        )
+    except Exception:
+        logger.exception("Falha ao ler tags do cadastro")
+        return conversation
+    if not cadastro_tags:
+        return conversation
+    current = [normalize_text(t) for t in (conversation.get("tags") or []) if normalize_text(t)]
+    if [t.lower() for t in current] == [t.lower() for t in cadastro_tags]:
+        return conversation
+    return (
+        store.update_conversation(conversation["id"], tags=cadastro_tags)
+        or conversation
+    )

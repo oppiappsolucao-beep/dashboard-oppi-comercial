@@ -83,12 +83,13 @@ def _settings_context(request: Request, settings_params: dict):
     niches_rows: list[dict] = []
     sectors_rows: list[dict] = []
     attendance_tags_rows: list[dict] = []
+    tag_color_presets: list[dict] = []
     quick_replies_rows: list[dict] = []
     account_users_options: list[dict] = []
     try:
         from app.services.niches import list_niches_rows
         from app.services.sectors import enrich_sectors_for_settings, list_sectors
-        from app.services.attendance_tags import list_attendance_tags
+        from app.services.attendance_tags import list_attendance_tags, PRESET_COLORS
         from app.services.attendance_quick_replies import list_quick_replies
         from app.services.account_users import ensure_default_account_users, load_account_users
 
@@ -96,6 +97,7 @@ def _settings_context(request: Request, settings_params: dict):
         niches_rows = list_niches_rows()
         sectors_rows = enrich_sectors_for_settings(list_sectors(active_only=False))
         attendance_tags_rows = list_attendance_tags(active_only=False)
+        tag_color_presets = list(PRESET_COLORS)
         quick_replies_rows = list_quick_replies(active_only=False)
         account_users_options = [
             {
@@ -110,6 +112,7 @@ def _settings_context(request: Request, settings_params: dict):
         niches_rows = []
         sectors_rows = []
         attendance_tags_rows = []
+        tag_color_presets = []
         quick_replies_rows = []
         account_users_options = []
 
@@ -147,6 +150,7 @@ def _settings_context(request: Request, settings_params: dict):
         "niches": niches_rows,
         "sectors": sectors_rows,
         "attendance_tags": attendance_tags_rows,
+        "tag_color_presets": tag_color_presets,
         "quick_replies": quick_replies_rows,
         "sector_options": [{"id": s["id"], "name": s["name"]} for s in sectors_rows if s.get("active", True)],
         "account_users_options": account_users_options,
@@ -489,6 +493,7 @@ async def settings_remove_sector(
 async def settings_add_tag(
     request: Request,
     tag_name: str = Form(...),
+    tag_color: str = Form("verde"),
     tab: str = Form("atendimentos"),
 ):
     redirect = require_auth(request)
@@ -500,12 +505,38 @@ async def settings_add_tag(
     from app.services.attendance_tags import add_attendance_tag
 
     try:
-        add_attendance_tag(tag_name)
+        add_attendance_tag(tag_name, color=tag_color)
         request.session["settings_tag_success"] = "Tag cadastrada com sucesso."
     except ValueError as error:
         request.session["settings_tag_error"] = str(error)
     except Exception as error:
         request.session["settings_tag_error"] = f"Não consegui cadastrar a tag: {error}"
+    return RedirectResponse(url="/configuracoes?tab=atendimentos", status_code=303)
+
+
+@router.post("/configuracoes/tags/editar")
+async def settings_edit_tag(
+    request: Request,
+    tag_name: str = Form(...),
+    new_name: str = Form(...),
+    tag_color: str = Form("verde"),
+    tab: str = Form("atendimentos"),
+):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+    if not is_admin(request):
+        request.session["settings_tag_error"] = "Apenas o administrador pode editar tags."
+        return RedirectResponse(url="/configuracoes?tab=atendimentos", status_code=303)
+    from app.services.attendance_tags import update_attendance_tag
+
+    try:
+        update_attendance_tag(tag_name, new_name=new_name, color=tag_color)
+        request.session["settings_tag_success"] = "Tag atualizada."
+    except ValueError as error:
+        request.session["settings_tag_error"] = str(error)
+    except Exception as error:
+        request.session["settings_tag_error"] = f"Não consegui editar a tag: {error}"
     return RedirectResponse(url="/configuracoes?tab=atendimentos", status_code=303)
 
 

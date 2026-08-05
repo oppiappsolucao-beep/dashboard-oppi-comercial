@@ -1,14 +1,15 @@
 (function () {
   "use strict";
 
-  // Poll leve no SQLite. 2.5s ≈ atraso máximo na UI após o webhook.
-  var POLL_MS = 2500;
+  // SSE em tempo real + poll de backup (celular chega rápido; UI acompanha o webhook).
+  var POLL_MS = 4000;
   var pollTimer = null;
   var lastUnread = 0;
   var lastInboxToken = "";
   var lastConversationToken = "";
   var soundEnabled = true;
   var syncInFlight = false;
+  var eventSource = null;
 
   function $(sel, root) {
     return (root || document).querySelector(sel);
@@ -302,6 +303,28 @@
     // snapshot inicial sem disparar refresh
     pollSync();
     pollTimer = setInterval(pollSync, POLL_MS);
+  }
+
+  function startSSE() {
+    if (eventSource || !window.EventSource) return;
+    try {
+      eventSource = new EventSource("/atendimentos/stream");
+      eventSource.onmessage = function (ev) {
+        try {
+          handleEvent(JSON.parse(ev.data || "{}"));
+        } catch (e) { /* ignore */ }
+      };
+      eventSource.onerror = function () {
+        // Proxy às vezes derruba SSE — poll continua cobrindo.
+        try {
+          eventSource.close();
+        } catch (e) {}
+        eventSource = null;
+        setTimeout(startSSE, 8000);
+      };
+    } catch (e) {
+      eventSource = null;
+    }
   }
 
   // Browsers bloqueiam áudio até haver gesto do usuário
@@ -637,6 +660,7 @@
     lastUnread = pill ? Number(pill.getAttribute("data-count") || 0) : 0;
     scrollMessages();
     bindCrmSheet(document);
+    startSSE();
     startPoll();
   }
 

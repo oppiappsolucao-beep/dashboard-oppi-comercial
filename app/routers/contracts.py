@@ -58,6 +58,9 @@ from app.services.registration import (
 
 router = APIRouter()
 
+# Lista misturada /cadastro/todos foi descontinuada — Empresas aprovada.
+_CADASTRO_LIST_URL = "/leads-e-empresas"
+
 
 def _contract_edit_value(row, columns, key):
     column_name = columns.get(key)
@@ -75,9 +78,19 @@ def _get_row_by_sheet(df, sheet_row: int):
 
 def _resolve_edit_from_page(value: str) -> str:
     normalized = normalize_text(value).lower()
-    if normalized in {"leads", "activities", "funnel", "contracts"}:
+    if normalized in {"leads", "activities", "funnel", "attendances", "overview", "contracts"}:
         return normalized
     return ""
+
+
+def _list_url_for_from_page(from_page: str = "") -> str:
+    return {
+        "leads": "/leads-e-empresas",
+        "activities": "/atividades",
+        "funnel": "/funil-de-vendas",
+        "attendances": "/atendimentos",
+        "overview": "/",
+    }.get(normalize_text(from_page).lower(), _CADASTRO_LIST_URL)
 
 
 def _edit_page_url(sheet_row: int, *, tab: str = "", from_page: str = "") -> str:
@@ -92,89 +105,11 @@ def _edit_page_url(sheet_row: int, *, tab: str = "", from_page: str = "") -> str
 
 @router.get("/cadastro/todos", response_class=HTMLResponse)
 async def contracts_list(request: Request, order: str = "recentes"):
+    """Tela misturada descontinuada — redireciona para Empresas."""
     redirect = require_auth(request)
     if redirect:
         return redirect
-
-    refresh = request.query_params.get("refresh") == "1"
-    df, columns = get_prepared_data(refresh=refresh)
-    options = get_dashboard_filter_options(df)
-
-    filters = apply_default_period_filters(
-        DashboardFilters(
-            seller=request.query_params.get("seller", "Todos os vendedores"),
-            status=request.query_params.get("status", "Todos os status"),
-            period_start=date.fromisoformat(request.query_params["period_start"])
-            if request.query_params.get("period_start") else None,
-            period_end=date.fromisoformat(request.query_params["period_end"])
-            if request.query_params.get("period_end") else None,
-            niche=request.query_params.get("niche", "Todos os nichos"),
-            state=request.query_params.get("state", "Todos os estados"),
-            search=request.query_params.get("search", ""),
-        ),
-        df,
-    )
-
-    filtered_df = apply_dashboard_filters(df, columns, filters)
-
-    if normalize_text(filters.search):
-        term = normalize_search_text(filters.search)
-        filtered_df = filtered_df[
-            filtered_df["_empresa"].apply(lambda v: term in normalize_search_text(v))
-        ].copy()
-
-    names_df = filtered_df[["_empresa", "_sheet_row"]].copy()
-    names_df["Empresa"] = names_df["_empresa"].apply(normalize_text)
-    names_df = names_df[names_df["Empresa"] != ""].copy()
-
-    sort_mode = "alfabetica" if order == "alfabetica" else "recentes"
-    if sort_mode == "alfabetica":
-        names_df = names_df.sort_values("Empresa", key=lambda s: s.map(normalize_search_text))
-    else:
-        names_df = names_df.sort_values("_sheet_row", ascending=False)
-
-    companies = []
-    for _, row in names_df.iterrows():
-        full_row = _get_row_by_sheet(filtered_df, int(row["_sheet_row"]))
-        if full_row is None:
-            full_row = _get_row_by_sheet(df, int(row["_sheet_row"]))
-        status = "Novo Lead"
-        vendedor = "Sem vendedor"
-        nicho = "—"
-        estado = "—"
-        if full_row is not None:
-            status = resolve_company_status(full_row)
-            vendedor = normalize_text(full_row.get("_vendedor", "")) or "Sem vendedor"
-            nicho = normalize_text(full_row.get("_nicho", "")) or "—"
-            estado = normalize_text(full_row.get("_estado", "")) or "—"
-
-        empresa = row["Empresa"]
-        initials = "".join(part[0] for part in empresa.split()[:2]).upper() if empresa else "—"
-        companies.append({
-            "name": empresa,
-            "sheet_row": int(row["_sheet_row"]),
-            "initials": initials[:2],
-            "vendedor": vendedor,
-            "status": status,
-            "status_class": status_badge_class(status),
-            "nicho": nicho,
-            "estado": estado,
-        })
-
-    return render(
-        request,
-        "contracts/list.html",
-        {
-            "active_page": "contracts",
-            "companies": companies,
-            "count": len(companies),
-            "options": options,
-            "filters": filters,
-            "sort_mode": sort_mode,
-            "next_order": "alfabetica" if sort_mode == "recentes" else "recentes",
-            "status_options": STATUS_OPTIONS,
-        },
-    )
+    return RedirectResponse(url=_CADASTRO_LIST_URL, status_code=303)
 
 
 @router.get("/cadastro/todos/{sheet_row}", response_class=HTMLResponse)
@@ -200,7 +135,7 @@ async def contract_edit_page(request: Request, sheet_row: int):
     df, columns = get_prepared_data()
     row = _get_row_by_sheet(df, sheet_row)
     if row is None:
-        return RedirectResponse(url="/cadastro/todos", status_code=303)
+        return RedirectResponse(url=_CADASTRO_LIST_URL, status_code=303)
 
     current_status = status_group(row.get("_status_original", row.get("_status_grupo", "Novo Lead")))
     if current_status not in STATUS_OPTIONS:
@@ -347,16 +282,14 @@ async def contract_edit_page(request: Request, sheet_row: int):
         "admin_email": ponto_snapshot.get("admin_email") or "",
     }
 
-    back_href = {
-        "leads": "/leads-e-empresas",
-        "activities": "/atividades",
-        "funnel": "/funil-de-vendas",
-    }.get(from_page, "/cadastro/todos")
+    back_href = _list_url_for_from_page(from_page)
     active_sidebar = {
         "leads": "leads",
         "activities": "activities",
         "funnel": "funnel",
-    }.get(from_page, "contracts")
+        "attendances": "attendances",
+        "overview": "overview",
+    }.get(from_page, "leads")
 
     return render(
         request,
@@ -369,7 +302,9 @@ async def contract_edit_page(request: Request, sheet_row: int):
                 "leads": "Empresas",
                 "activities": "Atividades",
                 "funnel": "Funil de Vendas",
-            }.get(from_page, "Todos os cadastros"),
+                "attendances": "Atendimentos",
+                "overview": "Visão Geral",
+            }.get(from_page, "Empresas"),
             "sheet_row": sheet_row,
             "seller_options": get_seller_options(df),
             "niche_options": niche_options,
@@ -526,7 +461,7 @@ async def contract_delete(
     row = _get_row_by_sheet(df, sheet_row)
     if row is None:
         request.session["edit_error"] = "Cadastro não encontrado."
-        return RedirectResponse(url="/cadastro/todos", status_code=303)
+        return RedirectResponse(url=_CADASTRO_LIST_URL, status_code=303)
 
     try:
         delete_company_registration(DEFAULT_TENANT_ID, sheet_row)
@@ -537,11 +472,7 @@ async def contract_delete(
         request.session["edit_error"] = f"Não consegui excluir o cadastro: {error}"
         return RedirectResponse(url=edit_url, status_code=303)
 
-    return RedirectResponse(url={
-        "leads": "/leads-e-empresas",
-        "activities": "/atividades",
-        "funnel": "/funil-de-vendas",
-    }.get(from_page, "/cadastro/todos"), status_code=303)
+    return RedirectResponse(url=_list_url_for_from_page(from_page), status_code=303)
 
 
 @router.post("/cadastro/todos/{sheet_row}/ativo")
@@ -631,7 +562,7 @@ async def contract_oppi_ponto_action(
     row = _get_row_by_sheet(df, sheet_row)
     if row is None:
         request.session["edit_error"] = "Cadastro não encontrado."
-        return RedirectResponse(url="/cadastro/todos", status_code=303)
+        return RedirectResponse(url=_CADASTRO_LIST_URL, status_code=303)
 
     values = {key: _contract_edit_value(row, columns, key) for key in [
         "empresa", "cnpj", "email", "telefone_b2b", "telefone_fixo",
@@ -710,7 +641,7 @@ async def contract_update_status(request: Request, sheet_row: int, status: str =
     df, columns = get_prepared_data()
     row = _get_row_by_sheet(df, sheet_row)
     if row is None:
-        return RedirectResponse(url="/cadastro/todos", status_code=303)
+        return RedirectResponse(url=_CADASTRO_LIST_URL, status_code=303)
 
     new_status = normalize_text(status)
     if new_status not in STATUS_OPTIONS:
@@ -725,7 +656,7 @@ async def contract_update_status(request: Request, sheet_row: int, status: str =
                 status_code=500,
             )
         request.session["contracts_status_error"] = str(error)
-        return RedirectResponse(url=request.headers.get("referer", "/cadastro/todos"), status_code=303)
+        return RedirectResponse(url=request.headers.get("referer", _CADASTRO_LIST_URL), status_code=303)
 
     status_context = {
         "sheet_row": sheet_row,
@@ -737,7 +668,7 @@ async def contract_update_status(request: Request, sheet_row: int, status: str =
     if request.headers.get("HX-Request"):
         return render(request, "partials/contracts_status_cell.html", status_context)
 
-    return RedirectResponse(url=request.headers.get("referer", "/cadastro/todos"), status_code=303)
+    return RedirectResponse(url=request.headers.get("referer", _CADASTRO_LIST_URL), status_code=303)
 
 
 @router.post("/cadastro/todos/atualizar")
@@ -746,4 +677,4 @@ async def contracts_refresh(request: Request):
     if redirect:
         return redirect
     invalidate_sheet_cache()
-    return RedirectResponse(url="/cadastro/todos?refresh=1", status_code=303)
+    return RedirectResponse(url=f"{_CADASTRO_LIST_URL}?refresh=1", status_code=303)

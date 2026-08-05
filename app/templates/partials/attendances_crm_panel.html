@@ -94,6 +94,7 @@
   {% endif %}
 
   <form class="att-notes-form"
+        id="att-notes-form"
         hx-post="/atendimentos/conversa/{{ selected.id }}/notas"
         hx-target="#att-crm-inner"
         hx-swap="innerHTML"
@@ -105,7 +106,8 @@
       <label class="att-tag-chip {% if tag in (selected.tags or []) %}is-on{% endif %}"
              {% if style %}style="--att-tag-bg: {{ style.bg }}; --att-tag-fg: {{ style.fg }}"{% endif %}>
         <input type="checkbox" name="tags" value="{{ tag }}"
-               {% if tag in (selected.tags or []) %}checked{% endif %}>
+               {% if tag in (selected.tags or []) %}checked{% endif %}
+               onchange="this.form && htmx.trigger(this.form, 'submit')">
         <span>{{ tag }}</span>
       </label>
       {% else %}

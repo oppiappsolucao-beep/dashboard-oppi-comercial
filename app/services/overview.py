@@ -353,8 +353,8 @@ def build_row_daily_action(row, columns: dict) -> dict | None:
             "status": grouped,
             "telefone": telefone,
             "email": email,
-            "href": f"/cadastro/todos/{sheet_row}/editar" if sheet_row else "/cadastro/todos",
-            "edit_href": f"/cadastro/todos/{sheet_row}/editar" if sheet_row else "/cadastro/todos",
+            "href": f"/cadastro/todos/{sheet_row}/editar" if sheet_row else "/leads-e-empresas",
+            "edit_href": f"/cadastro/todos/{sheet_row}/editar" if sheet_row else "/leads-e-empresas",
         }
         if telefone:
             action["tel_href"] = f"tel:{normalize_digits(telefone)}"

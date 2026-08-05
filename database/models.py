@@ -452,6 +452,7 @@ class CrmAttendanceTag(Base):
     is_system = Column(Boolean, nullable=False, default=False)
     active = Column(Boolean, nullable=False, default=True)
     sort_order = Column(Integer, nullable=False, default=0)
+    color = Column(String(40), nullable=False, default="verde")
     created_at = Column(String(40), nullable=False, default="")
 
 

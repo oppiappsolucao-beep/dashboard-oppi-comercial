@@ -24,8 +24,8 @@ PAGE_BACK_FALLBACKS = {
     "attendances": "/atendimentos",
     "proposals": "/propostas",
     "goals": "/metas-e-relatorios",
-    "registration_new": "/cadastro/todos",
-    "contracts": "/visao-geral",
+    "registration_new": "/leads-e-empresas",
+    "contracts": "/leads-e-empresas",
     "settings": "/visao-geral",
 }
 
