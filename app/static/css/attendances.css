@@ -72,6 +72,16 @@
   padding: 10px 12px 0;
 }
 
+.att-finalize-all-form {
+  padding: 8px 12px 0;
+}
+
+.att-finalize-all-btn {
+  width: 100%;
+  font-size: 12px;
+  padding: 7px 10px;
+}
+
 .att-line-pill {
   display: inline-flex;
   align-items: center;

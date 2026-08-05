@@ -336,7 +336,8 @@ def upsert_conversation_by_remote_jid(
                 or existing
             )
         updates: dict = {}
-        if contact_name and not normalize_text(existing.get("contact_name") or ""):
+        # Sempre preferir o nome salvo no WhatsApp (pushName) quando vier no evento
+        if contact_name and normalize_text(existing.get("contact_name") or "") != contact_name:
             updates["contact_name"] = contact_name
         if instance and not normalize_text(existing.get("evolution_instance") or ""):
             updates["evolution_instance"] = instance
@@ -896,8 +897,9 @@ def upsert_conversation_by_phone(
                 return {}
         if existing:
             changed = phone_linked_from_jid
-            if contact_name and not (existing.contact_name or "").strip():
-                existing.contact_name = normalize_text(contact_name)
+            # Sempre preferir o nome salvo no WhatsApp (pushName) quando vier no evento
+            if contact_name and normalize_text(existing.contact_name or "") != contact_name:
+                existing.contact_name = contact_name
                 changed = True
             if profile_pic_url:
                 existing.profile_pic_url = normalize_text(profile_pic_url)
@@ -1200,10 +1202,11 @@ def mark_conversation_read(conversation_id: str) -> None:
 
 
 def count_unread(*, evolution_instance: str = "") -> int:
+    """Soma unread só da fila ativa (não finalizados / não excluídos)."""
     instance = resolve_evolution_instance(evolution_instance) if evolution_instance else ""
     with _session(commit=False) as db:
         q = db.query(func.coalesce(func.sum(AttendanceConversation.unread_count), 0)).filter(
-            AttendanceConversation.status != STATUS_EXCLUIDO
+            AttendanceConversation.status.notin_([STATUS_EXCLUIDO, STATUS_FINALIZADO])
         )
         if instance:
             q = q.filter(_sql_instance_match(instance))
@@ -1211,14 +1214,52 @@ def count_unread(*, evolution_instance: str = "") -> int:
         return int(total or 0)
 
 
+def finalize_open_conversations(*, evolution_instance: str = "") -> dict:
+    """Finaliza todos os abertos da linha (ou de todas) e zera unread residual."""
+    instance = resolve_evolution_instance(evolution_instance) if evolution_instance else ""
+    finalized = 0
+    cleared_unread = 0
+    now = _now_iso()
+    with _lock, _session() as db:
+        q = db.query(AttendanceConversation).filter(
+            AttendanceConversation.status != STATUS_EXCLUIDO
+        )
+        if instance:
+            q = q.filter(_sql_instance_match(instance))
+        rows = q.all()
+        for row in rows:
+            changed = False
+            if (row.status or "") != STATUS_FINALIZADO:
+                row.status = STATUS_FINALIZADO
+                row.ai_mode = AI_MODE_OFF
+                finalized += 1
+                changed = True
+            if int(row.unread_count or 0) > 0:
+                row.unread_count = 0
+                cleared_unread += 1
+                changed = True
+            if changed:
+                row.typing = False
+                row.updated_at = now
+    try:
+        _notify(
+            {
+                "type": "conversations_finalized_bulk",
+                "evolution_instance": instance,
+                "finalized": finalized,
+                "cleared_unread": cleared_unread,
+            }
+        )
+    except Exception:
+        pass
+    return {"finalized": finalized, "cleared_unread": cleared_unread}
+
+
 def get_sync_snapshot(conversation_id: str = "") -> dict:
     """Snapshot do inbox — usado pelo poll da UI."""
     conversation_id = normalize_text(conversation_id)
+    unread = count_unread()
     with _session(commit=False) as db:
-        unread = int(
-            db.query(func.coalesce(func.sum(AttendanceConversation.unread_count), 0)).scalar()
-            or 0
-        )
         last_msg = (
             db.query(func.max(AttendanceConversation.last_message_at)).scalar() or ""
         )
@@ -1242,8 +1283,20 @@ def get_sync_snapshot(conversation_id: str = "") -> dict:
             conv_token = f"{crow[0]}|{crow[1] or ''}|{crow[2] or ''}|{typing}"
 
     inbox_token = f"{unread}|{last_msg}|{last_upd}|{msg_count}|{msg_max_id}"
+    lines: dict[str, int] = {}
+    try:
+        from app.config import settings
+
+        for name in settings.evolution_instances or []:
+            try:
+                lines[name] = count_unread(evolution_instance=name)
+            except Exception:
+                lines[name] = 0
+    except Exception:
+        lines = {}
     return {
         "unread": unread,
+        "lines": lines,
         "inbox_token": inbox_token,
         "conversation_id": conversation_id or None,
         "conversation_token": conv_token or None,

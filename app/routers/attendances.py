@@ -176,6 +176,10 @@ def attendances_page(request: Request):
     if request.query_params.get("deleted") == "1":
         flash = "Conversa excluída do atendimento. O cadastro no CRM foi mantido."
         light = True  # sem sync Evolution — evita demora e ressurreição imediata
+    flash_q = normalize_text(request.query_params.get("flash") or "")
+    if flash_q:
+        flash = flash_q
+        light = True
     err = normalize_text(request.query_params.get("error") or "")
     if err == "sem_permissao":
         error = "Apenas o administrador pode excluir conversas."
@@ -466,6 +470,45 @@ def attendances_finalize(request: Request, conversation_id: str):
     return render(request, "partials/attendances_thread.html", ctx)
 
 
+@router.post("/atendimentos/finalizar-todas")
+def attendances_finalize_all(request: Request, line: str = Form("")):
+    """Finaliza todas as conversas abertas da linha e zera o badge 555."""
+    auth = require_auth(request)
+    if isinstance(auth, RedirectResponse):
+        return auth
+    from urllib.parse import urlencode
+
+    line = normalize_text(line or request.query_params.get("line", ""))
+    result = attendances_service.finalize_all_open_conversations(evolution_instance=line)
+    finalized = int(result.get("finalized") or 0)
+    cleared = int(result.get("cleared_unread") or 0)
+    qs = urlencode(
+        {
+            **({"line": line} if line else {}),
+            "flash": f"Fila reiniciada: {finalized} finalizada(s), {cleared} não lida(s) zerada(s).",
+        }
+    )
+    return RedirectResponse(url=f"/atendimentos?{qs}", status_code=303)
+
+
+@router.post("/atendimentos/conversa/{conversation_id}/cadastro-nome", response_class=HTMLResponse)
+async def attendances_cadastro_nome(request: Request, conversation_id: str):
+    require_auth(request)
+    form = await request.form()
+    empresa = normalize_text(form.get("empresa", ""))
+    contato = normalize_text(form.get("contato", ""))
+    _, error = attendances_service.update_conversation_cadastro_names(
+        conversation_id,
+        empresa=empresa,
+        contato=contato,
+    )
+    if error:
+        ctx = _page_ctx(request, selected_id=conversation_id, error=error)
+    else:
+        ctx = _page_ctx(request, selected_id=conversation_id, flash="Nome do cadastro salvo.")
+    return render(request, "partials/attendances_crm_panel.html", ctx)
+
+
 @router.get("/atendimentos/conversa/{conversation_id}/excluir")
 def attendances_delete_get(request: Request, conversation_id: str):
     """GET acidental (refresh/proxy) — nunca processa exclusão; volta à inbox."""
@@ -556,7 +599,15 @@ async def attendances_notes(request: Request, conversation_id: str):
 @router.get("/atendimentos/unread")
 def attendances_unread(request: Request):
     require_auth(request)
-    return JSONResponse({"unread": store.count_unread()})
+    from app.config import settings
+
+    lines = {}
+    for name in settings.evolution_instances or []:
+        try:
+            lines[name] = store.count_unread(evolution_instance=name)
+        except Exception:
+            lines[name] = 0
+    return JSONResponse({"unread": store.count_unread(), "lines": lines})
 
 
 @router.get("/atendimentos/sync")
@@ -577,6 +628,7 @@ def attendances_sync(request: Request, conversation_id: str = ""):
         return JSONResponse(
             {
                 "unread": 0,
+                "lines": {},
                 "inbox_token": "",
                 "conversation_id": conversation_id or None,
                 "conversation_token": None,

@@ -78,6 +78,13 @@
       {% endfor %}
     </div>
     {% endif %}
+    <form method="post"
+          action="/atendimentos/finalizar-todas"
+          class="att-finalize-all-form"
+          onsubmit="return confirm('Finalizar TODAS as conversas abertas desta linha e zerar as não lidas?\n\nVocê começa a fila do zero a partir de agora.');">
+      <input type="hidden" name="line" value="{{ line_filter }}">
+      <button type="submit" class="btn btn-secondary att-finalize-all-btn">Finalizar todas desta linha</button>
+    </form>
     <form class="att-filters"
           hx-post="/atendimentos/filtros"
           hx-target="#att-conversation-list"

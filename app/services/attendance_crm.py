@@ -161,20 +161,31 @@ def resolve_or_create_lead(
         return None
 
 
+def _looks_like_whatsapp_placeholder(name: str) -> bool:
+    n = normalize_text(name).lower()
+    if not n or n in {"—", "-", "whatsapp"}:
+        return True
+    if n.startswith("lead whatsapp") or n.startswith("whatsapp "):
+        return True
+    return False
+
+
 def build_crm_panel(
     sheet_row: int | None,
     *,
     fallback_name: str = "",
     fallback_phone: str = "",
 ) -> dict:
+    wa_name = normalize_text(fallback_name)
     empty = {
         "sheet_row": None,
-        "empresa": normalize_text(fallback_name) or "—",
-        "contato": normalize_text(fallback_name) or "—",
+        "empresa": wa_name or "—",
+        "contato": wa_name or "—",
         "telefone": normalize_text(fallback_phone) or "—",
         "vendedor": "—",
         "etapa": "—",
         "edit_href": "",
+        "whatsapp_name": wa_name,
     }
     if not sheet_row:
         return empty
@@ -189,12 +200,149 @@ def build_crm_panel(
     socio_col = columns.get("socio_1")
     socio = normalize_text(row.get(socio_col, "")) if socio_col else ""
     empresa = normalize_text(row.get("_empresa", "")) or "—"
+    # Preferir nome do WhatsApp na lista/contato quando o cadastro ainda é genérico
+    contato = socio or empresa
+    if wa_name and (_looks_like_whatsapp_placeholder(contato) or _looks_like_whatsapp_placeholder(socio)):
+        contato = wa_name
+    if wa_name and _looks_like_whatsapp_placeholder(empresa):
+        empresa = wa_name
     return {
         "sheet_row": int(sheet_row),
         "empresa": empresa,
-        "contato": socio or empresa,
+        "contato": contato,
         "telefone": normalize_text(row.get("_telefone", "")) or normalize_text(fallback_phone) or "—",
         "vendedor": normalize_text(row.get("_vendedor", "")) or "Sem vendedor",
         "etapa": normalize_text(row.get("_status_grupo") or row.get("_status_original")) or "Novo Lead",
         "edit_href": f"/cadastro/todos/{int(sheet_row)}/editar?from=attendances",
+        "whatsapp_name": wa_name,
     }
+
+
+def update_cadastro_names(
+    sheet_row: int | None,
+    *,
+    empresa: str = "",
+    contato: str = "",
+) -> None:
+    """Atualiza só Empresa/Contato do cadastro vinculado (Atendimentos)."""
+    if not sheet_row:
+        return
+    empresa_name = normalize_text(empresa)
+    contato_name = normalize_text(contato)
+    if not empresa_name and not contato_name:
+        return
+
+    try:
+        from app.services.crm_registrations_storage import (
+            get_registration_by_sheet_row,
+            is_crm_postgres_ready,
+            registration_to_payload,
+            upsert_registration_from_payload,
+        )
+        from app.services.legacy_core import invalidate_sheet_cache
+
+        if is_crm_postgres_ready():
+            row = get_registration_by_sheet_row(int(sheet_row))
+            if row:
+                payload = registration_to_payload(row)
+                if empresa_name:
+                    payload["empresa"] = empresa_name
+                if contato_name:
+                    payload["socio_1"] = contato_name
+                upsert_registration_from_payload(
+                    payload,
+                    sheet_row=int(sheet_row),
+                    mirror_sheet=True,
+                )
+                try:
+                    invalidate_sheet_cache()
+                except Exception:
+                    pass
+                return
+
+        _patch_sheet_name_fields(
+            int(sheet_row),
+            empresa=empresa_name,
+            socio_1=contato_name,
+        )
+    except Exception:
+        raise
+
+
+def _patch_sheet_name_fields(
+    sheet_row: int,
+    *,
+    empresa: str = "",
+    socio_1: str = "",
+) -> None:
+    """Atualiza apenas Nome Empresas / Sócio 1, sem limpar o restante da linha."""
+    import gspread
+
+    from app.config import settings
+    from app.services.legacy_core import (
+        _open_worksheet,
+        _set_sheet_value_by_header,
+        ensure_registration_sheet_columns,
+        get_gsheet_client,
+        invalidate_sheet_cache,
+        normalize_text as _nt,
+    )
+
+    if not empresa and not socio_1:
+        return
+    client = get_gsheet_client()
+    spreadsheet = client.open_by_key(settings.sheet_id)
+    worksheet = _open_worksheet(spreadsheet, settings.worksheet_name)
+    headers = ensure_registration_sheet_columns(worksheet)
+    if not headers:
+        raise RuntimeError("A primeira linha da planilha precisa conter os cabeçalhos.")
+
+    current_row = worksheet.row_values(int(sheet_row))
+    row_values = list(current_row) + [""] * max(0, len(headers) - len(current_row))
+    row_values = row_values[: len(headers)]
+    if empresa:
+        _set_sheet_value_by_header(
+            row_values,
+            headers,
+            ["Nome Empresas", "Nome da empresa", "Empresa", "Nome Empresa", "Nome empresas", "Nome Empresa(s)"],
+            empresa,
+        )
+    if socio_1:
+        _set_sheet_value_by_header(
+            row_values,
+            headers,
+            ["Sócio 1", "Socio 1", "Sócio1", "Socio1"],
+            socio_1,
+        )
+
+    changed_cells = []
+    for column_index, new_value in enumerate(row_values, start=1):
+        old_value = current_row[column_index - 1] if column_index - 1 < len(current_row) else ""
+        if _nt(old_value) != _nt(new_value):
+            changed_cells.append(gspread.Cell(int(sheet_row), column_index, _nt(new_value)))
+    if changed_cells:
+        worksheet.update_cells(changed_cells, value_input_option="USER_ENTERED")
+    invalidate_sheet_cache()
+
+
+def apply_whatsapp_name_to_crm(
+    sheet_row: int | None,
+    *,
+    whatsapp_name: str,
+) -> None:
+    """Se o cadastro ainda está genérico, grava o nome do WhatsApp em Empresa/Contato."""
+    name = normalize_text(whatsapp_name)
+    if not sheet_row or not name:
+        return
+    panel = build_crm_panel(sheet_row, fallback_name=name)
+    empresa = normalize_text(panel.get("empresa") or "")
+    contato = normalize_text(panel.get("contato") or "")
+    new_empresa = name if _looks_like_whatsapp_placeholder(empresa) else ""
+    new_contato = name if (_looks_like_whatsapp_placeholder(contato) or not contato) else ""
+    if not new_empresa and not new_contato:
+        return
+    update_cadastro_names(
+        sheet_row,
+        empresa=new_empresa or empresa,
+        contato=new_contato or contato or name,
+    )

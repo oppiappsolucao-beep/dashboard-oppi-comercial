@@ -48,7 +48,7 @@
     } catch (e) { /* ignore */ }
   }
 
-  function updateUnreadBadge(count) {
+  function updateUnreadBadge(count, lines) {
     count = Number(count) || 0;
     var pill = $("#att-unread-pill");
     if (pill) {
@@ -68,6 +68,23 @@
       } else {
         side.hidden = true;
       }
+    }
+    if (lines && typeof lines === "object") {
+      document.querySelectorAll(".att-line-pill").forEach(function (btn) {
+        var id = btn.getAttribute("data-line") || "";
+        var n = Number(lines[id]) || 0;
+        var badge = btn.querySelector(".att-line-pill-unread");
+        if (n > 0) {
+          if (!badge) {
+            badge = document.createElement("span");
+            badge.className = "att-line-pill-unread";
+            btn.appendChild(badge);
+          }
+          badge.textContent = String(n);
+        } else if (badge) {
+          badge.remove();
+        }
+      });
     }
     if (count > lastUnread && lastUnread >= 0) {
       playNotify();
@@ -171,6 +188,20 @@
     if (!data || !data.type) return;
     if (data.type === "ping" || data.type === "connected") {
       if (typeof data.unread !== "undefined") updateUnreadBadge(data.unread);
+      fetch("/atendimentos/unread", { credentials: "same-origin" })
+        .then(function (r) { return r.json(); })
+        .then(function (j) { updateUnreadBadge(j.unread, j.lines); })
+        .catch(function () {});
+      return;
+    }
+    if (data.type === "conversations_finalized_bulk") {
+      lastInboxToken = "";
+      lastConversationToken = "";
+      refreshList({ clearSelection: true });
+      fetch("/atendimentos/unread", { credentials: "same-origin" })
+        .then(function (r) { return r.json(); })
+        .then(function (j) { updateUnreadBadge(j.unread, j.lines); })
+        .catch(function () {});
       return;
     }
     if (data.type === "typing") {
@@ -192,7 +223,7 @@
       lastConversationToken = "";
       fetch("/atendimentos/unread", { credentials: "same-origin" })
         .then(function (r) { return r.json(); })
-        .then(function (j) { updateUnreadBadge(j.unread); })
+        .then(function (j) { updateUnreadBadge(j.unread, j.lines); })
         .catch(function () {});
     }
   }
@@ -211,7 +242,7 @@
       })
       .then(function (j) {
         var prevUnread = lastUnread;
-        updateUnreadBadge(j.unread);
+        updateUnreadBadge(j.unread, j.lines);
 
         var inboxChanged =
           lastInboxToken && j.inbox_token && j.inbox_token !== lastInboxToken;
@@ -388,6 +419,7 @@
       && path.indexOf("/atalho") === -1
       && path.indexOf("/excluir") === -1
       && path.indexOf("/finalizar") === -1
+      && path.indexOf("/cadastro-nome") === -1
     ) {
       return;
     }
@@ -406,6 +438,10 @@
       refreshList({ bumpId: id });
       lastInboxToken = "";
       lastConversationToken = "";
+      fetch("/atendimentos/unread", { credentials: "same-origin" })
+        .then(function (r) { return r.json(); })
+        .then(function (j) { updateUnreadBadge(j.unread, j.lines); })
+        .catch(function () {});
     }
   });
 

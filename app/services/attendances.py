@@ -688,7 +688,60 @@ def finalize_conversation(conversation_id: str) -> dict | None:
         conversation_id,
         status=store.STATUS_FINALIZADO,
         ai_mode=store.AI_MODE_OFF,
+        unread_count=0,
     )
+
+
+def finalize_all_open_conversations(*, evolution_instance: str = "") -> dict:
+    """Zera a fila: finaliza abertos da linha e limpa badge de não lidas."""
+    return store.finalize_open_conversations(evolution_instance=evolution_instance)
+
+
+def update_conversation_cadastro_names(
+    conversation_id: str,
+    *,
+    empresa: str = "",
+    contato: str = "",
+) -> tuple[dict | None, str]:
+    """Edita Empresa/Contato direto no painel CRM do Atendimentos."""
+    conversation = store.get_conversation(conversation_id)
+    if not conversation:
+        return None, "Conversa não encontrada."
+
+    empresa_name = normalize_text(empresa)
+    contato_name = normalize_text(contato)
+    if not empresa_name and not contato_name:
+        return conversation, "Informe o nome da empresa ou do contato."
+
+    # Lista da inbox: prioriza contato; se vazio, empresa
+    display_name = contato_name or empresa_name or normalize_text(conversation.get("contact_name") or "")
+    if display_name:
+        conversation = (
+            store.update_conversation(conversation_id, contact_name=display_name)
+            or conversation
+        )
+
+    sheet_row = conversation.get("sheet_row")
+    if not sheet_row:
+        # Garante cadastro para persistir os nomes
+        conversation = ensure_crm_link(
+            conversation,
+            contact_name=display_name,
+        ) or conversation
+        sheet_row = conversation.get("sheet_row")
+
+    if sheet_row:
+        try:
+            attendance_crm.update_cadastro_names(
+                int(sheet_row),
+                empresa=empresa_name or display_name,
+                contato=contato_name or display_name,
+            )
+        except Exception as exc:
+            logger.exception("Falha ao salvar nomes do CRM (%s)", conversation_id)
+            return conversation, f"Nome da conversa atualizado, mas o CRM falhou: {exc}"
+
+    return conversation, ""
 
 
 def delete_conversation(conversation_id: str) -> bool:

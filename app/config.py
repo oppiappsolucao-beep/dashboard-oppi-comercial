@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-APP_BUILD = os.getenv("APP_BUILD", "20260731-filial-uniq-v152").strip() or "20260731-filial-uniq-v152"
+APP_BUILD = os.getenv("APP_BUILD", "20260805-att-unread-nome-v153").strip() or "20260805-att-unread-nome-v153"
 
 class Settings:
     sheet_id: str = "1GAbrca0NSiJfPXaSte1qGxXCsGkQPacoRsm0PVB51gE"

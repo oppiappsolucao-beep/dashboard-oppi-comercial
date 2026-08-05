@@ -759,7 +759,19 @@ def _handle_messages_upsert(payload: dict) -> int:
             try:
                 current = store.get_conversation(conv_id)
                 if current:
-                    attendances.ensure_crm_link(current, contact_name=name)
+                    current = attendances.ensure_crm_link(current, contact_name=name) or current
+                    if name:
+                        try:
+                            from app.services import attendance_crm
+
+                            attendance_crm.apply_whatsapp_name_to_crm(
+                                current.get("sheet_row"),
+                                whatsapp_name=name,
+                            )
+                        except Exception:
+                            logger.exception(
+                                "apply_whatsapp_name_to_crm falhou conversa %s", conv_id
+                            )
                 if reply_text:
                     attendances.maybe_ai_reply(conv_id, reply_text)
             except Exception:

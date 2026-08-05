@@ -5,14 +5,36 @@
   {% if error %}<div class="att-flash sm" style="background:#fde8e8;color:#9b1c1c">{{ error }}</div>{% endif %}
 
   <dl class="att-crm-dl">
-    <div><dt>Empresa</dt><dd>{% if crm.edit_href %}<a href="{{ crm.edit_href }}">{{ crm.empresa }}</a>{% else %}{{ crm.empresa }}{% endif %}</dd></div>
-    <div><dt>Contato</dt><dd>{{ crm.contato }}</dd></div>
     <div><dt>WhatsApp</dt><dd>{{ selected.phone_e164 }}</dd></div>
     <div><dt>Setor</dt><dd>{{ selected.sector_name or '—' }}</dd></div>
     <div><dt>Responsável</dt><dd>{{ selected.assignee or crm.vendedor or '—' }}</dd></div>
     <div><dt>Status CRM</dt><dd>{{ crm.etapa }}</dd></div>
     <div><dt>Status chat</dt><dd><span class="att-status-badge status-{{ selected.status }}">{{ selected.status_label }}</span></dd></div>
   </dl>
+
+  <form class="att-notes-form att-crm-name-form"
+        hx-post="/atendimentos/conversa/{{ selected.id }}/cadastro-nome"
+        hx-target="#att-crm-inner"
+        hx-swap="innerHTML"
+        style="margin-bottom:14px">
+    <label class="att-label">Empresa</label>
+    <input type="text" name="empresa" class="att-input"
+           value="{{ crm.empresa if crm.empresa != '—' else '' }}"
+           placeholder="Nome da empresa"
+           autocomplete="organization">
+    <label class="att-label">Contato <small class="att-hint">(nome do WhatsApp)</small></label>
+    <input type="text" name="contato" class="att-input"
+           value="{{ (crm.whatsapp_name or selected.contact_name or crm.contato) if (crm.whatsapp_name or selected.contact_name or crm.contato) != '—' else '' }}"
+           placeholder="Nome salvo no WhatsApp do cliente"
+           autocomplete="name">
+    {% if crm.whatsapp_name %}
+    <small class="att-hint">Nome do WhatsApp: <strong>{{ crm.whatsapp_name }}</strong></small>
+    {% endif %}
+    <button type="submit" class="btn btn-secondary att-notes-save" style="margin-top:8px">Salvar nome</button>
+    {% if crm.edit_href %}
+    <a href="{{ crm.edit_href }}" class="att-hint" style="display:inline-block;margin-top:6px">Abrir cadastro completo →</a>
+    {% endif %}
+  </form>
 
   <form class="att-notes-form att-assign-form"
         hx-post="/atendimentos/conversa/{{ selected.id }}/direcionar"
