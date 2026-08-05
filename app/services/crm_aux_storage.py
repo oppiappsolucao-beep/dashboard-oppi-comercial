@@ -262,6 +262,8 @@ def list_activities_pg(
             payload["id"] = row.id
             payload["tenant_id"] = row.tenant_id
             payload["sheet_row"] = row.sheet_row or 0
+            if getattr(row, "registration_id", None):
+                payload["registration_id"] = int(row.registration_id)
             payload["deleted"] = bool(row.deleted)
             result.append(payload)
         return result
@@ -296,6 +298,22 @@ def save_activity_pg(tenant_id: str | None, activity_id: str | None, payload: di
     record["tenant_id"] = tenant
     record["updated_at"] = _now_iso()
     record.setdefault("created_at", _now_iso())
+    sheet_row = int(record.get("sheet_row") or 0) or None
+    registration_id = record.get("registration_id")
+    try:
+        registration_id = int(registration_id) if registration_id not in (None, "") else None
+    except (TypeError, ValueError):
+        registration_id = None
+    if registration_id is None and sheet_row:
+        try:
+            from app.services.crm_registrations_storage import get_registration_by_sheet_row
+
+            reg = get_registration_by_sheet_row(int(sheet_row), tenant_id=tenant)
+            if reg:
+                registration_id = int(reg.id)
+                record["registration_id"] = registration_id
+        except Exception:
+            registration_id = None
     db = SessionLocal()
     try:
         row = db.get(CrmActivity, aid)
@@ -303,7 +321,8 @@ def save_activity_pg(tenant_id: str | None, activity_id: str | None, payload: di
             row = CrmActivity(id=aid, created_at=record["created_at"])
             db.add(row)
         row.tenant_id = tenant
-        row.sheet_row = int(record.get("sheet_row") or 0) or None
+        row.sheet_row = sheet_row
+        row.registration_id = registration_id
         row.payload_json = _json_dumps(record)
         row.deleted = bool(record.get("deleted"))
         row.updated_at = record["updated_at"]

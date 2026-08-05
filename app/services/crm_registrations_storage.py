@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import logging
 import threading
+import time
 from datetime import datetime
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -146,18 +147,37 @@ def invalidate_registrations_cache() -> None:
         pass
 
 
+_CRM_PG_READY_CACHE: bool | None = None
+_CRM_PG_READY_AT = 0.0
+_CRM_PG_READY_TTL_SEC = 30.0
+
+
+def invalidate_crm_postgres_ready_cache() -> None:
+    global _CRM_PG_READY_CACHE, _CRM_PG_READY_AT
+    _CRM_PG_READY_CACHE = None
+    _CRM_PG_READY_AT = 0.0
+
+
 def is_crm_postgres_ready() -> bool:
+    """Flag de cutover CRM→Postgres (cache curto — evita SessionLocal em todo request)."""
+    global _CRM_PG_READY_CACHE, _CRM_PG_READY_AT
+    now = time.monotonic()
+    if _CRM_PG_READY_CACHE is not None and (now - _CRM_PG_READY_AT) < _CRM_PG_READY_TTL_SEC:
+        return bool(_CRM_PG_READY_CACHE)
     try:
         from database.models import AppMeta
 
         db = SessionLocal()
         try:
             meta = db.get(AppMeta, "crm_postgres_migrated")
-            return bool(meta and (meta.value or "").strip() in {"1", "true", "yes"})
+            ready = bool(meta and (meta.value or "").strip() in {"1", "true", "yes"})
         finally:
             db.close()
     except Exception:
-        return False
+        ready = False
+    _CRM_PG_READY_CACHE = ready
+    _CRM_PG_READY_AT = now
+    return ready
 
 
 def count_registrations(tenant_id: str | None = None) -> int:

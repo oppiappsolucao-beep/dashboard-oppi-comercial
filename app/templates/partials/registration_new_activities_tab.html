@@ -10,7 +10,7 @@
   <label class="registration-new-toggle">
     <span>Criar primeira atividade junto com o cadastro</span>
     <span class="registration-toggle-switch">
-      <input type="checkbox" id="create-first-activity-toggle" {% if values.get('create_first_activity', '1') != '0' %}checked{% endif %}>
+      <input type="checkbox" id="create-first-activity-toggle" {% if values.get('create_first_activity', '0') == '1' %}checked{% endif %}>
       <span class="registration-toggle-slider"></span>
     </span>
   </label>

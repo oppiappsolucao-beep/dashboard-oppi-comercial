@@ -726,6 +726,12 @@ def migrate_crm_to_postgres_if_needed(
             db.commit()
         finally:
             db.close()
+        try:
+            from app.services.crm_registrations_storage import invalidate_crm_postgres_ready_cache
+
+            invalidate_crm_postgres_ready_cache()
+        except Exception:
+            pass
         result["reason"] = "destination_already_has_data"
         result["attendance_linked"] = backfill_attendance_registration_ids()
         result["ran"] = True
@@ -787,9 +793,13 @@ def migrate_crm_to_postgres_if_needed(
         finally:
             db.close()
         try:
-            from app.services.crm_registrations_storage import invalidate_registrations_cache
+            from app.services.crm_registrations_storage import (
+                invalidate_crm_postgres_ready_cache,
+                invalidate_registrations_cache,
+            )
 
             invalidate_registrations_cache()
+            invalidate_crm_postgres_ready_cache()
         except Exception:
             pass
 
@@ -882,9 +892,13 @@ def reset_and_reimport_crm_from_folha1(*, dry_run: bool = False) -> dict:
         db.close()
 
     try:
-        from app.services.crm_registrations_storage import invalidate_registrations_cache
+        from app.services.crm_registrations_storage import (
+            invalidate_crm_postgres_ready_cache,
+            invalidate_registrations_cache,
+        )
 
         invalidate_registrations_cache()
+        invalidate_crm_postgres_ready_cache()
     except Exception:
         pass
     try:

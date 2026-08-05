@@ -421,5 +421,55 @@ def soft_delete_activity(tenant_id: str | None, activity_id: str) -> bool:
     return True
 
 
+def clear_all_activities(*, tenant_id: str | None = None) -> dict:
+    """Apaga todas as atividades (Postgres + JSON + SQLite local)."""
+    global _cache
+    result = {"postgres": 0, "local_sqlite": 0, "json_cleared": False}
+    tenant = normalize_text(tenant_id) or DEFAULT_TENANT_ID
+
+    try:
+        from database.connection import SessionLocal
+        from database.models import CrmActivity
+
+        db = SessionLocal()
+        try:
+            q = db.query(CrmActivity)
+            if tenant:
+                q = q.filter(CrmActivity.tenant_id == tenant)
+            result["postgres"] = int(q.delete() or 0)
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
+        finally:
+            db.close()
+    except Exception:
+        pass
+
+    try:
+        from app.services.crm_local_db import save_activities_store
+
+        save_activities_store({})
+        result["local_sqlite"] = 1
+    except Exception:
+        pass
+
+    try:
+        path = _storage_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("{}", encoding="utf-8")
+        result["json_cleared"] = True
+    except Exception:
+        pass
+
+    with _lock:
+        _cache = _empty_store()
+    try:
+        invalidate_activities_cache()
+    except Exception:
+        pass
+    return result
+
+
 def activity_exists(tenant_id: str | None, activity_id: str) -> bool:
     return get_activity(tenant_id, activity_id) is not None

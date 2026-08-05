@@ -185,6 +185,31 @@ async def startup_maintenance() -> None:
             except Exception as purge_error:
                 log.error("Attendance group purge: %s", purge_error)
             try:
+                from database.connection import SessionLocal
+                from database.models import AppMeta
+                from app.services.activities_storage import clear_all_activities
+
+                purge_key = "activities_cleared_contato_pipeline_v1"
+                db = SessionLocal()
+                try:
+                    meta = db.get(AppMeta, purge_key)
+                    already = bool(meta and (meta.value or "").strip() in {"1", "true", "yes"})
+                finally:
+                    db.close()
+                if not already:
+                    cleared = clear_all_activities()
+                    log.info("Activities full purge: %s", cleared)
+                    db = SessionLocal()
+                    try:
+                        db.merge(AppMeta(key=purge_key, value="1"))
+                        db.commit()
+                    finally:
+                        db.close()
+                else:
+                    log.info("Activities full purge: already done (%s)", purge_key)
+            except Exception as act_purge_error:
+                log.error("Activities full purge: %s", act_purge_error)
+            try:
                 from app.services.attendance_media import backfill_all_conversations_media
 
                 fixed = backfill_all_conversations_media(limit=60)

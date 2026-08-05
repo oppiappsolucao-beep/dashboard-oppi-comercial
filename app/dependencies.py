@@ -100,12 +100,17 @@ def get_prepared_data(refresh: bool = False):
                 is_crm_postgres_ready,
             )
 
-            if merged_df is not None and not getattr(merged_df, "empty", True):
-                try_lazy_crm_postgres_cutover(bypass_throttle=True)
             if is_crm_postgres_ready():
                 prepared, columns = build_prepared_dataframe()
                 pg_df, pg_cols = _merge_pending(prepared, columns or {})
                 return pg_df, pg_cols
+            # Só tenta migrar se ainda não cortou — sem bypass a cada request
+            if merged_df is not None and not getattr(merged_df, "empty", True):
+                try_lazy_crm_postgres_cutover(bypass_throttle=False)
+                if is_crm_postgres_ready():
+                    prepared, columns = build_prepared_dataframe()
+                    pg_df, pg_cols = _merge_pending(prepared, columns or {})
+                    return pg_df, pg_cols
         except Exception:
             pass
         return merged_df, merged_cols

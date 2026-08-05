@@ -39,9 +39,15 @@ def normalize_legacy_stage(value: str | None) -> str:
     text = _clean(value)
     if not text:
         return ""
+    # "Novo Lead" saiu do kanban — entra em Contato
+    if text == "Novo Lead":
+        return "Contato"
     if text in PIPELINE_STAGE_OPTIONS:
         return text
-    return LEGACY_STAGE_MAP.get(text, SHEET_STATUS_TO_PIPELINE_STAGE.get(text, ""))
+    mapped = LEGACY_STAGE_MAP.get(text, SHEET_STATUS_TO_PIPELINE_STAGE.get(text, ""))
+    if mapped == "Novo Lead":
+        return "Contato"
+    return mapped
 
 
 def normalize_legacy_result(value: str | None) -> str:

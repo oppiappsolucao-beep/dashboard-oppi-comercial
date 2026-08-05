@@ -111,7 +111,7 @@ def _resolve_effective_stage(record: dict, tenant_id: str | None = None) -> str:
     if override:
         return override
     stage, _ = resolve_display_stage(record.get("stage", ""), stored)
-    return stage or "Novo Lead"
+    return stage or "Contato"
 
 
 def _empresa_match_key(value: str) -> str:
@@ -266,13 +266,13 @@ def _activity_matches_search(
 
 
 def _status_for_pipeline_stage(stage: str) -> str:
-    normalized_stage = normalize_legacy_stage(stage) or normalize_text(stage) or "Novo Lead"
+    normalized_stage = normalize_legacy_stage(stage) or normalize_text(stage) or "Contato"
     for status in PIPELINE_STAGE_SHEET_STATUSES.get(normalized_stage, []):
         if status in STATUS_OPTIONS:
             return status
     if normalized_stage in STATUS_OPTIONS:
         return normalized_stage
-    return "Novo Lead"
+    return "Contato"
 
 
 def _build_registration_prefill_params(activity: dict) -> dict[str, str]:
@@ -280,7 +280,7 @@ def _build_registration_prefill_params(activity: dict) -> dict[str, str]:
     if not empresa or empresa == "—":
         return {}
 
-    stage = normalize_text(activity.get("stage")) or "Novo Lead"
+    stage = normalize_text(activity.get("stage")) or "Contato"
     vendedor = normalize_text(activity.get("vendedor"))
     if vendedor == "Sem vendedor":
         vendedor = ""
@@ -288,7 +288,7 @@ def _build_registration_prefill_params(activity: dict) -> dict[str, str]:
     params: dict[str, str] = {
         "empresa": empresa,
         "status": _status_for_pipeline_stage(stage),
-        "create_first_activity": "1",
+        "create_first_activity": "0",
         "from": "activities",
     }
     if vendedor:
@@ -406,7 +406,7 @@ def _stamp_stage_entered(updates: dict, new_stage: str, old_stage: str | None = 
 
 def _resolve_stage_entered_at(record: dict, stage: str, tenant_id: str | None = None) -> datetime:
     tenant = tenant_id or record.get("tenant_id") or DEFAULT_TENANT_ID
-    stage = normalize_legacy_stage(stage) or "Novo Lead"
+    stage = normalize_legacy_stage(stage) or "Contato"
     activity_stage = normalize_legacy_stage(record.get("stage"))
 
     entered_raw = record.get("stage_entered_at")
@@ -438,10 +438,10 @@ def calcular_sla_atividade(
     stage: str | None = None,
 ) -> tuple[str, str, str]:
     """Retorna (sla_key, sla_label, sla_class) com base na etapa e tempo na etapa."""
-    stage = normalize_legacy_stage(stage or record.get("stage")) or "Novo Lead"
+    stage = normalize_legacy_stage(stage or record.get("stage")) or "Contato"
     sla = PIPELINE_STAGE_SLA.get(stage, {})
 
-    if stage == "Fechado" or sla.get("completed"):
+    if stage in {"Fechado", "Perdido"} or sla.get("completed"):
         return "concluido", "Concluído", "concluido"
     if status == "concluida":
         return "concluido", "Concluído", "concluido"
@@ -534,67 +534,11 @@ def sync_auto_activities(
     columns: dict,
     tenant_id: str | None = None,
 ) -> None:
-    global _AUTO_ACTIVITIES_SYNC_LAST
-    now = time.monotonic()
-    if (now - _AUTO_ACTIVITIES_SYNC_LAST) < _AUTO_ACTIVITIES_SYNC_TTL_SEC:
-        return
-    _AUTO_ACTIVITIES_SYNC_LAST = now
+    """Desativado: leads não entram mais sozinhos no kanban de Atividades.
 
-    queue = buscar_leads_para_acao(filtered_df, columns, tenant_id=tenant_id)
-    for item in queue:
-        sheet_row = int(item["sheet_row"])
-        activity_id = f"auto_{sheet_row}_{item['rule_code']}"
-        if activity_exists(tenant_id, activity_id) or _has_open_activity_for_lead(tenant_id, sheet_row):
-            continue
-
-        row_match = filtered_df[filtered_df["_sheet_row"] == item["sheet_row"]]
-        if row_match.empty:
-            continue
-        row = row_match.iloc[0]
-        lead = _lead_record(row, columns, tenant_id)
-        process_action = _process_from_overview(item["next_action"])
-        channel = _channel_from_overview(lead.get("next_action_type", "whatsapp"))
-        stage = normalize_legacy_stage(item.get("stage")) or lead.get("stage", "Novo Lead")
-
-        scheduled_date = lead.get("next_action_date") or date.today()
-        scheduled_time = lead.get("next_action_time") or "09:00"
-        scheduled_at = datetime.combine(
-            scheduled_date,
-            datetime.strptime(scheduled_time, "%H:%M").time(),
-        ).isoformat(timespec="seconds")
-
-        save_activity(tenant_id, activity_id, {
-            "tenant_id": tenant_id or DEFAULT_TENANT_ID,
-            "sheet_row": item["sheet_row"],
-            "lead_id": str(item["sheet_row"]),
-            "company_id": str(item["sheet_row"]),
-            "empresa": item["empresa"],
-            "contato": _contact_name(row, columns),
-            "assigned_user_id": item["owner"],
-            "created_by_user_id": "system",
-            "title": process_action,
-            "process_action": process_action,
-            "description": ACTION_DESCRIPTIONS.get(process_action, item["next_action"]),
-            "channel": channel,
-            "stage": stage,
-            "stage_entered_at": _now().isoformat(timespec="seconds"),
-            "result": "",
-            "result_notes": "",
-            "scheduled_at": scheduled_at,
-            "scheduled_date": scheduled_date.isoformat(),
-            "scheduled_time": scheduled_time,
-            "completed_at": None,
-            "status": "atrasada" if item["priority_key"] in {"atrasado", "critico"} else "pendente",
-            "priority": item["priority_score"],
-            "origin_activity_id": None,
-            "next_action": "",
-            "next_action_date": "",
-            "next_action_time": "09:00",
-            "next_action_channel": "WhatsApp",
-            "note": "",
-            "rule_code": item["rule_code"],
-            "deleted": False,
-        })
+    Cards só aparecem quando o usuário cria atividade no cadastro/tela.
+    """
+    return
 
 
 def _serialize_activity(record: dict, tenant_id: str | None = None) -> dict:
@@ -803,21 +747,61 @@ def _kanban_lead_key(card: dict) -> str:
 
 
 def _kanban_stage_for_card(card: dict, tenant_id: str | None) -> str:
-    return normalize_legacy_stage(card.get("stage")) or "Novo Lead"
+    return normalize_legacy_stage(card.get("stage")) or "Contato"
 
 
 def _pick_kanban_representative(group: list[dict]) -> dict:
+    """Escolhe 1 card por lead: prioriza atividade manual recente (não auto_*)."""
     if len(group) == 1:
         return group[0]
     open_cards = [item for item in group if item.get("status") not in {"concluida", "cancelada"}]
     pool = open_cards or group
 
     def activity_rank(item: dict) -> tuple:
-        is_auto = str(item.get("id", "")).startswith("auto_")
-        updated = _timeline_sort_value(item.get("updated_at"))
-        return (1 if is_auto else 0, updated, _sla_sort_key(item))
+        # Manual (cadastro/usuário) sempre acima de auto_* — senão o card “não muda”
+        is_manual = 0 if str(item.get("id", "")).startswith("auto_") else 1
+        updated = _timeline_sort_value(item.get("updated_at") or item.get("created_at"))
+        return (is_manual, updated, _sla_sort_key(item))
 
     return max(pool, key=activity_rank)
+
+
+def _close_auto_activities_for_lead(
+    tenant_id: str | None,
+    sheet_row: int,
+    *,
+    keep_activity_id: str = "",
+    user: str = "system",
+) -> int:
+    """Encerra auto_* abertas do lead quando o usuário cria atividade no cadastro."""
+    if not sheet_row:
+        return 0
+    open_statuses = {"pendente", "em_andamento", "atrasada", "reagendada"}
+    closed = 0
+    for record in list_activities(tenant_id):
+        activity_id = str(record.get("id") or "")
+        if not activity_id.startswith("auto_"):
+            continue
+        if keep_activity_id and activity_id == keep_activity_id:
+            continue
+        if int(record.get("sheet_row") or 0) != int(sheet_row):
+            continue
+        if record.get("status") not in open_statuses:
+            continue
+        save_activity(
+            tenant_id,
+            activity_id,
+            {
+                "status": "concluida",
+                "completed_at": _now().isoformat(timespec="seconds"),
+                "result": "Substituída",
+                "note": "Encerrada automaticamente ao criar atividade no cadastro.",
+                "updated_by": user,
+            },
+            sync_pipeline=False,
+        )
+        closed += 1
+    return closed
 
 
 def _prepare_kanban_activities(
@@ -1071,7 +1055,7 @@ def criar_proxima_atividade(
 ) -> dict | None:
     process_action = normalize_legacy_action(process_action)
     channel = normalize_legacy_channel(channel)
-    stage = normalize_legacy_stage(stage) or "Novo Lead"
+    stage = normalize_legacy_stage(stage) or "Contato"
 
     if verificar_duplicidade(tenant_id, origin.get("id"), process_action, scheduled_date, sheet_row):
         return None
@@ -1220,7 +1204,7 @@ def atualizar_atividade_inline(
     assigned_user = normalize_text(payload.get("assigned_user_id")) or current.get("assigned_user_id")
     move_stage = normalize_legacy_stage(payload.get("move_stage"))
     channel = normalize_legacy_channel(payload.get("channel") or current.get("channel"))
-    current_stage = normalize_legacy_stage(current.get("stage")) or "Novo Lead"
+    current_stage = normalize_legacy_stage(current.get("stage")) or "Contato"
 
     validation_payload = {
         "stage": current_stage,
@@ -1987,7 +1971,7 @@ def build_activity_page_context(
 
 
 def buscar_acoes_por_etapa(stage: str) -> list[str]:
-    return get_actions_for_stage(normalize_legacy_stage(stage) or "Novo Lead")
+    return get_actions_for_stage(normalize_legacy_stage(stage) or "Contato")
 
 
 def buscar_responsaveis_permitidos(seller_options: list[str], current_user: str, is_admin_user: bool) -> list[str]:
@@ -2038,7 +2022,6 @@ def _lead_is_accessible(row, current_user: str, is_admin_user: bool) -> bool:
 
 
 _STAGE_DEFAULT_ACTIVITY_TYPE = {
-    "Novo Lead": "Contato",
     "Contato": "Contato",
     "Qualificação": "Qualificação",
     "Reunião": "Reunião",
@@ -2050,7 +2033,7 @@ _STAGE_DEFAULT_ACTIVITY_TYPE = {
 
 
 def _default_new_activity_fields(stage: str) -> tuple[str, str]:
-    normalized_stage = normalize_legacy_stage(stage) or "Novo Lead"
+    normalized_stage = normalize_legacy_stage(stage) or "Contato"
     process_action = NEXT_ACTION_BY_STAGE.get(normalized_stage)
     if not process_action:
         actions = get_actions_for_stage(normalized_stage)
@@ -2062,7 +2045,7 @@ def _default_new_activity_fields(stage: str) -> tuple[str, str]:
 def _lead_result_item(row, columns: dict, lead: dict, tenant_id: str | None) -> dict:
     from app.services.registration import resolve_cadastro_tipo
 
-    stage = lead.get("stage", "Novo Lead")
+    stage = lead.get("stage", "Contato")
     cadastro_tipo = resolve_cadastro_tipo(
         tenant_id,
         int(lead.get("sheet_row") or 0),
@@ -2169,7 +2152,7 @@ def buscar_leads_para_atividade(
 
 
 def sugerir_prioridade(stage: str, scheduled_at: datetime | None, created_at=None) -> str:
-    if stage == "Novo Lead":
+    if stage in {"Contato", "Novo Lead"}:
         minutes = _minutes_since(created_at)
         if minutes is not None and minutes >= 60:
             return "Crítica"
@@ -2201,7 +2184,7 @@ def validar_nova_atividade(payload: dict, *, is_admin_user: bool = False, allow_
         return "Selecione um lead ou empresa."
 
     stage = normalize_legacy_stage(payload.get("stage"))
-    default_activity_type, default_process_action = _default_new_activity_fields(stage or "Novo Lead")
+    default_activity_type, default_process_action = _default_new_activity_fields(stage or "Contato")
     activity_type = normalize_text(payload.get("activity_type")) or default_activity_type
     process_action = normalize_legacy_action(payload.get("process_action")) or default_process_action
     channel = normalize_legacy_channel(payload.get("channel"))
@@ -2473,7 +2456,7 @@ def criar_atividade(
         return None, validation_error
 
     sheet_row = int(payload["sheet_row"])
-    stage = normalize_legacy_stage(payload.get("stage")) or "Novo Lead"
+    stage = normalize_legacy_stage(payload.get("stage")) or "Contato"
     default_activity_type, default_process_action = _default_new_activity_fields(stage)
     activity_type = normalize_text(payload.get("activity_type")) or default_activity_type
     process_action = normalize_legacy_action(payload.get("process_action")) or default_process_action
@@ -2534,11 +2517,30 @@ def criar_atividade(
         "priority_label": priority_label,
         "deleted": False,
     }
+    try:
+        from app.services.crm_registrations_storage import get_registration_by_sheet_row
+
+        reg = get_registration_by_sheet_row(int(sheet_row), tenant_id=tenant_id)
+        if reg:
+            activity_record["registration_id"] = int(reg.id)
+    except Exception:
+        pass
     if status == "concluida":
         activity_record["completed_at"] = _now().isoformat(timespec="seconds")
     activity_record["status"] = calcular_status_atraso(activity_record)
     saved = save_activity(tenant_id, None, activity_record)
     activity_id = saved["id"]
+
+    # Libera o card do kanban: auto_* não pode “tampar” a atividade criada no cadastro
+    try:
+        _close_auto_activities_for_lead(
+            tenant_id,
+            sheet_row,
+            keep_activity_id=activity_id,
+            user=user,
+        )
+    except Exception:
+        pass
 
     registrar_historico_atividade(
         tenant_id,

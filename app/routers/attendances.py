@@ -612,17 +612,11 @@ def attendances_unread(request: Request):
 
 @router.get("/atendimentos/sync")
 def attendances_sync(request: Request, conversation_id: str = ""):
-    """Poll leve — só lê o banco. Inbox nova vem do webhook (não sync Evolution aqui)."""
+    """Poll leve — só lê o banco. Inbox nova vem do webhook."""
     require_auth(request)
     try:
-        # Conversa aberta: fallback leve se webhook atrasar (throttle ~10s).
-        if conversation_id:
-            try:
-                attendances_service.schedule_sync_messages_from_evolution(
-                    conversation_id, limit=25, force=False
-                )
-            except Exception:
-                pass
+        # NÃO agenda Evolution aqui: poll a cada poucos segundos derrubava o worker.
+        # Sync Evolution fica ao abrir a conversa / manutenção periódica.
         return JSONResponse(store.get_sync_snapshot(conversation_id))
     except Exception:
         return JSONResponse(

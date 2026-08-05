@@ -1283,20 +1283,10 @@ def get_sync_snapshot(conversation_id: str = "") -> dict:
             conv_token = f"{crow[0]}|{crow[1] or ''}|{crow[2] or ''}|{typing}"
 
     inbox_token = f"{unread}|{last_msg}|{last_upd}|{msg_count}|{msg_max_id}"
-    lines: dict[str, int] = {}
-    try:
-        from app.config import settings
-
-        for name in settings.evolution_instances or []:
-            try:
-                lines[name] = count_unread(evolution_instance=name)
-            except Exception:
-                lines[name] = 0
-    except Exception:
-        lines = {}
+    # Linhas: só total no poll leve; /unread preenche badges por instância sob demanda
     return {
         "unread": unread,
-        "lines": lines,
+        "lines": {},
         "inbox_token": inbox_token,
         "conversation_id": conversation_id or None,
         "conversation_token": conv_token or None,

@@ -110,6 +110,10 @@ def _resolve_line_filter(line_filter: str, lines: list[dict] | None = None) -> s
     return configured[0]
 
 
+_PAGE_MAINT_LAST = 0.0
+_PAGE_MAINT_MIN_INTERVAL_SEC = 300.0  # purge/inbox sync no máximo a cada 5 min
+
+
 def page_context(
     *,
     search: str = "",
@@ -124,20 +128,27 @@ def page_context(
     soft: bool = False,
     request=None,
 ) -> dict:
-    # Manutenção pesada só na carga completa — e em background (não trava troca de aba)
+    # Manutenção pesada só na carga completa — throttle forte (não a cada F5)
     if not light:
-        def _maintenance() -> None:
-            try:
-                store.purge_group_conversations()
-                store.delete_conversations_by_contact_names()
-            except Exception:
-                logger.exception("Falha ao limpar conversas indesejadas da inbox")
-            try:
-                schedule_sync_inbox_from_evolution(force=False)
-            except Exception:
-                logger.exception("Falha ao agendar sync inbox Evolution")
+        import time as _time
 
-        threading.Thread(target=_maintenance, daemon=True, name="att-page-maint").start()
+        global _PAGE_MAINT_LAST
+        now = _time.monotonic()
+        if (now - _PAGE_MAINT_LAST) >= _PAGE_MAINT_MIN_INTERVAL_SEC:
+            _PAGE_MAINT_LAST = now
+
+            def _maintenance() -> None:
+                try:
+                    store.purge_group_conversations()
+                    store.delete_conversations_by_contact_names()
+                except Exception:
+                    logger.exception("Falha ao limpar conversas indesejadas da inbox")
+                try:
+                    schedule_sync_inbox_from_evolution(force=False)
+                except Exception:
+                    logger.exception("Falha ao agendar sync inbox Evolution")
+
+            threading.Thread(target=_maintenance, daemon=True, name="att-page-maint").start()
 
     effective_sector, scope = _resolve_sector_filter(session_user, sector_filter)
     # Rótulos das linhas: só cache (HTTP Evolution fora do hot path)

@@ -2,7 +2,7 @@
   "use strict";
 
   // Poll no SQLite (leve). SSE desligado: costuma travar/estressar o proxy do painel.
-  var POLL_MS = 4000;
+  var POLL_MS = 8000;
   var pollTimer = null;
   var lastUnread = 0;
   var lastInboxToken = "";
@@ -69,7 +69,7 @@
         side.hidden = true;
       }
     }
-    if (lines && typeof lines === "object") {
+    if (lines && typeof lines === "object" && Object.keys(lines).length > 0) {
       document.querySelectorAll(".att-line-pill").forEach(function (btn) {
         var id = btn.getAttribute("data-line") || "";
         var n = Number(lines[id]) || 0;
@@ -243,6 +243,16 @@
       .then(function (j) {
         var prevUnread = lastUnread;
         updateUnreadBadge(j.unread, j.lines);
+        // Badges por linha: snapshot leve não traz — puxa /unread a cada ~3 polls
+        if (!pollSync._lineTick) pollSync._lineTick = 0;
+        pollSync._lineTick += 1;
+        if (pollSync._lineTick >= 3) {
+          pollSync._lineTick = 0;
+          fetch("/atendimentos/unread", { credentials: "same-origin" })
+            .then(function (r) { return r.json(); })
+            .then(function (u) { updateUnreadBadge(u.unread, u.lines); })
+            .catch(function () {});
+        }
 
         var inboxChanged =
           lastInboxToken && j.inbox_token && j.inbox_token !== lastInboxToken;

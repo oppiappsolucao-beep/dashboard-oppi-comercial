@@ -1,7 +1,6 @@
 """Opções oficiais do processo comercial Oppi CRM — fonte única de verdade."""
 
 PIPELINE_STAGE_OPTIONS = [
-    "Novo Lead",
     "Contato",
     "Qualificação",
     "Reunião",
@@ -13,7 +12,6 @@ PIPELINE_STAGE_OPTIONS = [
 ]
 
 PIPELINE_STAGE_SLA = {
-    "Novo Lead": {"label": "Até 1 hora", "max_hours": 1},
     "Contato": {"label": "No mesmo dia", "same_day": True},
     "Qualificação": {"label": "1 a 3 dias", "min_days": 1, "max_days": 3},
     "Reunião": {"label": "Até 7 dias", "max_days": 7},
@@ -74,8 +72,7 @@ NEXT_ACTION_OPTIONS = [
 ]
 
 NEXT_ACTION_BY_STAGE = {
-    "Novo Lead": "Fazer primeiro contato",
-    "Contato": "Qualificar lead",
+    "Contato": "Realizar contato",
     "Qualificação": "Agendar reunião",
     "Reunião": "Criar proposta",
     "Proposta": "Retornar contato",
@@ -86,12 +83,10 @@ NEXT_ACTION_BY_STAGE = {
 }
 
 PROCESS_ACTIONS_BY_STAGE = {
-    "Novo Lead": [
+    "Contato": [
         "Fazer primeiro contato",
         "Verificar dados do lead",
         "Atribuir responsável",
-    ],
-    "Contato": [
         "Realizar contato",
         "Retornar contato",
         "Enviar apresentação inicial",
@@ -291,7 +286,6 @@ CLOSED_RESULTS = {"Sem interesse", "Contato inválido"}
 NO_NEXT_ACTION_RESULTS = CLOSED_RESULTS | {"Encerrar processo comercial"}
 
 PIPELINE_STAGE_COLORS = {
-    "Novo Lead": "#8B5CF6",
     "Contato": "#EC4899",
     "Qualificação": "#3B82F6",
     "Reunião": "#10B981",
@@ -303,7 +297,6 @@ PIPELINE_STAGE_COLORS = {
 }
 
 PIPELINE_STAGE_BADGE = {
-    "Novo Lead": "novo-lead",
     "Contato": "contato",
     "Qualificação": "qualificacao",
     "Reunião": "reuniao",
@@ -315,8 +308,13 @@ PIPELINE_STAGE_BADGE = {
 }
 
 PIPELINE_STAGE_SHEET_STATUSES = {
-    "Novo Lead": ["Novo Lead"],
-    "Contato": ["Chamado Whats", "Ligação", "Ligação - Conversando Whats", "Sem Whatsapp"],
+    "Contato": [
+        "Novo Lead",
+        "Chamado Whats",
+        "Ligação",
+        "Ligação - Conversando Whats",
+        "Sem Whatsapp",
+    ],
     "Qualificação": ["Conversando"],
     "Reunião": ["Reunião"],
     "Proposta": ["Proposta"],
@@ -327,7 +325,7 @@ PIPELINE_STAGE_SHEET_STATUSES = {
 }
 
 SHEET_STATUS_TO_PIPELINE_STAGE = {
-    "Novo Lead": "Novo Lead",
+    "Novo Lead": "Contato",
     "Chamado Whats": "Contato",
     "Ligação": "Contato",
     "Ligação - Conversando Whats": "Contato",

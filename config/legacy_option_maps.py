@@ -1,6 +1,7 @@
 """Mapeamento de valores legados para o processo comercial oficial."""
 
 LEGACY_STAGE_MAP = {
+    "Novo Lead": "Contato",
     "Primeiro Contato": "Contato",
     "Contato inicial": "Contato",
     "Primeiro contato": "Contato",

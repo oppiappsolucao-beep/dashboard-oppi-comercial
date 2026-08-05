@@ -69,7 +69,7 @@
   </nav>
 
   <form method="post" action="/cadastro/novo" class="client-edit-form" id="registration-new-form">
-    <input type="hidden" name="create_first_activity" id="create-first-activity" value="1">
+    <input type="hidden" name="create_first_activity" id="create-first-activity" value="0">
     <input type="hidden" name="status" value="Novo Lead">
     <input type="hidden" name="data_chamado" value="{{ today }}">
     {% if from_page %}<input type="hidden" name="from" value="{{ from_page }}">{% endif %}
