@@ -188,8 +188,9 @@ async def startup_maintenance() -> None:
                 from database.connection import SessionLocal
                 from database.models import AppMeta
                 from app.services.activities_storage import clear_all_activities
+                from app.services.crm_cleanup import purge_recent_leads_and_all_conversations
 
-                purge_key = "activities_cleared_contato_pipeline_v1"
+                purge_key = "purge_leads30d_conversations_v1"
                 db = SessionLocal()
                 try:
                     meta = db.get(AppMeta, purge_key)
@@ -197,18 +198,22 @@ async def startup_maintenance() -> None:
                 finally:
                     db.close()
                 if not already:
-                    cleared = clear_all_activities()
-                    log.info("Activities full purge: %s", cleared)
+                    cleared_acts = clear_all_activities()
+                    log.info("Activities full purge: %s", cleared_acts)
+                    cleaned = purge_recent_leads_and_all_conversations(days=30)
+                    log.info("Leads/conversations purge: %s", cleaned)
                     db = SessionLocal()
                     try:
                         db.merge(AppMeta(key=purge_key, value="1"))
+                        # marca também a limpeza anterior de atividades
+                        db.merge(AppMeta(key="activities_cleared_contato_pipeline_v1", value="1"))
                         db.commit()
                     finally:
                         db.close()
                 else:
-                    log.info("Activities full purge: already done (%s)", purge_key)
+                    log.info("Leads/conversations purge: already done (%s)", purge_key)
             except Exception as act_purge_error:
-                log.error("Activities full purge: %s", act_purge_error)
+                log.error("Leads/conversations purge: %s", act_purge_error)
             try:
                 from app.services.attendance_media import backfill_all_conversations_media
 

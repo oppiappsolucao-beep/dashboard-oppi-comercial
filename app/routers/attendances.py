@@ -495,17 +495,15 @@ def attendances_finalize_all(request: Request, line: str = Form("")):
 async def attendances_cadastro_nome(request: Request, conversation_id: str):
     require_auth(request)
     form = await request.form()
-    empresa = normalize_text(form.get("empresa", ""))
-    contato = normalize_text(form.get("contato", ""))
+    nome = normalize_text(form.get("nome", "")) or normalize_text(form.get("contato", "")) or normalize_text(form.get("empresa", ""))
     _, error = attendances_service.update_conversation_cadastro_names(
         conversation_id,
-        empresa=empresa,
-        contato=contato,
+        nome=nome,
     )
     if error:
         ctx = _page_ctx(request, selected_id=conversation_id, error=error)
     else:
-        ctx = _page_ctx(request, selected_id=conversation_id, flash="Nome do cadastro salvo.")
+        ctx = _page_ctx(request, selected_id=conversation_id, flash="Nome salvo no cadastro.")
     return render(request, "partials/attendances_crm_panel.html", ctx)
 
 

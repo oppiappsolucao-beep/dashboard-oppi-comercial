@@ -104,6 +104,10 @@ def _now() -> datetime:
 
 
 def _resolve_effective_stage(record: dict, tenant_id: str | None = None) -> str:
+    """Etapa do card = stage da atividade (kanban). Override do lead só como fallback."""
+    stage = normalize_legacy_stage(record.get("stage") or record.get("move_stage") or "")
+    if stage:
+        return stage
     tenant = tenant_id or record.get("tenant_id") or DEFAULT_TENANT_ID
     sheet_row = int(record.get("sheet_row") or 0)
     stored = get_lead_action(tenant, sheet_row) if sheet_row else {}

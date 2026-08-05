@@ -667,6 +667,57 @@
   font-weight: 700;
 }
 
+.att-crm-name-row {
+  margin: 0 0 14px;
+}
+
+.att-crm-name-label {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+.att-crm-name-view {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.att-crm-name-text {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.att-crm-name-edit-btn {
+  border: 1px solid var(--border, #E5E7EB);
+  background: #fff;
+  border-radius: 8px;
+  width: 32px;
+  height: 32px;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  color: #4B5563;
+}
+
+.att-crm-name-edit-btn:hover {
+  border-color: #9CA3AF;
+  background: #F9FAFB;
+}
+
+.att-crm-name-edit-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.att-crm-open-link {
+  display: inline-block;
+  margin-bottom: 4px;
+}
+
 .att-crm-dl {
   margin: 0 0 16px;
   display: flex;

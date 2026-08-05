@@ -4,6 +4,29 @@
   {% if flash %}<div class="att-flash sm">{{ flash }}</div>{% endif %}
   {% if error %}<div class="att-flash sm" style="background:#fde8e8;color:#9b1c1c">{{ error }}</div>{% endif %}
 
+  <div class="att-crm-name-row" id="att-crm-name-row">
+    <span class="att-crm-name-label">Nome</span>
+    <div class="att-crm-name-view" id="att-crm-name-view">
+      <strong class="att-crm-name-text">{{ selected.contact_name or crm.contato or crm.empresa or '—' }}</strong>
+      <button type="button" class="att-crm-name-edit-btn" id="att-crm-name-edit-btn" title="Editar nome" aria-label="Editar nome">✎</button>
+    </div>
+    <form class="att-crm-name-edit"
+          id="att-crm-name-edit"
+          hidden
+          hx-post="/atendimentos/conversa/{{ selected.id }}/cadastro-nome"
+          hx-target="#att-crm-inner"
+          hx-swap="innerHTML">
+      <input type="text" name="nome" class="att-input" id="att-crm-name-input"
+             value="{{ selected.contact_name or crm.whatsapp_name or crm.contato or crm.empresa or '' }}"
+             placeholder="Nome do cliente"
+             autocomplete="name">
+      <div class="att-crm-name-edit-actions">
+        <button type="submit" class="btn btn-secondary att-notes-save">Salvar</button>
+        <button type="button" class="btn" id="att-crm-name-cancel">Cancelar</button>
+      </div>
+    </form>
+  </div>
+
   <dl class="att-crm-dl">
     <div><dt>WhatsApp</dt><dd>{{ selected.phone_e164 }}</dd></div>
     <div><dt>Setor</dt><dd>{{ selected.sector_name or '—' }}</dd></div>
@@ -12,35 +35,15 @@
     <div><dt>Status chat</dt><dd><span class="att-status-badge status-{{ selected.status }}">{{ selected.status_label }}</span></dd></div>
   </dl>
 
-  <form class="att-notes-form att-crm-name-form"
-        hx-post="/atendimentos/conversa/{{ selected.id }}/cadastro-nome"
-        hx-target="#att-crm-inner"
-        hx-swap="innerHTML"
-        style="margin-bottom:14px">
-    <label class="att-label">Empresa</label>
-    <input type="text" name="empresa" class="att-input"
-           value="{{ crm.empresa if crm.empresa != '—' else '' }}"
-           placeholder="Nome da empresa"
-           autocomplete="organization">
-    <label class="att-label">Contato <small class="att-hint">(nome do WhatsApp)</small></label>
-    <input type="text" name="contato" class="att-input"
-           value="{{ (crm.whatsapp_name or selected.contact_name or crm.contato) if (crm.whatsapp_name or selected.contact_name or crm.contato) != '—' else '' }}"
-           placeholder="Nome salvo no WhatsApp do cliente"
-           autocomplete="name">
-    {% if crm.whatsapp_name %}
-    <small class="att-hint">Nome do WhatsApp: <strong>{{ crm.whatsapp_name }}</strong></small>
-    {% endif %}
-    <button type="submit" class="btn btn-secondary att-notes-save" style="margin-top:8px">Salvar nome</button>
-    {% if crm.edit_href %}
-    <a href="{{ crm.edit_href }}" class="att-hint" style="display:inline-block;margin-top:6px">Abrir cadastro completo →</a>
-    {% endif %}
-  </form>
+  {% if crm.edit_href %}
+  <a href="{{ crm.edit_href }}" class="att-hint att-crm-open-link">Abrir cadastro completo →</a>
+  {% endif %}
 
   <form class="att-notes-form att-assign-form"
         hx-post="/atendimentos/conversa/{{ selected.id }}/direcionar"
         hx-target="#att-chat-root"
         hx-swap="innerHTML"
-        style="margin-bottom:14px">
+        style="margin-bottom:14px;margin-top:14px">
     <label class="att-label">Setor</label>
     <select name="sector_id" id="att-sector-select" class="att-input">
       <option value="">Selecione o setor</option>
@@ -115,21 +118,40 @@
 (function () {
   var sector = document.getElementById('att-sector-select');
   var assignee = document.getElementById('att-assignee-select');
-  if (!sector || !assignee) return;
-  function refill() {
-    var opt = sector.options[sector.selectedIndex];
-    var names = (opt && opt.getAttribute('data-users') || '').split('||').filter(Boolean);
-    var current = assignee.value;
-    assignee.innerHTML = '<option value="">Selecione</option>';
-    names.forEach(function (name) {
-      var o = document.createElement('option');
-      o.value = name;
-      o.textContent = name;
-      if (name === current) o.selected = true;
-      assignee.appendChild(o);
+  if (sector && assignee) {
+    function refill() {
+      var opt = sector.options[sector.selectedIndex];
+      var names = (opt && opt.getAttribute('data-users') || '').split('||').filter(Boolean);
+      var current = assignee.value;
+      assignee.innerHTML = '<option value="">Selecione</option>';
+      names.forEach(function (name) {
+        var o = document.createElement('option');
+        o.value = name;
+        o.textContent = name;
+        if (name === current) o.selected = true;
+        assignee.appendChild(o);
+      });
+    }
+    sector.addEventListener('change', refill);
+  }
+  var view = document.getElementById('att-crm-name-view');
+  var edit = document.getElementById('att-crm-name-edit');
+  var editBtn = document.getElementById('att-crm-name-edit-btn');
+  var cancelBtn = document.getElementById('att-crm-name-cancel');
+  var input = document.getElementById('att-crm-name-input');
+  if (editBtn && view && edit) {
+    editBtn.addEventListener('click', function () {
+      view.hidden = true;
+      edit.hidden = false;
+      if (input) { input.focus(); input.select(); }
     });
   }
-  sector.addEventListener('change', refill);
+  if (cancelBtn && view && edit) {
+    cancelBtn.addEventListener('click', function () {
+      edit.hidden = true;
+      view.hidden = false;
+    });
+  }
 })();
 </script>
 {% endif %}

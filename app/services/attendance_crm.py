@@ -330,19 +330,13 @@ def apply_whatsapp_name_to_crm(
     *,
     whatsapp_name: str,
 ) -> None:
-    """Se o cadastro ainda está genérico, grava o nome do WhatsApp em Empresa/Contato."""
+    """Grava o nome do WhatsApp no cadastro (Empresa/Contato) quando chega mensagem."""
     name = normalize_text(whatsapp_name)
     if not sheet_row or not name:
         return
-    panel = build_crm_panel(sheet_row, fallback_name=name)
-    empresa = normalize_text(panel.get("empresa") or "")
-    contato = normalize_text(panel.get("contato") or "")
-    new_empresa = name if _looks_like_whatsapp_placeholder(empresa) else ""
-    new_contato = name if (_looks_like_whatsapp_placeholder(contato) or not contato) else ""
-    if not new_empresa and not new_contato:
-        return
+    # Sempre atualiza com o nome do WhatsApp do cliente
     update_cadastro_names(
         sheet_row,
-        empresa=new_empresa or empresa,
-        contato=new_contato or contato or name,
+        empresa=name,
+        contato=name,
     )

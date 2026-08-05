@@ -713,28 +713,24 @@ def update_conversation_cadastro_names(
     *,
     empresa: str = "",
     contato: str = "",
+    nome: str = "",
 ) -> tuple[dict | None, str]:
-    """Edita Empresa/Contato direto no painel CRM do Atendimentos."""
+    """Edita o Nome no painel CRM (grava na conversa + cadastro)."""
     conversation = store.get_conversation(conversation_id)
     if not conversation:
         return None, "Conversa não encontrada."
 
-    empresa_name = normalize_text(empresa)
-    contato_name = normalize_text(contato)
-    if not empresa_name and not contato_name:
-        return conversation, "Informe o nome da empresa ou do contato."
+    display_name = normalize_text(nome) or normalize_text(contato) or normalize_text(empresa)
+    if not display_name:
+        return conversation, "Informe o nome."
 
-    # Lista da inbox: prioriza contato; se vazio, empresa
-    display_name = contato_name or empresa_name or normalize_text(conversation.get("contact_name") or "")
-    if display_name:
-        conversation = (
-            store.update_conversation(conversation_id, contact_name=display_name)
-            or conversation
-        )
+    conversation = (
+        store.update_conversation(conversation_id, contact_name=display_name)
+        or conversation
+    )
 
     sheet_row = conversation.get("sheet_row")
     if not sheet_row:
-        # Garante cadastro para persistir os nomes
         conversation = ensure_crm_link(
             conversation,
             contact_name=display_name,
@@ -745,12 +741,12 @@ def update_conversation_cadastro_names(
         try:
             attendance_crm.update_cadastro_names(
                 int(sheet_row),
-                empresa=empresa_name or display_name,
-                contato=contato_name or display_name,
+                empresa=display_name,
+                contato=display_name,
             )
         except Exception as exc:
-            logger.exception("Falha ao salvar nomes do CRM (%s)", conversation_id)
-            return conversation, f"Nome da conversa atualizado, mas o CRM falhou: {exc}"
+            logger.exception("Falha ao salvar nome do CRM (%s)", conversation_id)
+            return conversation, f"Nome do chat atualizado, mas o cadastro falhou: {exc}"
 
     return conversation, ""
 
