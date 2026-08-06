@@ -9,7 +9,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import APP_BUILD, settings
 from app.routers import auth, activities, attendances, contracts, evolution_webhook, funnel, goals_reports, leads, overview, proposals, registration
-from app.routers import migration_ponto
+from app.routers import api_v1, migration_ponto
 from app.routers import settings as settings_router
 from app.templating import render
 
@@ -37,6 +37,7 @@ app.include_router(leads.router)
 app.include_router(registration.router)
 app.include_router(contracts.router)
 app.include_router(migration_ponto.router)
+app.include_router(api_v1.router)
 app.include_router(settings_router.router)
 
 # Atendimentos (registro explícito para garantir rota no deploy)
@@ -491,6 +492,12 @@ async def root():
 
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
+    if request.url.path.startswith("/api/"):
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"ok": False, "detail": exc.detail},
+            headers=dict(exc.headers or {}),
+        )
     if exc.status_code == 503:
         return render(
             request,
@@ -503,6 +510,11 @@ async def http_exception_handler(request: Request, exc: HTTPException):
 
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
+    if request.url.path.startswith("/api/"):
+        return JSONResponse(
+            status_code=500,
+            content={"ok": False, "detail": f"Erro interno: {exc}"},
+        )
     return render(
         request,
         "error.html",
