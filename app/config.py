@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-APP_BUILD = os.getenv("APP_BUILD", "20260806-01-inbox-order-meta-v162").strip() or "20260806-01-inbox-order-meta-v162"
+APP_BUILD = os.getenv("APP_BUILD", "20260806-02-api-cadastro-ponto-v163").strip() or "20260806-02-api-cadastro-ponto-v163"
 
 class Settings:
     sheet_id: str = "1GAbrca0NSiJfPXaSte1qGxXCsGkQPacoRsm0PVB51gE"
@@ -24,6 +24,7 @@ class Settings:
     ai_attendance_enabled: bool = False
     oppi_ponto_api_url: str = "https://ponto.oppitech.com.br"
     oppi_ponto_crm_api_key: str = ""
+    comercial_api_key: str = ""
 
     app_username: str
     app_password: str
@@ -82,6 +83,10 @@ class Settings:
         }
         self.oppi_ponto_api_url = os.getenv("OPPI_PONTO_API_URL", "https://ponto.oppitech.com.br").strip().rstrip("/")
         self.oppi_ponto_crm_api_key = os.getenv("OPPI_PONTO_CRM_API_KEY", "").strip()
+        self.comercial_api_key = (
+            os.getenv("COMERCIAL_API_KEY", "").strip()
+            or os.getenv("OPPI_COMERCIAL_API_KEY", "").strip()
+        )
 
     @property
     def evolution_instances(self) -> list[str]:

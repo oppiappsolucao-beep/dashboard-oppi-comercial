@@ -104,6 +104,8 @@ def build_integrations() -> list[dict]:
         ("n8n", ["N8N_WEBHOOK_URL"]),
         ("Asaas", ["ASAAS_API_KEY"]),
         ("ZapSign", ["ZAPSIGN_API_TOKEN"]),
+        ("Oppi Ponto", ["OPPI_PONTO_CRM_API_KEY"]),
+        ("API Comercial", ["COMERCIAL_API_KEY", "OPPI_COMERCIAL_API_KEY"]),
     ]
     rows = []
     for name, env_keys in items:

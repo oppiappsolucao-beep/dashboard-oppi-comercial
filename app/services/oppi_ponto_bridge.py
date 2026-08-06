@@ -204,6 +204,9 @@ def build_onboard_payload_from_crm(
     access: dict | None = None,
     closed_services: list[dict] | None = None,
     password: str | None = None,
+    pagamento_modalidade: str | None = None,
+    vincular_gestor_existente: bool = False,
+    admin_nome_override: str | None = None,
 ) -> dict[str, Any]:
     access = access or {}
     closed = closed_services or []
@@ -227,7 +230,8 @@ def build_onboard_payload_from_crm(
         email_cobranca,
     )
     admin_nome = (
-        normalize_text(values.get("socio_1"))
+        normalize_text(admin_nome_override)
+        or normalize_text(values.get("socio_1"))
         or normalize_text(values.get("empresa"))
         or "Gestor"
     )
@@ -235,6 +239,12 @@ def build_onboard_payload_from_crm(
     vencimento = normalize_text(primary.get("vencimento")) or ""
     whatsapp = normalize_text(values.get("telefone_b2b")) or normalize_text(values.get("telefone_socio_1"))
     telefone = normalize_text(values.get("telefone_fixo")) or whatsapp
+
+    modalidade = normalize_text(pagamento_modalidade).lower()
+    if modalidade not in {"boleto", "cartao_recorrente", "manual"}:
+        # Sem modalidade explícita (fluxo UI antigo): mantém manual para não
+        # disparar Asaas no fechamento comercial. A API grava pagamento_modalidade.
+        modalidade = "manual"
 
     return {
         "admin_nome": admin_nome,
@@ -250,9 +260,9 @@ def build_onboard_payload_from_crm(
         "password_confirm": password,
         "plano_vencimento": vencimento or None,
         "plano_valor": valor.replace("R$", "").strip() if valor else "",
-        # Evita Asaas automático no fechamento comercial; cobrança fica no CRM.
-        "pagamento_modalidade": "manual",
-        "vincular_gestor_existente": False,
+        # boleto/cartao_recorrente → Asaas no Ponto; manual → sem Asaas.
+        "pagamento_modalidade": modalidade or "manual",
+        "vincular_gestor_existente": bool(vincular_gestor_existente),
         "_generated_password": password,
     }
 
@@ -264,6 +274,9 @@ def sync_or_onboard_company(
     access: dict | None = None,
     closed_services: list[dict] | None = None,
     force_create: bool = False,
+    pagamento_modalidade: str | None = None,
+    vincular_gestor_existente: bool = False,
+    admin_nome_override: str | None = None,
 ) -> dict:
     """Se CNPJ já existe no Ponto, só vincula. Senão, faz onboard."""
     if not oppi_ponto_configured():
@@ -286,10 +299,18 @@ def sync_or_onboard_company(
         }
 
     access = access if access is not None else load_access_fields(DEFAULT_TENANT_ID, sheet_row)
+    if pagamento_modalidade is None:
+        stored = get_lead_action(DEFAULT_TENANT_ID, sheet_row) or {}
+        pagamento_modalidade = normalize_text(stored.get("pagamento_modalidade")) or None
+    if not vincular_gestor_existente:
+        vincular_gestor_existente = bool(values.get("is_filial"))
     payload = build_onboard_payload_from_crm(
         values=values,
         access=access,
         closed_services=closed_services,
+        pagamento_modalidade=pagamento_modalidade,
+        vincular_gestor_existente=vincular_gestor_existente,
+        admin_nome_override=admin_nome_override,
     )
     if not payload.get("email_login") or not payload.get("email_cobranca"):
         raise OppiPontoError(
