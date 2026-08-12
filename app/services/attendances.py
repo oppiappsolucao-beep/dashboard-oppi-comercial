@@ -12,6 +12,54 @@ from app.services.legacy_core import normalize_text
 
 logger = logging.getLogger(__name__)
 
+
+def annotate_messages_day_separators(messages: list[dict] | None) -> list[dict]:
+    """Insere rótulos de dia (Hoje / Ontem / dd/mm/aaaa) entre bolhas, estilo WhatsApp."""
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+
+    if not messages:
+        return []
+    tz = ZoneInfo("America/Sao_Paulo")
+    today = datetime.now(tz).date()
+    yesterday = today - timedelta(days=1)
+    last_day = None
+    out: list[dict] = []
+    for raw in messages:
+        item = dict(raw)
+        day = None
+        created = normalize_text(item.get("created_at") or "")
+        if created:
+            try:
+                # ISO local (sem Z) ou com timezone
+                stub = created.replace("Z", "+00:00")
+                dt = datetime.fromisoformat(stub)
+                if dt.tzinfo is not None:
+                    dt = dt.astimezone(tz).replace(tzinfo=None)
+                day = dt.date()
+                item["time_label"] = dt.strftime("%H:%M")
+            except Exception:
+                if len(created) >= 16:
+                    item["time_label"] = created[11:16]
+                else:
+                    item["time_label"] = ""
+        else:
+            item["time_label"] = ""
+
+        if day and day != last_day:
+            if day == today:
+                item["day_separator"] = "Hoje"
+            elif day == yesterday:
+                item["day_separator"] = "Ontem"
+            else:
+                item["day_separator"] = day.strftime("%d/%m/%Y")
+            last_day = day
+        else:
+            item["day_separator"] = ""
+        out.append(item)
+    return out
+
+
 def can_delete_attendance_conversation(
     session_user: dict | None,
     *,
@@ -173,31 +221,34 @@ def page_context(
         evolution_instance=list_instance,
         tag="",
     )
-    # Tags do cadastro → lista (ao lado de Novo Lead / Em Atendimento)
-    try:
-        from app.services.crm_registrations_storage import get_registration_attendance_tags
+    # Tags do cadastro → só overlay em memória na carga completa.
+    # NUNCA grava aqui: update_conversation + SSE gerava storm e derrubava o worker.
+    if not light:
+        try:
+            from app.services.crm_registrations_storage import get_registration_attendance_tags
 
-        hydrated: list[dict] = []
-        for conv in conversations:
-            if not conv.get("sheet_row") and not conv.get("registration_id"):
-                hydrated.append(conv)
-                continue
-            cadastro_tags = get_registration_attendance_tags(
-                sheet_row=int(conv["sheet_row"]) if conv.get("sheet_row") else None,
-                registration_id=int(conv["registration_id"]) if conv.get("registration_id") else None,
-            )
-            if not cadastro_tags:
-                hydrated.append(conv)
-                continue
-            current = [normalize_text(t) for t in (conv.get("tags") or [])]
-            if [t.lower() for t in current] != [t.lower() for t in cadastro_tags]:
-                updated = store.update_conversation(conv["id"], tags=cadastro_tags) or conv
-                hydrated.append(updated)
-            else:
-                hydrated.append(conv)
-        conversations = hydrated
-    except Exception:
-        logger.exception("Falha ao hidratar tags do cadastro na lista")
+            hydrated: list[dict] = []
+            for conv in conversations:
+                if not conv.get("sheet_row") and not conv.get("registration_id"):
+                    hydrated.append(conv)
+                    continue
+                cadastro_tags = get_registration_attendance_tags(
+                    sheet_row=int(conv["sheet_row"]) if conv.get("sheet_row") else None,
+                    registration_id=int(conv["registration_id"]) if conv.get("registration_id") else None,
+                )
+                if not cadastro_tags:
+                    hydrated.append(conv)
+                    continue
+                current = [normalize_text(t) for t in (conv.get("tags") or [])]
+                if [t.lower() for t in current] != [t.lower() for t in cadastro_tags]:
+                    overlay = dict(conv)
+                    overlay["tags"] = cadastro_tags
+                    hydrated.append(overlay)
+                else:
+                    hydrated.append(conv)
+            conversations = hydrated
+        except Exception:
+            logger.exception("Falha ao overlay tags do cadastro na lista")
     if active_tag:
         wanted = active_tag.lower()
         conversations = [
@@ -277,10 +328,24 @@ def page_context(
                 store.mark_conversation_read(selected_id)
                 selected = store.get_conversation(selected_id)
                 try:
+                    from app.services.legacy_core import format_br_whatsapp_display
+
+                    if selected:
+                        selected = dict(selected)
+                        selected["phone_display"] = (
+                            format_br_whatsapp_display(selected.get("phone_e164") or "")
+                            or selected.get("phone_e164")
+                            or ""
+                        )
+                except Exception:
+                    pass
+                try:
                     selected = apply_registration_tags_to_conversation(selected) or selected
                 except Exception:
                     logger.exception("apply tags do cadastro falhou")
-                messages = store.list_messages(selected_id)
+                messages = annotate_messages_day_separators(
+                    store.list_messages(selected_id)
+                )
                 # CRM / mídia nunca no request — travava o worker e o chat “não abria”
                 if not soft:
                     try:

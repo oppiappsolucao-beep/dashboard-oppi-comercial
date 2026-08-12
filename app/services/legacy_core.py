@@ -1509,12 +1509,39 @@ def normalize_phone_for_duplicate(value) -> str:
     return digits if len(digits) >= 8 else ""
 
 
+def canonicalize_br_mobile_national(value) -> str:
+    """Garante o 9º dígito em celular BR (WhatsApp/JID às vezes vem sem o 9)."""
+    digits = normalize_phone_for_duplicate(value)
+    if not digits:
+        return ""
+    # DDD + 8 dígitos iniciando em 6–9 = celular no formato antigo → insere o 9
+    if len(digits) == 10 and digits[2] in "6789":
+        return digits[:2] + "9" + digits[2:]
+    return digits
+
+
+def format_br_whatsapp_display(value) -> str:
+    """Máscara de celular para gravar/exibir no cadastro, sempre com o 9 quando for móvel."""
+    digits = canonicalize_br_mobile_national(value)
+    if len(digits) == 11:
+        return f"({digits[:2]}) {digits[2:7]}-{digits[7:]}"
+    if len(digits) == 10:
+        return f"({digits[:2]}) {digits[2:6]}-{digits[6:]}"
+    return normalize_text(value)
+
+
 def phone_match_keys(value) -> set[str]:
     """Chaves de comparação para telefone/WhatsApp (com e sem DDD)."""
     digits = normalize_phone_for_duplicate(value)
     if not digits:
         return set()
     keys = {digits}
+    # Inclui versão com/sem 9º dígito para não perder match nem “esconder” o 9 na busca
+    canon = canonicalize_br_mobile_national(digits)
+    if canon:
+        keys.add(canon)
+    if len(canon) == 11 and canon[2] == "9":
+        keys.add(canon[:2] + canon[3:])
     if len(digits) >= 8:
         keys.add(digits[-8:])
     if len(digits) >= 10:

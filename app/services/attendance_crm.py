@@ -114,13 +114,9 @@ def create_lead_from_whatsapp(
     contact_name: str = "",
     vendedor: str = "",
 ) -> int:
-    digits = normalize_phone_for_duplicate(phone)
-    display_phone = phone
-    if digits:
-        if len(digits) == 11:
-            display_phone = f"({digits[:2]}) {digits[2:7]}-{digits[7:]}"
-        elif len(digits) == 10:
-            display_phone = f"({digits[:2]}) {digits[2:6]}-{digits[6:]}"
+    from app.services.legacy_core import format_br_whatsapp_display
+
+    display_phone = format_br_whatsapp_display(phone) or normalize_text(phone)
     name = normalize_text(contact_name) or f"Lead WhatsApp {display_phone}"
     seller = normalize_text(vendedor) or "Sem vendedor"
     form = {
@@ -191,12 +187,15 @@ def build_crm_panel(
     fallback_name: str = "",
     fallback_phone: str = "",
 ) -> dict:
+    from app.services.legacy_core import format_br_whatsapp_display
+
     wa_name = normalize_text(fallback_name)
+    phone_disp = format_br_whatsapp_display(fallback_phone) or normalize_text(fallback_phone) or "—"
     empty = {
         "sheet_row": None,
         "empresa": wa_name or "—",
         "contato": wa_name or "—",
-        "telefone": normalize_text(fallback_phone) or "—",
+        "telefone": phone_disp,
         "vendedor": "—",
         "etapa": "—",
         "edit_href": "",
@@ -221,11 +220,12 @@ def build_crm_panel(
         contato = wa_name
     if wa_name and _looks_like_whatsapp_placeholder(empresa):
         empresa = wa_name
+    raw_phone = normalize_text(row.get("_telefone", "")) or normalize_text(fallback_phone)
     return {
         "sheet_row": int(sheet_row),
         "empresa": empresa,
         "contato": contato,
-        "telefone": normalize_text(row.get("_telefone", "")) or normalize_text(fallback_phone) or "—",
+        "telefone": format_br_whatsapp_display(raw_phone) or raw_phone or "—",
         "vendedor": normalize_text(row.get("_vendedor", "")) or "Sem vendedor",
         "etapa": normalize_text(row.get("_status_grupo") or row.get("_status_original")) or "Novo Lead",
         "edit_href": f"/cadastro/todos/{int(sheet_row)}/editar?from=attendances",

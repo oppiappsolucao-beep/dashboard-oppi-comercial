@@ -420,6 +420,27 @@
   margin-top: 2px;
 }
 
+.att-day-sep {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  margin: 10px 0 6px;
+  align-self: stretch;
+}
+
+.att-day-sep span {
+  background: #e1f2fa;
+  color: #54656f;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  padding: 5px 12px;
+  border-radius: 8px;
+  box-shadow: 0 1px 0.5px rgba(11, 20, 26, 0.13);
+  text-transform: none;
+}
+
 .att-media-link {
   display: inline-block;
   color: #0369a1;

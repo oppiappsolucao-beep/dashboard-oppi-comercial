@@ -224,8 +224,12 @@
       if (el) el.hidden = !data.typing;
       return;
     }
-    if (data.type === "message" || data.type === "conversation_upsert" || data.type === "conversation_read" || data.type === "conversation_meta") {
-      // Só sobe na lista quando chega mensagem / atividade real — não ao salvar tag/nome
+    // Tag/nome: o formulário já atualiza a UI — NÃO refreshList (evita loop com SSE)
+    if (data.type === "conversation_meta") {
+      return;
+    }
+    if (data.type === "message" || data.type === "conversation_upsert" || data.type === "conversation_read") {
+      // Só sobe na lista quando chega mensagem real
       if (data.type === "message") {
         bumpConversationToTop(data.conversation_id);
         refreshList({ bumpId: data.conversation_id });

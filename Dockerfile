@@ -7,7 +7,7 @@ ENV PYTHONUNBUFFERED=1
 ENV PORT=8501
 ENV HOME=/tmp
 ENV TZ=America/Sao_Paulo
-ENV APP_BUILD=20260805-fix-move-crm-v156
+ENV APP_BUILD=20260812-01-fix-att-storm-v163
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \

@@ -29,7 +29,7 @@
   </div>
 
   <dl class="att-crm-dl">
-    <div><dt>WhatsApp</dt><dd>{{ selected.phone_e164 }}</dd></div>
+    <div><dt>WhatsApp</dt><dd>{{ selected.phone_display or selected.phone_e164 }}</dd></div>
     <div><dt>Setor</dt><dd>{{ selected.sector_name or '—' }}</dd></div>
     <div><dt>Responsável</dt><dd>{{ selected.assignee or crm.vendedor or '—' }}</dd></div>
     <div><dt>Status CRM</dt><dd>{{ crm.etapa }}</dd></div>

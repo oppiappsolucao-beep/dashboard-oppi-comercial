@@ -8,7 +8,7 @@
     <div class="att-chat-header-text">
       <div class="att-chat-title">{{ selected.contact_name or selected.phone_e164 }}</div>
       <div class="att-chat-sub">
-        {{ selected.phone_e164 }}
+        {{ selected.phone_display or selected.phone_e164 }}
         · <span class="att-status-badge status-{{ selected.status }}">{{ selected.status_label }}</span>
         {% if selected.ai_mode == ai_mode_paused %}· IA pausada{% elif selected.ai_mode == ai_mode_on %}· IA ativa{% else %}· IA off{% endif %}
         <span class="att-typing-indicator" id="att-typing-{{ selected.id }}" {% if not selected.typing %}hidden{% endif %}>digitando…</span>
@@ -33,6 +33,9 @@
 
   <div class="att-messages" id="att-messages" data-conversation-id="{{ selected.id }}">
     {% for m in messages %}
+    {% if m.day_separator %}
+    <div class="att-day-sep" role="separator"><span>{{ m.day_separator }}</span></div>
+    {% endif %}
     <div class="att-bubble {% if m.direction == 'out' %}out{% else %}in{% endif %} sender-{{ m.sender }}">
       {% if m.type == 'image' and m.media_url %}
         <a class="att-media-link" href="{{ m.media_url }}" target="_blank" rel="noopener">🖼 Imagem</a>
@@ -52,7 +55,7 @@
       {% endif %}
       <div class="att-bubble-meta">
         {% if m.sender == 'ai' %}IA · {% elif m.sender == 'agent' %}Você · {% endif %}
-        {{ m.created_at[11:16] if m.created_at|length >= 16 else '' }}
+        {{ m.time_label or (m.created_at[11:16] if m.created_at|length >= 16 else '') }}
       </div>
     </div>
     {% else %}

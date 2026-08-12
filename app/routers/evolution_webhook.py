@@ -720,6 +720,23 @@ def _handle_messages_upsert(payload: dict) -> int:
         direction = "out" if from_me else "in"
         sender = "agent" if from_me else "contact"
         # Grava a mensagem ANTES de CRM/IA — webhook não pode travar na planilha Google
+        created_at = None
+        try:
+            ts_raw = item.get("messageTimestamp") or key.get("messageTimestamp") or 0
+            ts = int(str(ts_raw).strip() or 0)
+            if ts > 10_000_000_000:
+                ts //= 1000
+            if ts > 0:
+                from datetime import datetime
+                from zoneinfo import ZoneInfo
+
+                created_at = (
+                    datetime.fromtimestamp(ts, ZoneInfo("America/Sao_Paulo"))
+                    .replace(tzinfo=None)
+                    .isoformat(timespec="seconds")
+                )
+        except Exception:
+            created_at = None
         saved_msg = store.add_message(
             conversation["id"],
             direction=direction,
@@ -730,6 +747,7 @@ def _handle_messages_upsert(payload: dict) -> int:
             media_filename=media_filename,
             evolution_id=evolution_id,
             sender=sender,
+            created_at=created_at,
             bump_unread=not from_me,
         )
         count += 1

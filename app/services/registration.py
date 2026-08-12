@@ -366,6 +366,11 @@ def build_registration_payload(form: dict) -> dict:
             data_chamado = raw
 
     payload = {field: normalize_text(form.get(field, "")) for field in REGISTRATION_FIELDS}
+    # Celular WhatsApp: sempre grava com o 9º dígito quando for móvel BR
+    if payload.get("telefone_b2b"):
+        from app.services.legacy_core import format_br_whatsapp_display
+
+        payload["telefone_b2b"] = format_br_whatsapp_display(payload["telefone_b2b"]) or payload["telefone_b2b"]
     payload["data_chamado"] = normalize_text(data_chamado)
     payload["ultima_atualizacao"] = now_text
     tipo = normalize_text(form.get("cadastro_tipo")).lower()
