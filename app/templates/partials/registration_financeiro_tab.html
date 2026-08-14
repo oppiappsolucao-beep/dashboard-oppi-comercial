@@ -4,7 +4,7 @@
       <span class="client-edit-section-icon">💰</span>
       <div>
         <h2>Financeiro</h2>
-        <p>Serviços contratados e histórico de pagamentos do cliente.</p>
+        <p>Plano, faturas Asaas e histórico de pagamentos do cliente.</p>
       </div>
     </div>
 
@@ -94,14 +94,12 @@
     <div class="billing-plan-actions">
       {% if asaas_configured %}
       <button type="submit" name="action" value="generate_invoice" class="btn">Gerar fatura no Asaas</button>
-      <span class="billing-plan-hint">Mensal e anual criam recorrência. Avulso gera uma cobrança única.</span>
+      <span class="billing-plan-hint">Cartão e boleto recorrente criam assinatura no Asaas. PIX avulso e Boleto/Pix avulso geram cobrança única.</span>
       {% else %}
       <p class="billing-plan-hint">Asaas não está configurado. Você ainda pode salvar o plano escolhido e o histórico manual.</p>
       {% endif %}
     </div>
   </section>
-
-  {% include "partials/registration_closed_services.html" %}
 
   <section class="client-edit-section panel" id="payment-history-section">
     <div class="client-edit-section-head">

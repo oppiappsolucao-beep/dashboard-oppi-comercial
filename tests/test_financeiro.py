@@ -64,6 +64,18 @@ class CadastroBillingMappingTest(unittest.TestCase):
         self.assertEqual(asaas_cycle("anual"), "YEARLY")
         self.assertIsNone(asaas_cycle("avulso"))
 
+    def test_payment_option_order_and_labels(self):
+        from app.services.cadastro_billing import BILLING_FORM_OPTIONS, forma_label, is_recurring_forma
+
+        self.assertEqual(
+            [key for key, _ in BILLING_FORM_OPTIONS],
+            ["cartao_recorrente", "boleto_recorrente", "pix", "pix_boleto"],
+        )
+        self.assertEqual(forma_label("pix"), "PIX Avulso")
+        self.assertEqual(forma_label("pix_boleto"), "Boleto/Pix Avulso")
+        self.assertTrue(is_recurring_forma("cartao_recorrente"))
+        self.assertFalse(is_recurring_forma("pix"))
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

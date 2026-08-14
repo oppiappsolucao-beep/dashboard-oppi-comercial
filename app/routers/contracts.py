@@ -392,8 +392,6 @@ async def contract_edit_submit(request: Request, sheet_row: int):
 
     try:
         if action == "save_financeiro":
-            closed_items = parse_closed_services_from_form(form)
-            save_closed_services(DEFAULT_TENANT_ID, sheet_row, closed_items)
             payments = parse_payment_history_from_form(form)
             save_payment_history(DEFAULT_TENANT_ID, sheet_row, payments)
             previous_plan = load_billing_plan(DEFAULT_TENANT_ID, sheet_row)
@@ -409,8 +407,6 @@ async def contract_edit_submit(request: Request, sheet_row: int):
             )
 
         if action == "generate_invoice":
-            closed_items = parse_closed_services_from_form(form)
-            save_closed_services(DEFAULT_TENANT_ID, sheet_row, closed_items)
             payments = parse_payment_history_from_form(form)
             save_payment_history(DEFAULT_TENANT_ID, sheet_row, payments)
             previous_plan = load_billing_plan(DEFAULT_TENANT_ID, sheet_row)

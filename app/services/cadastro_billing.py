@@ -31,10 +31,10 @@ PLAN_CYCLE_OPTIONS = [
     ("avulso", "Avulso"),
 ]
 BILLING_FORM_OPTIONS = [
-    ("pix", "PIX"),
     ("cartao_recorrente", "Cartão recorrente"),
-    ("pix_boleto", "PIX / Boleto"),
     ("boleto_recorrente", "Boleto recorrente"),
+    ("pix", "PIX Avulso"),
+    ("pix_boleto", "Boleto/Pix Avulso"),
 ]
 _CYCLE_KEYS = {key for key, _ in PLAN_CYCLE_OPTIONS}
 _FORM_KEYS = {key for key, _ in BILLING_FORM_OPTIONS}
@@ -53,7 +53,7 @@ def forma_label(key: str) -> str:
 def _empty_plan() -> dict[str, Any]:
     return {
         "ciclo": "mensal",
-        "forma": "pix",
+        "forma": "cartao_recorrente",
         "servico": "",
         "valor": "",
         "vencimento": "",
@@ -67,9 +67,9 @@ def _normalize_plan(raw: dict | None) -> dict[str, Any]:
     ciclo = normalize_text(data.get("ciclo")).lower() or "mensal"
     if ciclo not in _CYCLE_KEYS:
         ciclo = "mensal"
-    forma = normalize_text(data.get("forma")).lower() or "pix"
+    forma = normalize_text(data.get("forma")).lower() or "cartao_recorrente"
     if forma not in _FORM_KEYS:
-        forma = "pix"
+        forma = "cartao_recorrente"
     return {
         "ciclo": ciclo,
         "forma": forma,
@@ -144,6 +144,10 @@ def save_billing_plan(tenant_id: str | None, sheet_row: int, plan: dict) -> dict
     }
     save_lead_action(tenant_id, sheet_row, {"billing_plan": payload})
     return load_billing_plan(tenant_id, sheet_row)
+
+
+def is_recurring_forma(forma: str) -> bool:
+    return normalize_text(forma).lower() in {"cartao_recorrente", "boleto_recorrente"}
 
 
 def asaas_billing_type(forma: str) -> str:
@@ -312,7 +316,7 @@ def generate_asaas_invoice(
     customer = ensure_asaas_customer({**values, "sheet_row": sheet_row}, plan=normalized)
     customer_id = normalize_text(customer.get("id"))
     billing_type = asaas_billing_type(normalized["forma"])
-    cycle = asaas_cycle(normalized["ciclo"])
+    cycle = asaas_cycle(normalized["ciclo"]) if is_recurring_forma(normalized["forma"]) else None
     created: dict[str, Any]
     if cycle:
         created = create_subscription({
