@@ -1407,6 +1407,7 @@ SHEET_VALOR_SERVICO_ALIASES = [
 ]
 
 REGISTRATION_OPTIONAL_COLUMNS: list[tuple[str, list[str]]] = [
+    ("Nome do contato", ["Nome do contato", "Nome contato", "Contato WhatsApp"]),
     ("Serviços fechados", SHEET_SERVICO_ALIASES),
     ("Valor do serviço", SHEET_VALOR_SERVICO_ALIASES),
     ("Número", ["Número", "Numero", "Nº", "No"]),
@@ -1968,7 +1969,7 @@ def append_company_to_sheet(payload: dict) -> int:
                     "Nome Empresas", "CNPJ", "Data de abertura", "Capital",
                     "Endereço", "Número", "Complemento", "CEP", "Bairro", "Município", "UF",
                     "Email", "Site empresa",
-                    "Celular WhatsApp", "Telefone fixo", "Telefone lemitt",
+                    "Celular WhatsApp", "Nome do contato", "Telefone fixo", "Telefone lemitt",
                     "Sócio 1", "CPF", "E-mail Sócio 1", "Telefone",
                     "Sócio 2", "Telefone sócio 2", "CPF_2",
                     "Sócio 3", "Telefone sócio 3", "CPF_3",
