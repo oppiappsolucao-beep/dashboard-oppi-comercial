@@ -1,0 +1,257 @@
+<form id="financeiro-filters"
+  hx-post="/financeiro/filtros"
+  hx-target="#financeiro-root"
+  hx-swap="innerHTML">
+  <input type="hidden" name="tab" id="fin-tab-input" value="{{ tab }}">
+
+  {% if flash %}
+  <div class="alert-success fin-flash">{{ flash }}</div>
+  {% endif %}
+  {% if asaas_error %}
+  <div class="fin-banner">{{ asaas_error }}</div>
+  {% endif %}
+
+  <div class="metric-grid metric-grid-fin">
+    {% for card in kpi_cards %}
+    <div class="metric-card">
+      <div class="metric-top">
+        <div class="metric-icon tone-{{ card.tone }}">{{ card.icon }}</div>
+      </div>
+      <div class="metric-label">{{ card.label }}</div>
+      <div class="metric-value">{{ card.value }}</div>
+      <div class="metric-note">{{ card.note }}</div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="fin-tabs" role="tablist">
+    <button type="button" class="fin-tab {% if tab == 'visao' %}active{% endif %}" data-fin-tab="visao">Visão Geral</button>
+    <button type="button" class="fin-tab {% if tab == 'faturas' %}active{% endif %}" data-fin-tab="faturas">Faturas</button>
+    <button type="button" class="fin-tab {% if tab == 'recorrencias' %}active{% endif %}" data-fin-tab="recorrencias">Recorrências</button>
+    <button type="button" class="fin-tab {% if tab == 'atraso' %}active{% endif %}" data-fin-tab="atraso">Clientes em atraso</button>
+  </div>
+
+  <div class="toolbar-card fin-toolbar">
+    <div class="filters-row filters-row-main">
+      <div class="filter-field filter-field-sm">
+        <label>Status</label>
+        <select name="status" onchange="document.getElementById('financeiro-filters').requestSubmit()">
+          {% for value, label in status_options %}
+          <option value="{{ value }}" {% if filters.status == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="filter-field filter-field-sm">
+        <label>Forma</label>
+        <select name="forma" onchange="document.getElementById('financeiro-filters').requestSubmit()">
+          {% for value, label in forma_options %}
+          <option value="{{ value }}" {% if filters.forma == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="filter-field filter-field-sm">
+        <label>Período início</label>
+        <input type="date" name="period_start" value="{{ filters.period_start }}"
+          onchange="document.getElementById('financeiro-filters').requestSubmit()">
+      </div>
+      <div class="filter-field filter-field-sm">
+        <label>Período fim</label>
+        <input type="date" name="period_end" value="{{ filters.period_end }}"
+          onchange="document.getElementById('financeiro-filters').requestSubmit()">
+      </div>
+      <div class="filter-field fin-search">
+        <label>Buscar</label>
+        <input type="search" name="search" value="{{ filters.search }}"
+          placeholder="Buscar cliente, fatura ou cobrança..."
+          onchange="document.getElementById('financeiro-filters').requestSubmit()">
+      </div>
+    </div>
+  </div>
+</form>
+
+{% if tab in ['visao', 'faturas'] %}
+<div class="fin-layout {% if tab == 'visao' %}fin-layout-split{% endif %}">
+  <div class="panel fin-table-card">
+    <div class="section-heading">Faturas e cobranças</div>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Cliente</th>
+            <th>Serviço</th>
+            <th>Valor</th>
+            <th>Vencimento</th>
+            <th>Forma</th>
+            <th>Status</th>
+            <th>Ação</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in invoices %}
+          <tr>
+            <td>
+              {% if row.cliente_href %}
+              <a href="{{ row.cliente_href }}">{{ row.cliente }}</a>
+              {% else %}
+              {{ row.cliente }}
+              {% endif %}
+            </td>
+            <td>{{ row.servico }}</td>
+            <td>{{ row.valor_label }}</td>
+            <td>{{ row.vencimento_label }}</td>
+            <td>{{ row.forma }}</td>
+            <td><span class="fin-badge tone-{{ row.status_tone }}">{{ row.status_label }}</span></td>
+            <td class="fin-actions">
+              {% if row.status_key == 'atrasado' and row.whatsapp_url %}
+              <a class="btn btn-secondary fin-btn-sm" href="{{ row.whatsapp_url }}" target="_blank" rel="noopener">Cobrar</a>
+              {% elif row.invoice_url %}
+              <a class="btn btn-secondary fin-btn-sm" href="{{ row.invoice_url }}" target="_blank" rel="noopener">Ver</a>
+              {% else %}
+              —
+              {% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="7" class="fin-empty">Nenhuma cobrança neste filtro.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {% if tab == 'visao' %}
+  <div class="fin-side">
+    <div class="panel">
+      <div class="section-heading">Clientes em atraso</div>
+      {% for item in overdue_clients[:5] %}
+      <div class="fin-overdue-item">
+        <strong>{{ item.cliente }}</strong>
+        <div class="fin-overdue-value">{{ item.valor_label }} em aberto</div>
+        <div class="fin-overdue-meta">{{ item.days_label }} · {{ item.count_label }}</div>
+        <div class="fin-overdue-actions">
+          {% if item.whatsapp_url %}
+          <a class="btn fin-btn-wa" href="{{ item.whatsapp_url }}" target="_blank" rel="noopener">WhatsApp</a>
+          {% endif %}
+          {% if item.cliente_href %}
+          <a class="btn btn-secondary fin-btn-sm" href="{{ item.cliente_href }}">Ver</a>
+          {% endif %}
+        </div>
+      </div>
+      {% else %}
+      <p class="fin-empty">Nenhum cliente em atraso.</p>
+      {% endfor %}
+    </div>
+    <div class="panel">
+      <div class="section-heading">Recorrências</div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Cliente</th>
+              <th>Valor</th>
+              <th>Ciclo</th>
+              <th>Próx. venc.</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in subscriptions[:6] %}
+            <tr>
+              <td>{{ row.cliente }}</td>
+              <td>{{ row.valor_label }}</td>
+              <td>{{ row.ciclo }}</td>
+              <td>{{ row.proximo_label }}</td>
+              <td><span class="fin-badge tone-{{ row.status_tone }}">{{ row.status_label }}</span></td>
+            </tr>
+            {% else %}
+            <tr><td colspan="5" class="fin-empty">Sem assinaturas no Asaas.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+
+{% if tab == 'recorrencias' %}
+<div class="panel fin-table-card">
+  <div class="section-heading">Recorrências</div>
+  <div class="section-subtitle">Assinaturas do Asaas que geram cobranças automaticamente.</div>
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Cliente</th>
+          <th>Serviço</th>
+          <th>Valor</th>
+          <th>Ciclo</th>
+          <th>Próximo vencimento</th>
+          <th>Forma</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in subscriptions %}
+        <tr>
+          <td>
+            {% if row.cliente_href %}
+            <a href="{{ row.cliente_href }}">{{ row.cliente }}</a>
+            {% else %}
+            {{ row.cliente }}
+            {% endif %}
+          </td>
+          <td>{{ row.servico }}</td>
+          <td>{{ row.valor_label }}</td>
+          <td>{{ row.ciclo }}</td>
+          <td>{{ row.proximo_label }}</td>
+          <td>{{ row.forma }}</td>
+          <td><span class="fin-badge tone-{{ row.status_tone }}">{{ row.status_label }}</span></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="fin-empty">Nenhuma recorrência encontrada.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{% if tab == 'atraso' %}
+<div class="fin-overdue-grid">
+  {% for item in overdue_clients %}
+  <article class="panel fin-overdue-card">
+    <h3>{{ item.cliente }}</h3>
+    <div class="fin-overdue-value">{{ item.valor_label }} em aberto</div>
+    <div class="fin-overdue-meta">{{ item.days_label }}</div>
+    <div class="fin-overdue-meta">{{ item.count_label }}</div>
+    <div class="fin-overdue-actions">
+      {% if item.whatsapp_url %}
+      <a class="btn fin-btn-wa" href="{{ item.whatsapp_url }}" target="_blank" rel="noopener">WhatsApp</a>
+      {% endif %}
+      <button type="button" class="btn btn-secondary fin-btn-sm" data-fin-tab="faturas">Ver faturas</button>
+      {% if item.cliente_href %}
+      <a class="btn btn-secondary fin-btn-sm" href="{{ item.cliente_href }}">Abrir cliente</a>
+      {% endif %}
+    </div>
+  </article>
+  {% else %}
+  <div class="panel fin-empty">Nenhum cliente em atraso.</div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<script>
+(function () {
+  var form = document.getElementById("financeiro-filters");
+  var tabInput = document.getElementById("fin-tab-input");
+  if (!form) return;
+  document.querySelectorAll("[data-fin-tab]").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      if (tabInput) tabInput.value = btn.getAttribute("data-fin-tab") || "visao";
+      form.requestSubmit();
+    });
+  });
+})();
+</script>

@@ -224,3 +224,13 @@ def is_admin(request: Request) -> bool:
     if user:
         return user.get("role") == "Administrador"
     return bool(request.session.get("authenticated"))
+
+
+def require_admin(request: Request):
+    """Login + perfil Administrador. Sem acesso, volta para a visão geral."""
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+    if not is_admin(request):
+        return RedirectResponse(url="/visao-geral", status_code=303)
+    return None

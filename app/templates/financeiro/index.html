@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block content %}
+<link rel="stylesheet" href="/static/css/financeiro.css?v={{ static_version }}">
+<div class="page-header">
+  <div>
+    <div class="page-title">Financeiro</div>
+    <div class="page-subtitle">Acompanhe cobranças, recorrências e valores a receber integrados ao Asaas.</div>
+  </div>
+  <div class="page-actions">
+    <form method="post" action="/financeiro/atualizar">
+      <button type="submit" class="btn btn-secondary">↻ Atualizar</button>
+    </form>
+    <form method="post" action="/financeiro/sincronizar">
+      <button type="submit" class="btn">☁ Sincronizar Asaas</button>
+    </form>
+  </div>
+</div>
+
+<div id="financeiro-root">
+  {% include "partials/financeiro_content.html" %}
+</div>
+{% endblock %}

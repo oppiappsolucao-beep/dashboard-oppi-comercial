@@ -54,6 +54,11 @@
         <a href="/metas-e-relatorios" class="sidebar-link {% if active_page == 'goals' %}active{% endif %}">
           <span class="sidebar-link-icon">📊</span> Metas e Relatórios
         </a>
+        {% if is_admin %}
+        <a href="/financeiro" class="sidebar-link {% if active_page == 'financeiro' %}active{% endif %}">
+          <span class="sidebar-link-icon">💳</span> Financeiro
+        </a>
+        {% endif %}
         <a href="/configuracoes" class="sidebar-link {% if active_page == 'settings' %}active{% endif %}">
           <span class="sidebar-link-icon">⚙</span> Configurações
         </a>
@@ -123,7 +128,7 @@
       <span class="mobile-bottom-label">Atendimentos</span>
       <span class="att-sidebar-badge mobile-bottom-badge" id="att-bottom-badge" hidden>0</span>
     </a>
-    <button type="button" class="mobile-bottom-link mobile-bottom-more {% if active_page in ['proposals', 'goals', 'settings'] %}active{% endif %}" id="mobile-more-btn" aria-label="Mais opções" aria-controls="app-sidebar" aria-expanded="false">
+    <button type="button" class="mobile-bottom-link mobile-bottom-more {% if active_page in ['proposals', 'goals', 'settings', 'financeiro'] %}active{% endif %}" id="mobile-more-btn" aria-label="Mais opções" aria-controls="app-sidebar" aria-expanded="false">
       <span class="mobile-bottom-icon" aria-hidden="true">⋯</span>
       <span class="mobile-bottom-label">Mais</span>
     </button>

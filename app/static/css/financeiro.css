@@ -1,0 +1,159 @@
+.metric-grid-fin {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.fin-flash {
+  margin-bottom: 12px;
+}
+
+.fin-banner {
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #FEF3C7;
+  color: #92400E;
+  font-size: 13px;
+}
+
+.fin-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+  margin: 4px 0 14px;
+}
+
+.fin-tab {
+  border: 0;
+  background: transparent;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+
+.fin-tab.active {
+  color: var(--violet);
+  border-bottom-color: var(--violet);
+}
+
+.fin-toolbar {
+  margin-bottom: 14px;
+}
+
+.fin-search {
+  flex: 1;
+  min-width: 220px;
+}
+
+.fin-layout-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(280px, 0.9fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.fin-side {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.fin-table-card .section-heading {
+  margin-bottom: 10px;
+}
+
+.fin-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.fin-badge.tone-green { background: #DCFCE7; color: #15803D; }
+.fin-badge.tone-blue { background: #DBEAFE; color: #1D4ED8; }
+.fin-badge.tone-yellow { background: #FEF3C7; color: #B45309; }
+.fin-badge.tone-red { background: #FEE2E2; color: #B91C1C; }
+.fin-badge.tone-purple { background: #EDE9FE; color: #6D28D9; }
+.fin-badge.tone-muted { background: #F3F4F6; color: #6B7280; }
+
+.fin-btn-sm {
+  height: 32px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.fin-btn-wa {
+  height: 32px;
+  padding: 0 10px;
+  font-size: 12px;
+  background: #16A34A;
+  color: #fff;
+  border: 0;
+}
+
+.fin-overdue-item {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.fin-overdue-item:last-child {
+  border-bottom: 0;
+}
+
+.fin-overdue-value {
+  font-weight: 700;
+  margin-top: 4px;
+}
+
+.fin-overdue-meta {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.fin-overdue-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.fin-overdue-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px;
+}
+
+.fin-overdue-card h3 {
+  margin: 0 0 8px;
+  font-size: 16px;
+}
+
+.fin-empty {
+  color: var(--muted);
+  font-size: 13px;
+  padding: 18px 8px;
+  text-align: center;
+}
+
+@media (max-width: 1200px) {
+  .metric-grid-fin {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .fin-layout-split {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .metric-grid-fin {
+    grid-template-columns: 1fr 1fr;
+  }
+}

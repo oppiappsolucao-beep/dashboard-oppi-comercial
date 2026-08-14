@@ -24,6 +24,7 @@ PAGE_BACK_FALLBACKS = {
     "attendances": "/atendimentos",
     "proposals": "/propostas",
     "goals": "/metas-e-relatorios",
+    "financeiro": "/financeiro",
     "registration_new": "/leads-e-empresas",
     "contracts": "/leads-e-empresas",
     "settings": "/visao-geral",
@@ -57,6 +58,13 @@ def render(
         else:
             ctx.setdefault("display_username", settings.app_username)
             ctx.setdefault("display_role", "")
+    if "is_admin" not in ctx:
+        try:
+            from app.dependencies import is_admin
+
+            ctx["is_admin"] = is_admin(request)
+        except Exception:
+            ctx["is_admin"] = False
     return templates.TemplateResponse(
         request=request,
         name=name,

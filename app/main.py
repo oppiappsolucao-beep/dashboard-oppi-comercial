@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import APP_BUILD, settings
-from app.routers import auth, activities, attendances, contracts, evolution_webhook, funnel, goals_reports, leads, overview, proposals, registration
+from app.routers import auth, activities, attendances, contracts, evolution_webhook, financeiro, funnel, goals_reports, leads, overview, proposals, registration
 from app.routers import migration_ponto
 from app.routers import settings as settings_router
 from app.templating import render
@@ -33,6 +33,7 @@ app.include_router(attendances.router)
 app.include_router(evolution_webhook.router)
 app.include_router(proposals.router)
 app.include_router(goals_reports.router)
+app.include_router(financeiro.router)
 app.include_router(leads.router)
 app.include_router(registration.router)
 app.include_router(contracts.router)
@@ -82,6 +83,13 @@ from app.routers.goals_reports import goals_filters, goals_page, goals_refresh  
 app.add_api_route("/metas-e-relatorios", goals_page, methods=["GET"], tags=["goals"])
 app.add_api_route("/metas-e-relatorios/filtros", goals_filters, methods=["POST"], tags=["goals"])
 app.add_api_route("/metas-e-relatorios/atualizar", goals_refresh, methods=["POST"], tags=["goals"])
+
+from app.routers.financeiro import financeiro_filters, financeiro_page, financeiro_refresh, financeiro_sync  # noqa: E402
+
+app.add_api_route("/financeiro", financeiro_page, methods=["GET"], tags=["financeiro"])
+app.add_api_route("/financeiro/filtros", financeiro_filters, methods=["POST"], tags=["financeiro"])
+app.add_api_route("/financeiro/atualizar", financeiro_refresh, methods=["POST"], tags=["financeiro"])
+app.add_api_route("/financeiro/sincronizar", financeiro_sync, methods=["POST"], tags=["financeiro"])
 
 from app.routers.settings import (  # noqa: E402
     settings_add_service,

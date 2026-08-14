@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-APP_BUILD = os.getenv("APP_BUILD", "20260814-att-contato-empresa-v1").strip() or "20260814-att-contato-empresa-v1"
+APP_BUILD = os.getenv("APP_BUILD", "20260814-financeiro-asaas-v1").strip() or "20260814-financeiro-asaas-v1"
 
 class Settings:
     sheet_id: str = "1GAbrca0NSiJfPXaSte1qGxXCsGkQPacoRsm0PVB51gE"
@@ -24,6 +24,8 @@ class Settings:
     ai_attendance_enabled: bool = False
     oppi_ponto_api_url: str = "https://ponto.oppitech.com.br"
     oppi_ponto_crm_api_key: str = ""
+    asaas_api_key: str = ""
+    asaas_api_url: str = "https://api.asaas.com/v3"
 
     app_username: str
     app_password: str
@@ -82,6 +84,11 @@ class Settings:
         }
         self.oppi_ponto_api_url = os.getenv("OPPI_PONTO_API_URL", "https://ponto.oppitech.com.br").strip().rstrip("/")
         self.oppi_ponto_crm_api_key = os.getenv("OPPI_PONTO_CRM_API_KEY", "").strip()
+        self.asaas_api_key = os.getenv("ASAAS_API_KEY", "").strip()
+        self.asaas_api_url = (
+            os.getenv("ASAAS_API_URL", "https://api.asaas.com/v3").strip().rstrip("/")
+            or "https://api.asaas.com/v3"
+        )
 
     @property
     def evolution_instances(self) -> list[str]:
@@ -103,6 +110,10 @@ class Settings:
     def evolution_primary_instance(self) -> str:
         instances = self.evolution_instances
         return instances[0] if instances else ""
+
+    @property
+    def asaas_configured(self) -> bool:
+        return bool(self.asaas_api_key)
 
     @property
     def evolution_configured(self) -> bool:
