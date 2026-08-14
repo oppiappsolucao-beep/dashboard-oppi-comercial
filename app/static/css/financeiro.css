@@ -74,33 +74,34 @@
   white-space: nowrap;
 }
 
-.fin-table th:nth-child(1),
-.fin-table td:nth-child(1) {
-  width: 24%;
+.fin-table-invoices {
+  min-width: 860px;
 }
 
-.fin-table th:nth-child(2),
-.fin-table td:nth-child(2) {
-  width: 22%;
+.fin-table-invoices th,
+.fin-table-invoices td {
+  overflow: hidden;
+  vertical-align: middle;
+  white-space: nowrap;
 }
 
-.fin-table th:nth-child(3),
-.fin-table td:nth-child(3),
-.fin-table th:nth-child(4),
-.fin-table td:nth-child(4) {
-  width: 12%;
-}
+.fin-col-cliente { width: 22%; }
+.fin-col-servico { width: 18%; }
+.fin-col-valor { width: 96px; }
+.fin-col-venc { width: 104px; }
+.fin-col-forma { width: 92px; }
+.fin-col-status { width: 118px; }
+.fin-col-acao { width: 76px; }
 
-.fin-table th:nth-child(7),
-.fin-table td:nth-child(7) {
-  width: 88px;
-}
-
-.fin-cell-clip {
+.fin-cell-clip,
+.fin-cell-clip a {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 0;
+}
+
+.fin-cell-clip a {
+  display: block;
 }
 
 .fin-cell-num {
