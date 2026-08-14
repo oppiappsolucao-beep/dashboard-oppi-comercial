@@ -7,7 +7,7 @@ ENV PYTHONUNBUFFERED=1
 ENV PORT=8501
 ENV HOME=/tmp
 ENV TZ=America/Sao_Paulo
-ENV APP_BUILD=20260814-nome-contato-save-v1
+ENV APP_BUILD=20260814-nome-contato-deploy-v2
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
