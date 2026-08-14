@@ -5,6 +5,7 @@ import unittest
 
 from app.services.crm_phone_cleanup import (
     connected_duplicate_groups,
+    conversation_phone_from_remote_jid,
     is_evolution_origin,
     is_protected_filial,
     needs_mobile_ninth_digit,
@@ -100,6 +101,13 @@ class FilialAndDuplicatesTest(unittest.TestCase):
         groups = connected_duplicate_groups([a, b])
         self.assertEqual(len(groups), 1)
         self.assertEqual({row["id"] for row in groups[0]}, {1, 2})
+
+    def test_send_phone_follows_pn_jid_not_lid(self):
+        self.assertEqual(
+            conversation_phone_from_remote_jid("551691378494@s.whatsapp.net"),
+            "551691378494",
+        )
+        self.assertEqual(conversation_phone_from_remote_jid("123456789012345@lid"), "")
 
 
 if __name__ == "__main__":

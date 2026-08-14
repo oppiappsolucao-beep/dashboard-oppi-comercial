@@ -531,6 +531,22 @@ async def settings_finalize_attendance_queue(
     return RedirectResponse(url="/configuracoes?tab=atendimentos", status_code=303)
 
 
+@router.post("/configuracoes/restaurar-telefones-envio-whatsapp")
+async def settings_restore_whatsapp_send_phones(request: Request):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+    if not is_admin(request):
+        return JSONResponse({"ok": False, "error": "Apenas o administrador pode executar."}, status_code=403)
+    from app.services.crm_phone_cleanup import restore_evolution_send_phones
+
+    try:
+        result = restore_evolution_send_phones(apply=True)
+        return JSONResponse({"ok": True, **result})
+    except Exception as error:
+        return JSONResponse({"ok": False, "error": str(error)}, status_code=500)
+
+
 @router.post("/configuracoes/limpeza-whatsapp-cadastros")
 async def settings_cleanup_whatsapp_cadastros(request: Request):
     redirect = require_auth(request)

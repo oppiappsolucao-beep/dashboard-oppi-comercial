@@ -214,16 +214,52 @@ def _evolution_markers(db: Session) -> tuple[set[int], set[int]]:
     return sheet_rows, registration_ids
 
 
-def _fix_conversation_phones(db: Session) -> int:
+def conversation_phone_from_remote_jid(remote_jid: str) -> str:
+    """Telefone de envio a partir do JID PN. Vazio se for @lid/grupo (não é número)."""
+    from app.services.evolution_client import normalize_phone_from_jid
+
+    jid = normalize_text(remote_jid)
+    jid_lower = jid.lower()
+    if not jid or "@lid" in jid_lower or "@g.us" in jid_lower:
+        return ""
+    from_jid = normalize_phone_from_jid(jid)
+    return from_jid if from_jid and len(from_jid) >= 12 else ""
+
+
+def restore_conversation_phones_from_jid(db: Session) -> int:
+    """O envio usa phone_e164. O JID @s.whatsapp.net é a identidade na Evolution — não forçar o 9 nele."""
     changed = 0
     conversations = db.query(AttendanceConversation).all()
     for conv in conversations:
-        phone = normalize_text(conv.phone_e164 or "")
-        if not phone or not needs_mobile_ninth_digit(phone):
-            continue
-        conv.phone_e164 = canonical_e164(phone)
-        changed += 1
+        from_jid = conversation_phone_from_remote_jid(conv.remote_jid or "")
+        current = normalize_text(conv.phone_e164 or "")
+        if from_jid and from_jid != current:
+            conv.phone_e164 = from_jid
+            changed += 1
     return changed
+
+
+def restore_evolution_send_phones(*, apply: bool = False) -> dict[str, Any]:
+    """Só alinha phone_e164 com o JID da Evolution. Não apaga cadastro."""
+    db = SessionLocal()
+    changed = 0
+    try:
+        if apply:
+            changed = restore_conversation_phones_from_jid(db)
+            db.commit()
+        else:
+            for conv in db.query(AttendanceConversation).all():
+                from_jid = conversation_phone_from_remote_jid(conv.remote_jid or "")
+                current = normalize_text(conv.phone_e164 or "")
+                if from_jid and from_jid != current:
+                    changed += 1
+            db.rollback()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+    return {"apply": apply, "conversations_phones_restored": changed}
 
 
 def _merge_duplicate_conversations(db: Session) -> int:
@@ -336,7 +372,7 @@ def cleanup_evolution_phones_and_duplicates(*, apply: bool = False) -> dict[str,
                 })
 
         if apply:
-            conv_phones = _fix_conversation_phones(db)
+            conv_phones = restore_conversation_phones_from_jid(db)
             conv_merged = _merge_duplicate_conversations(db)
             db.flush()
             live = (

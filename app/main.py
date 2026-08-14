@@ -99,6 +99,7 @@ from app.routers.settings import (  # noqa: E402
     settings_permissions_toggle,
     settings_refresh,
     settings_remove_service,
+    settings_restore_whatsapp_send_phones,
 )
 
 app.add_api_route("/configuracoes", settings_page, methods=["GET"], tags=["settings"])
@@ -110,6 +111,12 @@ app.add_api_route("/configuracoes/servicos/remover", settings_remove_service, me
 app.add_api_route(
     "/configuracoes/limpeza-whatsapp-cadastros",
     settings_cleanup_whatsapp_cadastros,
+    methods=["POST"],
+    tags=["settings"],
+)
+app.add_api_route(
+    "/configuracoes/restaurar-telefones-envio-whatsapp",
+    settings_restore_whatsapp_send_phones,
     methods=["POST"],
     tags=["settings"],
 )
