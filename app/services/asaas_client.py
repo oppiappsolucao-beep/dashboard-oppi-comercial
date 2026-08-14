@@ -110,3 +110,56 @@ def fetch_dashboard_payload(*, force: bool = False) -> dict[str, Any]:
         _CACHE["payload"] = payload
         _CACHE["at"] = time.monotonic()
     return payload
+
+
+def _post(path: str, body: dict[str, Any]) -> dict[str, Any]:
+    if not is_configured():
+        raise AsaasError("ASAAS_API_KEY não configurada.")
+    url = f"{settings.asaas_api_url.rstrip('/')}/{path.lstrip('/')}"
+    try:
+        response = requests.post(url, headers=_headers(), json=body, timeout=25)
+    except requests.RequestException as exc:
+        raise AsaasError(f"Falha ao conectar no Asaas: {exc}") from exc
+    if response.status_code == 401:
+        raise AsaasError("Asaas recusou a chave (401). Confira ASAAS_API_KEY no Easypanel.")
+    try:
+        data = response.json()
+    except ValueError:
+        data = {}
+    if not response.ok:
+        errors = data.get("errors") if isinstance(data, dict) else None
+        if isinstance(errors, list) and errors:
+            first = errors[0] if isinstance(errors[0], dict) else {}
+            detail = first.get("description") or first.get("message") or str(first)
+        else:
+            detail = (response.text or "")[:180]
+        raise AsaasError(f"Asaas HTTP {response.status_code}: {detail}")
+    return data if isinstance(data, dict) else {}
+
+
+def find_customers(**params: Any) -> list[dict]:
+    return _list("customers", {key: value for key, value in params.items() if value})
+
+
+def create_customer(payload: dict[str, Any]) -> dict[str, Any]:
+    data = _post("customers", payload)
+    invalidate_cache()
+    return data
+
+
+def create_payment(payload: dict[str, Any]) -> dict[str, Any]:
+    data = _post("payments", payload)
+    invalidate_cache()
+    return data
+
+
+def create_subscription(payload: dict[str, Any]) -> dict[str, Any]:
+    data = _post("subscriptions", payload)
+    invalidate_cache()
+    return data
+
+
+def list_payments_for_customer(customer_id: str) -> list[dict]:
+    if not customer_id:
+        return []
+    return _list("payments", {"customer": customer_id}, max_pages=4)

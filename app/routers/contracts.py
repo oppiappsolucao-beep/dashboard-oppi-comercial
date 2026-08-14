@@ -21,6 +21,16 @@ from app.services.payment_history import (
     parse_payment_history_from_form,
     save_payment_history,
 )
+from app.services.cadastro_billing import (
+    BILLING_FORM_OPTIONS,
+    PLAN_CYCLE_OPTIONS,
+    asaas_history_for_cadastro,
+    generate_asaas_invoice,
+    load_billing_plan,
+    parse_billing_plan_from_form,
+    save_billing_plan,
+)
+from app.services.asaas_client import AsaasError, is_configured as asaas_is_configured
 from app.services.legacy_core import (
     DuplicateRegistrationError,
     STATUS_OPTIONS,
@@ -265,6 +275,24 @@ async def contract_edit_page(request: Request, sheet_row: int):
         valor_proposta=values.get("valor_proposta", ""),
     )
     payment_history = load_payment_history(DEFAULT_TENANT_ID, sheet_row)
+    billing_plan = load_billing_plan(DEFAULT_TENANT_ID, sheet_row)
+    asaas_payments_unique: list = []
+    summary_payments = payment_history
+    if active_tab == "financeiro":
+        asaas_payments = asaas_history_for_cadastro(values, plan=billing_plan)
+        asaas_ids = {item.get("asaas_payment_id") for item in payment_history if item.get("asaas_payment_id")}
+        asaas_payments_unique = [
+            item for item in asaas_payments if item.get("asaas_payment_id") not in asaas_ids
+        ]
+        summary_payments = payment_history + [
+            {
+                **item,
+                "status": "Pago" if item.get("status") == "Pago" else (
+                    "Atrasado" if item.get("status") == "Atrasado" else "Pendente"
+                ),
+            }
+            for item in asaas_payments_unique
+        ]
     if closed_services:
         page_ctx["proposals_count"] = len([
             item for item in closed_services
@@ -320,7 +348,12 @@ async def contract_edit_page(request: Request, sheet_row: int):
             "payment_status_options": PAYMENT_STATUS_OPTIONS,
             "closed_services": closed_services,
             "payment_history": payment_history,
-            "financial_summary": financial_summary(closed_services, payment_history),
+            "asaas_payments": asaas_payments_unique,
+            "billing_plan": billing_plan,
+            "plan_cycle_options": PLAN_CYCLE_OPTIONS,
+            "billing_form_options": BILLING_FORM_OPTIONS,
+            "asaas_configured": asaas_is_configured(),
+            "financial_summary": financial_summary(closed_services, summary_payments),
             "colaborador_options": get_colaborador_options(),
             "vendedor": normalize_text(row.get("_vendedor", "")) or "Sem vendedor",
             "error": request.session.pop("edit_error", ""),
@@ -363,7 +396,63 @@ async def contract_edit_submit(request: Request, sheet_row: int):
             save_closed_services(DEFAULT_TENANT_ID, sheet_row, closed_items)
             payments = parse_payment_history_from_form(form)
             save_payment_history(DEFAULT_TENANT_ID, sheet_row, payments)
+            previous_plan = load_billing_plan(DEFAULT_TENANT_ID, sheet_row)
+            save_billing_plan(
+                DEFAULT_TENANT_ID,
+                sheet_row,
+                parse_billing_plan_from_form(form, previous=previous_plan),
+            )
             request.session["edit_success"] = "Financeiro atualizado com sucesso."
+            return RedirectResponse(
+                url=_edit_page_url(sheet_row, tab="financeiro", from_page=from_page),
+                status_code=303,
+            )
+
+        if action == "generate_invoice":
+            closed_items = parse_closed_services_from_form(form)
+            save_closed_services(DEFAULT_TENANT_ID, sheet_row, closed_items)
+            payments = parse_payment_history_from_form(form)
+            save_payment_history(DEFAULT_TENANT_ID, sheet_row, payments)
+            previous_plan = load_billing_plan(DEFAULT_TENANT_ID, sheet_row)
+            plan = save_billing_plan(
+                DEFAULT_TENANT_ID,
+                sheet_row,
+                parse_billing_plan_from_form(form, previous=previous_plan),
+            )
+            df, columns = get_prepared_data()
+            row = _get_row_by_sheet(df, sheet_row)
+            values = {
+                "empresa": _contract_edit_value(row, columns, "empresa") if row is not None else "",
+                "cnpj": _contract_edit_value(row, columns, "cnpj") if row is not None else "",
+                "telefone_b2b": _contract_edit_value(row, columns, "telefone_b2b") if row is not None else "",
+                "email": _contract_edit_value(row, columns, "email") if row is not None else "",
+                "nome_contato": _contract_edit_value(row, columns, "nome_contato") if row is not None else "",
+            }
+            try:
+                from app.services.crm_registrations_storage import (
+                    get_registration_by_sheet_row,
+                    is_crm_postgres_ready,
+                    registration_to_payload,
+                )
+
+                if is_crm_postgres_ready():
+                    pg_row = get_registration_by_sheet_row(int(sheet_row))
+                    if pg_row is not None:
+                        pg = registration_to_payload(pg_row)
+                        values["empresa"] = normalize_text(pg.get("empresa")) or values["empresa"]
+                        values["cnpj"] = normalize_text(pg.get("cnpj")) or values["cnpj"]
+                        values["telefone_b2b"] = normalize_text(pg.get("telefone_b2b")) or values["telefone_b2b"]
+                        values["email_empresa"] = normalize_text(pg.get("email_empresa")) or values["email"]
+                        values["nome_contato"] = normalize_text(pg.get("nome_contato")) or values["nome_contato"]
+            except Exception:
+                pass
+            try:
+                result = generate_asaas_invoice(DEFAULT_TENANT_ID, sheet_row, values, plan)
+                request.session["edit_success"] = result.get("message") or "Fatura gerada no Asaas."
+            except AsaasError as error:
+                request.session["edit_error"] = str(error)
+            except Exception as error:
+                request.session["edit_error"] = f"Não consegui gerar a fatura: {error}"
             return RedirectResponse(
                 url=_edit_page_url(sheet_row, tab="financeiro", from_page=from_page),
                 status_code=303,

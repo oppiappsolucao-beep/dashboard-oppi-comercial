@@ -43,5 +43,18 @@ class FinanceiroMappingTest(unittest.TestCase):
         self.assertEqual(cycle_label("MONTHLY"), "Mensal")
 
 
+class CadastroBillingMappingTest(unittest.TestCase):
+    def test_asaas_types(self):
+        from app.services.cadastro_billing import asaas_billing_type, asaas_cycle
+
+        self.assertEqual(asaas_billing_type("pix"), "PIX")
+        self.assertEqual(asaas_billing_type("cartao_recorrente"), "CREDIT_CARD")
+        self.assertEqual(asaas_billing_type("boleto_recorrente"), "BOLETO")
+        self.assertEqual(asaas_billing_type("pix_boleto"), "UNDEFINED")
+        self.assertEqual(asaas_cycle("mensal"), "MONTHLY")
+        self.assertEqual(asaas_cycle("anual"), "YEARLY")
+        self.assertIsNone(asaas_cycle("avulso"))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -1755,6 +1755,115 @@
   background: #FAFAFA;
 }
 
+.billing-plan-current {
+  margin: 14px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.billing-plan-grid {
+  margin-top: 12px;
+}
+
+.billing-choice {
+  border: 0;
+  margin: 16px 0 0;
+  padding: 0;
+}
+
+.billing-choice legend {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+.billing-choice-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.billing-choice-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid #E5E7EB;
+  border-radius: 12px;
+  background: #FAFAFA;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.billing-choice-card:has(input:checked) {
+  border-color: #7C3AED;
+  background: #F5F3FF;
+  color: #6D28D9;
+}
+
+.billing-plan-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+
+.billing-plan-hint {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 8px 0 0;
+}
+
+.asaas-history-table-wrap {
+  overflow-x: auto;
+  margin: 12px 0 16px;
+}
+
+.asaas-history-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.asaas-history-table th,
+.asaas-history-table td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid #E5E7EB;
+}
+
+.asaas-history-table th {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.fin-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.fin-badge.tone-green { background: #DCFCE7; color: #15803D; }
+.fin-badge.tone-blue { background: #DBEAFE; color: #1D4ED8; }
+.fin-badge.tone-yellow { background: #FEF9C3; color: #A16207; }
+.fin-badge.tone-red { background: #FEE2E2; color: #B91C1C; }
+.fin-badge.tone-purple { background: #F3E8FF; color: #7C3AED; }
+.fin-badge.tone-muted { background: #F3F4F6; color: #6B7280; }
+
+@media (max-width: 720px) {
+  .billing-choice-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 .registration-tipo-switch {
   display: inline-flex;
   padding: 4px;

@@ -26,6 +26,79 @@
         <strong>{{ financial_summary.next_due }}</strong>
       </div>
     </div>
+    {% if billing_plan.ciclo_label and billing_plan.ciclo_label != '—' %}
+    <p class="billing-plan-current">Plano informado: <strong>{{ billing_plan.ciclo_label }}</strong> · {{ billing_plan.forma_label }}{% if billing_plan.servico %} · {{ billing_plan.servico }}{% endif %}{% if billing_plan.valor %} · {{ billing_plan.valor }}{% endif %}</p>
+    {% endif %}
+  </section>
+
+  <section class="client-edit-section panel" id="billing-plan-section">
+    <div class="client-edit-section-head">
+      <span class="client-edit-section-icon">🧾</span>
+      <div>
+        <h2>Gerar fatura</h2>
+        <p>Informe o plano escolhido pelo cliente e gere a cobrança no Asaas.</p>
+      </div>
+    </div>
+
+    <div class="form-grid cols-2 billing-plan-grid">
+      <div class="form-group">
+        <label for="billing_servico">Plano / serviço</label>
+        {% if service_options %}
+        <select id="billing_servico" name="billing_servico">
+          <option value="">Selecione</option>
+          {% for service in service_options %}
+          <option value="{{ service }}" {% if billing_plan.servico == service %}selected{% endif %}>{{ service }}</option>
+          {% endfor %}
+          {% if billing_plan.servico and billing_plan.servico not in service_options %}
+          <option value="{{ billing_plan.servico }}" selected>{{ billing_plan.servico }}</option>
+          {% endif %}
+        </select>
+        {% else %}
+        <input id="billing_servico" type="text" name="billing_servico" value="{{ billing_plan.servico }}" placeholder="Ex.: Oppi Ponto Mensal">
+        {% endif %}
+      </div>
+      <div class="form-group">
+        <label for="billing_valor">Valor</label>
+        <input id="billing_valor" type="text" name="billing_valor" value="{{ billing_plan.valor }}" placeholder="R$ 0,00">
+      </div>
+      <div class="form-group">
+        <label for="billing_vencimento">Primeiro vencimento</label>
+        <input id="billing_vencimento" type="date" name="billing_vencimento" value="{{ billing_plan.vencimento }}">
+      </div>
+    </div>
+
+    <fieldset class="billing-choice">
+      <legend>Periodicidade</legend>
+      <div class="billing-choice-grid">
+        {% for key, label in plan_cycle_options %}
+        <label class="billing-choice-card">
+          <input type="radio" name="billing_ciclo" value="{{ key }}" {% if billing_plan.ciclo == key %}checked{% endif %}>
+          <span>{{ label }}</span>
+        </label>
+        {% endfor %}
+      </div>
+    </fieldset>
+
+    <fieldset class="billing-choice">
+      <legend>Forma de pagamento</legend>
+      <div class="billing-choice-grid">
+        {% for key, label in billing_form_options %}
+        <label class="billing-choice-card">
+          <input type="radio" name="billing_forma" value="{{ key }}" {% if billing_plan.forma == key %}checked{% endif %}>
+          <span>{{ label }}</span>
+        </label>
+        {% endfor %}
+      </div>
+    </fieldset>
+
+    <div class="billing-plan-actions">
+      {% if asaas_configured %}
+      <button type="submit" name="action" value="generate_invoice" class="btn">Gerar fatura no Asaas</button>
+      <span class="billing-plan-hint">Mensal e anual criam recorrência. Avulso gera uma cobrança única.</span>
+      {% else %}
+      <p class="billing-plan-hint">Asaas não está configurado. Você ainda pode salvar o plano escolhido e o histórico manual.</p>
+      {% endif %}
+    </div>
   </section>
 
   {% include "partials/registration_closed_services.html" %}
@@ -35,9 +108,44 @@
       <span class="client-edit-section-icon">🧾</span>
       <div>
         <h2>Histórico de pagamento</h2>
-        <p>Registre os pagamentos recebidos e pendentes.</p>
+        <p>Cobranças do Asaas vinculadas a este cliente e lançamentos manuais.</p>
       </div>
     </div>
+
+    {% if asaas_payments %}
+    <div class="asaas-history-table-wrap">
+      <table class="asaas-history-table">
+        <thead>
+          <tr>
+            <th>Vencimento</th>
+            <th>Descrição</th>
+            <th>Valor</th>
+            <th>Forma</th>
+            <th>Status</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in asaas_payments %}
+          <tr>
+            <td>{{ item.data_display }}</td>
+            <td>{{ item.descricao }}</td>
+            <td>{{ item.valor }}</td>
+            <td>{{ item.forma_pagamento }}</td>
+            <td><span class="fin-badge tone-{{ item.status_tone }}">{{ item.status }}</span></td>
+            <td>
+              {% if item.invoice_url %}
+              <a href="{{ item.invoice_url }}" target="_blank" rel="noopener">Abrir fatura</a>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% elif asaas_configured %}
+    <p class="billing-plan-hint">Nenhuma fatura Asaas vinculada ainda. Confira CNPJ/WhatsApp do cadastro ou gere a primeira cobrança acima.</p>
+    {% endif %}
 
     <div class="payment-history-list" id="payment-history-list">
       {% if payment_history %}
