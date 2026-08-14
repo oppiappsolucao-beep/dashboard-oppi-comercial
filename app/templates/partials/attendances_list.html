@@ -16,6 +16,9 @@
         <span class="att-conv-name">{{ c.contact_name or c.phone_e164 }}</span>
         <span class="att-conv-time">{{ c.last_message_at[11:16] if c.last_message_at|length >= 16 else (c.last_message_at[-8:-3] if c.last_message_at else '') }}</span>
       </div>
+      {% if c.empresa_name and c.empresa_name != (c.contact_name or '') %}
+      <div class="att-conv-company">{{ c.empresa_name }}</div>
+      {% endif %}
       <div class="att-conv-preview">
         {% if c.typing %}<em class="att-typing-preview">digitando…</em>{% else %}{{ c.last_message_preview or '—' }}{% endif %}
       </div>

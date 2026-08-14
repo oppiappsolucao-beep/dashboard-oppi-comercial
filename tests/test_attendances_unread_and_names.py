@@ -22,6 +22,7 @@ from database.connection import Base, SessionLocal, engine  # noqa: E402
 from database import models  # noqa: E402, F401
 from app.services import attendances_storage as store  # noqa: E402
 from app.services import attendance_crm  # noqa: E402
+from app.services import attendances as attendances_service  # noqa: E402
 
 
 class AttendancesUnreadAndNamesTest(unittest.TestCase):
@@ -117,6 +118,14 @@ class AttendancesUnreadAndNamesTest(unittest.TestCase):
         self.assertFalse(attendance_crm.should_adopt_contact_name("Vicente Lemos", "Oppi Tech"))
         self.assertTrue(attendance_crm.should_adopt_contact_name("", "Vicente Lemos"))
         self.assertTrue(attendance_crm.should_adopt_contact_name("Lead WhatsApp 11", "Vicente Lemos"))
+
+    def test_crm_display_puts_company_below_contact(self):
+        out = attendances_service.apply_crm_display_names_to_conversation(
+            {"contact_name": "WA Name", "phone_e164": "5511999999999"},
+            {"contato": "Maria", "empresa": "Oppi Tech"},
+        )
+        self.assertEqual(out["contact_name"], "Maria")
+        self.assertEqual(out["empresa_name"], "Oppi Tech")
 
 
 if __name__ == "__main__":

@@ -5,10 +5,10 @@
   {% if error %}<div class="att-flash sm" style="background:#fde8e8;color:#9b1c1c">{{ error }}</div>{% endif %}
 
   <div class="att-crm-name-row" id="att-crm-name-row">
-    <span class="att-crm-name-label">Nome</span>
+    <span class="att-crm-name-label">Contato</span>
     <div class="att-crm-name-view" id="att-crm-name-view">
-      <strong class="att-crm-name-text">{{ selected.contact_name or crm.contato or crm.empresa or '—' }}</strong>
-      <button type="button" class="att-crm-name-edit-btn" id="att-crm-name-edit-btn" title="Editar nome" aria-label="Editar nome">✎</button>
+      <strong class="att-crm-name-text">{{ selected.contact_name or crm.contato or '—' }}</strong>
+      <button type="button" class="att-crm-name-edit-btn" id="att-crm-name-edit-btn" title="Editar nome do contato" aria-label="Editar nome do contato">✎</button>
     </div>
     <form class="att-crm-name-edit"
           id="att-crm-name-edit"
@@ -18,14 +18,19 @@
           hx-swap="innerHTML"
           hx-on::after-request="document.querySelector('.att-filters') && htmx.trigger(document.querySelector('.att-filters'), 'submit')">
       <input type="text" name="nome" class="att-input" id="att-crm-name-input"
-             value="{{ selected.contact_name or crm.whatsapp_name or crm.contato or crm.empresa or '' }}"
-             placeholder="Nome do cliente"
+             value="{{ selected.contact_name or crm.whatsapp_name or crm.contato or '' }}"
+             placeholder="Nome do contato"
              autocomplete="name">
       <div class="att-crm-name-edit-actions">
         <button type="submit" class="btn btn-secondary att-notes-save">Salvar</button>
         <button type="button" class="btn" id="att-crm-name-cancel">Cancelar</button>
       </div>
     </form>
+    {% set empresa_crm = selected.empresa_name or crm.empresa %}
+    {% if empresa_crm and empresa_crm not in ('—', '-') %}
+    <span class="att-crm-name-label">Empresa</span>
+    <strong class="att-crm-company-text">{{ empresa_crm }}</strong>
+    {% endif %}
   </div>
 
   <dl class="att-crm-dl">

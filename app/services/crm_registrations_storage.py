@@ -217,6 +217,52 @@ def get_registration_by_sheet_row(
         db.close()
 
 
+def get_registration_names_by_sheet_rows(
+    sheet_rows: list[int],
+    *,
+    tenant_id: str | None = None,
+) -> dict[int, dict[str, str]]:
+    """Nome do contato + empresa para overlay da inbox (uma query)."""
+    ids: list[int] = []
+    seen: set[int] = set()
+    for raw in sheet_rows or []:
+        try:
+            value = int(raw)
+        except (TypeError, ValueError):
+            continue
+        if value and value not in seen:
+            seen.add(value)
+            ids.append(value)
+    if not ids:
+        return {}
+    tenant = normalize_text(tenant_id) or DEFAULT_TENANT_ID
+    db = SessionLocal()
+    try:
+        rows = (
+            db.query(
+                CrmRegistration.sheet_row,
+                CrmRegistration.empresa,
+                CrmRegistration.nome_contato,
+            )
+            .filter(
+                CrmRegistration.tenant_id == tenant,
+                CrmRegistration.sheet_row.in_(ids),
+            )
+            .all()
+        )
+    finally:
+        db.close()
+    out: dict[int, dict[str, str]] = {}
+    for sheet_row, empresa, nome_contato in rows:
+        if not sheet_row:
+            continue
+        out[int(sheet_row)] = {
+            "empresa": normalize_text(empresa or ""),
+            "nome_contato": normalize_text(nome_contato or ""),
+        }
+    return out
+
+
 def search_matriz_companies(
     query: str = "",
     *,

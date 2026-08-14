@@ -221,6 +221,7 @@ def page_context(
         evolution_instance=list_instance,
         tag="",
     )
+    conversations = overlay_conversations_crm_names(conversations)
     # Tags do cadastro → só overlay em memória na carga completa.
     # NUNCA grava aqui: update_conversation + SSE gerava storm e derrubava o worker.
     if not light:
@@ -360,6 +361,7 @@ def page_context(
                     )
                 except Exception:
                     crm = attendance_crm.build_crm_panel(None)
+                selected = apply_crm_display_names_to_conversation(selected, crm)
                 try:
                     from app.services.sectors import responsible_options_for_sector
 
@@ -862,14 +864,14 @@ def update_conversation_cadastro_names(
     contato: str = "",
     nome: str = "",
 ) -> tuple[dict | None, str]:
-    """Edita o Nome no painel CRM (grava na conversa + cadastro)."""
+    """Edita o nome do contato no painel CRM (não altera o nome da empresa)."""
     conversation = store.get_conversation(conversation_id)
     if not conversation:
         return None, "Conversa não encontrada."
 
-    display_name = normalize_text(nome) or normalize_text(contato) or normalize_text(empresa)
+    display_name = normalize_text(nome) or normalize_text(contato)
     if not display_name:
-        return conversation, "Informe o nome."
+        return conversation, "Informe o nome do contato."
 
     conversation = (
         store.update_conversation(conversation_id, contact_name=display_name)
@@ -888,8 +890,7 @@ def update_conversation_cadastro_names(
         try:
             attendance_crm.update_cadastro_names(
                 int(sheet_row),
-                empresa=display_name,
-                contato=display_name,
+                nome_contato=display_name,
             )
         except Exception as exc:
             logger.exception("Falha ao salvar nome do CRM (%s)", conversation_id)
@@ -1258,6 +1259,73 @@ def sync_conversation_tags_to_registration(
         sheet_row=int(sheet_row) if sheet_row else None,
         registration_id=int(registration_id) if registration_id else None,
     )
+
+
+def overlay_conversations_crm_names(conversations: list[dict]) -> list[dict]:
+    """Lista: nome do contato em cima, empresa abaixo (sem gravar na conversa)."""
+    if not conversations:
+        return conversations
+    sheet_rows: list[int] = []
+    for conv in conversations:
+        raw = conv.get("sheet_row")
+        if not raw:
+            continue
+        try:
+            sheet_rows.append(int(raw))
+        except (TypeError, ValueError):
+            continue
+    if not sheet_rows:
+        return conversations
+    try:
+        from app.services.crm_registrations_storage import get_registration_names_by_sheet_rows
+
+        names = get_registration_names_by_sheet_rows(sheet_rows)
+    except Exception:
+        logger.exception("Falha ao overlay nomes CRM na lista de atendimentos")
+        return conversations
+    if not names:
+        return conversations
+    hydrated: list[dict] = []
+    for conv in conversations:
+        try:
+            sheet_row = int(conv["sheet_row"]) if conv.get("sheet_row") else None
+        except (TypeError, ValueError):
+            sheet_row = None
+        info = names.get(sheet_row) if sheet_row else None
+        if not info:
+            hydrated.append(conv)
+            continue
+        overlay = dict(conv)
+        contato = normalize_text(info.get("nome_contato") or "")
+        empresa = normalize_text(info.get("empresa") or "")
+        if contato:
+            overlay["contact_name"] = contato
+            overlay["initials"] = store._initials(contato)
+        overlay["empresa_name"] = empresa
+        hydrated.append(overlay)
+    return hydrated
+
+
+def apply_crm_display_names_to_conversation(
+    conversation: dict | None,
+    crm: dict | None,
+) -> dict | None:
+    """Cabeçalho do chat: contato + empresa do cadastro."""
+    if not conversation:
+        return conversation
+    overlay = dict(conversation)
+    crm = crm or {}
+    contato = normalize_text(crm.get("contato") or "")
+    if contato in ("—", "-"):
+        contato = ""
+    empresa = normalize_text(crm.get("empresa") or "")
+    if empresa in ("—", "-"):
+        empresa = ""
+    if contato:
+        overlay["contact_name"] = contato
+        overlay["initials"] = store._initials(contato)
+    overlay["empresa_name"] = empresa
+    return overlay
 
 
 def apply_registration_tags_to_conversation(conversation: dict | None) -> dict | None:
