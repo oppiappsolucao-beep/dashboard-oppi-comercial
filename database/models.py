@@ -501,6 +501,7 @@ class CrmRegistration(Base):
     email_empresa = Column(String(255), nullable=False, default="")
     site = Column(String(255), nullable=False, default="")
     telefone_b2b = Column(String(80), nullable=False, default="", index=True)
+    nome_contato = Column(String(255), nullable=False, default="")
     telefone_fixo = Column(String(80), nullable=False, default="")
     telefone_alternativo = Column(String(80), nullable=False, default="")
     socio_1 = Column(String(255), nullable=False, default="")

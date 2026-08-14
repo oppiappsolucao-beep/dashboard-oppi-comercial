@@ -49,7 +49,7 @@ STAGE_SUMMARY_HINTS = {
 REGISTRATION_FIELDS = [
     "empresa", "data_abertura", "capital", "cnpj", "endereco", "endereco_numero", "endereco_complemento",
     "cep", "bairro", "municipio", "uf", "email_empresa", "site",
-    "telefone_b2b", "telefone_fixo", "telefone_alternativo",
+    "telefone_b2b", "nome_contato", "telefone_fixo", "telefone_alternativo",
     "socio_1", "cpf_socio_1", "email_socio_1", "telefone_socio_1",
     "socio_2", "telefone_socio_2", "cpf_socio_2",
     "socio_3", "telefone_socio_3", "cpf_socio_3",

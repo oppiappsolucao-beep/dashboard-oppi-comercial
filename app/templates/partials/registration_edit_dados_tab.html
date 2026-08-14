@@ -67,7 +67,7 @@
       </div>
     </div>
     <div class="form-grid">
-      <div class="form-group"><label>E-mail principal</label><input name="email" type="email" value="{{ values.email }}"></div>
+      <div class="form-group full"><label>E-mail principal</label><input name="email" type="email" value="{{ values.email }}"></div>
       <div class="form-group">
         <label>Celular / WhatsApp{% if not sheet_row %} *{% endif %}</label>
         <input name="telefone_b2b"
@@ -76,6 +76,13 @@
           autocomplete="tel"
           placeholder="Ex.: 11999998888"
           {% if not sheet_row %}required{% endif %}>
+      </div>
+      <div class="form-group">
+        <label>Nome do contato</label>
+        <input name="nome_contato"
+          value="{{ values.nome_contato }}"
+          autocomplete="name"
+          placeholder="Nome de quem atende no WhatsApp">
       </div>
       <div class="form-group"><label>Telefone fixo</label><input name="telefone_fixo" value="{{ values.telefone_fixo }}"></div>
       <div class="form-group"><label>Telefone alternativo</label><input name="telefone_alternativo" value="{{ values.telefone_alternativo }}"></div>
