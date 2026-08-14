@@ -88,7 +88,7 @@
 .fin-col-servico { width: 16%; }
 .fin-col-valor { width: 96px; }
 .fin-col-venc { width: 104px; }
-.fin-col-forma { width: 158px; }
+.fin-col-forma { width: 168px; }
 .fin-col-status { width: 132px; }
 .fin-col-acao { width: 76px; }
 
@@ -169,8 +169,15 @@
 .fin-badge.tone-blue { background: #DBEAFE; color: #1D4ED8; }
 .fin-badge.tone-yellow { background: #FEF3C7; color: #B45309; }
 .fin-badge.tone-red { background: #FEE2E2; color: #B91C1C; }
-.fin-badge.tone-purple { background: #EDE9FE; color: #6D28D9; }
+.fin-badge.tone-purple { background: #F3E8FF; color: #6D28D9; }
 .fin-badge.tone-muted { background: #F3F4F6; color: #6B7280; }
+
+.fin-badge-box {
+  border: 1.5px solid #7C3AED;
+  border-radius: 6px;
+  color: #6D28D9;
+  background: #F3E8FF;
+}
 
 .fin-btn-sm {
   height: 32px;

@@ -108,8 +108,16 @@
             <td class="fin-cell-clip" title="{{ row.servico }}">{{ row.servico }}</td>
             <td class="fin-cell-num">{{ row.valor_label }}</td>
             <td class="fin-cell-num">{{ row.vencimento_label }}</td>
-            <td>{{ row.forma }}</td>
-            <td><span class="fin-badge tone-{{ row.status_tone }}">{{ row.status_label }}</span></td>
+            <td>
+              {% if 'recorrente' in (row.forma or '')|lower %}
+              <span class="fin-badge fin-badge-box tone-purple">{{ row.forma }}</span>
+              {% else %}
+              {{ row.forma }}
+              {% endif %}
+            </td>
+            <td>
+              <span class="fin-badge {% if row.status_key == 'recorrente' %}fin-badge-box {% endif %}tone-{{ row.status_tone }}">{{ row.status_label }}</span>
+            </td>
             <td class="fin-actions">
               {% if row.status_key == 'atrasado' and row.whatsapp_url %}
               <a class="btn btn-secondary fin-btn-sm" href="{{ row.whatsapp_url }}" target="_blank" rel="noopener">Cobrar</a>
