@@ -143,32 +143,17 @@
     </div>
     <div class="panel">
       <div class="section-heading">Recorrências</div>
-      <div class="table-wrap">
-        <table class="data-table fin-table fin-table-compact">
-          <thead>
-            <tr>
-              <th>Cliente</th>
-              <th>Valor</th>
-              <th>Ciclo</th>
-              <th>Próx. venc.</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for row in subscriptions[:6] %}
-            <tr>
-              <td>{{ row.cliente }}</td>
-              <td>{{ row.valor_label }}</td>
-              <td>{{ row.ciclo }}</td>
-              <td>{{ row.proximo_label }}</td>
-              <td><span class="fin-badge tone-{{ row.status_tone }}">{{ row.status_label }}</span></td>
-            </tr>
-            {% else %}
-            <tr><td colspan="5" class="fin-empty">Sem assinaturas no Asaas.</td></tr>
-            {% endfor %}
-          </tbody>
-        </table>
+      {% for row in subscriptions[:6] %}
+      <div class="fin-sub-item">
+        <div class="fin-sub-top">
+          <strong class="fin-sub-name" title="{{ row.cliente }}">{{ row.cliente }}</strong>
+          <span class="fin-badge tone-{{ row.status_tone }}">{{ row.status_label }}</span>
+        </div>
+        <div class="fin-sub-meta">{{ row.valor_label }} · {{ row.ciclo }} · próximo {{ row.proximo_label }}</div>
       </div>
+      {% else %}
+      <p class="fin-empty">Sem assinaturas no Asaas.</p>
+      {% endfor %}
     </div>
   </div>
   {% endif %}
