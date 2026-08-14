@@ -108,7 +108,7 @@
             <td class="fin-cell-clip" title="{{ row.servico }}">{{ row.servico }}</td>
             <td class="fin-cell-num">{{ row.valor_label }}</td>
             <td class="fin-cell-num">{{ row.vencimento_label }}</td>
-            <td class="fin-cell-clip" title="{{ row.forma }}">{{ row.forma }}</td>
+            <td>{{ row.forma }}</td>
             <td><span class="fin-badge tone-{{ row.status_tone }}">{{ row.status_label }}</span></td>
             <td class="fin-actions">
               {% if row.status_key == 'atrasado' and row.whatsapp_url %}
