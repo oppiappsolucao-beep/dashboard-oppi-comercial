@@ -42,6 +42,15 @@ class FinanceiroMappingTest(unittest.TestCase):
         self.assertEqual(billing_label("CREDIT_CARD", has_subscription=True), "Cartão recorrente")
         self.assertEqual(cycle_label("MONTHLY"), "Mensal")
 
+    def test_service_name_strips_repeated_client(self):
+        from app.services.financeiro import _service_name
+
+        self.assertEqual(
+            _service_name({"description": "Oppi RH — ITALO KLENYS"}, "ITALO KLENYS"),
+            "Oppi RH",
+        )
+        self.assertEqual(_service_name({"description": "Parcela 2 de 12"}, "MARCOS"), "Parcela 2 de 12")
+
 
 class CadastroBillingMappingTest(unittest.TestCase):
     def test_asaas_types(self):

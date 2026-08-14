@@ -52,9 +52,64 @@
 
 .fin-layout-split {
   display: grid;
-  grid-template-columns: minmax(0, 1.7fr) minmax(280px, 0.9fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 14px;
   align-items: start;
+}
+
+.fin-table-card .table-wrap {
+  overflow-x: auto;
+}
+
+.fin-table {
+  table-layout: fixed;
+  width: 100%;
+}
+
+.fin-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #fff;
+  white-space: nowrap;
+}
+
+.fin-table th:nth-child(1),
+.fin-table td:nth-child(1) {
+  width: 24%;
+}
+
+.fin-table th:nth-child(2),
+.fin-table td:nth-child(2) {
+  width: 22%;
+}
+
+.fin-table th:nth-child(3),
+.fin-table td:nth-child(3),
+.fin-table th:nth-child(4),
+.fin-table td:nth-child(4) {
+  width: 12%;
+}
+
+.fin-table th:nth-child(7),
+.fin-table td:nth-child(7) {
+  width: 88px;
+}
+
+.fin-cell-clip {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 0;
+}
+
+.fin-cell-num {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.fin-actions {
+  white-space: nowrap;
 }
 
 .fin-side {
@@ -147,8 +202,11 @@
   .metric-grid-fin {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
+}
+
+@media (min-width: 1280px) {
   .fin-layout-split {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 320px);
   }
 }
 

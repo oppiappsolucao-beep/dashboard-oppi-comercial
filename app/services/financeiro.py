@@ -104,11 +104,20 @@ def classify_payment(payment: dict, *, today: date | None = None) -> dict[str, s
     return {"key": "outro", "label": status or "—", "tone": "muted"}
 
 
-def _service_name(item: dict) -> str:
+def _service_name(item: dict, cliente: str = "") -> str:
     description = normalize_text(item.get("description") or item.get("externalReference"))
-    if description:
-        return description.split("\n", 1)[0][:80]
-    return "Cobrança Asaas"
+    if not description:
+        return "Cobrança Asaas"
+    line = description.split("\n", 1)[0].strip()
+    client = normalize_text(cliente)
+    if client:
+        lower_line = line.lower()
+        lower_client = client.lower()
+        if lower_line.endswith(lower_client):
+            line = line[: len(line) - len(client)].rstrip(" —–-")
+        elif f"— {lower_client}" in lower_line:
+            line = line[: lower_line.find(f"— {lower_client}")].rstrip(" —–-")
+    return (line or "Oppi RH")[:60]
 
 
 def _load_crm_rows() -> list[dict[str, Any]]:
@@ -190,7 +199,7 @@ def _map_invoice(payment: dict, customers: dict[str, dict], crm_rows: list[dict]
         or "Cliente Asaas"
     )
     phone = (crm or {}).get("telefone") or customer.get("mobilePhone") or customer.get("phone") or ""
-    service = _service_name(payment)
+    service = _service_name(payment, cliente)
     due_label = format_date_br(due)
     charge_text = (
         f"Olá! Aqui é da Oppi. Identificamos a fatura de {service} "
@@ -230,7 +239,7 @@ def _map_subscription(item: dict, customers: dict[str, dict], crm_rows: list[dic
     return {
         "id": item.get("id") or "",
         "cliente": (crm or {}).get("empresa") or normalize_text(customer.get("name")) or "Cliente Asaas",
-        "servico": _service_name(item),
+        "servico": _service_name(item, (crm or {}).get("empresa") or normalize_text(customer.get("name"))),
         "valor": float(item.get("value") or 0),
         "valor_label": format_brl(item.get("value")),
         "ciclo": cycle_label(item.get("cycle") or ""),

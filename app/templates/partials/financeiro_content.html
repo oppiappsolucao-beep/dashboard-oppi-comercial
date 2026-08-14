@@ -74,7 +74,7 @@
   <div class="panel fin-table-card">
     <div class="section-heading">Faturas e cobranças</div>
     <div class="table-wrap">
-      <table class="data-table">
+      <table class="data-table fin-table">
         <thead>
           <tr>
             <th>Cliente</th>
@@ -89,17 +89,17 @@
         <tbody>
           {% for row in invoices %}
           <tr>
-            <td>
+            <td class="fin-cell-clip" title="{{ row.cliente }}">
               {% if row.cliente_href %}
               <a href="{{ row.cliente_href }}">{{ row.cliente }}</a>
               {% else %}
               {{ row.cliente }}
               {% endif %}
             </td>
-            <td>{{ row.servico }}</td>
-            <td>{{ row.valor_label }}</td>
-            <td>{{ row.vencimento_label }}</td>
-            <td>{{ row.forma }}</td>
+            <td class="fin-cell-clip" title="{{ row.servico }}">{{ row.servico }}</td>
+            <td class="fin-cell-num">{{ row.valor_label }}</td>
+            <td class="fin-cell-num">{{ row.vencimento_label }}</td>
+            <td class="fin-cell-clip" title="{{ row.forma }}">{{ row.forma }}</td>
             <td><span class="fin-badge tone-{{ row.status_tone }}">{{ row.status_label }}</span></td>
             <td class="fin-actions">
               {% if row.status_key == 'atrasado' and row.whatsapp_url %}
@@ -144,7 +144,7 @@
     <div class="panel">
       <div class="section-heading">Recorrências</div>
       <div class="table-wrap">
-        <table class="data-table">
+        <table class="data-table fin-table fin-table-compact">
           <thead>
             <tr>
               <th>Cliente</th>
@@ -180,7 +180,7 @@
   <div class="section-heading">Recorrências</div>
   <div class="section-subtitle">Assinaturas do Asaas que geram cobranças automaticamente.</div>
   <div class="table-wrap">
-    <table class="data-table">
+    <table class="data-table fin-table">
       <thead>
         <tr>
           <th>Cliente</th>
