@@ -108,6 +108,18 @@ def sheet_row_matches_phone(sheet_row: int | None, phone: str) -> bool:
     return any(phones_strongly_match(target, existing) for existing in row_phones)
 
 
+def _looks_like_whatsapp_placeholder(name: str) -> bool:
+    n = normalize_text(name).lower()
+    if not n or n in {"—", "-", "whatsapp"}:
+        return True
+    if n.startswith("lead whatsapp") or n.startswith("whatsapp "):
+        return True
+    digits = "".join(ch for ch in n if ch.isdigit())
+    if digits and len(digits) >= 10 and digits == "".join(ch for ch in n if ch.isdigit() or ch in " +()-"):
+        return True
+    return False
+
+
 def create_lead_from_whatsapp(
     *,
     phone: str,
@@ -118,9 +130,13 @@ def create_lead_from_whatsapp(
 
     display_phone = format_br_whatsapp_display(phone) or normalize_text(phone)
     name = normalize_text(contact_name) or f"Lead WhatsApp {display_phone}"
+    contato_wa = normalize_text(contact_name)
+    if _looks_like_whatsapp_placeholder(contato_wa):
+        contato_wa = ""
     seller = normalize_text(vendedor) or "Sem vendedor"
     form = {
         "empresa": name,
+        "nome_contato": contato_wa,
         "telefone_b2b": display_phone,
         "status": "Novo Lead",
         "data_chamado": date.today().strftime("%d/%m/%Y"),
@@ -157,19 +173,6 @@ def resolve_or_create_lead(
         return None
 
 
-def _looks_like_whatsapp_placeholder(name: str) -> bool:
-    n = normalize_text(name).lower()
-    if not n or n in {"—", "-", "whatsapp"}:
-        return True
-    if n.startswith("lead whatsapp") or n.startswith("whatsapp "):
-        return True
-    # Só dígitos / telefone cru
-    digits = "".join(ch for ch in n if ch.isdigit())
-    if digits and len(digits) >= 10 and digits == "".join(ch for ch in n if ch.isdigit() or ch in " +()-"):
-        return True
-    return False
-
-
 def should_adopt_contact_name(existing: str, incoming: str) -> bool:
     """Só preenche nome vazio/placeholder — nunca sobrescreve um nome bom (ex.: Vicente → Oppi)."""
     new_name = normalize_text(incoming)
@@ -195,6 +198,7 @@ def build_crm_panel(
         "sheet_row": None,
         "empresa": wa_name or "—",
         "contato": wa_name or "—",
+        "nome_contato": wa_name,
         "telefone": phone_disp,
         "vendedor": "—",
         "etapa": "—",
@@ -212,19 +216,31 @@ def build_crm_panel(
         return empty
     row = matches.iloc[0]
     socio_col = columns.get("socio_1")
+    contato_col = columns.get("nome_contato")
     socio = normalize_text(row.get(socio_col, "")) if socio_col else ""
+    nome_contato = normalize_text(row.get(contato_col, "")) if contato_col else ""
+    try:
+        from app.services.crm_registrations_storage import (
+            get_registration_by_sheet_row,
+            is_crm_postgres_ready,
+        )
+
+        if is_crm_postgres_ready():
+            pg = get_registration_by_sheet_row(int(sheet_row))
+            if pg:
+                nome_contato = normalize_text(getattr(pg, "nome_contato", "")) or nome_contato
+    except Exception:
+        pass
     empresa = normalize_text(row.get("_empresa", "")) or "—"
-    # Preferir nome do WhatsApp na lista/contato quando o cadastro ainda é genérico
-    contato = socio or empresa
-    if wa_name and (_looks_like_whatsapp_placeholder(contato) or _looks_like_whatsapp_placeholder(socio)):
+    contato = nome_contato or socio or wa_name or empresa
+    if wa_name and _looks_like_whatsapp_placeholder(contato):
         contato = wa_name
-    if wa_name and _looks_like_whatsapp_placeholder(empresa):
-        empresa = wa_name
     raw_phone = normalize_text(row.get("_telefone", "")) or normalize_text(fallback_phone)
     return {
         "sheet_row": int(sheet_row),
         "empresa": empresa,
         "contato": contato,
+        "nome_contato": nome_contato,
         "telefone": format_br_whatsapp_display(raw_phone) or raw_phone or "—",
         "vendedor": normalize_text(row.get("_vendedor", "")) or "Sem vendedor",
         "etapa": normalize_text(row.get("_status_grupo") or row.get("_status_original")) or "Novo Lead",
@@ -238,13 +254,15 @@ def update_cadastro_names(
     *,
     empresa: str = "",
     contato: str = "",
+    nome_contato: str = "",
 ) -> None:
-    """Atualiza só Empresa/Contato do cadastro vinculado (Atendimentos)."""
+    """Atualiza Empresa / Nome do contato do cadastro vinculado (Atendimentos)."""
     if not sheet_row:
         return
     empresa_name = normalize_text(empresa)
     contato_name = normalize_text(contato)
-    if not empresa_name and not contato_name:
+    nome_contato_value = normalize_text(nome_contato) or contato_name
+    if not empresa_name and not contato_name and not nome_contato_value:
         return
 
     try:
@@ -262,8 +280,8 @@ def update_cadastro_names(
                 payload = registration_to_payload(row)
                 if empresa_name:
                     payload["empresa"] = empresa_name
-                if contato_name:
-                    payload["socio_1"] = contato_name
+                if nome_contato_value:
+                    payload["nome_contato"] = nome_contato_value
                 upsert_registration_from_payload(
                     payload,
                     sheet_row=int(sheet_row),
@@ -278,7 +296,7 @@ def update_cadastro_names(
         _patch_sheet_name_fields(
             int(sheet_row),
             empresa=empresa_name,
-            socio_1=contato_name,
+            nome_contato=nome_contato_value,
         )
     except Exception:
         raise
@@ -289,8 +307,9 @@ def _patch_sheet_name_fields(
     *,
     empresa: str = "",
     socio_1: str = "",
+    nome_contato: str = "",
 ) -> None:
-    """Atualiza apenas Nome Empresas / Sócio 1, sem limpar o restante da linha."""
+    """Atualiza apenas Nome Empresas / Nome do contato, sem limpar o restante da linha."""
     import gspread
 
     from app.config import settings
@@ -303,7 +322,7 @@ def _patch_sheet_name_fields(
         normalize_text as _nt,
     )
 
-    if not empresa and not socio_1:
+    if not empresa and not socio_1 and not nome_contato:
         return
     client = get_gsheet_client()
     spreadsheet = client.open_by_key(settings.sheet_id)
@@ -329,6 +348,13 @@ def _patch_sheet_name_fields(
             ["Sócio 1", "Socio 1", "Sócio1", "Socio1"],
             socio_1,
         )
+    if nome_contato:
+        _set_sheet_value_by_header(
+            row_values,
+            headers,
+            ["Nome do contato", "Nome contato", "Contato WhatsApp"],
+            nome_contato,
+        )
 
     changed_cells = []
     for column_index, new_value in enumerate(row_values, start=1):
@@ -345,18 +371,14 @@ def apply_whatsapp_name_to_crm(
     *,
     whatsapp_name: str,
 ) -> None:
-    """Preenche Empresa/Contato só quando o cadastro ainda está genérico."""
+    """Grava o pushName no campo Nome do contato, sem alterar o nome da empresa."""
     name = normalize_text(whatsapp_name)
     if not sheet_row or not name or _looks_like_whatsapp_placeholder(name):
         return
     panel = build_crm_panel(int(sheet_row), fallback_name=name)
-    empresa = normalize_text(panel.get("empresa") or "")
-    contato = normalize_text(panel.get("contato") or "")
-    # Não apaga nome real de empresa (ex.: Oppi Tech) com pushName do WhatsApp
-    if not _looks_like_whatsapp_placeholder(empresa) and not _looks_like_whatsapp_placeholder(contato):
+    current = normalize_text(panel.get("nome_contato") or "")
+    if current and not _looks_like_whatsapp_placeholder(current) and current.lower() == name.lower():
         return
-    update_cadastro_names(
-        sheet_row,
-        empresa=name if _looks_like_whatsapp_placeholder(empresa) else "",
-        contato=name if _looks_like_whatsapp_placeholder(contato) else "",
-    )
+    if current and not _looks_like_whatsapp_placeholder(current):
+        return
+    update_cadastro_names(sheet_row, nome_contato=name)

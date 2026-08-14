@@ -453,7 +453,15 @@ def ensure_crm_link(
                     )
             except Exception:
                 pass
-        return apply_registration_tags_to_conversation(conversation) or conversation
+        conversation = apply_registration_tags_to_conversation(conversation) or conversation
+        try:
+            attendance_crm.apply_whatsapp_name_to_crm(
+                conversation.get("sheet_row"),
+                whatsapp_name=contact_name or conversation.get("contact_name") or "",
+            )
+        except Exception:
+            pass
+        return conversation
 
     # Vínculo ausente ou de outro contato — limpa e resolve de novo pelo telefone
     if current_row:
@@ -487,7 +495,15 @@ def ensure_crm_link(
             )
             or conversation
         )
-        return apply_registration_tags_to_conversation(conversation) or conversation
+        conversation = apply_registration_tags_to_conversation(conversation) or conversation
+        try:
+            attendance_crm.apply_whatsapp_name_to_crm(
+                int(sheet_row),
+                whatsapp_name=contact_name or conversation.get("contact_name") or "",
+            )
+        except Exception:
+            pass
+        return conversation
     return conversation
 
 
