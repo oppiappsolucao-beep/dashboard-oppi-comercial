@@ -1,5 +1,5 @@
 from fastapi import APIRouter, File, Form, Request, UploadFile
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from app.config import settings
 from app.dependencies import get_prepared_data, is_admin, require_auth
@@ -529,6 +529,22 @@ async def settings_finalize_attendance_queue(
             f"Não consegui finalizar a fila: {error}"
         )
     return RedirectResponse(url="/configuracoes?tab=atendimentos", status_code=303)
+
+
+@router.post("/configuracoes/limpeza-whatsapp-cadastros")
+async def settings_cleanup_whatsapp_cadastros(request: Request):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+    if not is_admin(request):
+        return JSONResponse({"ok": False, "error": "Apenas o administrador pode executar."}, status_code=403)
+    from app.services.crm_phone_cleanup import cleanup_evolution_phones_and_duplicates
+
+    try:
+        result = cleanup_evolution_phones_and_duplicates(apply=True)
+        return JSONResponse({"ok": True, **result})
+    except Exception as error:
+        return JSONResponse({"ok": False, "error": str(error)}, status_code=500)
 
 
 @router.post("/configuracoes/tags/adicionar")

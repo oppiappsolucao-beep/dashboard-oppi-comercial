@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-APP_BUILD = os.getenv("APP_BUILD", "20260814-financeiro-asaas-v1").strip() or "20260814-financeiro-asaas-v1"
+APP_BUILD = os.getenv("APP_BUILD", "20260814-wa-9digit-cleanup-v1").strip() or "20260814-wa-9digit-cleanup-v1"
 
 class Settings:
     sheet_id: str = "1GAbrca0NSiJfPXaSte1qGxXCsGkQPacoRsm0PVB51gE"

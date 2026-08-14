@@ -93,6 +93,7 @@ app.add_api_route("/financeiro/sincronizar", financeiro_sync, methods=["POST"], 
 
 from app.routers.settings import (  # noqa: E402
     settings_add_service,
+    settings_cleanup_whatsapp_cadastros,
     settings_filters,
     settings_page,
     settings_permissions_toggle,
@@ -106,6 +107,12 @@ app.add_api_route("/configuracoes/permissoes", settings_permissions_toggle, meth
 app.add_api_route("/configuracoes/atualizar", settings_refresh, methods=["POST"], tags=["settings"])
 app.add_api_route("/configuracoes/servicos/adicionar", settings_add_service, methods=["POST"], tags=["settings"])
 app.add_api_route("/configuracoes/servicos/remover", settings_remove_service, methods=["POST"], tags=["settings"])
+app.add_api_route(
+    "/configuracoes/limpeza-whatsapp-cadastros",
+    settings_cleanup_whatsapp_cadastros,
+    methods=["POST"],
+    tags=["settings"],
+)
 
 
 @app.on_event("startup")
