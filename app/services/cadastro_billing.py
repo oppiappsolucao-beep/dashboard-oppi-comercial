@@ -33,11 +33,11 @@ PLAN_CYCLE_OPTIONS = [
 BILLING_FORM_OPTIONS = [
     ("cartao_recorrente", "Cartão recorrente"),
     ("boleto_recorrente", "Boleto recorrente"),
-    ("pix", "PIX Avulso"),
-    ("pix_boleto", "Boleto/Pix Avulso"),
+    ("cartao_avulso", "Cartão de crédito (Avulso)"),
+    ("pix_boleto", "Pix/Boleto (Avulso)"),
 ]
 _CYCLE_KEYS = {key for key, _ in PLAN_CYCLE_OPTIONS}
-_FORM_KEYS = {key for key, _ in BILLING_FORM_OPTIONS}
+_FORM_KEYS = {key for key, _ in BILLING_FORM_OPTIONS} | {"pix"}
 
 
 def cycle_label(key: str) -> str:
@@ -47,6 +47,7 @@ def cycle_label(key: str) -> str:
 
 def forma_label(key: str) -> str:
     mapping = dict(BILLING_FORM_OPTIONS)
+    mapping["pix"] = "PIX Avulso"
     return mapping.get(normalize_text(key).lower(), "—")
 
 
@@ -99,7 +100,7 @@ def load_billing_plan(tenant_id: str | None, sheet_row: int) -> dict[str, Any]:
         elif "vista" in forma_closed or "avulso" in forma_closed:
             ciclo = "avulso"
         if "cartão" in forma_closed or "cartao" in forma_closed:
-            forma = "cartao_recorrente"
+            forma = "cartao_avulso" if ciclo == "avulso" else "cartao_recorrente"
         elif "boleto" in forma_closed and "pix" in forma_closed:
             forma = "pix_boleto"
         elif "boleto" in forma_closed:
@@ -154,7 +155,7 @@ def asaas_billing_type(forma: str) -> str:
     key = normalize_text(forma).lower()
     if key == "pix":
         return "PIX"
-    if key == "cartao_recorrente":
+    if key in {"cartao_recorrente", "cartao_avulso"}:
         return "CREDIT_CARD"
     if key == "boleto_recorrente":
         return "BOLETO"

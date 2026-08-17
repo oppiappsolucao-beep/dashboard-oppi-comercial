@@ -58,6 +58,7 @@ class CadastroBillingMappingTest(unittest.TestCase):
 
         self.assertEqual(asaas_billing_type("pix"), "PIX")
         self.assertEqual(asaas_billing_type("cartao_recorrente"), "CREDIT_CARD")
+        self.assertEqual(asaas_billing_type("cartao_avulso"), "CREDIT_CARD")
         self.assertEqual(asaas_billing_type("boleto_recorrente"), "BOLETO")
         self.assertEqual(asaas_billing_type("pix_boleto"), "UNDEFINED")
         self.assertEqual(asaas_cycle("mensal"), "MONTHLY")
@@ -69,12 +70,20 @@ class CadastroBillingMappingTest(unittest.TestCase):
 
         self.assertEqual(
             [key for key, _ in BILLING_FORM_OPTIONS],
-            ["cartao_recorrente", "boleto_recorrente", "pix", "pix_boleto"],
+            ["cartao_recorrente", "boleto_recorrente", "cartao_avulso", "pix_boleto"],
         )
-        self.assertEqual(forma_label("pix"), "PIX Avulso")
-        self.assertEqual(forma_label("pix_boleto"), "Boleto/Pix Avulso")
+        self.assertEqual(
+            [label for _, label in BILLING_FORM_OPTIONS],
+            [
+                "Cartão recorrente",
+                "Boleto recorrente",
+                "Cartão de crédito (Avulso)",
+                "Pix/Boleto (Avulso)",
+            ],
+        )
         self.assertTrue(is_recurring_forma("cartao_recorrente"))
-        self.assertFalse(is_recurring_forma("pix"))
+        self.assertFalse(is_recurring_forma("cartao_avulso"))
+        self.assertFalse(is_recurring_forma("pix_boleto"))
 
 
 if __name__ == "__main__":
