@@ -53,7 +53,7 @@
     {% endfor %}
   </div>
 
-  <nav class="client-edit-tabs panel client-edit-tabs-interactive" aria-label="Abas do cadastro">
+  <nav class="client-edit-tabs panel client-edit-tabs-interactive client-edit-tabs-new" aria-label="Abas do cadastro">
     <button type="button" class="client-edit-tab is-active" data-registration-tab="dados">
       <span class="client-edit-tab-title">Dados gerais</span>
       <span class="client-edit-tab-sub">Informações da empresa</span>
@@ -65,6 +65,10 @@
     <button type="button" class="client-edit-tab" data-registration-tab="proposta">
       <span class="client-edit-tab-title">Proposta</span>
       <span class="client-edit-tab-sub">Resumo comercial</span>
+    </button>
+    <button type="button" class="client-edit-tab" data-registration-tab="financeiro">
+      <span class="client-edit-tab-title">Financeiro</span>
+      <span class="client-edit-tab-sub">Forma de pagamento</span>
     </button>
   </nav>
 
@@ -84,6 +88,10 @@
 
     <div class="client-edit-tab-panel is-hidden" data-registration-panel="proposta">
       {% include "partials/registration_new_proposta_tab.html" %}
+    </div>
+
+    <div class="client-edit-tab-panel is-hidden" data-registration-panel="financeiro">
+      {% include "partials/registration_new_financeiro_tab.html" %}
     </div>
 
     <footer class="client-edit-footer panel">

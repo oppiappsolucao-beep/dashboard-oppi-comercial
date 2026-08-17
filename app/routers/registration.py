@@ -10,6 +10,12 @@ from app.services.closed_services import PAYMENT_METHOD_OPTIONS, closed_services
 from app.services.commercial_services import get_commercial_service_options
 from app.services.crm_validation_service import get_actions_for_stage, normalize_legacy_stage
 from app.services.legacy_core import DuplicateRegistrationError, STATUS_OPTIONS, get_colaborador_options, normalize_text
+from app.services.cadastro_billing import (
+    BILLING_FORM_OPTIONS,
+    PLAN_CYCLE_OPTIONS,
+    parse_billing_plan_from_form,
+    save_billing_plan,
+)
 from app.services.registration import (
     CADASTRO_TIPO_OPTIONS,
     build_cadastro_new_page_context,
@@ -107,6 +113,15 @@ def _registration_page_context(request: Request, df, *, error: str = "", values:
         "cadastro_tipo": cadastro_tipo,
         "cadastro_tipo_options": CADASTRO_TIPO_OPTIONS,
         "closed_services": load_closed_services(DEFAULT_TENANT_ID, 0),
+        "billing_plan": {
+            "ciclo": normalize_text(values.get("billing_ciclo")).lower(),
+            "forma": normalize_text(values.get("billing_forma")).lower(),
+            "servico": normalize_text(values.get("billing_servico")),
+            "valor": normalize_text(values.get("billing_valor")),
+            "vencimento": normalize_text(values.get("billing_vencimento"))[:10],
+        },
+        "plan_cycle_options": PLAN_CYCLE_OPTIONS,
+        "billing_form_options": BILLING_FORM_OPTIONS,
         "error": error or request.session.pop("registration_error", ""),
         **page_ctx,
     }
@@ -195,6 +210,16 @@ async def new_registration_submit(request: Request):
             )
         if closed_services_has_data(closed_items):
             save_closed_services(DEFAULT_TENANT_ID, sheet_row, closed_items)
+        if int(sheet_row or 0) != 0 and (
+            normalize_text(form.get("billing_forma"))
+            or normalize_text(form.get("billing_valor"))
+            or normalize_text(form.get("billing_servico"))
+        ):
+            save_billing_plan(
+                DEFAULT_TENANT_ID,
+                sheet_row,
+                parse_billing_plan_from_form(form),
+            )
 
         empresa = normalize_text(form_dict.get("empresa"))
         status = normalize_text(form_dict.get("status"))

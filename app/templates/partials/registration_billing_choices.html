@@ -1,0 +1,23 @@
+<fieldset class="billing-choice">
+  <legend>Periodicidade</legend>
+  <div class="billing-choice-grid">
+    {% for key, label in plan_cycle_options %}
+    <label class="billing-choice-card">
+      <input type="radio" name="billing_ciclo" value="{{ key }}" {% if billing_plan.ciclo == key %}checked{% endif %}>
+      <span>{{ label }}</span>
+    </label>
+    {% endfor %}
+  </div>
+</fieldset>
+
+<fieldset class="billing-choice">
+  <legend>Forma de pagamento</legend>
+  <div class="billing-choice-grid">
+    {% for key, label in billing_form_options %}
+    <label class="billing-choice-card">
+      <input type="radio" name="billing_forma" value="{{ key }}" {% if billing_plan.forma == key %}checked{% endif %}>
+      <span>{{ label }}</span>
+    </label>
+    {% endfor %}
+  </div>
+</fieldset>

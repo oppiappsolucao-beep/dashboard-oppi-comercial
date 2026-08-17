@@ -1383,6 +1383,10 @@
   margin-top: 14px;
 }
 
+.client-edit-tabs-new {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
 .client-edit-tabs-interactive .client-edit-tab {
   border: none;
   font: inherit;

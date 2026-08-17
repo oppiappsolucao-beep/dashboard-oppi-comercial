@@ -85,6 +85,22 @@ class CadastroBillingMappingTest(unittest.TestCase):
         self.assertFalse(is_recurring_forma("cartao_avulso"))
         self.assertFalse(is_recurring_forma("pix_boleto"))
 
+    def test_parse_billing_plan_from_form_keeps_selected_option(self):
+        from app.services.cadastro_billing import parse_billing_plan_from_form
+
+        plan = parse_billing_plan_from_form(
+            {
+                "billing_ciclo": "mensal",
+                "billing_forma": "boleto_recorrente",
+                "billing_servico": "Oppi RH",
+                "billing_valor": "R$ 59,90",
+            }
+        )
+        self.assertEqual(plan["ciclo"], "mensal")
+        self.assertEqual(plan["forma"], "boleto_recorrente")
+        self.assertEqual(plan["servico"], "Oppi RH")
+        self.assertEqual(plan["valor"], "R$ 59,90")
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

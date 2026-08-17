@@ -1,0 +1,42 @@
+<div class="client-edit-sections">
+  <section class="client-edit-section panel" id="billing-plan-section">
+    <div class="client-edit-section-head">
+      <span class="client-edit-section-icon">💳</span>
+      <div>
+        <h2>Financeiro</h2>
+        <p>Assinale o plano e a forma de pagamento escolhidos pelo cliente.</p>
+      </div>
+    </div>
+
+    <div class="form-grid cols-2 billing-plan-grid">
+      <div class="form-group">
+        <label for="billing_servico">Plano / serviço</label>
+        {% if service_options %}
+        <select id="billing_servico" name="billing_servico">
+          <option value="">Selecione</option>
+          {% for service in service_options %}
+          <option value="{{ service }}" {% if billing_plan.servico == service %}selected{% endif %}>{{ service }}</option>
+          {% endfor %}
+          {% if billing_plan.servico and billing_plan.servico not in service_options %}
+          <option value="{{ billing_plan.servico }}" selected>{{ billing_plan.servico }}</option>
+          {% endif %}
+        </select>
+        {% else %}
+        <input id="billing_servico" type="text" name="billing_servico" value="{{ billing_plan.servico }}" placeholder="Ex.: Oppi Ponto Mensal">
+        {% endif %}
+      </div>
+      <div class="form-group">
+        <label for="billing_valor">Valor</label>
+        <input id="billing_valor" type="text" name="billing_valor" value="{{ billing_plan.valor }}" placeholder="R$ 0,00">
+      </div>
+      <div class="form-group">
+        <label for="billing_vencimento">Primeiro vencimento</label>
+        <input id="billing_vencimento" type="date" name="billing_vencimento" value="{{ billing_plan.vencimento }}">
+      </div>
+    </div>
+
+    {% include "partials/registration_billing_choices.html" %}
+
+    <p class="billing-plan-hint">Cartão e boleto recorrente criam assinatura no Asaas depois de salvar. Cartão de crédito avulso e Pix/Boleto avulso geram cobrança única.</p>
+  </section>
+</div>
