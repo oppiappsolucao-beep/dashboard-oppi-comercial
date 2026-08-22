@@ -8,7 +8,7 @@ from urllib.parse import quote
 from zoneinfo import ZoneInfo
 
 from app.services.asaas_client import AsaasError, fetch_dashboard_payload, is_configured
-from app.services.internal_finance import build_internal_forecast, internal_kpi_cards, resolve_period
+from app.services.internal_finance import build_internal_forecast, resolve_period
 from app.services.legacy_core import (
     normalize_cnpj_for_duplicate,
     normalize_phone_for_duplicate,
@@ -321,7 +321,7 @@ def build_financeiro_context(params: dict | None = None, *, force_sync: bool = F
         "active_page": "financeiro",
         "asaas_configured": is_configured(),
         "asaas_error": "",
-        "kpi_cards": internal_kpi_cards(forecast),
+        "kpi_cards": _kpi_cards(0, 0, 0, 0, 0, 0, 0, 0),
         "forecast": forecast,
         "invoices": [],
         "subscriptions": [],
@@ -347,16 +347,19 @@ def build_financeiro_context(params: dict | None = None, *, force_sync: bool = F
     }
 
     if not is_configured():
-        empty["asaas_error"] = ""
+        empty["kpi_cards"] = _kpi_cards(0, 0, 0, 0, 0, 0, 0, 0)
+        empty["asaas_error"] = "Configure ASAAS_API_KEY no Easypanel para puxar as cobranças."
         return empty
 
     try:
         payload = fetch_dashboard_payload(force=force_sync)
     except AsaasError as exc:
+        empty["kpi_cards"] = _kpi_cards(0, 0, 0, 0, 0, 0, 0, 0)
         empty["asaas_error"] = str(exc)
         return empty
     except Exception:
         logger.exception("Falha inesperada no Asaas")
+        empty["kpi_cards"] = _kpi_cards(0, 0, 0, 0, 0, 0, 0, 0)
         empty["asaas_error"] = "Não foi possível sincronizar o Asaas agora."
         return empty
 
@@ -374,7 +377,6 @@ def build_financeiro_context(params: dict | None = None, *, force_sync: bool = F
             company_names[int(sheet_row)] = empresa
     forecast = build_internal_forecast(period_start, period_end, company_names=company_names)
     empty["forecast"] = forecast
-    empty["kpi_cards"] = internal_kpi_cards(forecast)
 
     invoices = [
         _map_invoice(row, customers, crm_rows, today)
@@ -406,7 +408,12 @@ def build_financeiro_context(params: dict | None = None, *, force_sync: bool = F
             and row.get("vencimento")
             and period_start <= row["vencimento"] <= period_end
         ]
-    atrasados = [row for row in invoices if row["status_key"] == "atrasado"]
+    atrasados = [
+        row for row in invoices
+        if row["status_key"] == "atrasado"
+        and row.get("vencimento")
+        and period_start <= row["vencimento"] <= period_end
+    ]
     proximos = [
         row for row in invoices
         if row["status_key"] in {"receber", "vence_hoje", "recorrente"}
@@ -456,6 +463,17 @@ def build_financeiro_context(params: dict | None = None, *, force_sync: bool = F
 
     filtered = _filter_invoices(invoices, params)
     empty.update({
+        "kpi_cards": _kpi_cards(
+            sum(row["valor"] for row in receber_mes),
+            len(receber_mes),
+            recebido_valor,
+            len(recebido_mes),
+            atrasado_valor,
+            len({row["cliente"] for row in atrasados}),
+            len(ativas),
+            len(proximos),
+            inadimplencia,
+        ),
         "invoices": filtered,
         "subscriptions": subscriptions,
         "overdue_clients": overdue_clients,
@@ -520,3 +538,40 @@ def _kpi_cards(
             "icon": "%",
         },
     ]
+
+
+def group_asaas_payments_by_value(payments: list[dict] | None, start: date, end: date) -> list[dict]:
+    """Agrupa cobranças Asaas já carregadas (sem nova chamada HTTP)."""
+    from collections import defaultdict
+
+    today = _today()
+    grouped: dict[str, dict[str, float]] = defaultdict(lambda: {"recebido": 0.0, "a_receber": 0.0})
+    for payment in payments or []:
+        if not isinstance(payment, dict):
+            continue
+        classified = classify_payment(payment, today=today)
+        value = float(payment.get("value") or 0)
+        key = f"{value:.2f}"
+        due = _parse_date(payment.get("dueDate"))
+        paid_on = _parse_date(payment.get("paymentDate") or payment.get("confirmedDate"))
+        if classified["key"] == "pago":
+            when = paid_on or due
+            if when and start <= when <= end:
+                grouped[key]["recebido"] += value
+            continue
+        if classified["key"] in {"receber", "vence_hoje", "recorrente", "atrasado"} and due and start <= due <= end:
+            grouped[key]["a_receber"] += value
+
+    rows = []
+    for key in sorted(grouped.keys(), key=lambda item: float(item)):
+        item = grouped[key]
+        rows.append(
+            {
+                "label": format_brl(float(key)),
+                "recebido": item["recebido"],
+                "recebido_label": format_brl(item["recebido"]),
+                "a_receber": item["a_receber"],
+                "a_receber_label": format_brl(item["a_receber"]),
+            }
+        )
+    return rows

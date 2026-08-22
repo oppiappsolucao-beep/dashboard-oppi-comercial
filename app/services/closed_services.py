@@ -50,7 +50,7 @@ def _normalize_item(raw: dict | None) -> dict:
 
 
 def _has_data(item: dict) -> bool:
-    return any(normalize_text(item.get(key)) for key in ("servico", "valor", "vencimento"))
+    return any(normalize_text(item.get(key)) for key in ("servico", "valor"))
 
 
 def closed_services_has_data(items: list[dict]) -> bool:

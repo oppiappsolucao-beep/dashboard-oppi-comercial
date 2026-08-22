@@ -36,7 +36,7 @@
   <div class="overview-analytics-grid">
     <div class="panel">
       <div class="section-heading">Empresas por estado</div>
-      <div class="section-subtitle">Onde estamos vendendo mais no período.</div>
+      <div class="section-subtitle">Onde estamos vendendo mais — somente cadastros com a tag Empresa.</div>
       <div id="overview-state-chart" class="overview-chart" data-chart='{{ state_chart_json | safe }}'></div>
       {% if state_rows %}
       <ul class="overview-stat-list">
@@ -67,7 +67,7 @@
 
   <div class="panel">
     <div class="section-heading">Resumo financeiro</div>
-    <div class="section-subtitle">Valores agrupados por grupo de valor — recebidos e a receber.</div>
+    <div class="section-subtitle">Valores agrupados por grupo de valor — recebidos e a receber (Asaas, no período filtrado).</div>
     <div id="overview-finance-chart" class="overview-chart overview-chart-wide" data-chart='{{ finance_chart_json | safe }}'></div>
     {% if value_groups %}
     <div class="table-wrap">
@@ -91,7 +91,7 @@
       </table>
     </div>
     {% else %}
-    <p class="overview-empty-note">Sem valores internos no período selecionado.</p>
+    <p class="overview-empty-note">Sem cobranças Asaas neste período. Abra o Financeiro para carregar os dados em cache.</p>
     {% endif %}
   </div>
 </form>

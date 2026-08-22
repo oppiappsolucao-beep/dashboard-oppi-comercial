@@ -45,16 +45,13 @@
           {% endfor %}
         </select>
       </div>
-      <div class="form-group">
-        <label>Vencimento</label>
-        <input type="date" name="closed_vencimento" value="{{ item.vencimento }}">
-      </div>
     </div>
     {% endfor %}
   </div>
 
-  <div class="client-closed-services-footer" style="margin-top: 12px;">
+  <div class="client-closed-services-footer" style="margin-top: 12px; display:flex; gap:8px; flex-wrap:wrap;">
     <button type="button" class="btn btn-secondary" id="closed-services-add">+ Adicionar serviço</button>
+    <button type="submit" name="action" value="save_financeiro" class="btn">Salvar serviços</button>
   </div>
 
   <template id="closed-services-slide-template">
@@ -87,10 +84,6 @@
           <option value="{{ option }}" {% if option == 'Mensal' %}selected{% endif %}>{{ option }}</option>
           {% endfor %}
         </select>
-      </div>
-      <div class="form-group">
-        <label>Vencimento</label>
-        <input type="date" name="closed_vencimento" value="">
       </div>
     </div>
   </template>

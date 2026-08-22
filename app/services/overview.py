@@ -16,13 +16,12 @@ from config.crm_options import (
 )
 from app.services.internal_finance import (
     build_internal_forecast,
-    group_value_bands,
     plan_breakdown,
     previous_calendar_month,
     resolve_period,
 )
 from app.services.filters import DashboardFilters, apply_dashboard_filters
-from app.services.lead_actions_storage import DEFAULT_TENANT_ID, get_lead_action
+from app.services.lead_actions_storage import DEFAULT_TENANT_ID, get_all_lead_actions, get_lead_action
 from app.services.leads import ETAPA_BADGE, apply_leads_view, map_etapa
 from app.services.legacy_core import (
     DASHBOARD_STATUS_OPTIONS,
@@ -943,14 +942,31 @@ def build_overview_analytics(df: pd.DataFrame, columns: dict, filters: Dashboard
     current_df = apply_dashboard_filters(df, columns, current_filters)
     prev_df = apply_dashboard_filters(df, columns, prev_filters)
 
-    closed_now = count_dashboard_status(current_df, "Fechado")
-    closed_prev = count_dashboard_status(prev_df, "Fechado")
+    actions = get_all_lead_actions(DEFAULT_TENANT_ID) or {}
+
+    def _is_empresa_row(row) -> bool:
+        sheet_row = int(row.get("_sheet_row", 0) or 0)
+        stored = None
+        if sheet_row:
+            stored = actions.get(str(sheet_row)) or actions.get(sheet_row)
+        tipo = ""
+        if isinstance(stored, dict):
+            tipo = normalize_text(stored.get("cadastro_tipo")).lower()
+        return tipo == "empresa"
+
+    empresas_df = current_df[current_df.apply(_is_empresa_row, axis=1)].copy() if not current_df.empty else current_df
+    empresas_prev_df = prev_df[prev_df.apply(_is_empresa_row, axis=1)].copy() if not prev_df.empty else prev_df
+
+    empresas_all = df[df.apply(_is_empresa_row, axis=1)].copy() if df is not None and not df.empty else current_df
+
+    closed_now = count_dashboard_status(empresas_df, "Fechado")
+    closed_prev = count_dashboard_status(empresas_prev_df, "Fechado")
     leads_now = int(len(current_df))
     leads_prev = int(len(prev_df))
 
     state_counts: dict[str, int] = {}
-    if not current_df.empty and "_estado" in current_df.columns:
-        for value in current_df["_estado"].fillna("Não identificado"):
+    if not empresas_all.empty and "_estado" in empresas_all.columns:
+        for value in empresas_all["_estado"].fillna("Não identificado"):
             label = normalize_text(value) or "Não identificado"
             state_counts[label] = state_counts.get(label, 0) + 1
     state_rows = [
@@ -962,7 +978,24 @@ def build_overview_analytics(df: pd.DataFrame, columns: dict, filters: Dashboard
     forecast = build_internal_forecast(start, end, company_names=names)
     prev_forecast = build_internal_forecast(prev_start, prev_end, company_names=names)
     plans = plan_breakdown(forecast["lines"])
-    value_groups = group_value_bands(forecast["lines"])
+
+    asaas_groups: list[dict] = []
+    try:
+        from app.services.asaas_client import peek_cached_payload
+        from app.services.financeiro import group_asaas_payments_by_value
+
+        cached = peek_cached_payload() or {}
+        payments = cached.get("payments")
+        if not payments:
+            from app.services.asaas_client import fetch_dashboard_payload, is_configured
+
+            if is_configured():
+                cached = fetch_dashboard_payload(force=False) or {}
+                payments = cached.get("payments")
+        asaas_groups = group_asaas_payments_by_value(payments, start, end)
+    except Exception:
+        asaas_groups = []
+    value_groups = asaas_groups
 
     kpi_cards = [
         {

@@ -88,7 +88,11 @@ def test_connection() -> dict[str, Any]:
         return {"ok": False, "message": str(exc)}
 
 
-def fetch_dashboard_payload(*, force: bool = False) -> dict[str, Any]:
+def peek_cached_payload() -> dict[str, Any] | None:
+    """Devolve o cache local do Asaas sem fazer nova requisição HTTP."""
+    with _CACHE_LOCK:
+        payload = _CACHE.get("payload")
+        return payload if isinstance(payload, dict) else None
     """Pagamentos + assinaturas + clientes (cache curto para não travar o worker)."""
     now = time.monotonic()
     with _CACHE_LOCK:

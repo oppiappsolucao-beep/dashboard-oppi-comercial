@@ -1,8 +1,14 @@
 .metric-grid-fin {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 12px;
   margin-bottom: 16px;
+}
+
+@media (max-width: 1200px) {
+  .metric-grid-fin {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 .fin-flash {
