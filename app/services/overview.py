@@ -929,8 +929,22 @@ def _grouped_finance_chart_json(rows: list[dict]) -> str:
 
 
 def _empresas_cadastradas_por_estado() -> list[dict]:
-    """Somente cadastros com tag Empresa (não leads)."""
+    """Somente cadastros com tag Empresa (não leads), agrupados pela UF real."""
+    from app.services.legacy_core import infer_state_from_address
+
     counts: dict[str, int] = {}
+
+    def _add(label: str) -> None:
+        uf = normalize_text(label).upper()
+        if uf in {"NÃO IDENTIFICADO", "NAO IDENTIFICADO", ""}:
+            return
+        if len(uf) != 2:
+            inferred = infer_state_from_address(label)
+            if inferred in {"Não identificado", ""}:
+                return
+            uf = inferred
+        counts[uf] = counts.get(uf, 0) + 1
+
     try:
         from app.services.crm_registrations_storage import is_crm_postgres_ready
         from database.connection import SessionLocal
@@ -940,15 +954,24 @@ def _empresas_cadastradas_por_estado() -> list[dict]:
             db = SessionLocal()
             try:
                 rows = (
-                    db.query(CrmRegistration.uf, CrmRegistration.municipio)
+                    db.query(
+                        CrmRegistration.uf,
+                        CrmRegistration.endereco,
+                        CrmRegistration.municipio,
+                    )
                     .filter(CrmRegistration.cadastro_tipo == "empresa")
                     .all()
                 )
             finally:
                 db.close()
-            for uf, municipio in rows:
-                label = normalize_text(uf) or normalize_text(municipio) or "Não identificado"
-                counts[label] = counts.get(label, 0) + 1
+            for uf, endereco, municipio in rows:
+                label = normalize_text(uf)
+                if len(label) != 2:
+                    blob = " ".join(part for part in (endereco, municipio, uf) if part)
+                    inferred = infer_state_from_address(blob)
+                    label = "" if inferred == "Não identificado" else inferred
+                if label:
+                    _add(label)
             return [
                 {"name": name, "count": count}
                 for name, count in sorted(counts.items(), key=lambda item: (-item[1], item[0]))
@@ -1005,8 +1028,10 @@ def build_overview_analytics(df: pd.DataFrame, columns: dict, filters: Dashboard
         empresas_all = df[df.apply(_is_empresa_row, axis=1)].copy() if df is not None and not df.empty else df
         counts: dict[str, int] = {}
         if empresas_all is not None and not empresas_all.empty and "_estado" in empresas_all.columns:
-            for value in empresas_all["_estado"].fillna("Não identificado"):
-                label = normalize_text(value) or "Não identificado"
+            for value in empresas_all["_estado"].fillna(""):
+                label = normalize_text(value).upper()
+                if not label or label in {"NÃO IDENTIFICADO", "NAO IDENTIFICADO"}:
+                    continue
                 counts[label] = counts.get(label, 0) + 1
         state_rows = [
             {"name": name, "count": count}
