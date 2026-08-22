@@ -928,6 +928,36 @@ def _grouped_finance_chart_json(rows: list[dict]) -> str:
     return figure.to_json()
 
 
+def _empresas_cadastradas_por_estado() -> list[dict]:
+    """Somente cadastros com tag Empresa (não leads)."""
+    counts: dict[str, int] = {}
+    try:
+        from app.services.crm_registrations_storage import is_crm_postgres_ready
+        from database.connection import SessionLocal
+        from database.models import CrmRegistration
+
+        if is_crm_postgres_ready():
+            db = SessionLocal()
+            try:
+                rows = (
+                    db.query(CrmRegistration.uf, CrmRegistration.municipio)
+                    .filter(CrmRegistration.cadastro_tipo == "empresa")
+                    .all()
+                )
+            finally:
+                db.close()
+            for uf, municipio in rows:
+                label = normalize_text(uf) or normalize_text(municipio) or "Não identificado"
+                counts[label] = counts.get(label, 0) + 1
+            return [
+                {"name": name, "count": count}
+                for name, count in sorted(counts.items(), key=lambda item: (-item[1], item[0]))
+            ]
+    except Exception:
+        pass
+    return []
+
+
 def build_overview_analytics(df: pd.DataFrame, columns: dict, filters: DashboardFilters) -> dict:
     today = date.today()
     start, end = resolve_period(
@@ -937,42 +967,51 @@ def build_overview_analytics(df: pd.DataFrame, columns: dict, filters: Dashboard
     )
     prev_start, prev_end = previous_calendar_month(start, end)
     current_filters = replace(filters, period_start=start, period_end=end)
-    prev_filters = replace(filters, period_start=prev_start, period_end=prev_end)
 
     current_df = apply_dashboard_filters(df, columns, current_filters)
+    prev_filters = replace(filters, period_start=prev_start, period_end=prev_end)
     prev_df = apply_dashboard_filters(df, columns, prev_filters)
 
-    actions = get_all_lead_actions(DEFAULT_TENANT_ID) or {}
-
-    def _is_empresa_row(row) -> bool:
-        sheet_row = int(row.get("_sheet_row", 0) or 0)
-        stored = None
-        if sheet_row:
-            stored = actions.get(str(sheet_row)) or actions.get(sheet_row)
-        tipo = ""
-        if isinstance(stored, dict):
-            tipo = normalize_text(stored.get("cadastro_tipo")).lower()
-        return tipo == "empresa"
-
-    empresas_df = current_df[current_df.apply(_is_empresa_row, axis=1)].copy() if not current_df.empty else current_df
-    empresas_prev_df = prev_df[prev_df.apply(_is_empresa_row, axis=1)].copy() if not prev_df.empty else prev_df
-
-    empresas_all = df[df.apply(_is_empresa_row, axis=1)].copy() if df is not None and not df.empty else current_df
-
-    closed_now = count_dashboard_status(empresas_df, "Fechado")
-    closed_prev = count_dashboard_status(empresas_prev_df, "Fechado")
-    leads_now = int(len(current_df))
-    leads_prev = int(len(prev_df))
-
-    state_counts: dict[str, int] = {}
-    if not empresas_all.empty and "_estado" in empresas_all.columns:
-        for value in empresas_all["_estado"].fillna("Não identificado"):
-            label = normalize_text(value) or "Não identificado"
-            state_counts[label] = state_counts.get(label, 0) + 1
-    state_rows = [
-        {"name": name, "count": count}
-        for name, count in sorted(state_counts.items(), key=lambda item: (-item[1], item[0]))
+    kpi_cards = [
+        {
+            "label": "Empresas fechadas",
+            "value": count_dashboard_status(current_df, "Fechado"),
+            "icon": "✓",
+            "tone": "green",
+            **_delta_note(
+                count_dashboard_status(current_df, "Fechado"),
+                count_dashboard_status(prev_df, "Fechado"),
+            ),
+        },
+        {
+            "label": "Leads chamados",
+            "value": int(len(current_df)),
+            "icon": "☎",
+            "tone": "purple",
+            **_delta_note(int(len(current_df)), int(len(prev_df))),
+        },
     ]
+
+    state_rows = _empresas_cadastradas_por_estado()
+    if not state_rows:
+        actions = get_all_lead_actions(DEFAULT_TENANT_ID) or {}
+
+        def _is_empresa_row(row) -> bool:
+            sheet_row = int(row.get("_sheet_row", 0) or 0)
+            stored = actions.get(str(sheet_row)) or actions.get(sheet_row) if sheet_row else None
+            tipo = normalize_text((stored or {}).get("cadastro_tipo")).lower() if isinstance(stored, dict) else ""
+            return tipo == "empresa"
+
+        empresas_all = df[df.apply(_is_empresa_row, axis=1)].copy() if df is not None and not df.empty else df
+        counts: dict[str, int] = {}
+        if empresas_all is not None and not empresas_all.empty and "_estado" in empresas_all.columns:
+            for value in empresas_all["_estado"].fillna("Não identificado"):
+                label = normalize_text(value) or "Não identificado"
+                counts[label] = counts.get(label, 0) + 1
+        state_rows = [
+            {"name": name, "count": count}
+            for name, count in sorted(counts.items(), key=lambda item: (-item[1], item[0]))
+        ]
 
     names = _company_names_from_df(df)
     forecast = build_internal_forecast(start, end, company_names=names)
@@ -997,43 +1036,31 @@ def build_overview_analytics(df: pd.DataFrame, columns: dict, filters: Dashboard
         asaas_groups = []
     value_groups = asaas_groups
 
-    kpi_cards = [
-        {
-            "label": "Empresas fechadas",
-            "value": closed_now,
-            "icon": "✓",
-            "tone": "green",
-            **_delta_note(closed_now, closed_prev),
-        },
-        {
-            "label": "Leads chamados",
-            "value": leads_now,
-            "icon": "☎",
-            "tone": "purple",
-            **_delta_note(leads_now, leads_prev),
-        },
-        {
-            "label": "Previsão de faturamento",
-            "value": forecast["faturamento_label"],
-            "icon": "📈",
-            "tone": "blue",
-            **_delta_note(forecast["faturamento"], prev_forecast["faturamento"], money=True),
-        },
-        {
-            "label": "Recebidos",
-            "value": forecast["recebido_label"],
-            "icon": "💰",
-            "tone": "green",
-            **_delta_note(forecast["recebido"], prev_forecast["recebido"], money=True),
-        },
-        {
-            "label": "A receber",
-            "value": forecast["a_receber_label"],
-            "icon": "👛",
-            "tone": "orange",
-            **_delta_note(forecast["a_receber"], prev_forecast["a_receber"], money=True),
-        },
-    ]
+    kpi_cards.extend(
+        [
+            {
+                "label": "Previsão de faturamento",
+                "value": forecast["faturamento_label"],
+                "icon": "📈",
+                "tone": "blue",
+                **_delta_note(forecast["faturamento"], prev_forecast["faturamento"], money=True),
+            },
+            {
+                "label": "Recebidos",
+                "value": forecast["recebido_label"],
+                "icon": "💰",
+                "tone": "green",
+                **_delta_note(forecast["recebido"], prev_forecast["recebido"], money=True),
+            },
+            {
+                "label": "A receber",
+                "value": forecast["a_receber_label"],
+                "icon": "👛",
+                "tone": "orange",
+                **_delta_note(forecast["a_receber"], prev_forecast["a_receber"], money=True),
+            },
+        ]
+    )
 
     return {
         "filters": replace(filters, period_start=start, period_end=end),
@@ -1053,4 +1080,3 @@ def build_overview_analytics(df: pd.DataFrame, columns: dict, filters: Dashboard
         "finance_chart_json": _grouped_finance_chart_json(value_groups),
         "forecast": forecast,
     }
-

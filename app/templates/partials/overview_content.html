@@ -3,6 +3,19 @@
   hx-target="#overview-root"
   hx-swap="innerHTML"
 >
+  <div class="funnel-kpi-grid overview-kpi-grid operational-kpi-grid">
+    {% for card in kpi_cards %}
+    <div class="funnel-kpi-card panel operational-kpi-card">
+      <div class="funnel-kpi-icon tone-{{ card.tone }}">{{ card.icon }}</div>
+      <div class="funnel-kpi-body">
+        <div class="funnel-kpi-label">{{ card.label }}</div>
+        <div class="funnel-kpi-value">{{ card.value }}</div>
+        <div class="operational-kpi-note">{{ card.note }}</div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
   <div class="overview-toolbar panel">
     <div class="overview-toolbar-row">
       <div class="filter-field filter-field-sm">
@@ -20,35 +33,7 @@
     <div class="section-subtitle">Comparação automática com {{ prev_period_label }}.</div>
   </div>
 
-  <div class="funnel-kpi-grid overview-kpi-grid operational-kpi-grid">
-    {% for card in kpi_cards %}
-    <div class="funnel-kpi-card panel operational-kpi-card">
-      <div class="funnel-kpi-icon tone-{{ card.tone }}">{{ card.icon }}</div>
-      <div class="funnel-kpi-body">
-        <div class="funnel-kpi-label">{{ card.label }}</div>
-        <div class="funnel-kpi-value">{{ card.value }}</div>
-        <div class="operational-kpi-note">{{ card.note }}</div>
-      </div>
-    </div>
-    {% endfor %}
-  </div>
-
   <div class="overview-analytics-grid">
-    <div class="panel">
-      <div class="section-heading">Empresas por estado</div>
-      <div class="section-subtitle">Onde estamos vendendo mais — somente cadastros com a tag Empresa.</div>
-      <div id="overview-state-chart" class="overview-chart" data-chart='{{ state_chart_json | safe }}'></div>
-      {% if state_rows %}
-      <ul class="overview-stat-list">
-        {% for row in state_rows[:10] %}
-        <li><span>{{ row.name }}</span><strong>{{ row.count }}</strong></li>
-        {% endfor %}
-      </ul>
-      {% else %}
-      <p class="overview-empty-note">Nenhuma empresa no período.</p>
-      {% endif %}
-    </div>
-
     <div class="panel">
       <div class="section-heading">Planos contratados</div>
       <div class="section-subtitle">Quantidade de planos por valor e forma de pagamento.</div>
@@ -63,11 +48,26 @@
       <p class="overview-empty-note">Nenhum plano interno no período.</p>
       {% endif %}
     </div>
+
+    <div class="panel">
+      <div class="section-heading">Empresas por estado</div>
+      <div class="section-subtitle">Somente cadastros com a tag Empresa (não inclui leads).</div>
+      <div id="overview-state-chart" class="overview-chart" data-chart='{{ state_chart_json | safe }}'></div>
+      {% if state_rows %}
+      <ul class="overview-stat-list">
+        {% for row in state_rows[:10] %}
+        <li><span>{{ row.name }}</span><strong>{{ row.count }}</strong></li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="overview-empty-note">Nenhuma empresa cadastrada com a tag Empresa.</p>
+      {% endif %}
+    </div>
   </div>
 
   <div class="panel">
     <div class="section-heading">Resumo financeiro</div>
-    <div class="section-subtitle">Valores agrupados por grupo de valor — recebidos e a receber (Asaas, no período filtrado).</div>
+    <div class="section-subtitle">Valores agrupados por grupo de valor — recebidos e a receber.</div>
     <div id="overview-finance-chart" class="overview-chart overview-chart-wide" data-chart='{{ finance_chart_json | safe }}'></div>
     {% if value_groups %}
     <div class="table-wrap">
@@ -91,7 +91,7 @@
       </table>
     </div>
     {% else %}
-    <p class="overview-empty-note">Sem cobranças Asaas neste período. Abra o Financeiro para carregar os dados em cache.</p>
+    <p class="overview-empty-note">Sem cobranças Asaas neste período.</p>
     {% endif %}
   </div>
 </form>

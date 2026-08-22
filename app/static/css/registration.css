@@ -1476,13 +1476,9 @@
   padding: 18px;
 }
 
-.client-edit-section-head,
-.registration-activities-head,
-.client-edit-proposal-panel .client-edit-section-head {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  margin-bottom: 16px;
+.client-edit-section-head .btn {
+  margin-left: auto;
+  flex-shrink: 0;
 }
 
 .client-edit-section-head h2,

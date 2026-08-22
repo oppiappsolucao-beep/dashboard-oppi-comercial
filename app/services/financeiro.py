@@ -462,8 +462,7 @@ def build_financeiro_context(params: dict | None = None, *, force_sync: bool = F
     overdue_clients.sort(key=lambda row: row.get("days") or 0, reverse=True)
 
     filtered = _filter_invoices(invoices, params)
-    empty.update({
-        "kpi_cards": _kpi_cards(
+    asaas_cards = _kpi_cards(
             sum(row["valor"] for row in receber_mes),
             len(receber_mes),
             recebido_valor,
@@ -473,7 +472,9 @@ def build_financeiro_context(params: dict | None = None, *, force_sync: bool = F
             len(ativas),
             len(proximos),
             inadimplencia,
-        ),
+        )
+    empty.update({
+        "kpi_cards": asaas_cards,
         "invoices": filtered,
         "subscriptions": subscriptions,
         "overdue_clients": overdue_clients,
