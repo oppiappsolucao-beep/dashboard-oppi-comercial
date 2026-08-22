@@ -24,6 +24,48 @@
     {% endfor %}
   </div>
 
+  {% if tab == 'visao' %}
+  <div class="panel fin-table-card" style="margin-bottom: 14px;">
+    <div class="section-heading">Previsão de faturamento</div>
+    <div class="section-subtitle">Soma dos serviços de cada empresa no período selecionado (controle interno).</div>
+    <div class="table-wrap">
+      <table class="data-table fin-table">
+        <thead>
+          <tr>
+            <th>Empresa</th>
+            <th>Serviço</th>
+            <th>Qtd</th>
+            <th>Valor</th>
+            <th>Forma</th>
+            <th>Vencimento</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in forecast.lines %}
+          <tr>
+            <td>
+              {% if row.cliente_href %}
+              <a href="{{ row.cliente_href }}">{{ row.empresa }}</a>
+              {% else %}
+              {{ row.empresa }}
+              {% endif %}
+            </td>
+            <td>{{ row.servico }}</td>
+            <td>{{ row.quantidade }}</td>
+            <td>{{ row.valor_label }}</td>
+            <td>{{ row.forma }}</td>
+            <td>{{ row.vencimento_label }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="6" class="fin-empty">Nenhum serviço interno neste período.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p class="billing-plan-hint" style="margin: 12px 14px 14px;">Total previsto: <strong>{{ forecast.faturamento_label }}</strong></p>
+  </div>
+  {% endif %}
+
   <div class="fin-tabs" role="tablist">
     <button type="button" class="fin-tab {% if tab == 'visao' %}active{% endif %}" data-fin-tab="visao">Visão Geral</button>
     <button type="button" class="fin-tab {% if tab == 'faturas' %}active{% endif %}" data-fin-tab="faturas">Faturas</button>
@@ -51,13 +93,15 @@
       </div>
       <div class="filter-field filter-field-sm">
         <label>Período início</label>
-        <input type="date" name="period_start" value="{{ filters.period_start }}"
-          onchange="document.getElementById('financeiro-filters').requestSubmit()">
+        <input type="date" name="period_start" value="{{ filters.period_start }}">
       </div>
       <div class="filter-field filter-field-sm">
         <label>Período fim</label>
-        <input type="date" name="period_end" value="{{ filters.period_end }}"
-          onchange="document.getElementById('financeiro-filters').requestSubmit()">
+        <input type="date" name="period_end" value="{{ filters.period_end }}">
+      </div>
+      <div class="filter-field filter-field-sm">
+        <label>&nbsp;</label>
+        <button type="submit" class="btn">Filtrar</button>
       </div>
       <div class="filter-field fin-search">
         <label>Buscar</label>

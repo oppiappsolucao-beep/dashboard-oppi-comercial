@@ -8,6 +8,7 @@ from urllib.parse import quote
 from zoneinfo import ZoneInfo
 
 from app.services.asaas_client import AsaasError, fetch_dashboard_payload, is_configured
+from app.services.internal_finance import build_internal_forecast, internal_kpi_cards, resolve_period
 from app.services.legacy_core import (
     normalize_cnpj_for_duplicate,
     normalize_phone_for_duplicate,
@@ -287,10 +288,13 @@ def _filter_invoices(rows: list[dict], params: dict) -> list[dict]:
         if forma in {"cartao", "cartão", "cartao_recorrente"} and billing not in {"CREDIT_CARD", "DEBIT_CARD"}:
             continue
         due = row.get("vencimento")
-        if start and due and due < start:
-            continue
-        if end and due and due > end:
-            continue
+        if start or end:
+            if not due:
+                continue
+            if start and due < start:
+                continue
+            if end and due > end:
+                continue
         if search:
             blob = f"{row['cliente']} {row['servico']} {row['id']}".lower()
             if search not in blob:
@@ -302,21 +306,23 @@ def _filter_invoices(rows: list[dict], params: dict) -> list[dict]:
 def build_financeiro_context(params: dict | None = None, *, force_sync: bool = False) -> dict[str, Any]:
     params = params or {}
     today = _today()
-    month_start = today.replace(day=1)
-    if month_start.month == 12:
-        month_end = date(month_start.year + 1, 1, 1) - timedelta(days=1)
-    else:
-        month_end = date(month_start.year, month_start.month + 1, 1) - timedelta(days=1)
-    next_week = today + timedelta(days=7)
+    period_start, period_end = resolve_period(params.get("period_start"), params.get("period_end"), today=today)
+    params = {
+        **params,
+        "period_start": period_start.isoformat(),
+        "period_end": period_end.isoformat(),
+    }
     tab = normalize_text(params.get("tab")).lower() or TAB_VISAO
     if tab not in {TAB_VISAO, TAB_FATURAS, TAB_RECORRENCIAS, TAB_ATRASO}:
         tab = TAB_VISAO
 
+    forecast = build_internal_forecast(period_start, period_end)
     empty = {
         "active_page": "financeiro",
         "asaas_configured": is_configured(),
         "asaas_error": "",
-        "kpi_cards": [],
+        "kpi_cards": internal_kpi_cards(forecast),
+        "forecast": forecast,
         "invoices": [],
         "subscriptions": [],
         "overdue_clients": [],
@@ -341,19 +347,16 @@ def build_financeiro_context(params: dict | None = None, *, force_sync: bool = F
     }
 
     if not is_configured():
-        empty["kpi_cards"] = _kpi_cards(0, 0, 0, 0, 0, 0, 0, 0)
-        empty["asaas_error"] = "Configure ASAAS_API_KEY no Easypanel para puxar as cobranças."
+        empty["asaas_error"] = ""
         return empty
 
     try:
         payload = fetch_dashboard_payload(force=force_sync)
     except AsaasError as exc:
-        empty["kpi_cards"] = _kpi_cards(0, 0, 0, 0, 0, 0, 0, 0)
         empty["asaas_error"] = str(exc)
         return empty
     except Exception:
         logger.exception("Falha inesperada no Asaas")
-        empty["kpi_cards"] = _kpi_cards(0, 0, 0, 0, 0, 0, 0, 0)
         empty["asaas_error"] = "Não foi possível sincronizar o Asaas agora."
         return empty
 
@@ -363,6 +366,16 @@ def build_financeiro_context(params: dict | None = None, *, force_sync: bool = F
         if normalize_text(row.get("id"))
     }
     crm_rows = _load_crm_rows()
+    company_names: dict[int, str] = {}
+    for row in crm_rows:
+        sheet_row = row.get("sheet_row")
+        empresa = normalize_text(row.get("empresa"))
+        if sheet_row and empresa:
+            company_names[int(sheet_row)] = empresa
+    forecast = build_internal_forecast(period_start, period_end, company_names=company_names)
+    empty["forecast"] = forecast
+    empty["kpi_cards"] = internal_kpi_cards(forecast)
+
     invoices = [
         _map_invoice(row, customers, crm_rows, today)
         for row in (payload.get("payments") or [])
@@ -378,27 +391,27 @@ def build_financeiro_context(params: dict | None = None, *, force_sync: bool = F
         row for row in invoices
         if row["status_key"] in {"receber", "vence_hoje", "recorrente"}
         and row.get("vencimento")
-        and month_start <= row["vencimento"] <= month_end
+        and period_start <= row["vencimento"] <= period_end
     ]
     recebido_mes = [
         row for row in invoices
         if row["status_key"] == "pago"
         and row.get("payment_date")
-        and month_start <= row["payment_date"] <= month_end
+        and period_start <= row["payment_date"] <= period_end
     ]
     if not recebido_mes:
         recebido_mes = [
             row for row in invoices
             if row["status_key"] == "pago"
             and row.get("vencimento")
-            and month_start <= row["vencimento"] <= month_end
+            and period_start <= row["vencimento"] <= period_end
         ]
     atrasados = [row for row in invoices if row["status_key"] == "atrasado"]
     proximos = [
         row for row in invoices
         if row["status_key"] in {"receber", "vence_hoje", "recorrente"}
         and row.get("vencimento")
-        and today <= row["vencimento"] <= next_week
+        and today <= row["vencimento"] <= today + timedelta(days=7)
     ]
     ativas = [row for row in subscriptions if row.get("ativa")]
     recebido_valor = sum(row["valor"] for row in recebido_mes)
@@ -443,17 +456,6 @@ def build_financeiro_context(params: dict | None = None, *, force_sync: bool = F
 
     filtered = _filter_invoices(invoices, params)
     empty.update({
-        "kpi_cards": _kpi_cards(
-            sum(row["valor"] for row in receber_mes),
-            len(receber_mes),
-            recebido_valor,
-            len(recebido_mes),
-            atrasado_valor,
-            len({row["cliente"] for row in atrasados}),
-            len(ativas),
-            len(proximos),
-            inadimplencia,
-        ),
         "invoices": filtered,
         "subscriptions": subscriptions,
         "overdue_clients": overdue_clients,

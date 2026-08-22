@@ -24,6 +24,9 @@ function copyPhone(button, phone) {
 
 function renderOverviewCharts() {
   renderPlotlyChart("overview-conversion-donut");
+  renderPlotlyChart("overview-state-chart");
+  renderPlotlyChart("overview-plan-chart");
+  renderPlotlyChart("overview-finance-chart");
 }
 
 function renderFunnelCharts() {

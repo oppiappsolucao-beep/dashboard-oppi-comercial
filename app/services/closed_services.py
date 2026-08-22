@@ -19,6 +19,7 @@ PAYMENT_METHOD_OPTIONS = [
 _EMPTY_ITEM = {
     "servico": "",
     "valor": "",
+    "quantidade": "1",
     "forma_pagamento": "Mensal",
     "vencimento": "",
 }
@@ -38,9 +39,11 @@ def _normalize_item(raw: dict | None) -> dict:
     forma = normalize_text(data.get("forma_pagamento")) or "Mensal"
     if forma not in PAYMENT_METHOD_OPTIONS:
         forma = "Mensal"
+    qty_raw = normalize_text(data.get("quantidade")) or "1"
     return {
         "servico": normalize_text(data.get("servico")),
         "valor": normalize_text(data.get("valor")),
+        "quantidade": qty_raw,
         "forma_pagamento": forma,
         "vencimento": _format_date_input(normalize_text(data.get("vencimento"))),
     }
@@ -65,6 +68,7 @@ def _items_from_sheet_mirror(servico: str, valor_proposta: str, lead_action: dic
                 {
                     "servico": servicos[index] if index < len(servicos) else "",
                     "valor": valores[index] if index < len(valores) else "",
+                    "quantidade": "1",
                     "forma_pagamento": lead_action.get("forma_pagamento", "Mensal"),
                     "vencimento": lead_action.get("vencimento", ""),
                 }
@@ -95,9 +99,10 @@ def load_closed_services(
 def parse_closed_services_from_form(form: Any) -> list[dict]:
     servicos = form.getlist("closed_servico")
     valores = form.getlist("closed_valor")
+    quantidades = form.getlist("closed_quantidade")
     pagamentos = form.getlist("closed_forma_pagamento")
     vencimentos = form.getlist("closed_vencimento")
-    total = max(len(servicos), len(valores), len(pagamentos), len(vencimentos), 1)
+    total = max(len(servicos), len(valores), len(quantidades), len(pagamentos), len(vencimentos), 1)
 
     items: list[dict] = []
     for index in range(total):
@@ -106,6 +111,7 @@ def parse_closed_services_from_form(form: Any) -> list[dict]:
                 {
                     "servico": servicos[index] if index < len(servicos) else "",
                     "valor": valores[index] if index < len(valores) else "",
+                    "quantidade": quantidades[index] if index < len(quantidades) else "1",
                     "forma_pagamento": pagamentos[index] if index < len(pagamentos) else "Mensal",
                     "vencimento": vencimentos[index] if index < len(vencimentos) else "",
                 }
@@ -218,6 +224,8 @@ def summarize_closed_services_for_display(
     first = active_items[0]
     title = normalize_text(first.get("servico")) or "Proposta comercial"
     meta_parts: list[str] = []
+    if normalize_text(first.get("quantidade")):
+        meta_parts.append(f"Qtd {normalize_text(first['quantidade'])}")
     if normalize_text(first.get("valor")):
         meta_parts.append(normalize_text(first["valor"]))
     if normalize_text(first.get("forma_pagamento")):

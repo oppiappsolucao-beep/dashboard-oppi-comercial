@@ -327,6 +327,8 @@ async def settings_remove_goal(
 async def settings_add_service(
     request: Request,
     service_name: str = Form(...),
+    service_valor: str = Form(""),
+    service_quantidade: str = Form("1"),
     tab: str = Form("servicos"),
 ):
     redirect = require_auth(request)
@@ -340,7 +342,7 @@ async def settings_add_service(
     from app.services.commercial_services import add_commercial_service
 
     try:
-        add_commercial_service(service_name)
+        add_commercial_service(service_name, valor=service_valor, quantidade=service_quantidade)
         request.session["settings_service_success"] = "Serviço cadastrado com sucesso."
     except ValueError as error:
         request.session["settings_service_error"] = str(error)

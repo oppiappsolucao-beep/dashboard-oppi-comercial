@@ -28,6 +28,26 @@
     });
   }
 
+  function bindServiceSelects(root) {
+    if (!root) return;
+    root.querySelectorAll("[data-service-select]").forEach(function (select) {
+      if (select.dataset.bound === "1") return;
+      select.dataset.bound = "1";
+      select.addEventListener("change", function () {
+        var option = select.options[select.selectedIndex];
+        if (!option) return;
+        var row = select.closest(".contracted-service-row, .client-closed-services-slide");
+        if (!row) return;
+        var valor = option.getAttribute("data-valor") || "";
+        var quantidade = option.getAttribute("data-quantidade") || "";
+        var valorInput = row.querySelector('input[name="closed_valor"]');
+        var qtyInput = row.querySelector('input[name="closed_quantidade"]');
+        if (valorInput && valor) valorInput.value = valor;
+        if (qtyInput && quantidade) qtyInput.value = quantidade;
+      });
+    });
+  }
+
   function initClosedServices() {
     var root = document.getElementById("client-closed-services");
     if (!root) return;
@@ -39,9 +59,11 @@
     var prevButton = root.querySelector(".client-closed-services-nav.prev");
     var nextButton = root.querySelector(".client-closed-services-nav.next");
     var index = 0;
+    var isCarousel = Boolean(root.querySelector(".client-closed-services-viewport"));
 
     function slides() {
-      return track ? Array.prototype.slice.call(track.querySelectorAll(".client-closed-services-slide")) : [];
+      if (!track) return [];
+      return Array.prototype.slice.call(track.querySelectorAll(".client-closed-services-slide, .contracted-service-row"));
     }
 
     function total() {
@@ -50,13 +72,17 @@
 
     function updateView() {
       var count = total();
-      if (!count) return;
+      if (!count || !isCarousel) {
+        bindServiceSelects(root);
+        return;
+      }
       if (index >= count) index = count - 1;
       if (index < 0) index = 0;
       track.style.transform = "translateX(-" + (index * 100) + "%)";
       if (counter) counter.textContent = (index + 1) + " / " + count;
       if (prevButton) prevButton.disabled = index <= 0;
       if (nextButton) nextButton.disabled = index >= count - 1;
+      bindServiceSelects(root);
     }
 
     if (prevButton) {

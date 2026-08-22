@@ -7,7 +7,7 @@ from app.dependencies import get_prepared_data, is_admin, require_auth
 from app.services.activities_storage import DEFAULT_TENANT_ID
 from app.services.activity_service import criar_atividade
 from app.services.closed_services import PAYMENT_METHOD_OPTIONS, closed_services_has_data, closed_services_sheet_values, load_closed_services, parse_closed_services_from_form, save_closed_services
-from app.services.commercial_services import get_commercial_service_options
+from app.services.commercial_services import get_commercial_service_catalog, get_commercial_service_options
 from app.services.crm_validation_service import get_actions_for_stage, normalize_legacy_stage
 from app.services.legacy_core import DuplicateRegistrationError, STATUS_OPTIONS, get_colaborador_options, normalize_text
 from app.services.cadastro_billing import (
@@ -98,6 +98,7 @@ def _registration_page_context(request: Request, df, *, error: str = "", values:
         "sector_options": sector_options,
         "status_options": STATUS_OPTIONS,
         "service_options": get_commercial_service_options(),
+        "service_catalog": get_commercial_service_catalog(),
         "payment_method_options": PAYMENT_METHOD_OPTIONS,
         "colaborador_options": get_colaborador_options(),
         "pipeline_stages": PIPELINE_STAGE_OPTIONS,
@@ -209,7 +210,7 @@ async def new_registration_submit(request: Request):
                 (setor or {}).get("name", ""),
             )
         if closed_services_has_data(closed_items):
-            save_closed_services(DEFAULT_TENANT_ID, sheet_row, closed_items)
+            save_closed_services(DEFAULT_TENANT_ID, sheet_row, closed_items, sync_sheet=False)
         if int(sheet_row or 0) != 0 and (
             normalize_text(form.get("billing_forma"))
             or normalize_text(form.get("billing_valor"))

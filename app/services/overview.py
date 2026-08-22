@@ -14,6 +14,13 @@ from config.crm_options import (
     PIPELINE_STAGE_OPTIONS,
     PIPELINE_STAGE_SHEET_STATUSES,
 )
+from app.services.internal_finance import (
+    build_internal_forecast,
+    group_value_bands,
+    plan_breakdown,
+    previous_calendar_month,
+    resolve_period,
+)
 from app.services.filters import DashboardFilters, apply_dashboard_filters
 from app.services.lead_actions_storage import DEFAULT_TENANT_ID, get_lead_action
 from app.services.leads import ETAPA_BADGE, apply_leads_view, map_etapa
@@ -856,3 +863,161 @@ def build_calls_table(
             "sheet_row": int(row.get("_sheet_row", 0)),
         })
     return rows
+
+
+def _delta_note(current: float | int, previous: float | int, *, money: bool = False) -> dict:
+    trend = _period_trend(float(current), float(previous), is_points=False)
+    return {
+        "note": trend["trend_label"].replace("vs período anterior", "vs mês anterior"),
+        "note_class": "up" if trend["trend_up"] else "down",
+        "trend_up": trend["trend_up"],
+    }
+
+
+def _company_names_from_df(df: pd.DataFrame) -> dict[int, str]:
+    names: dict[int, str] = {}
+    if df is None or df.empty:
+        return names
+    for _, row in df.iterrows():
+        sheet_row = int(row.get("_sheet_row", 0) or 0)
+        empresa = normalize_text(row.get("_empresa", ""))
+        if sheet_row and empresa:
+            names[sheet_row] = empresa
+    return names
+
+
+def _bar_chart_json(labels: list[str], values: list[float], *, money: bool = False) -> str:
+    figure = go.Figure(
+        go.Bar(
+            x=labels,
+            y=values,
+            marker={"color": "#7C3AED"},
+            hovertemplate=("%{x}<br>R$ %{y:,.2f}<extra></extra>" if money else "%{x}<br>Quantidade: %{y}<extra></extra>"),
+        )
+    )
+    figure.update_layout(
+        height=320,
+        margin=dict(l=12, r=12, t=12, b=48),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#475569", size=12),
+        xaxis=dict(title="", tickangle=-20, showgrid=False),
+        yaxis=dict(title="", gridcolor="rgba(148,163,184,0.18)", tickprefix="R$ " if money else ""),
+        showlegend=False,
+    )
+    return figure.to_json()
+
+
+def _grouped_finance_chart_json(rows: list[dict]) -> str:
+    labels = [row["label"] for row in rows]
+    recebido = [row["recebido"] for row in rows]
+    a_receber = [row["a_receber"] for row in rows]
+    figure = go.Figure()
+    figure.add_trace(go.Bar(name="Recebidos", x=labels, y=recebido, marker_color="#16A34A"))
+    figure.add_trace(go.Bar(name="A receber", x=labels, y=a_receber, marker_color="#7C3AED"))
+    figure.update_layout(
+        barmode="group",
+        height=340,
+        margin=dict(l=12, r=12, t=12, b=48),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#475569", size=12),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
+        xaxis=dict(title="", tickangle=-15, showgrid=False),
+        yaxis=dict(title="", gridcolor="rgba(148,163,184,0.18)", tickprefix="R$ "),
+    )
+    return figure.to_json()
+
+
+def build_overview_analytics(df: pd.DataFrame, columns: dict, filters: DashboardFilters) -> dict:
+    today = date.today()
+    start, end = resolve_period(
+        filters.period_start.isoformat() if filters.period_start else "",
+        filters.period_end.isoformat() if filters.period_end else "",
+        today=today,
+    )
+    prev_start, prev_end = previous_calendar_month(start, end)
+    current_filters = replace(filters, period_start=start, period_end=end)
+    prev_filters = replace(filters, period_start=prev_start, period_end=prev_end)
+
+    current_df = apply_dashboard_filters(df, columns, current_filters)
+    prev_df = apply_dashboard_filters(df, columns, prev_filters)
+
+    closed_now = count_dashboard_status(current_df, "Fechado")
+    closed_prev = count_dashboard_status(prev_df, "Fechado")
+    leads_now = int(len(current_df))
+    leads_prev = int(len(prev_df))
+
+    state_counts: dict[str, int] = {}
+    if not current_df.empty and "_estado" in current_df.columns:
+        for value in current_df["_estado"].fillna("Não identificado"):
+            label = normalize_text(value) or "Não identificado"
+            state_counts[label] = state_counts.get(label, 0) + 1
+    state_rows = [
+        {"name": name, "count": count}
+        for name, count in sorted(state_counts.items(), key=lambda item: (-item[1], item[0]))
+    ]
+
+    names = _company_names_from_df(df)
+    forecast = build_internal_forecast(start, end, company_names=names)
+    prev_forecast = build_internal_forecast(prev_start, prev_end, company_names=names)
+    plans = plan_breakdown(forecast["lines"])
+    value_groups = group_value_bands(forecast["lines"])
+
+    kpi_cards = [
+        {
+            "label": "Empresas fechadas",
+            "value": closed_now,
+            "icon": "✓",
+            "tone": "green",
+            **_delta_note(closed_now, closed_prev),
+        },
+        {
+            "label": "Leads chamados",
+            "value": leads_now,
+            "icon": "☎",
+            "tone": "purple",
+            **_delta_note(leads_now, leads_prev),
+        },
+        {
+            "label": "Previsão de faturamento",
+            "value": forecast["faturamento_label"],
+            "icon": "📈",
+            "tone": "blue",
+            **_delta_note(forecast["faturamento"], prev_forecast["faturamento"], money=True),
+        },
+        {
+            "label": "Recebidos",
+            "value": forecast["recebido_label"],
+            "icon": "💰",
+            "tone": "green",
+            **_delta_note(forecast["recebido"], prev_forecast["recebido"], money=True),
+        },
+        {
+            "label": "A receber",
+            "value": forecast["a_receber_label"],
+            "icon": "👛",
+            "tone": "orange",
+            **_delta_note(forecast["a_receber"], prev_forecast["a_receber"], money=True),
+        },
+    ]
+
+    return {
+        "filters": replace(filters, period_start=start, period_end=end),
+        "prev_period_label": f"{prev_start.strftime('%d/%m/%Y')} a {prev_end.strftime('%d/%m/%Y')}",
+        "kpi_cards": kpi_cards,
+        "state_rows": state_rows,
+        "state_chart_json": _bar_chart_json(
+            [row["name"] for row in state_rows[:12]],
+            [row["count"] for row in state_rows[:12]],
+        ),
+        "plan_rows": plans,
+        "plan_chart_json": _bar_chart_json(
+            [row["summary"][:42] for row in plans[:12]],
+            [row["count"] for row in plans[:12]],
+        ),
+        "value_groups": value_groups,
+        "finance_chart_json": _grouped_finance_chart_json(value_groups),
+        "forecast": forecast,
+    }
+

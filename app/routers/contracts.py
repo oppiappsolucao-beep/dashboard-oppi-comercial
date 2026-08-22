@@ -6,7 +6,7 @@ from app.dependencies import get_prepared_data, get_pricing_store, require_auth
 from app.templating import render
 from app.services.filters import DashboardFilters, apply_dashboard_filters, apply_default_period_filters
 from app.services.filters import get_filter_options as get_dashboard_filter_options
-from app.services.commercial_services import get_commercial_service_options
+from app.services.commercial_services import get_commercial_service_catalog, get_commercial_service_options
 from app.services.closed_services import (
     PAYMENT_METHOD_OPTIONS,
     closed_services_has_data,
@@ -344,6 +344,7 @@ async def contract_edit_page(request: Request, sheet_row: int):
             "values": values,
             "partners_count": infer_partners_count(values),
             "service_options": get_commercial_service_options(),
+            "service_catalog": get_commercial_service_catalog(),
             "payment_method_options": PAYMENT_METHOD_OPTIONS,
             "payment_status_options": PAYMENT_STATUS_OPTIONS,
             "closed_services": closed_services,
@@ -394,6 +395,8 @@ async def contract_edit_submit(request: Request, sheet_row: int):
         if action == "save_financeiro":
             payments = parse_payment_history_from_form(form)
             save_payment_history(DEFAULT_TENANT_ID, sheet_row, payments)
+            closed_items = parse_closed_services_from_form(form)
+            save_closed_services(DEFAULT_TENANT_ID, sheet_row, closed_items, sync_sheet=False)
             previous_plan = load_billing_plan(DEFAULT_TENANT_ID, sheet_row)
             save_billing_plan(
                 DEFAULT_TENANT_ID,

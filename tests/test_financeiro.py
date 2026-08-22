@@ -102,5 +102,27 @@ class CadastroBillingMappingTest(unittest.TestCase):
         self.assertEqual(plan["valor"], "R$ 59,90")
 
 
+class InternalFinanceTest(unittest.TestCase):
+    def test_monthly_occurrences_in_august(self):
+        from app.services.internal_finance import occurrences_in_period
+        from datetime import date
+
+        item = {
+            "vencimento": "2026-01-10",
+            "forma_pagamento": "Mensal",
+            "valor": "49,90",
+            "quantidade": "1",
+        }
+        dates = occurrences_in_period(item, date(2026, 8, 1), date(2026, 8, 31))
+        self.assertEqual(dates, [date(2026, 8, 10)])
+
+    def test_catalog_accepts_legacy_string_list(self):
+        from app.services.commercial_services import _normalize_catalog
+
+        items = _normalize_catalog(["Oppi RH", {"name": "Oppi Ponto", "valor": "49,90", "quantidade": 2}])
+        self.assertEqual(items[0]["name"], "Oppi RH")
+        self.assertEqual(items[1]["quantidade"], 2)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
