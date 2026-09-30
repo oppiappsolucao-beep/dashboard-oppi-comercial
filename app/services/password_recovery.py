@@ -1,11 +1,14 @@
-"""Recuperação de senha: o código sai no log do serviço, não na tela."""
+"""Recuperação de senha: o código é enviado por e-mail, não aparece na tela."""
 from __future__ import annotations
 
 import hashlib
 import json
 import logging
+import os
 import secrets
+import smtplib
 import time
+from email.message import EmailMessage
 
 import bcrypt
 
@@ -81,11 +84,51 @@ def user_can_recover(username: str) -> bool:
     return get_account_user_by_username(username) is not None
 
 
-def request_reset_code(username: str) -> None:
-    """Gera um código se o usuário existir. A resposta da tela é sempre a mesma."""
+def _recovery_recipient() -> str:
+    return os.getenv("PASSWORD_RECOVERY_EMAIL", "oppiappsolucao@gmail.com").strip() or "oppiappsolucao@gmail.com"
+
+
+def _send_reset_email(username: str, code: str) -> str:
+    """Envia o código. Devolve sent, missing_smtp ou failed."""
+    recipient = _recovery_recipient()
+    smtp_user = os.getenv("SMTP_USER", recipient).strip() or recipient
+    smtp_password = os.getenv("SMTP_PASSWORD", "").strip()
+    if not smtp_password:
+        logger.error("Recuperacao de senha sem SMTP_PASSWORD. E-mail não enviado.")
+        return "missing_smtp"
+
+    host = os.getenv("SMTP_HOST", "smtp.gmail.com").strip() or "smtp.gmail.com"
+    try:
+        port = int(os.getenv("SMTP_PORT", "587") or "587")
+    except ValueError:
+        port = 587
+
+    message = EmailMessage()
+    message["Subject"] = "Código para recuperar a senha do Comercial Oppi"
+    message["From"] = smtp_user
+    message["To"] = recipient
+    message.set_content(
+        "Foi pedida a recuperação de senha do Dashboard Oppi Comercial.\n\n"
+        f"Usuário: {username}\n"
+        f"Código: {code}\n\n"
+        "Ele vale por 20 minutos. Se você não pediu, ignore este e-mail.\n"
+    )
+    try:
+        with smtplib.SMTP(host, port, timeout=20) as smtp:
+            smtp.starttls()
+            smtp.login(smtp_user, smtp_password)
+            smtp.send_message(message)
+    except Exception:
+        logger.exception("Falha ao enviar o código de recuperação para %s", recipient)
+        return "failed"
+    return "sent"
+
+
+def request_reset_code(username: str) -> str:
+    """Gera um código se o usuário existir e envia para o e-mail de recuperação."""
     clean = normalize_text(username)
     if not user_can_recover(clean):
-        return
+        return "skipped"
 
     key = _reset_key(clean)
     now = time.time()
@@ -96,9 +139,13 @@ def request_reset_code(username: str) -> None:
     created = float(current.get("created") or 0)
     expires = float(current.get("expires") or 0)
     if current.get("code_hash") and expires > now and (now - created) < _RESEND_COOLDOWN_SEC:
-        return
+        return "cooldown"
 
     code = f"{secrets.randbelow(100_000_000):08d}"
+    status = _send_reset_email(clean, code)
+    if status != "sent":
+        return status
+
     _save_meta(
         key,
         json.dumps(
@@ -110,11 +157,7 @@ def request_reset_code(username: str) -> None:
             }
         ),
     )
-    logger.warning(
-        "Recuperacao de senha para '%s'. Codigo: %s. Valido por 20 minutos.",
-        clean,
-        code,
-    )
+    return "sent"
 
 
 def verify_admin_password_override(password: str) -> bool:

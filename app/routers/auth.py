@@ -86,11 +86,26 @@ async def recover_request_submit(request: Request, username: str = Form(...)):
 
     clean = username.strip()
     request.session["recovery_username"] = clean
-    request_reset_code(clean)
-    request.session["recovery_info"] = (
-        "Se o usuário existir, o código foi registrado no log do serviço comercial "
-        "e vale por 20 minutos."
-    )
+    status = request_reset_code(clean)
+    if status == "missing_smtp":
+        request.session["recovery_error"] = (
+            "O e-mail ainda não está configurado. Falta SMTP_PASSWORD no ambiente do serviço."
+        )
+        return RedirectResponse(url="/recuperar-senha", status_code=303)
+    if status == "failed":
+        request.session["recovery_error"] = (
+            "Não consegui enviar o e-mail. Confira SMTP_PASSWORD e tente de novo."
+        )
+        return RedirectResponse(url="/recuperar-senha", status_code=303)
+    if status == "cooldown":
+        request.session["recovery_info"] = (
+            "Um código já foi enviado para oppiappsolucao@gmail.com. Confira a caixa de entrada e o spam."
+        )
+    else:
+        request.session["recovery_info"] = (
+            "Se o usuário existir, o código foi enviado para oppiappsolucao@gmail.com. "
+            "Ele vale 20 minutos. Confira também o spam."
+        )
     return RedirectResponse(url="/recuperar-senha/codigo", status_code=303)
 
 
