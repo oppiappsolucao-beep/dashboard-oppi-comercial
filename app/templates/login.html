@@ -7,7 +7,7 @@
   <meta http-equiv="Content-Language" content="pt-BR">
   <title>Login - Dashboard Oppi</title>
   <link rel="stylesheet" href="/static/css/dashboard.css?v=12">
-  <link rel="stylesheet" href="/static/css/login.css?v=6">
+  <link rel="stylesheet" href="/static/css/login.css?v=7">
 </head>
 <body class="login-page notranslate" translate="no">
   <div class="login-layout">
@@ -26,6 +26,9 @@
     <section class="login-card">
       <h2>Acesse sua conta</h2>
       <p>Entre com suas credenciais para continuar.</p>
+      {% if notice %}
+      <div class="alert-success">{{ notice }}</div>
+      {% endif %}
       {% if error %}
       <div class="alert-error">{{ error }}</div>
       {% endif %}
@@ -36,6 +39,7 @@
         <input id="password" name="password" type="password" required autocomplete="current-password">
         <button type="submit">Entrar</button>
       </form>
+      <p class="login-recover"><a href="/recuperar-senha">Esqueci minha senha</a></p>
     </section>
   </div>
 </body>

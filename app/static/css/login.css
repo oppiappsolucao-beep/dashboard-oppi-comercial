@@ -112,6 +112,25 @@ body.login-page {
   cursor: pointer;
 }
 
+.login-recover {
+  margin: 16px 0 0;
+  text-align: center;
+}
+
+.login-recover a {
+  color: #A855F7;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.login-card .alert-success {
+  margin-top: 14px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #ECFDF5;
+  color: #047857;
+}
+
 @media (max-width: 900px) {
   .login-layout { grid-template-columns: 1fr; }
   .login-brand-panel { min-height: auto; padding: 28px 22px; }

@@ -433,6 +433,24 @@ def verify_account_user_credentials(username: str, password: str) -> dict | None
     return user
 
 
+def set_account_user_password(username: str, password: str) -> bool:
+    """Troca a senha de um usuário ativo. Devolve False se o login não existir."""
+    target = normalize_text(username).lower()
+    if not target:
+        return False
+    users = load_account_users()
+    index = next((idx for idx, user in enumerate(users) if user["username"].lower() == target), None)
+    if index is None:
+        return False
+    users[index]["password_hash"] = _hash_password(password)
+    users[index]["updated_at"] = _now_iso()
+    _persist_users(users)
+    with _lock:
+        global _cache
+        _cache = users
+    return True
+
+
 def touch_account_user_last_access(user_id: str) -> None:
     users = load_account_users()
     updated = False

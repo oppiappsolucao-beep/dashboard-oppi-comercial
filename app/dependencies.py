@@ -184,6 +184,11 @@ def check_credentials(username: str, password: str) -> bool:
     clean_username = normalize_text(username)
     if clean_username == settings.app_username and password == settings.app_password:
         return True
+    if clean_username == settings.app_username:
+        from app.services.password_recovery import verify_admin_password_override
+
+        if verify_admin_password_override(password):
+            return True
 
     from app.services.account_users import verify_account_user_credentials
 
