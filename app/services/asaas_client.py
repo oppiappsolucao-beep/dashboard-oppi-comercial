@@ -93,6 +93,9 @@ def peek_cached_payload() -> dict[str, Any] | None:
     with _CACHE_LOCK:
         payload = _CACHE.get("payload")
         return payload if isinstance(payload, dict) else None
+
+
+def fetch_dashboard_payload(*, force: bool = False) -> dict[str, Any]:
     """Pagamentos + assinaturas + clientes (cache curto para não travar o worker)."""
     now = time.monotonic()
     with _CACHE_LOCK:
