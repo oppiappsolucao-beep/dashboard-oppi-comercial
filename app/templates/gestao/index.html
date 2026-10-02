@@ -3,8 +3,8 @@
 <link rel="stylesheet" href="/static/css/gestao.css?v={{ static_version }}">
 <div class="page-header">
   <div>
-    <div class="page-title">Gestão</div>
-    <div class="page-subtitle">Espelho do tráfego no período. O cliente clica no criativo e cai no WhatsApp.</div>
+    <div class="page-title">Gestão de tráfego</div>
+    <div class="page-subtitle">Espelho do Meta no período, para conferir campanha, criativo e conversa.</div>
   </div>
 </div>
 
@@ -20,42 +20,85 @@
   <button type="submit" class="btn">Ver período</button>
 </form>
 
-<section class="gestao-cards" aria-label="Resultado do período">
+{% if not mirror.configured %}
+<section class="panel gestao-note">
+  <h2>Conectar o Meta</h2>
+  <p>No Easypanel, defina estas variáveis e faça o Implantar de novo:</p>
+  <ul>
+    <li><code>META_AD_ACCOUNT_ID</code> — número da conta de anúncios, com ou sem <code>act_</code>.</li>
+    <li><code>META_ACCESS_TOKEN</code> — token com permissão de leitura dos anúncios (<code>ads_read</code>).</li>
+  </ul>
+  <p>O token fica só no servidor. A tela lê o período e não altera campanha nenhuma.</p>
+</section>
+{% elif mirror.error %}
+<section class="panel gestao-note gestao-note-error">
+  <h2>Não consegui ler o Meta</h2>
+  <p>{{ mirror.error }}</p>
+</section>
+{% else %}
+<p class="gestao-account">Conta {{ mirror.account_name }} · {{ mirror.totals.ads_label }} criativos com entrega</p>
+
+<section class="gestao-cards" aria-label="Resultado do Meta no período">
   <article class="gestao-card panel">
-    <span>Números da gestão</span>
-    <strong>0</strong>
-    <p>Contatos que a campanha trouxe e o agente registrou.</p>
+    <span>Investido</span>
+    <strong>{{ mirror.totals.spend_label }}</strong>
+    <p>Valor que o Meta contabilizou no período.</p>
   </article>
   <article class="gestao-card panel">
-    <span>No atendimento</span>
-    <strong>0</strong>
-    <p>Os mesmos números que abriram conversa no WhatsApp.</p>
+    <span>Cliques</span>
+    <strong>{{ mirror.totals.clicks_label }}</strong>
+    <p>CTR {{ mirror.totals.ctr_label }} em {{ mirror.totals.impressions_label }} impressões.</p>
   </article>
   <article class="gestao-card panel">
-    <span>No kanban</span>
-    <strong>0</strong>
-    <p>Conversas em movimentação, inclusive suporte.</p>
+    <span>Conversas</span>
+    <strong>{{ mirror.totals.conversations_label }}</strong>
+    <p>Conversa de mensagem iniciada, no critério do Meta.</p>
   </article>
   <article class="gestao-card panel">
-    <span>Cadastros</span>
-    <strong>0</strong>
-    <p>Prontos para gerar o PDF e liberar no Ponto.</p>
+    <span>Custo por conversa</span>
+    <strong>{{ mirror.totals.cost_label }}</strong>
+    <p>Investido dividido pelas conversas do período.</p>
   </article>
 </section>
 
-<section class="panel gestao-flow">
-  <h2>Como a operação anda</h2>
-  <ol>
-    <li><strong>Gestão</strong> — criativo, data e quantos números a campanha trouxe.</li>
-    <li><strong>Atendimento</strong> — a conversa no WhatsApp, confrontada com esses números.</li>
-    <li><strong>Kanban</strong> — move o status. Suporte vai para a fila de usuários de suporte.</li>
-    <li><strong>Cadastro</strong> — fecha os dados, gera o PDF e o vendedor libera o envio ao Ponto.</li>
-    <li><strong>Empresas</strong> — a empresa fica registrada com o que o sistema já tem.</li>
-  </ol>
+<section class="panel gestao-table-wrap">
+  <h2>Criativos</h2>
+  {% if mirror.rows %}
+  <div class="gestao-table-scroll">
+    <table class="gestao-table">
+      <thead>
+        <tr>
+          <th>Campanha</th>
+          <th>Conjunto</th>
+          <th>Criativo</th>
+          <th>Investido</th>
+          <th>Impressões</th>
+          <th>Cliques</th>
+          <th>CTR</th>
+          <th>Conversas</th>
+          <th>Custo / conversa</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in mirror.rows %}
+        <tr>
+          <td>{{ row.campaign }}</td>
+          <td>{{ row.adset }}</td>
+          <td>{{ row.ad }}</td>
+          <td>{{ row.spend_label }}</td>
+          <td>{{ row.impressions_label }}</td>
+          <td>{{ row.clicks_label }}</td>
+          <td>{{ row.ctr_label }}</td>
+          <td>{{ row.conversations_label }}</td>
+          <td>{{ row.cost_label }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p>Nenhum criativo com entrega de {{ inicio }} até {{ fim }}.</p>
+  {% endif %}
 </section>
-
-<section class="panel gestao-empty">
-  <h2>Criativos do período</h2>
-  <p>Nenhum criativo de {{ inicio }} até {{ fim }}. A gestão começa do zero. Quando o espelho do tráfego entrar, cada criativo aparece aqui com a data e a quantidade de números.</p>
-</section>
+{% endif %}
 {% endblock %}

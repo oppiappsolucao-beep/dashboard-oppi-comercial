@@ -84,6 +84,80 @@
   padding-bottom: 18px;
 }
 
+.gestao-note,
+.gestao-table-wrap {
+  padding: 18px;
+}
+
+.gestao-note h2,
+.gestao-table-wrap h2 {
+  margin: 0 0 8px;
+  font-size: 1.05rem;
+}
+
+.gestao-note p,
+.gestao-note li,
+.gestao-table-wrap p {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.gestao-note ul {
+  margin: 8px 0 12px;
+  padding-left: 18px;
+}
+
+.gestao-note code {
+  font-size: 0.86rem;
+  color: var(--text);
+}
+
+.gestao-note-error {
+  border-color: #fecaca;
+  background: #fef2f2;
+}
+
+.gestao-note-error p,
+.gestao-note-error h2 {
+  color: #991b1b;
+}
+
+.gestao-account {
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.gestao-table-scroll {
+  overflow-x: auto;
+}
+
+.gestao-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+.gestao-table th,
+.gestao-table td {
+  padding: 10px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.gestao-table th {
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.gestao-table td:nth-child(3) {
+  white-space: normal;
+  min-width: 180px;
+}
+
 .att-compare {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

@@ -84,6 +84,8 @@ class Settings:
         }
         self.oppi_ponto_api_url = os.getenv("OPPI_PONTO_API_URL", "https://ponto.oppitech.com.br").strip().rstrip("/")
         self.oppi_ponto_crm_api_key = os.getenv("OPPI_PONTO_CRM_API_KEY", "").strip()
+        self.meta_ad_account_id = os.getenv("META_AD_ACCOUNT_ID", "").strip()
+        self.meta_access_token = os.getenv("META_ACCESS_TOKEN", "").strip()
         self.asaas_api_key = os.getenv("ASAAS_API_KEY", "").strip()
         self.asaas_api_url = (
             os.getenv("ASAAS_API_URL", "https://api.asaas.com/v3").strip().rstrip("/")
@@ -110,6 +112,10 @@ class Settings:
     def evolution_primary_instance(self) -> str:
         instances = self.evolution_instances
         return instances[0] if instances else ""
+
+    @property
+    def meta_configured(self) -> bool:
+        return bool(self.meta_ad_account_id and self.meta_access_token)
 
     @property
     def asaas_configured(self) -> bool:
