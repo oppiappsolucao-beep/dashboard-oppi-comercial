@@ -2,7 +2,6 @@ from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from app.dependencies import check_credentials
-from app.services.legacy_core import get_logo_data_uri
 from app.templating import render
 
 router = APIRouter()
@@ -16,7 +15,6 @@ async def login_page(request: Request):
         request,
         "login.html",
         {
-            "logo_uri": get_logo_data_uri(),
             "error": request.session.pop("auth_error", ""),
             "notice": request.session.pop("auth_notice", ""),
         },

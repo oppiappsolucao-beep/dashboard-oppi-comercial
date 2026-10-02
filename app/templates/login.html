@@ -5,42 +5,59 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="google" content="notranslate">
   <meta http-equiv="Content-Language" content="pt-BR">
-  <title>Login - Dashboard Oppi</title>
-  <link rel="stylesheet" href="/static/css/dashboard.css?v=12">
-  <link rel="stylesheet" href="/static/css/login.css?v=7">
+  <title>Entrar — Oppi CRM</title>
+  <link rel="stylesheet" href="/static/css/login.css?v=10">
 </head>
-<body class="login-page notranslate" translate="no">
-  <div class="login-layout">
-    <section class="login-brand-panel">
-      {% if logo_uri %}
-      <img src="{{ logo_uri }}" alt="Oppi Tech" class="login-logo-img">
-      {% endif %}
-      <div class="login-brand-title">
-        Dashboard
-        <span class="login-brand-highlight">Oppi Comercial</span>
+<body class="auth-body notranslate" translate="no">
+  <main class="auth-shell">
+    <section class="auth-brand">
+      <img src="/static/img/oppi-logo.png" alt="" class="auth-logo" width="72" height="72">
+      <div class="auth-brand-copy">
+        <p class="auth-kicker">Oppi</p>
+        <h1>CRM Comercial</h1>
+        <p class="auth-lead">Funil, atendimentos, propostas e financeiro da equipe.</p>
       </div>
-      <div class="login-brand-subtitle">Painel de gestão comercial</div>
-      <div class="login-accent-line"></div>
-      <p>Segurança, performance e inteligência para impulsionar seus resultados.</p>
     </section>
-    <section class="login-card">
-      <h2>Acesse sua conta</h2>
-      <p>Entre com suas credenciais para continuar.</p>
-      {% if notice %}
-      <div class="alert-success">{{ notice }}</div>
-      {% endif %}
-      {% if error %}
-      <div class="alert-error">{{ error }}</div>
-      {% endif %}
-      <form method="post" action="/login">
+
+    <section class="auth-main">
+      <form class="auth-form" method="post" action="/login">
+        <h2>Entrar</h2>
+        <p class="auth-form-lead">Use o usuário e a senha do painel.</p>
+
+        {% if notice %}
+        <div class="auth-alert auth-alert-ok" role="status">{{ notice }}</div>
+        {% endif %}
+        {% if error %}
+        <div class="auth-alert auth-alert-bad" role="alert">{{ error }}</div>
+        {% endif %}
+
         <label for="username">Usuário</label>
-        <input id="username" name="username" type="text" required autocomplete="username">
+        <input id="username" name="username" type="text" required autocomplete="username" spellcheck="false" autocapitalize="none">
+
         <label for="password">Senha</label>
-        <input id="password" name="password" type="password" required autocomplete="current-password">
-        <button type="submit">Entrar</button>
+        <div class="auth-password">
+          <input id="password" name="password" type="password" required autocomplete="current-password">
+          <button type="button" class="auth-toggle" aria-controls="password" aria-pressed="false">Mostrar</button>
+        </div>
+
+        <button type="submit" class="auth-submit">Entrar</button>
+        <p class="auth-recover"><a href="/recuperar-senha">Esqueci minha senha</a></p>
       </form>
-      <p class="login-recover"><a href="/recuperar-senha">Esqueci minha senha</a></p>
     </section>
-  </div>
+  </main>
+  <script>
+    (function () {
+      var toggle = document.querySelector(".auth-toggle");
+      var input = document.getElementById("password");
+      if (!toggle || !input) return;
+      toggle.addEventListener("click", function () {
+        var show = input.type === "password";
+        input.type = show ? "text" : "password";
+        toggle.textContent = show ? "Ocultar" : "Mostrar";
+        toggle.setAttribute("aria-pressed", show ? "true" : "false");
+        input.focus();
+      });
+    })();
+  </script>
 </body>
 </html>

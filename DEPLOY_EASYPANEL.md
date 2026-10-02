@@ -9,7 +9,7 @@ Deixe **VAZIO** (usa Dockerfile) ou:
 uvicorn app.main:app --host 0.0.0.0 --port 8501 --proxy-headers
 ```
 
-**NÃO use** `streamlit run app.py` neste deploy.
+O serviço sobe com o `Dockerfile` (`uvicorn app.main:app`).
 
 ## Variáveis OBRIGATÓRIAS no Easypanel
 
@@ -40,6 +40,6 @@ Opcional:
 
 ## Se "Service is not reachable"
 1. Porta interna = **8501**
-2. Comando de início vazio ou uvicorn (não streamlit)
+2. Comando de início vazio ou uvicorn
 3. APP_USERNAME e APP_PASSWORD definidos
 4. Ver logs do container
