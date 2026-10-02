@@ -237,5 +237,5 @@ def require_admin(request: Request):
     if redirect:
         return redirect
     if not is_admin(request):
-        return RedirectResponse(url="/visao-geral", status_code=303)
+        return RedirectResponse(url="/gestao", status_code=303)
     return None

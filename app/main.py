@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import APP_BUILD, settings
-from app.routers import auth, activities, attendances, contracts, evolution_webhook, financeiro, funnel, goals_reports, leads, overview, proposals, registration
+from app.routers import auth, activities, attendances, contracts, evolution_webhook, financeiro, funnel, gestao, goals_reports, leads, overview, proposals, registration
 from app.routers import migration_ponto
 from app.routers import settings as settings_router
 from app.templating import render
@@ -26,6 +26,7 @@ static_dir = Path(__file__).resolve().parent / "static"
 app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
 app.include_router(auth.router)
+app.include_router(gestao.router)
 app.include_router(overview.router)
 app.include_router(funnel.router)
 app.include_router(activities.router)
@@ -508,7 +509,7 @@ async def health_pdf_engine():
 
 @app.get("/")
 async def root():
-    return RedirectResponse(url="/visao-geral", status_code=303)
+    return RedirectResponse(url="/gestao", status_code=303)
 
 
 @app.exception_handler(HTTPException)

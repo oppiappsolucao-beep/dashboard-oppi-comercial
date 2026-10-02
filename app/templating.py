@@ -17,6 +17,7 @@ templates.env.globals["support_whatsapp_label"] = settings.support_whatsapp_labe
 templates.env.globals["static_version"] = APP_BUILD
 
 PAGE_BACK_FALLBACKS = {
+    "gestao": "/gestao",
     "overview": "/visao-geral",
     "funnel": "/funil-de-vendas",
     "leads": "/leads-e-empresas",
@@ -41,7 +42,7 @@ def render(
     if "back_fallback" not in ctx:
         active_page = ctx.get("active_page")
         if active_page:
-            ctx["back_fallback"] = PAGE_BACK_FALLBACKS.get(active_page, "/visao-geral")
+            ctx["back_fallback"] = PAGE_BACK_FALLBACKS.get(active_page, "/gestao")
     if "display_username" not in ctx or "display_role" not in ctx:
         try:
             from app.dependencies import get_session_user

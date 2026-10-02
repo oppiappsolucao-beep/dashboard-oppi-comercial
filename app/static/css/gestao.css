@@ -1,0 +1,140 @@
+.gestao-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 14px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+}
+
+.gestao-filters label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.gestao-filters input {
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--soft);
+  color: var(--text);
+  font: inherit;
+}
+
+.gestao-cards {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.gestao-card {
+  padding: 16px;
+}
+
+.gestao-card span {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--purple);
+}
+
+.gestao-card strong {
+  display: block;
+  margin-top: 8px;
+  font-size: 1.8rem;
+  letter-spacing: -0.03em;
+}
+
+.gestao-card p,
+.gestao-flow p,
+.gestao-empty p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.gestao-flow,
+.gestao-empty {
+  padding: 18px 18px 8px;
+  margin-bottom: 16px;
+}
+
+.gestao-flow h2,
+.gestao-empty h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.gestao-flow ol {
+  margin: 12px 0 16px;
+  padding-left: 18px;
+  color: var(--text);
+  line-height: 1.55;
+}
+
+.gestao-empty {
+  padding-bottom: 18px;
+}
+
+.att-compare {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.att-compare article {
+  padding: 14px 16px;
+}
+
+.att-compare span {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--purple);
+}
+
+.att-compare strong {
+  display: block;
+  margin-top: 6px;
+  font-size: 1.6rem;
+  letter-spacing: -0.03em;
+}
+
+.att-compare p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+  line-height: 1.4;
+}
+
+.cadastro-release {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+@media (max-width: 900px) {
+  .gestao-cards,
+  .att-compare {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .gestao-cards,
+  .att-compare {
+    grid-template-columns: 1fr;
+  }
+}

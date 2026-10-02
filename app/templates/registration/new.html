@@ -38,6 +38,12 @@
     </div>
   </header>
 
+  <div class="cadastro-release">
+    <button type="button" class="btn" id="cadastro-gerar-pdf">Gerar PDF</button>
+    <button type="button" class="btn btn-secondary" id="cadastro-enviar-ponto">Enviar ao Ponto</button>
+    <p class="page-subtitle" id="cadastro-ponto-note" hidden>Salve o cadastro. Quando a venda estiver liberada, o envio manda esses dados ao Ponto Oppi RH.</p>
+  </div>
+
   {% if error %}<div class="alert-error">{{ error }}</div>{% endif %}
 
   <div class="client-edit-summary-grid">
@@ -103,6 +109,16 @@
   </form>
 </div>
 
+<script>
+  document.getElementById("cadastro-gerar-pdf")?.addEventListener("click", function () {
+    var tab = document.querySelector('[data-registration-tab="proposta"]');
+    if (tab) tab.click();
+  });
+  document.getElementById("cadastro-enviar-ponto")?.addEventListener("click", function () {
+    var note = document.getElementById("cadastro-ponto-note");
+    if (note) note.hidden = false;
+  });
+</script>
 <script src="/static/js/partners-form.js?v={{ static_version }}" defer></script>
 <script src="/static/js/registration-edit.js?v={{ static_version }}" defer></script>
 <script src="/static/js/registration-new.js?v={{ static_version }}" defer></script>

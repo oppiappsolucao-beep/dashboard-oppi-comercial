@@ -162,7 +162,7 @@ function initMobileNavigation() {
 function initPageBackButtons() {
   document.querySelectorAll(".page-back-btn[data-back-fallback]").forEach((button) => {
     button.addEventListener("click", () => {
-      const fallback = button.getAttribute("data-back-fallback") || "/visao-geral";
+      const fallback = button.getAttribute("data-back-fallback") || "/gestao";
       if (window.history.length > 1) {
         history.back();
         return;

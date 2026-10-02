@@ -10,7 +10,7 @@ router = APIRouter()
 @router.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request):
     if request.session.get("authenticated"):
-        return RedirectResponse(url="/visao-geral", status_code=303)
+        return RedirectResponse(url="/gestao", status_code=303)
     return render(
         request,
         "login.html",
@@ -46,7 +46,7 @@ async def login_submit(
             request.session["user_id"] = ""
             request.session["user_role"] = "Administrador"
 
-        return RedirectResponse(url="/visao-geral", status_code=303)
+        return RedirectResponse(url="/gestao", status_code=303)
 
     request.session["auth_error"] = "Usuário ou senha inválidos."
     return RedirectResponse(url="/login", status_code=303)
@@ -74,7 +74,7 @@ def _recovery_context(request: Request, **extra):
 @router.get("/recuperar-senha", response_class=HTMLResponse)
 async def recover_request_page(request: Request):
     if request.session.get("authenticated"):
-        return RedirectResponse(url="/visao-geral", status_code=303)
+        return RedirectResponse(url="/gestao", status_code=303)
     return render(request, "recover_password.html", _recovery_context(request, step="request"))
 
 
@@ -110,7 +110,7 @@ async def recover_request_submit(request: Request, username: str = Form(...)):
 @router.get("/recuperar-senha/codigo", response_class=HTMLResponse)
 async def recover_code_page(request: Request):
     if request.session.get("authenticated"):
-        return RedirectResponse(url="/visao-geral", status_code=303)
+        return RedirectResponse(url="/gestao", status_code=303)
     return render(request, "recover_password.html", _recovery_context(request, step="code"))
 
 

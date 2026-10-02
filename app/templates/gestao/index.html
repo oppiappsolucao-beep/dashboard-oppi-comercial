@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block content %}
+<link rel="stylesheet" href="/static/css/gestao.css?v={{ static_version }}">
+<div class="page-header">
+  <div>
+    <div class="page-title">Gestão</div>
+    <div class="page-subtitle">Espelho do tráfego no período. O cliente clica no criativo e cai no WhatsApp.</div>
+  </div>
+</div>
+
+<form class="gestao-filters panel" method="get" action="/gestao">
+  <label>
+    De
+    <input type="date" name="inicio" value="{{ inicio }}">
+  </label>
+  <label>
+    Até
+    <input type="date" name="fim" value="{{ fim }}">
+  </label>
+  <button type="submit" class="btn">Ver período</button>
+</form>
+
+<section class="gestao-cards" aria-label="Resultado do período">
+  <article class="gestao-card panel">
+    <span>Números da gestão</span>
+    <strong>0</strong>
+    <p>Contatos que a campanha trouxe e o agente registrou.</p>
+  </article>
+  <article class="gestao-card panel">
+    <span>No atendimento</span>
+    <strong>0</strong>
+    <p>Os mesmos números que abriram conversa no WhatsApp.</p>
+  </article>
+  <article class="gestao-card panel">
+    <span>No kanban</span>
+    <strong>0</strong>
+    <p>Conversas em movimentação, inclusive suporte.</p>
+  </article>
+  <article class="gestao-card panel">
+    <span>Cadastros</span>
+    <strong>0</strong>
+    <p>Prontos para gerar o PDF e liberar no Ponto.</p>
+  </article>
+</section>
+
+<section class="panel gestao-flow">
+  <h2>Como a operação anda</h2>
+  <ol>
+    <li><strong>Gestão</strong> — criativo, data e quantos números a campanha trouxe.</li>
+    <li><strong>Atendimento</strong> — a conversa no WhatsApp, confrontada com esses números.</li>
+    <li><strong>Kanban</strong> — move o status. Suporte vai para a fila de usuários de suporte.</li>
+    <li><strong>Cadastro</strong> — fecha os dados, gera o PDF e o vendedor libera o envio ao Ponto.</li>
+    <li><strong>Empresas</strong> — a empresa fica registrada com o que o sistema já tem.</li>
+  </ol>
+</section>
+
+<section class="panel gestao-empty">
+  <h2>Criativos do período</h2>
+  <p>Nenhum criativo de {{ inicio }} até {{ fim }}. A gestão começa do zero. Quando o espelho do tráfego entrar, cada criativo aparece aqui com a data e a quantidade de números.</p>
+</section>
+{% endblock %}

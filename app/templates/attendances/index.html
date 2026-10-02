@@ -16,6 +16,25 @@
 {% if flash %}<div class="att-page-flash ok">{{ flash }}</div>{% endif %}
 {% if error %}<div class="att-page-flash err">{{ error }}</div>{% endif %}
 
+<link rel="stylesheet" href="/static/css/gestao.css?v={{ static_version }}">
+<section class="att-compare" aria-label="Gestão e atendimento">
+  <article class="panel">
+    <span>Números da gestão</span>
+    <strong>0</strong>
+    <p>O espelho do tráfego ainda começa do zero.</p>
+  </article>
+  <article class="panel">
+    <span>Números de atendimento</span>
+    <strong>{{ conversations|length }}</strong>
+    <p>Conversas nesta lista, no filtro atual.</p>
+  </article>
+  <article class="panel">
+    <span>Já no cadastro</span>
+    <strong>{{ conversations|selectattr('sheet_row')|list|length }}</strong>
+    <p>Conversas desta lista que já têm empresa.</p>
+  </article>
+</section>
+
 <div class="att-new-call-panel" id="att-new-call-panel" hidden>
   <form method="post" action="/atendimentos/novo" class="att-new-call-form">
     <div class="att-new-call-title">Chamar no WhatsApp</div>

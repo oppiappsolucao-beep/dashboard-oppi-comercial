@@ -2112,3 +2112,16 @@
     grid-template-columns: 1fr;
   }
 }
+
+.cadastro-release {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.cadastro-release .page-subtitle {
+  flex-basis: 100%;
+  margin: 0;
+}
