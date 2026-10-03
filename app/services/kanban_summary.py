@@ -52,7 +52,7 @@ def build_kanban_summary(sector_name: str, inicio: str, fim: str) -> dict:
         "leads": leads,
         "leads_note": leads_note,
         "andamento": andamento,
-        "andamento_note": "Em aberto neste período. Na Campanha, conta a data do lead.",
+        "andamento_note": "Cards da coluna Andamento com data neste período.",
         "concluidos": concluidos,
         "concluidos_note": "Ordens deste setor concluídas no período.",
     }
@@ -73,9 +73,32 @@ def _conversations(start: str, end: str) -> tuple[str, str]:
     return label, "Conversas iniciadas no Meta, no mesmo critério da gestão de tráfego."
 
 
+def _andamento_queue_ids(sector_name: str) -> set[str]:
+    from app.services.org_registry import list_sector_queues, list_sectors
+
+    sector = next(
+        (item for item in list_sectors() if normalize_text(item["name"]).lower() == normalize_text(sector_name).lower()),
+        None,
+    )
+    if sector is None:
+        return set()
+    found = set()
+    for queue in list_sector_queues(sector["id"]):
+        name = normalize_text(queue["name"]).lower()
+        if name in {"andamento", "em andamento"}:
+            found.add(queue["id"])
+    return found
+
+
+def _date_in_period(card: dict, start: str, end: str) -> bool:
+    day = _stamp_day(card.get("scheduled_date") or "")
+    return bool(day) and start <= day <= end
+
+
 def _orders(sector_name: str, start: str, end: str) -> tuple[int, int]:
     if not normalize_text(sector_name):
         return 0, 0
+    andamento_ids = _andamento_queue_ids(sector_name)
     andamento = 0
     concluidos = 0
     for card in list_orders_by_sector(sector_name):
@@ -83,17 +106,12 @@ def _orders(sector_name: str, start: str, end: str) -> tuple[int, int]:
         lead_day = _stamp_day(card.get("scheduled_date") or "")
         created = _stamp_day(card.get("created_at") or "") or lead_day
         updated = _stamp_day(card.get("updated_at") or "") or created
-        if campaign:
-            in_period = (not lead_day) or (start <= lead_day <= end)
-        else:
-            in_period = start <= created <= end
+        if card.get("queue_id") in andamento_ids and _date_in_period(card, start, end):
+            andamento += 1
         if card.get("queue_id") == DONE_QUEUE_ID or card.get("status") == "concluida":
             if campaign:
-                if in_period:
+                if (not lead_day) or (start <= lead_day <= end):
                     concluidos += 1
             elif start <= updated <= end:
                 concluidos += 1
-            continue
-        if in_period:
-            andamento += 1
     return andamento, concluidos

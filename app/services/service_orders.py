@@ -363,6 +363,11 @@ def build_sector_board(sector_id: str, sector_name: str, inicio: str = "", fim: 
             queue_id = ENTRY_QUEUE_ID
         if queue_id == CAMPAIGN_QUEUE_ID and period_start and not _campaign_visible(card, period_start, period_end):
             continue
+        column = buckets[queue_id]
+        if period_start and normalize_text(column["name"]).lower() in {"andamento", "em andamento"}:
+            day = normalize_text(card.get("scheduled_date"))[:10]
+            if not (len(day) == 10 and period_start <= day <= period_end):
+                continue
         buckets[queue_id]["cards"].append(card)
     return columns
 
