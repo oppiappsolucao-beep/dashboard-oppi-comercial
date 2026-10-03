@@ -18,7 +18,7 @@ def test_protocolo_e_gerado_e_nao_repete(isolated_storage):
     from app.services.org_registry import list_sectors, save_person
 
     sector = next(item for item in list_sectors() if item["name"] == "Suporte")
-    save_person(kind="funcionario", name="Ana", sector_id=sector["id"])
+    save_person(kind="funcionario", name="Ana", sector_id=sector["id"], username="ana.suporte", password="123456")
     first = create_service_order(
         tenant_id="default",
         sheet_row=42,
@@ -54,7 +54,7 @@ def test_assunto_obrigatorio(isolated_storage):
     from app.services.org_registry import list_sectors, save_person
 
     sector = next(item for item in list_sectors() if item["name"] == "Suporte")
-    save_person(kind="funcionario", name="Ana", sector_id=sector["id"])
+    save_person(kind="funcionario", name="Ana", sector_id=sector["id"], username="ana.suporte", password="123456")
     with pytest.raises(ValueError, match="assunto"):
         create_service_order(
             tenant_id="default",

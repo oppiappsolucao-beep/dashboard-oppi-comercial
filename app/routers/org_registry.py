@@ -96,12 +96,19 @@ async def org_save_person(request: Request):
             email=form.get("email", ""),
             phone=form.get("phone", ""),
             region=form.get("region", ""),
+            username=form.get("username", ""),
+            password=form.get("password", ""),
+            state_name=form.get("state_name", ""),
+            city=form.get("city", ""),
         )
     except ValueError as error:
         request.session["org_error"] = str(error)
     else:
         label = "Representante" if kind == "representante" else "Funcionário"
-        request.session["org_success"] = f"{label} {person['name']} cadastrado no setor {person['sector_name']}."
+        if person.get("sector_name"):
+            request.session["org_success"] = f"{label} {person['name']} cadastrado no setor {person['sector_name']}."
+        else:
+            request.session["org_success"] = f"{label} {person['name']} cadastrado."
     return RedirectResponse(url=f"/cadastros?tipo={tab}", status_code=303)
 
 

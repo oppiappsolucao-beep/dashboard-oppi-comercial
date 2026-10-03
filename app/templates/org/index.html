@@ -3,7 +3,7 @@
 <link rel="stylesheet" href="/static/css/org-registry.css?v=1">
 <div class="page-header">
   <div>
-    <div class="page-title">Cadastro</div>
+    <div class="page-title">Sistema</div>
     <div class="page-subtitle">Funcionários, setores e representantes nacionais. O setor define quem pode atender e quais acessos estão liberados.</div>
   </div>
 </div>
@@ -103,25 +103,22 @@
 {% elif active_tab == 'representantes' %}
 <section class="panel org-panel">
   <h2>Representante nacional</h2>
-  <p>Estrutura inicial da representação por estado, ligada a um setor.</p>
+  <p>Login de acesso e o local onde o representante reside.</p>
   <form method="post" action="/cadastros/pessoas" class="org-form">
     <input type="hidden" name="kind" value="representante">
     <div class="form-grid">
       <div class="form-group"><label>Nome</label><input name="name" required maxlength="120" placeholder="Nome do representante"></div>
+      <div class="form-group"><label>Login</label><input name="username" required maxlength="40" autocomplete="off" placeholder="usuario.acesso"></div>
+      <div class="form-group"><label>Senha</label><input name="password" type="password" required minlength="6" autocomplete="new-password" placeholder="Mínimo 6 caracteres"></div>
       <div class="form-group">
         <label>UF</label>
         <select name="region">
-          <option value="">Nacional / sem UF</option>
+          <option value="">Selecione</option>
           {% for uf in ufs %}<option value="{{ uf }}">{{ uf }}</option>{% endfor %}
         </select>
       </div>
-      <div class="form-group">
-        <label>Setor</label>
-        <select name="sector_id" required>
-          <option value="">Selecione</option>
-          {% for sector in sectors %}<option value="{{ sector.id }}">{{ sector.name }}</option>{% endfor %}
-        </select>
-      </div>
+      <div class="form-group"><label>Estado</label><input name="state_name" required maxlength="80" placeholder="Estado em que reside"></div>
+      <div class="form-group"><label>Cidade</label><input name="city" required maxlength="80" placeholder="Cidade em que reside"></div>
       <div class="form-group"><label>Telefone</label><input name="phone" maxlength="40"></div>
       <div class="form-group"><label>E-mail</label><input name="email" type="email" maxlength="120"></div>
     </div>
@@ -134,7 +131,7 @@
     <div class="org-card-head">
       <div>
         <strong>{{ person.name }}</strong>
-        <span>{{ person.region }} · {{ person.sector_name }}</span>
+        <span>{{ person.city }} · {{ person.state_name }} · {{ person.region }} · {{ person.username }}</span>
       </div>
       <form method="post" action="/cadastros/pessoas/{{ person.id }}/remover">
         <input type="hidden" name="kind" value="representante">
@@ -162,6 +159,8 @@
           {% for sector in sectors %}<option value="{{ sector.id }}">{{ sector.name }}</option>{% endfor %}
         </select>
       </div>
+      <div class="form-group"><label>Login</label><input name="username" required maxlength="40" autocomplete="off" placeholder="usuario.acesso"></div>
+      <div class="form-group"><label>Senha</label><input name="password" type="password" required minlength="6" autocomplete="new-password" placeholder="Mínimo 6 caracteres"></div>
       <div class="form-group"><label>Telefone</label><input name="phone" maxlength="40"></div>
       <div class="form-group"><label>E-mail</label><input name="email" type="email" maxlength="120"></div>
     </div>
@@ -174,7 +173,7 @@
     <div class="org-card-head">
       <div>
         <strong>{{ person.name }}</strong>
-        <span>{{ person.sector_name }}{% if person.phone != '—' %} · {{ person.phone }}{% endif %}</span>
+        <span>{{ person.sector_name }} · {{ person.username }}{% if person.phone != '—' %} · {{ person.phone }}{% endif %}</span>
       </div>
       <form method="post" action="/cadastros/pessoas/{{ person.id }}/remover">
         <input type="hidden" name="kind" value="funcionario">

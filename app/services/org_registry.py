@@ -2,9 +2,12 @@
 from __future__ import annotations
 
 import json
+import re
 import uuid
 from datetime import datetime
 from zoneinfo import ZoneInfo
+
+import bcrypt
 
 from app.services.crm_local_db import _connect, _lock, init_crm_local_db
 from app.services.legacy_core import normalize_text
@@ -17,7 +20,7 @@ ACCESS_OPTIONS = [
     ("financeiro", "Financeiro"),
     ("propostas", "Propostas"),
     ("gestao", "Gestão"),
-    ("cadastro", "Cadastro"),
+    ("cadastro", "Sistema"),
 ]
 
 ACCESS_KEYS = {key for key, _label in ACCESS_OPTIONS}
@@ -120,6 +123,9 @@ def list_people(kind: str | None = None) -> list[dict]:
                 "sector_id": row["sector_id"],
                 "sector_name": row["sector_name"] or "—",
                 "region": row["region"] or "—",
+                "username": (row["username"] if "username" in row.keys() else "") or "—",
+                "state_name": (row["state_name"] if "state_name" in row.keys() else "") or "—",
+                "city": (row["city"] if "city" in row.keys() else "") or "—",
             }
         )
     return people
@@ -184,39 +190,78 @@ def remove_sector(sector_id: str) -> None:
         )
 
 
+def _normalize_username(value: str) -> str:
+    username = normalize_text(value).lower()
+    if not re.match(r"^[a-z0-9._-]{3,40}$", username):
+        raise ValueError("O login deve ter 3 a 40 caracteres (letras, números, ., - ou _).")
+    return username
+
+
+def _hash_password(password: str) -> str:
+    clean = str(password or "")
+    if len(clean.strip()) < 6:
+        raise ValueError("A senha deve ter pelo menos 6 caracteres.")
+    return bcrypt.hashpw(clean.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+
 def save_person(
     *,
     kind: str,
     name: str,
-    sector_id: str,
+    sector_id: str = "",
     email: str = "",
     phone: str = "",
     region: str = "",
+    username: str = "",
+    password: str = "",
+    state_name: str = "",
+    city: str = "",
 ) -> dict:
     if kind not in PERSON_KINDS:
         raise ValueError("Tipo de cadastro inválido.")
     clean_name = normalize_text(name)
     if len(clean_name) < 2:
         raise ValueError("Informe o nome.")
+    clean_username = _normalize_username(username)
+    password_hash = _hash_password(password)
     clean_region = normalize_text(region).upper()
-    if kind == "representante" and clean_region and clean_region not in BRAZIL_UFS:
-        raise ValueError("Selecione a UF do representante.")
+    clean_state = normalize_text(state_name)
+    clean_city = normalize_text(city)
+    if kind == "representante":
+        if clean_region and clean_region not in BRAZIL_UFS:
+            raise ValueError("Selecione a UF do representante.")
+        if len(clean_state) < 2:
+            raise ValueError("Informe o estado em que o representante reside.")
+        if len(clean_city) < 2:
+            raise ValueError("Informe a cidade em que o representante reside.")
     init_crm_local_db()
     stamp = _now()
     person_id = f"pes_{uuid.uuid4().hex[:12]}"
     with _lock, _connect() as conn:
         _ensure_seed(conn)
-        sector = conn.execute(
-            "SELECT id, name FROM org_sectors WHERE id = ? AND active = 1",
-            (normalize_text(sector_id),),
+        taken = conn.execute(
+            "SELECT id FROM org_people WHERE lower(username) = ? AND active = 1",
+            (clean_username,),
         ).fetchone()
-        if sector is None:
-            raise ValueError("Selecione o setor.")
+        if taken:
+            raise ValueError("Este login já está em uso.")
+        sector_name = ""
+        stored_sector_id = ""
+        if kind == "funcionario":
+            sector = conn.execute(
+                "SELECT id, name FROM org_sectors WHERE id = ? AND active = 1",
+                (normalize_text(sector_id),),
+            ).fetchone()
+            if sector is None:
+                raise ValueError("Selecione o setor.")
+            stored_sector_id = sector["id"]
+            sector_name = sector["name"]
         conn.execute(
             """
             INSERT INTO org_people (
-                id, kind, name, email, phone, sector_id, region, active, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+                id, kind, name, email, phone, sector_id, region, username, password_hash,
+                state_name, city, active, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
             """,
             (
                 person_id,
@@ -224,13 +269,17 @@ def save_person(
                 clean_name,
                 normalize_text(email),
                 normalize_text(phone),
-                sector["id"],
+                stored_sector_id,
                 clean_region,
+                clean_username,
+                password_hash,
+                clean_state,
+                clean_city,
                 stamp,
                 stamp,
             ),
         )
-    return {"id": person_id, "name": clean_name, "sector_name": sector["name"]}
+    return {"id": person_id, "name": clean_name, "sector_name": sector_name, "username": clean_username}
 
 
 def remove_person(person_id: str) -> None:

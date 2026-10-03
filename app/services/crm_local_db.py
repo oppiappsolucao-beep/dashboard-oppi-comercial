@@ -162,6 +162,10 @@ def init_crm_local_db() -> None:
                     phone TEXT NOT NULL DEFAULT '',
                     sector_id TEXT NOT NULL DEFAULT '',
                     region TEXT NOT NULL DEFAULT '',
+                    username TEXT NOT NULL DEFAULT '',
+                    password_hash TEXT NOT NULL DEFAULT '',
+                    state_name TEXT NOT NULL DEFAULT '',
+                    city TEXT NOT NULL DEFAULT '',
                     active INTEGER NOT NULL DEFAULT 1,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
@@ -187,6 +191,18 @@ def init_crm_local_db() -> None:
                 conn.execute(
                     "ALTER TABLE service_orders ADD COLUMN sector TEXT NOT NULL DEFAULT ''"
                 )
+            people_cols = {
+                row[1]
+                for row in conn.execute("PRAGMA table_info(org_people)").fetchall()
+            }
+            for column, definition in (
+                ("username", "TEXT NOT NULL DEFAULT ''"),
+                ("password_hash", "TEXT NOT NULL DEFAULT ''"),
+                ("state_name", "TEXT NOT NULL DEFAULT ''"),
+                ("city", "TEXT NOT NULL DEFAULT ''"),
+            ):
+                if people_cols and column not in people_cols:
+                    conn.execute(f"ALTER TABLE org_people ADD COLUMN {column} {definition}")
             conn.commit()
         _initialized = True
 
