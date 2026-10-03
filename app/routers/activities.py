@@ -191,6 +191,7 @@ async def activities_move_order(
     order_id: str,
     queue_id: str = Form(""),
     sector_id: str = Form(""),
+    reopen: str = Form(""),
 ):
     redirect = require_auth(request)
     if redirect:
@@ -205,10 +206,63 @@ async def activities_move_order(
     if sector is None:
         return HTMLResponse("Setor não encontrado.", status_code=404)
     try:
-        move_service_order(order_id, queue_id, sector["id"], sector["name"])
+        move_service_order(
+            order_id,
+            queue_id,
+            sector["id"],
+            sector["name"],
+            author=_os_actor(request),
+            reopen=normalize_text(reopen) in {"1", "true", "sim", "yes"},
+        )
     except ValueError as error:
         return HTMLResponse(str(error), status_code=400)
     return HTMLResponse("ok")
+
+
+def _os_actor(request: Request) -> str:
+    return (
+        normalize_text(request.session.get("org_person_name"))
+        or normalize_text(request.session.get("username"))
+        or "Usuário"
+    )
+
+
+def _order_visible(request: Request, detail: dict) -> bool:
+    if not request.session.get("org_person_id"):
+        return True
+    sector_name = normalize_text(request.session.get("org_sector_name"))
+    return sector_name.lower() == normalize_text(detail.get("sector")).lower()
+
+
+@router.get("/atividades/os/{order_id}", response_class=HTMLResponse)
+async def activities_order_detail(request: Request, order_id: str):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+    from app.services.service_orders import get_order_detail
+
+    detail = get_order_detail(order_id)
+    if not detail or not _order_visible(request, detail):
+        return HTMLResponse("Ordem de serviço não encontrada.", status_code=404)
+    return render(request, "partials/os_order_panel.html", {"order": detail})
+
+
+@router.post("/atividades/os/{order_id}/atualizacao", response_class=HTMLResponse)
+async def activities_order_update(request: Request, order_id: str, note: str = Form("")):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+    from app.services.service_orders import add_order_update, get_order_detail
+
+    detail = get_order_detail(order_id)
+    if not detail or not _order_visible(request, detail):
+        return HTMLResponse("Ordem de serviço não encontrada.", status_code=404)
+    try:
+        add_order_update(order_id, note, _os_actor(request))
+    except ValueError as error:
+        return HTMLResponse(str(error), status_code=400)
+    detail = get_order_detail(order_id)
+    return render(request, "partials/os_order_panel.html", {"order": detail})
 
 
 @router.get("/atividades/nova/modal", response_class=HTMLResponse)

@@ -185,6 +185,17 @@ def init_crm_local_db() -> None:
                 );
                 CREATE INDEX IF NOT EXISTS idx_org_queues_sector
                     ON org_queues(sector_id, position);
+
+                CREATE TABLE IF NOT EXISTS service_order_events (
+                    id TEXT PRIMARY KEY,
+                    order_id TEXT NOT NULL,
+                    kind TEXT NOT NULL,
+                    summary TEXT NOT NULL DEFAULT '',
+                    author TEXT NOT NULL DEFAULT '',
+                    created_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_service_order_events
+                    ON service_order_events(order_id, created_at);
                 """
             )
             # Migrações leves (idempotentes)

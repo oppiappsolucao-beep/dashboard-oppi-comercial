@@ -436,8 +436,10 @@ def add_sector_queue(sector_id: str, name: str) -> dict:
         raise ValueError("Informe o nome da fila.")
     if len(clean_name) > 40:
         raise ValueError("O nome da fila pode ter no máximo 40 caracteres.")
-    if clean_name.lower() == "análise" or clean_name.lower() == "analise":
+    if clean_name.lower() in {"análise", "analise"}:
         raise ValueError("A primeira coluna já é Análise.")
+    if clean_name.lower() in {"concluída", "concluida", "finalizada", "finalizado"}:
+        raise ValueError("A última coluna já é Concluída.")
     init_crm_local_db()
     stamp = _now()
     queue_id = f"fila_{uuid.uuid4().hex[:12]}"

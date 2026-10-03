@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import re
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from config.crm_options import PRIORITY_OPTIONS
@@ -17,12 +17,34 @@ SERVICE_ORDER_STATUS_LABELS = {
     "aberta": "Aberta",
     "em_andamento": "Em andamento",
     "concluida": "Concluída",
+    "reaberta": "Reaberta",
     "cancelada": "Cancelada",
+}
+
+EVENT_KIND_LABELS = {
+    "criada": "Criada",
+    "movida": "Movida",
+    "concluida": "Concluída",
+    "reaberta": "Reaberta",
+    "atualizacao": "Atualização",
 }
 
 
 def _now() -> datetime:
     return datetime.now(ZoneInfo(runtime_settings.timezone)).replace(tzinfo=None)
+
+
+_last_event_at: datetime | None = None
+
+
+def _event_stamp() -> str:
+    """Horário crescente mesmo quando dois registros caem no mesmo segundo."""
+    global _last_event_at
+    current = _now()
+    if _last_event_at is not None and current <= _last_event_at:
+        current = _last_event_at + timedelta(microseconds=1)
+    _last_event_at = current
+    return current.isoformat(timespec="microseconds")
 
 
 def _format_day(value: str) -> str:
@@ -78,8 +100,41 @@ def _row_to_view(row) -> dict:
         "scheduled_date_label": _format_day(row["scheduled_date"] if "scheduled_date" in row.keys() else ""),
         "responsible": row["responsible"] or "—",
         "created_by": row["created_by"] or "—",
+        "created_at": row["created_at"] or "",
         "created_at_label": _format_when(row["created_at"]),
+        "sheet_row": int(row["sheet_row"] or 0) if "sheet_row" in row.keys() else 0,
     }
+
+
+def _add_event(conn, order_id: str, kind: str, summary: str, author: str, stamp: str) -> None:
+    conn.execute(
+        """
+        INSERT INTO service_order_events (id, order_id, kind, summary, author, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (
+            f"evt_{uuid.uuid4().hex[:12]}",
+            order_id,
+            kind,
+            normalize_text(summary),
+            normalize_text(author) or "Usuário",
+            _event_stamp(),
+        ),
+    )
+
+
+def _queue_label(conn, queue_id: str) -> str:
+    if queue_id == ENTRY_QUEUE_ID:
+        return ENTRY_QUEUE_NAME
+    if queue_id == DONE_QUEUE_ID:
+        return DONE_QUEUE_NAME
+    row = conn.execute(
+        "SELECT name FROM org_queues WHERE id = ? AND active = 1",
+        (queue_id,),
+    ).fetchone()
+    if row is None:
+        return queue_id or ENTRY_QUEUE_NAME
+    return row["name"] or queue_id
 
 
 def list_service_orders(tenant_id: str | None, sheet_row: int) -> list[dict]:
@@ -163,6 +218,14 @@ def create_service_order(
                 stamp,
             ),
         )
+        _add_event(
+            conn,
+            order_id,
+            "criada",
+            clean_description or clean_subject,
+            created_by,
+            stamp,
+        )
 
     orders = list_service_orders(tenant, sheet_row)
     created = next((item for item in orders if item["id"] == order_id), None)
@@ -173,6 +236,8 @@ def create_service_order(
 
 ENTRY_QUEUE_ID = "analise"
 ENTRY_QUEUE_NAME = "Análise"
+DONE_QUEUE_ID = "concluida"
+DONE_QUEUE_NAME = "Concluída"
 
 
 def list_orders_by_sector(sector_name: str) -> list[dict]:
@@ -200,6 +265,8 @@ def build_sector_board(sector_id: str, sector_name: str) -> list[dict]:
     for queue in list_sector_queues(sector_id):
         columns.append({"id": queue["id"], "name": queue["name"], "fixed": False, "cards": []})
         known.add(queue["id"])
+    columns.append({"id": DONE_QUEUE_ID, "name": DONE_QUEUE_NAME, "fixed": True, "cards": []})
+    known.add(DONE_QUEUE_ID)
     buckets = {column["id"]: column for column in columns}
     for card in list_orders_by_sector(sector_name):
         queue_id = card.get("queue_id") or ENTRY_QUEUE_ID
@@ -209,25 +276,182 @@ def build_sector_board(sector_id: str, sector_name: str) -> list[dict]:
     return columns
 
 
-def move_service_order(order_id: str, queue_id: str, sector_id: str, sector_name: str) -> None:
+def move_service_order(
+    order_id: str,
+    queue_id: str,
+    sector_id: str,
+    sector_name: str,
+    *,
+    author: str = "",
+    reopen: bool = False,
+) -> None:
     from app.services.org_registry import list_sector_queues
 
     target = normalize_text(queue_id) or ENTRY_QUEUE_ID
-    allowed = {ENTRY_QUEUE_ID} | {queue["id"] for queue in list_sector_queues(sector_id)}
+    allowed = {ENTRY_QUEUE_ID, DONE_QUEUE_ID} | {queue["id"] for queue in list_sector_queues(sector_id)}
     if target not in allowed:
         raise ValueError("Essa fila não pertence ao setor.")
     init_crm_local_db()
     stamp = _now().isoformat(timespec="seconds")
     with _lock, _connect() as conn:
         current = conn.execute(
-            "SELECT id, sector FROM service_orders WHERE id = ?",
+            "SELECT id, sector, status, queue_id FROM service_orders WHERE id = ?",
             (order_id,),
         ).fetchone()
         if current is None:
             raise ValueError("Ordem de serviço não encontrada.")
         if normalize_text(current["sector"]).lower() != normalize_text(sector_name).lower():
             raise ValueError("Essa ordem é de outro setor.")
+        current_queue = normalize_text(current["queue_id"]) or ENTRY_QUEUE_ID
+        if current_queue == target:
+            return
+        label = _queue_label(conn, target)
+        leaving_done = current_queue == DONE_QUEUE_ID and target != DONE_QUEUE_ID
+        if leaving_done and not reopen:
+            raise ValueError("Confirme se deseja reabrir a ordem de serviço.")
+        if leaving_done:
+            status = "reaberta"
+            kind = "reaberta"
+            summary = f"Reaberta na fila {label}."
+        elif target == DONE_QUEUE_ID:
+            status = "concluida"
+            kind = "concluida"
+            summary = "Concluída."
+        else:
+            status = "reaberta" if normalize_text(current["status"]) == "reaberta" else "em_andamento"
+            kind = "movida"
+            summary = f"Movida para {label}."
         conn.execute(
-            "UPDATE service_orders SET queue_id = ?, updated_at = ? WHERE id = ?",
-            (target, stamp, order_id),
+            "UPDATE service_orders SET queue_id = ?, status = ?, updated_at = ? WHERE id = ?",
+            (target, status, stamp, order_id),
+        )
+        _add_event(conn, order_id, kind, summary, author, stamp)
+
+
+def _client_contact(sheet_row: int) -> dict:
+    empty = {
+        "contato": "",
+        "whatsapp": "",
+        "telefone": "",
+        "email": "",
+        "cidade": "",
+        "uf": "",
+        "endereco": "",
+    }
+    if not sheet_row:
+        return empty
+    try:
+        from app.services.crm_registrations_storage import is_crm_postgres_ready
+
+        if not is_crm_postgres_ready():
+            return empty
+        from database.connection import SessionLocal
+        from database.models import CrmRegistration
+
+        db = SessionLocal()
+        try:
+            row = (
+                db.query(CrmRegistration)
+                .filter(CrmRegistration.sheet_row == int(sheet_row))
+                .first()
+            )
+            if row is None:
+                return empty
+            cidade = normalize_text(row.municipio)
+            uf = normalize_text(row.uf)
+            endereco = ", ".join(
+                part
+                for part in (
+                    normalize_text(row.endereco),
+                    normalize_text(row.endereco_numero),
+                    normalize_text(row.bairro),
+                    cidade,
+                    uf,
+                )
+                if part
+            )
+            return {
+                "contato": normalize_text(row.nome_contato),
+                "whatsapp": normalize_text(row.telefone_b2b),
+                "telefone": normalize_text(row.telefone_fixo) or normalize_text(row.telefone_alternativo),
+                "email": normalize_text(row.email_empresa) or normalize_text(row.email_socio_1),
+                "cidade": cidade,
+                "uf": uf,
+                "endereco": endereco,
+            }
+        finally:
+            db.close()
+    except Exception:
+        return empty
+
+
+def _event_view(row) -> dict:
+    kind = normalize_text(row["kind"]) or "atualizacao"
+    return {
+        "kind": kind,
+        "kind_label": EVENT_KIND_LABELS.get(kind, "Atualização"),
+        "summary": row["summary"] or "",
+        "author": row["author"] or "Usuário",
+        "created_at_label": _format_when(row["created_at"]),
+    }
+
+
+def get_order_detail(order_id: str) -> dict | None:
+    init_crm_local_db()
+    with _lock, _connect() as conn:
+        row = conn.execute(
+            "SELECT * FROM service_orders WHERE id = ?",
+            (normalize_text(order_id),),
+        ).fetchone()
+        if row is None:
+            return None
+        events = conn.execute(
+            """
+            SELECT kind, summary, author, created_at
+            FROM service_order_events
+            WHERE order_id = ?
+            ORDER BY created_at, id
+            """,
+            (row["id"],),
+        ).fetchall()
+        queue_id = (row["queue_id"] if "queue_id" in row.keys() else "") or ENTRY_QUEUE_ID
+        queue_name = _queue_label(conn, queue_id)
+    detail = _row_to_view(row)
+    detail["queue_name"] = queue_name
+    detail["description"] = normalize_text(row["description"])
+    history = [_event_view(item) for item in events]
+    if not history:
+        history.append(
+            {
+                "kind": "criada",
+                "kind_label": "Criada",
+                "summary": detail["description"] or detail["subject"],
+                "author": detail["created_by"],
+                "created_at_label": detail["created_at_label"],
+            }
+        )
+    detail["history"] = history
+    detail["client"] = _client_contact(detail["sheet_row"])
+    return detail
+
+
+def add_order_update(order_id: str, note: str, author: str = "") -> None:
+    clean = normalize_text(note)
+    if len(clean) < 2:
+        raise ValueError("Escreva a atualização.")
+    if len(clean) > 1000:
+        raise ValueError("A atualização pode ter no máximo 1000 caracteres.")
+    init_crm_local_db()
+    stamp = _now().isoformat(timespec="seconds")
+    with _lock, _connect() as conn:
+        current = conn.execute(
+            "SELECT id FROM service_orders WHERE id = ?",
+            (normalize_text(order_id),),
+        ).fetchone()
+        if current is None:
+            raise ValueError("Ordem de serviço não encontrada.")
+        _add_event(conn, current["id"], "atualizacao", clean, author, stamp)
+        conn.execute(
+            "UPDATE service_orders SET updated_at = ? WHERE id = ?",
+            (stamp, current["id"]),
         )

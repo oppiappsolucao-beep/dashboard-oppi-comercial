@@ -694,3 +694,16 @@ class ServiceOrderCounter(Base):
 
     year = Column(Integer, primary_key=True)
     last_seq = Column(Integer, nullable=False, default=0)
+
+
+class ServiceOrderEvent(Base):
+    """Histórico da ordem: criação, fila, conclusão, reabertura e atualizações."""
+
+    __tablename__ = "service_order_events"
+
+    id = Column(String(40), primary_key=True)
+    order_id = Column(String(40), nullable=False, index=True)
+    kind = Column(String(30), nullable=False, default="")
+    summary = Column(Text, nullable=False, default="")
+    author = Column(String(255), nullable=False, default="")
+    created_at = Column(String(40), nullable=False, default="")

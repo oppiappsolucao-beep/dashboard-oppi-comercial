@@ -24,6 +24,7 @@ _TABLES = (
     "org_queues",
     "service_orders",
     "service_order_counters",
+    "service_order_events",
 )
 
 
@@ -89,10 +90,11 @@ def _ensure_postgres_tables() -> None:
         OrgQueue,
         OrgSector,
         ServiceOrderCounter,
+        ServiceOrderEvent,
         ServiceOrderRecord,
     )
 
-    for model in (OrgSector, OrgPerson, OrgQueue, ServiceOrderRecord, ServiceOrderCounter):
+    for model in (OrgSector, OrgPerson, OrgQueue, ServiceOrderRecord, ServiceOrderCounter, ServiceOrderEvent):
         model.__table__.create(bind=engine, checkfirst=True)
 
 
@@ -237,6 +239,25 @@ def _import_sqlite() -> None:
                     {"year": int(row["year"]), "last_seq": int(row["last_seq"] or 0)},
                 ):
                     copied["service_order_counters"] += 1
+        if "service_order_events" in present:
+            for row in src.execute("SELECT * FROM service_order_events").fetchall():
+                if _insert_ignore(
+                    engine,
+                    """
+                    INSERT INTO service_order_events (id, order_id, kind, summary, author, created_at)
+                    VALUES (:id, :order_id, :kind, :summary, :author, :created_at)
+                    ON CONFLICT (id) DO NOTHING
+                    """,
+                    {
+                        "id": row["id"],
+                        "order_id": _cell(row, "order_id"),
+                        "kind": _cell(row, "kind"),
+                        "summary": _cell(row, "summary"),
+                        "author": _cell(row, "author"),
+                        "created_at": _cell(row, "created_at"),
+                    },
+                ):
+                    copied["service_order_events"] += 1
         if any(copied.values()):
             logger.info("Cadastros copiados do SQLite para o Postgres: %s", copied)
     finally:

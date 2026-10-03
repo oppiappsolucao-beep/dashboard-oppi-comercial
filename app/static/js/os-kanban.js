@@ -1,7 +1,10 @@
 (function () {
   var board = document.getElementById("os-kanban-board");
+  var modal = document.getElementById("os-order-modal");
+  var modalBody = document.getElementById("os-order-modal-body");
   if (!board) return;
   var dragged = null;
+  var suppressClick = false;
 
   function countColumn(column) {
     var body = column.querySelector(".activities-kanban-column-body");
@@ -20,14 +23,46 @@
     }
   }
 
+  function closeModal() {
+    if (!modal) return;
+    modal.hidden = true;
+    if (modalBody) modalBody.innerHTML = "";
+  }
+
+  function openOrder(orderId) {
+    if (!modal || !modalBody) return;
+    modal.hidden = false;
+    modalBody.textContent = "Carregando…";
+    fetch("/atividades/os/" + encodeURIComponent(orderId))
+      .then(function (response) {
+        if (!response.ok) throw new Error("fail");
+        return response.text();
+      })
+      .then(function (html) {
+        modalBody.innerHTML = html;
+      })
+      .catch(function () {
+        modalBody.textContent = "Não consegui abrir esta ordem.";
+      });
+  }
+
   board.querySelectorAll(".activities-kanban-card").forEach(function (card) {
     card.addEventListener("dragstart", function () {
+      suppressClick = true;
       dragged = card;
       card.classList.add("is-dragging");
     });
     card.addEventListener("dragend", function () {
       card.classList.remove("is-dragging");
       dragged = null;
+    });
+    card.addEventListener("click", function (event) {
+      if (suppressClick) {
+        suppressClick = false;
+        return;
+      }
+      if (event.target.closest("a, button, textarea, input")) return;
+      openOrder(card.getAttribute("data-order-id"));
     });
   });
 
@@ -45,7 +80,13 @@
       if (!dragged) return;
       var queueId = body.getAttribute("data-drop-queue");
       var orderId = dragged.getAttribute("data-order-id");
-      if (!queueId || !orderId || dragged.getAttribute("data-current-queue") === queueId) return;
+      var fromQueue = dragged.getAttribute("data-current-queue");
+      if (!queueId || !orderId || fromQueue === queueId) return;
+      var reopen = false;
+      if (fromQueue === "concluida") {
+        reopen = window.confirm("Esta ordem já foi concluída. Deseja realmente reabrir?");
+        if (!reopen) return;
+      }
       var previous = dragged.parentElement;
       var empty = body.querySelector(".activities-kanban-empty");
       if (empty) empty.remove();
@@ -55,6 +96,7 @@
       countColumn(body.closest(".activities-kanban-column"));
       var data = new FormData();
       data.set("queue_id", queueId);
+      if (reopen) data.set("reopen", "1");
       var sector = document.getElementById("os-board-sector");
       if (sector) data.set("sector_id", sector.value);
       fetch("/atividades/os/" + encodeURIComponent(orderId) + "/fila", {
@@ -67,4 +109,29 @@
       });
     });
   });
+
+  if (modal) {
+    modal.addEventListener("click", function (event) {
+      if (event.target.closest("[data-os-close]")) closeModal();
+    });
+    modal.addEventListener("submit", function (event) {
+      var form = event.target;
+      if (!form || form.id !== "os-update-form") return;
+      event.preventDefault();
+      fetch(form.action, { method: "POST", body: new FormData(form) })
+        .then(function (response) {
+          if (!response.ok) throw new Error("fail");
+          return response.text();
+        })
+        .then(function (html) {
+          modalBody.innerHTML = html;
+        })
+        .catch(function () {
+          window.location.reload();
+        });
+    });
+    document.addEventListener("keydown", function (event) {
+      if (event.key === "Escape" && !modal.hidden) closeModal();
+    });
+  }
 })();

@@ -1,0 +1,42 @@
+<div class="os-detail">
+  <p class="os-detail-protocol">{{ order.protocol }} · {{ order.status_label }} · {{ order.queue_name }}</p>
+  <h2 id="os-modal-title">{{ order.subject }}</h2>
+
+  <section class="os-detail-block">
+    <h3>Quem criou</h3>
+    <p><strong>{{ order.created_by }}</strong> em {{ order.created_at_label }}</p>
+    <p>Responsável: {{ order.responsible }} · Dia: {{ order.scheduled_date_label }} · Prioridade: {{ order.priority }}</p>
+    <p class="os-detail-text">{{ order.description or "Sem descrição." }}</p>
+  </section>
+
+  <section class="os-detail-block">
+    <h3>Cliente</h3>
+    <p><strong>{{ order.empresa }}</strong></p>
+    <p>Contato: {{ order.client.contato or "Não informado" }}</p>
+    <p>WhatsApp: {% if order.client.whatsapp %}<a href="tel:{{ order.client.whatsapp }}">{{ order.client.whatsapp }}</a>{% else %}Não informado{% endif %}</p>
+    <p>Telefone: {% if order.client.telefone %}<a href="tel:{{ order.client.telefone }}">{{ order.client.telefone }}</a>{% else %}Não informado{% endif %}</p>
+    <p>E-mail: {% if order.client.email %}<a href="mailto:{{ order.client.email }}">{{ order.client.email }}</a>{% else %}Não informado{% endif %}</p>
+    {% if order.client.endereco %}<p>{{ order.client.endereco }}</p>{% endif %}
+    {% if order.sheet_row %}
+    <a class="btn btn-small btn-secondary" href="/cadastro/todos/{{ order.sheet_row }}/editar?tab=ordens&from=activities">Abrir cadastro</a>
+    {% endif %}
+  </section>
+
+  <section class="os-detail-block">
+    <h3>Histórico</h3>
+    <ol class="os-detail-history">
+      {% for item in order.history %}
+      <li>
+        <strong>{{ item.kind_label }}</strong>
+        <span>{{ item.created_at_label }} · {{ item.author }}</span>
+        {% if item.summary %}<p>{{ item.summary }}</p>{% endif %}
+      </li>
+      {% endfor %}
+    </ol>
+    <form id="os-update-form" method="post" action="/atividades/os/{{ order.id }}/atualizacao" data-order-id="{{ order.id }}">
+      <label for="os-update-note">Atualização</label>
+      <textarea id="os-update-note" name="note" maxlength="1000" rows="3" required placeholder="O que mudou nesta ordem"></textarea>
+      <button type="submit" class="btn btn-small">Registrar atualização</button>
+    </form>
+  </section>
+</div>
