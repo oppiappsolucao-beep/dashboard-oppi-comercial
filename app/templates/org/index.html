@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
-<link rel="stylesheet" href="/static/css/org-registry.css?v=1">
+<link rel="stylesheet" href="/static/css/org-registry.css?v=2">
 <div class="page-header">
   <div>
     <div class="page-title">Sistema</div>
@@ -29,7 +29,7 @@
           <option value="">Selecione</option>
           <option value="novo">Novo setor</option>
           {% for sector in sectors %}
-          <option value="{{ sector.id }}" data-name="{{ sector.name }}" data-accesses="{{ sector.accesses_csv }}">{{ sector.name }}</option>
+          <option value="{{ sector.id }}" data-name="{{ sector.name }}" data-accesses="{{ sector.accesses_csv }}" {% if editing_sector_id == sector.id %}selected{% endif %}>{{ sector.name }}</option>
           {% endfor %}
         </select>
       </div>
@@ -61,9 +61,12 @@
         <strong>{{ sector.name }}</strong>
         <span>{{ sector.people_count }} pessoa(s)</span>
       </div>
-      <form method="post" action="/cadastros/setores/{{ sector.id }}/remover">
-        <button type="submit" class="btn btn-secondary btn-small">Remover</button>
-      </form>
+      <div class="org-card-actions">
+        <a class="btn btn-secondary btn-small" href="/cadastros?tipo=setores&editar={{ sector.id }}">Editar</a>
+        <form method="post" action="/cadastros/setores/{{ sector.id }}/remover">
+          <button type="submit" class="btn btn-secondary btn-small">Remover</button>
+        </form>
+      </div>
     </div>
     <div class="org-access-tags">
       {% if sector.access_labels %}
@@ -97,32 +100,37 @@
     });
   }
   select.addEventListener("change", sync);
+  if (select.value) sync();
 })();
 </script>
 
 {% elif active_tab == 'representantes' %}
 <section class="panel org-panel">
-  <h2>Representante nacional</h2>
+  <h2>{% if editing %}Editar representante{% else %}Representante nacional{% endif %}</h2>
   <p>Login de acesso e o local onde o representante reside.</p>
   <form method="post" action="/cadastros/pessoas" class="org-form">
     <input type="hidden" name="kind" value="representante">
+    {% if editing %}<input type="hidden" name="person_id" value="{{ editing.id }}">{% endif %}
     <div class="form-grid">
-      <div class="form-group"><label>Nome</label><input name="name" required maxlength="120" placeholder="Nome do representante"></div>
-      <div class="form-group"><label>Login</label><input name="username" required maxlength="40" autocomplete="off" placeholder="usuario.acesso"></div>
-      <div class="form-group"><label>Senha</label><input name="password" type="password" required minlength="6" autocomplete="new-password" placeholder="Mínimo 6 caracteres"></div>
+      <div class="form-group"><label>Nome</label><input name="name" required maxlength="120" placeholder="Nome do representante" value="{{ editing.name if editing else '' }}"></div>
+      <div class="form-group"><label>Login</label><input name="username" required maxlength="40" autocomplete="off" placeholder="usuario.acesso" value="{{ editing.username if editing else '' }}"></div>
+      <div class="form-group"><label>{% if editing %}Nova senha{% else %}Senha{% endif %}</label><input name="password" type="password" {% if not editing %}required{% endif %} minlength="6" autocomplete="new-password" placeholder="{% if editing %}Deixe em branco para manter{% else %}Mínimo 6 caracteres{% endif %}"></div>
       <div class="form-group">
         <label>UF</label>
         <select name="region">
           <option value="">Selecione</option>
-          {% for uf in ufs %}<option value="{{ uf }}">{{ uf }}</option>{% endfor %}
+          {% for uf in ufs %}<option value="{{ uf }}" {% if editing and editing.region == uf %}selected{% endif %}>{{ uf }}</option>{% endfor %}
         </select>
       </div>
-      <div class="form-group"><label>Estado</label><input name="state_name" required maxlength="80" placeholder="Estado em que reside"></div>
-      <div class="form-group"><label>Cidade</label><input name="city" required maxlength="80" placeholder="Cidade em que reside"></div>
-      <div class="form-group"><label>Telefone</label><input name="phone" maxlength="40"></div>
-      <div class="form-group"><label>E-mail</label><input name="email" type="email" maxlength="120"></div>
+      <div class="form-group"><label>Estado</label><input name="state_name" required maxlength="80" placeholder="Estado em que reside" value="{{ editing.state_name if editing else '' }}"></div>
+      <div class="form-group"><label>Cidade</label><input name="city" required maxlength="80" placeholder="Cidade em que reside" value="{{ editing.city if editing else '' }}"></div>
+      <div class="form-group"><label>Telefone</label><input name="phone" maxlength="40" value="{{ editing.phone if editing else '' }}"></div>
+      <div class="form-group"><label>E-mail</label><input name="email" type="email" maxlength="120" value="{{ editing.email if editing else '' }}"></div>
     </div>
-    <button type="submit" class="btn">Cadastrar representante</button>
+    <div class="org-form-actions">
+      <button type="submit" class="btn">{% if editing %}Salvar alterações{% else %}Cadastrar representante{% endif %}</button>
+      {% if editing %}<a class="btn btn-secondary" href="/cadastros?tipo=representantes">Cancelar</a>{% endif %}
+    </div>
   </form>
 </section>
 <section class="org-list">
@@ -133,10 +141,13 @@
         <strong>{{ person.name }}</strong>
         <span>{{ person.city }} · {{ person.state_name }} · {{ person.region }} · {{ person.username }}</span>
       </div>
-      <form method="post" action="/cadastros/pessoas/{{ person.id }}/remover">
-        <input type="hidden" name="kind" value="representante">
-        <button type="submit" class="btn btn-secondary btn-small">Remover</button>
-      </form>
+      <div class="org-card-actions">
+        <a class="btn btn-secondary btn-small" href="/cadastros?tipo=representantes&editar={{ person.id }}">Editar</a>
+        <form method="post" action="/cadastros/pessoas/{{ person.id }}/remover">
+          <input type="hidden" name="kind" value="representante">
+          <button type="submit" class="btn btn-secondary btn-small">Remover</button>
+        </form>
+      </div>
     </div>
   </article>
   {% else %}
@@ -146,25 +157,29 @@
 
 {% else %}
 <section class="panel org-panel">
-  <h2>Funcionário</h2>
+  <h2>{% if editing %}Editar funcionário{% else %}Funcionário{% endif %}</h2>
   <p>Quem entra aqui pode ser escolhido como responsável na ordem de serviço do setor.</p>
   <form method="post" action="/cadastros/pessoas" class="org-form">
     <input type="hidden" name="kind" value="funcionario">
+    {% if editing %}<input type="hidden" name="person_id" value="{{ editing.id }}">{% endif %}
     <div class="form-grid">
-      <div class="form-group"><label>Nome</label><input name="name" required maxlength="120" placeholder="Nome do funcionário"></div>
+      <div class="form-group"><label>Nome</label><input name="name" required maxlength="120" placeholder="Nome do funcionário" value="{{ editing.name if editing else '' }}"></div>
       <div class="form-group">
         <label>Setor</label>
         <select name="sector_id" required>
           <option value="">Selecione</option>
-          {% for sector in sectors %}<option value="{{ sector.id }}">{{ sector.name }}</option>{% endfor %}
+          {% for sector in sectors %}<option value="{{ sector.id }}" {% if editing and editing.sector_id == sector.id %}selected{% endif %}>{{ sector.name }}</option>{% endfor %}
         </select>
       </div>
-      <div class="form-group"><label>Login</label><input name="username" required maxlength="40" autocomplete="off" placeholder="usuario.acesso"></div>
-      <div class="form-group"><label>Senha</label><input name="password" type="password" required minlength="6" autocomplete="new-password" placeholder="Mínimo 6 caracteres"></div>
-      <div class="form-group"><label>Telefone</label><input name="phone" maxlength="40"></div>
-      <div class="form-group"><label>E-mail</label><input name="email" type="email" maxlength="120"></div>
+      <div class="form-group"><label>Login</label><input name="username" required maxlength="40" autocomplete="off" placeholder="usuario.acesso" value="{{ editing.username if editing else '' }}"></div>
+      <div class="form-group"><label>{% if editing %}Nova senha{% else %}Senha{% endif %}</label><input name="password" type="password" {% if not editing %}required{% endif %} minlength="6" autocomplete="new-password" placeholder="{% if editing %}Deixe em branco para manter{% else %}Mínimo 6 caracteres{% endif %}"></div>
+      <div class="form-group"><label>Telefone</label><input name="phone" maxlength="40" value="{{ editing.phone if editing else '' }}"></div>
+      <div class="form-group"><label>E-mail</label><input name="email" type="email" maxlength="120" value="{{ editing.email if editing else '' }}"></div>
     </div>
-    <button type="submit" class="btn">Cadastrar funcionário</button>
+    <div class="org-form-actions">
+      <button type="submit" class="btn">{% if editing %}Salvar alterações{% else %}Cadastrar funcionário{% endif %}</button>
+      {% if editing %}<a class="btn btn-secondary" href="/cadastros?tipo=funcionarios">Cancelar</a>{% endif %}
+    </div>
   </form>
 </section>
 <section class="org-list">
@@ -175,10 +190,13 @@
         <strong>{{ person.name }}</strong>
         <span>{{ person.sector_name }} · {{ person.username }}{% if person.phone != '—' %} · {{ person.phone }}{% endif %}</span>
       </div>
-      <form method="post" action="/cadastros/pessoas/{{ person.id }}/remover">
-        <input type="hidden" name="kind" value="funcionario">
-        <button type="submit" class="btn btn-secondary btn-small">Remover</button>
-      </form>
+      <div class="org-card-actions">
+        <a class="btn btn-secondary btn-small" href="/cadastros?tipo=funcionarios&editar={{ person.id }}">Editar</a>
+        <form method="post" action="/cadastros/pessoas/{{ person.id }}/remover">
+          <input type="hidden" name="kind" value="funcionario">
+          <button type="submit" class="btn btn-secondary btn-small">Remover</button>
+        </form>
+      </div>
     </div>
   </article>
   {% else %}

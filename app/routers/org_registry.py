@@ -6,6 +6,7 @@ from app.services.legacy_core import normalize_text
 from app.services.org_registry import (
     ACCESS_OPTIONS,
     BRAZIL_UFS,
+    get_person,
     list_people,
     list_sectors,
     remove_person,
@@ -26,6 +27,16 @@ def _tab(value: str) -> str:
 
 
 def _page(request: Request, tab: str):
+    edit_id = normalize_text(request.query_params.get("editar"))
+    editing = None
+    editing_sector_id = ""
+    if edit_id and tab == "setores":
+        editing_sector_id = edit_id
+    elif edit_id:
+        editing = get_person(edit_id)
+        expected = "representante" if tab == "representantes" else "funcionario"
+        if editing and editing["kind"] != expected:
+            editing = None
     return render(
         request,
         "org/index.html",
@@ -37,6 +48,8 @@ def _page(request: Request, tab: str):
             "representantes": list_people("representante"),
             "access_options": ACCESS_OPTIONS,
             "ufs": BRAZIL_UFS,
+            "editing": editing,
+            "editing_sector_id": editing_sector_id,
             "success": request.session.pop("org_success", ""),
             "error": request.session.pop("org_error", ""),
         },
@@ -100,12 +113,15 @@ async def org_save_person(request: Request):
             password=form.get("password", ""),
             state_name=form.get("state_name", ""),
             city=form.get("city", ""),
+            person_id=form.get("person_id", ""),
         )
     except ValueError as error:
         request.session["org_error"] = str(error)
     else:
         label = "Representante" if kind == "representante" else "Funcionário"
-        if person.get("sector_name"):
+        if person.get("updated"):
+            request.session["org_success"] = f"{label} {person['name']} atualizado."
+        elif person.get("sector_name"):
             request.session["org_success"] = f"{label} {person['name']} cadastrado no setor {person['sector_name']}."
         else:
             request.session["org_success"] = f"{label} {person['name']} cadastrado."

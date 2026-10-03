@@ -84,6 +84,24 @@
   align-items: flex-start;
 }
 
+.org-card-actions,
+.org-form-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.org-card-actions form,
+.org-form-actions form {
+  margin: 0;
+}
+
+.org-card-actions a,
+.org-form-actions a {
+  text-decoration: none;
+}
+
 .org-card-head span,
 .org-access-tags {
   color: var(--muted);

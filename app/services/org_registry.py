@@ -205,6 +205,41 @@ def _hash_password(password: str) -> str:
     return bcrypt.hashpw(clean.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
 
+def get_person(person_id: str) -> dict | None:
+    init_crm_local_db()
+    with _lock, _connect() as conn:
+        row = conn.execute(
+            """
+            SELECT people.*, sectors.name AS sector_name
+            FROM org_people AS people
+            LEFT JOIN org_sectors AS sectors ON sectors.id = people.sector_id
+            WHERE people.id = ? AND people.active = 1
+            """,
+            (normalize_text(person_id),),
+        ).fetchone()
+    if row is None:
+        return None
+
+    def raw(key: str) -> str:
+        if key not in row.keys():
+            return ""
+        return normalize_text(row[key])
+
+    return {
+        "id": row["id"],
+        "kind": row["kind"],
+        "name": raw("name"),
+        "email": raw("email"),
+        "phone": raw("phone"),
+        "sector_id": raw("sector_id"),
+        "sector_name": normalize_text(row["sector_name"]) if "sector_name" in row.keys() else "",
+        "region": raw("region"),
+        "username": raw("username"),
+        "state_name": raw("state_name"),
+        "city": raw("city"),
+    }
+
+
 def save_person(
     *,
     kind: str,
@@ -217,6 +252,7 @@ def save_person(
     password: str = "",
     state_name: str = "",
     city: str = "",
+    person_id: str = "",
 ) -> dict:
     if kind not in PERSON_KINDS:
         raise ValueError("Tipo de cadastro inválido.")
@@ -224,7 +260,14 @@ def save_person(
     if len(clean_name) < 2:
         raise ValueError("Informe o nome.")
     clean_username = _normalize_username(username)
-    password_hash = _hash_password(password)
+    clean_person_id = normalize_text(person_id)
+    password_text = str(password or "").strip()
+    if password_text:
+        password_hash = _hash_password(password_text)
+    elif clean_person_id:
+        password_hash = ""
+    else:
+        password_hash = _hash_password(password)
     clean_region = normalize_text(region).upper()
     clean_state = normalize_text(state_name)
     clean_city = normalize_text(city)
@@ -237,12 +280,24 @@ def save_person(
             raise ValueError("Informe a cidade em que o representante reside.")
     init_crm_local_db()
     stamp = _now()
-    person_id = f"pes_{uuid.uuid4().hex[:12]}"
+    updated = False
     with _lock, _connect() as conn:
         _ensure_seed(conn)
+        current = None
+        if clean_person_id:
+            current = conn.execute(
+                "SELECT * FROM org_people WHERE id = ? AND active = 1",
+                (clean_person_id,),
+            ).fetchone()
+            if current is None:
+                raise ValueError("Cadastro não encontrado.")
+            if current["kind"] != kind:
+                raise ValueError("Tipo de cadastro inválido.")
+            if not password_hash:
+                password_hash = current["password_hash"] or ""
         taken = conn.execute(
-            "SELECT id FROM org_people WHERE lower(username) = ? AND active = 1",
-            (clean_username,),
+            "SELECT id FROM org_people WHERE lower(username) = ? AND active = 1 AND id != ?",
+            (clean_username, clean_person_id),
         ).fetchone()
         if taken:
             raise ValueError("Este login já está em uso.")
@@ -257,30 +312,61 @@ def save_person(
                 raise ValueError("Selecione o setor.")
             stored_sector_id = sector["id"]
             sector_name = sector["name"]
-        conn.execute(
-            """
-            INSERT INTO org_people (
-                id, kind, name, email, phone, sector_id, region, username, password_hash,
-                state_name, city, active, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
-            """,
-            (
-                person_id,
-                kind,
-                clean_name,
-                normalize_text(email),
-                normalize_text(phone),
-                stored_sector_id,
-                clean_region,
-                clean_username,
-                password_hash,
-                clean_state,
-                clean_city,
-                stamp,
-                stamp,
-            ),
-        )
-    return {"id": person_id, "name": clean_name, "sector_name": sector_name, "username": clean_username}
+        if current is None:
+            clean_person_id = f"pes_{uuid.uuid4().hex[:12]}"
+            conn.execute(
+                """
+                INSERT INTO org_people (
+                    id, kind, name, email, phone, sector_id, region, username, password_hash,
+                    state_name, city, active, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+                """,
+                (
+                    clean_person_id,
+                    kind,
+                    clean_name,
+                    normalize_text(email),
+                    normalize_text(phone),
+                    stored_sector_id,
+                    clean_region,
+                    clean_username,
+                    password_hash,
+                    clean_state,
+                    clean_city,
+                    stamp,
+                    stamp,
+                ),
+            )
+        else:
+            updated = True
+            conn.execute(
+                """
+                UPDATE org_people
+                SET name = ?, email = ?, phone = ?, sector_id = ?, region = ?, username = ?,
+                    password_hash = ?, state_name = ?, city = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    clean_name,
+                    normalize_text(email),
+                    normalize_text(phone),
+                    stored_sector_id,
+                    clean_region,
+                    clean_username,
+                    password_hash,
+                    clean_state,
+                    clean_city,
+                    stamp,
+                    clean_person_id,
+                ),
+            )
+    return {
+        "id": clean_person_id,
+        "name": clean_name,
+        "sector_name": sector_name,
+        "username": clean_username,
+        "updated": updated,
+    }
 
 
 def remove_person(person_id: str) -> None:
