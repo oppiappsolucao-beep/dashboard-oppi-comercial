@@ -440,6 +440,8 @@ def add_sector_queue(sector_id: str, name: str) -> dict:
         raise ValueError("A primeira coluna já é Análise.")
     if clean_name.lower() in {"concluída", "concluida", "finalizada", "finalizado"}:
         raise ValueError("A última coluna já é Concluída.")
+    if clean_name.lower() in {"campanha", "campanhas"}:
+        raise ValueError("A coluna Campanha já é fixa no comercial.")
     init_crm_local_db()
     stamp = _now()
     queue_id = f"fila_{uuid.uuid4().hex[:12]}"

@@ -22,6 +22,22 @@
     {% endif %}
   </section>
 
+  {% if order.source == 'campanha' %}
+  <section class="os-detail-block">
+    <h3>Campanha</h3>
+    {% if order.campaign %}<p>Campanha: {{ order.campaign }}</p>{% endif %}
+    {% if order.creative %}<p>Criativo: {{ order.creative }}</p>{% endif %}
+    {% if order.queue_id == 'concluida' %}
+    <div class="os-detail-actions">
+      <a class="btn btn-small" href="{{ order.cadastro_url }}">Finalizar cadastro</a>
+      <a class="btn btn-small btn-secondary" href="/leads-e-empresas">Validar em empresa</a>
+    </div>
+    {% else %}
+    <p>Quando o cliente fechar, arraste para Concluída. O cadastro abre com estes dados.</p>
+    {% endif %}
+  </section>
+  {% endif %}
+
   <section class="os-detail-block">
     <h3>Histórico</h3>
     <ol class="os-detail-history">

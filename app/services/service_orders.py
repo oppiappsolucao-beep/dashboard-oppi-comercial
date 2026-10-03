@@ -101,6 +101,7 @@ def _row_to_view(row) -> dict:
         "responsible": row["responsible"] or "—",
         "created_by": row["created_by"] or "—",
         "created_at": row["created_at"] or "",
+        "updated_at": row["updated_at"] if "updated_at" in row.keys() else "",
         "created_at_label": _format_when(row["created_at"]),
         "sheet_row": int(row["sheet_row"] or 0) if "sheet_row" in row.keys() else 0,
     }
@@ -126,6 +127,8 @@ def _add_event(conn, order_id: str, kind: str, summary: str, author: str, stamp:
 def _queue_label(conn, queue_id: str) -> str:
     if queue_id == ENTRY_QUEUE_ID:
         return ENTRY_QUEUE_NAME
+    if queue_id == CAMPAIGN_QUEUE_ID:
+        return CAMPAIGN_QUEUE_NAME
     if queue_id == DONE_QUEUE_ID:
         return DONE_QUEUE_NAME
     row = conn.execute(
@@ -236,6 +239,8 @@ def create_service_order(
 
 ENTRY_QUEUE_ID = "analise"
 ENTRY_QUEUE_NAME = "Análise"
+CAMPAIGN_QUEUE_ID = "campanha"
+CAMPAIGN_QUEUE_NAME = "Campanha"
 DONE_QUEUE_ID = "concluida"
 DONE_QUEUE_NAME = "Concluída"
 
@@ -257,18 +262,87 @@ def list_orders_by_sector(sector_name: str) -> list[dict]:
     return [_row_to_view(row) for row in rows]
 
 
+def create_campaign_card(
+    *,
+    empresa: str,
+    subject: str,
+    description: str,
+    sector: str,
+    scheduled_date: str,
+    phone: str = "",
+) -> str:
+    """Card da coluna Campanha. Não exige funcionário responsável."""
+    init_crm_local_db()
+    now = _now()
+    stamp = now.isoformat(timespec="seconds")
+    order_id = f"os_{uuid.uuid4().hex[:12]}"
+    day = scheduled_date if re.match(r"^\d{4}-\d{2}-\d{2}$", scheduled_date or "") else now.date().isoformat()
+    with _lock, _connect() as conn:
+        protocol = _allocate_protocol(conn, now.year)
+        conn.execute(
+            """
+            INSERT INTO service_orders (
+                id, tenant_id, sheet_row, protocol, empresa, subject, description,
+                status, priority, sector, scheduled_date, queue_id, responsible, created_by, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, 'aberta', ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                order_id,
+                DEFAULT_TENANT_ID,
+                0,
+                protocol,
+                normalize_text(empresa) or "Lead de campanha",
+                normalize_text(subject) or "Lead de campanha",
+                normalize_text(description),
+                "Média",
+                normalize_text(sector),
+                day,
+                CAMPAIGN_QUEUE_ID,
+                "Comercial",
+                "Leads Raissa",
+                stamp,
+                stamp,
+            ),
+        )
+        _add_event(
+            conn,
+            order_id,
+            "criada",
+            normalize_text(description) or normalize_text(subject) or "Lead da aba Leads Raissa",
+            "Leads Raissa",
+            stamp,
+        )
+    return order_id
+
+
+def is_commercial_sector(sector_name: str) -> bool:
+    name = normalize_text(sector_name).lower()
+    return "comercial" in name
+
+
 def build_sector_board(sector_id: str, sector_name: str) -> list[dict]:
+    from app.services.campaign_leads import attach_campaign_cards, sync_campaign_leads
     from app.services.org_registry import list_sector_queues
 
+    if is_commercial_sector(sector_name):
+        try:
+            sync_campaign_leads(sector_name)
+        except Exception:
+            pass
     columns = [{"id": ENTRY_QUEUE_ID, "name": ENTRY_QUEUE_NAME, "fixed": True, "cards": []}]
     known = {ENTRY_QUEUE_ID}
+    if is_commercial_sector(sector_name):
+        columns.append({"id": CAMPAIGN_QUEUE_ID, "name": CAMPAIGN_QUEUE_NAME, "fixed": True, "cards": []})
+        known.add(CAMPAIGN_QUEUE_ID)
     for queue in list_sector_queues(sector_id):
         columns.append({"id": queue["id"], "name": queue["name"], "fixed": False, "cards": []})
         known.add(queue["id"])
     columns.append({"id": DONE_QUEUE_ID, "name": DONE_QUEUE_NAME, "fixed": True, "cards": []})
     known.add(DONE_QUEUE_ID)
     buckets = {column["id"]: column for column in columns}
-    for card in list_orders_by_sector(sector_name):
+    cards = list_orders_by_sector(sector_name)
+    attach_campaign_cards(cards)
+    for card in cards:
         queue_id = card.get("queue_id") or ENTRY_QUEUE_ID
         if queue_id not in known:
             queue_id = ENTRY_QUEUE_ID
@@ -289,6 +363,8 @@ def move_service_order(
 
     target = normalize_text(queue_id) or ENTRY_QUEUE_ID
     allowed = {ENTRY_QUEUE_ID, DONE_QUEUE_ID} | {queue["id"] for queue in list_sector_queues(sector_id)}
+    if is_commercial_sector(sector_name):
+        allowed.add(CAMPAIGN_QUEUE_ID)
     if target not in allowed:
         raise ValueError("Essa fila não pertence ao setor.")
     init_crm_local_db()
@@ -432,6 +508,29 @@ def get_order_detail(order_id: str) -> dict | None:
         )
     detail["history"] = history
     detail["client"] = _client_contact(detail["sheet_row"])
+    detail["source"] = ""
+    detail["creative"] = ""
+    detail["campaign"] = ""
+    detail["cadastro_url"] = ""
+    try:
+        from app.services.campaign_leads import campaign_card_extra
+
+        extra = campaign_card_extra(row["id"])
+    except Exception:
+        extra = None
+    if extra:
+        detail.update(extra)
+        client = detail["client"]
+        if not client.get("whatsapp"):
+            client["whatsapp"] = extra.get("phone") or ""
+        if not client.get("email"):
+            client["email"] = extra.get("email") or ""
+        if not client.get("contato"):
+            client["contato"] = extra.get("contact_name") or ""
+        if not client.get("cidade"):
+            client["cidade"] = extra.get("city") or ""
+        if not client.get("uf"):
+            client["uf"] = extra.get("uf") or ""
     return detail
 
 

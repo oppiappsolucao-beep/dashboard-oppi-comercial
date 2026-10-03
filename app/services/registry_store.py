@@ -25,6 +25,7 @@ _TABLES = (
     "service_orders",
     "service_order_counters",
     "service_order_events",
+    "campaign_leads",
 )
 
 
@@ -89,12 +90,21 @@ def _ensure_postgres_tables() -> None:
         OrgPerson,
         OrgQueue,
         OrgSector,
+        CampaignLead,
         ServiceOrderCounter,
         ServiceOrderEvent,
         ServiceOrderRecord,
     )
 
-    for model in (OrgSector, OrgPerson, OrgQueue, ServiceOrderRecord, ServiceOrderCounter, ServiceOrderEvent):
+    for model in (
+        OrgSector,
+        OrgPerson,
+        OrgQueue,
+        ServiceOrderRecord,
+        ServiceOrderCounter,
+        ServiceOrderEvent,
+        CampaignLead,
+    ):
         model.__table__.create(bind=engine, checkfirst=True)
 
 
@@ -258,6 +268,37 @@ def _import_sqlite() -> None:
                     },
                 ):
                     copied["service_order_events"] += 1
+        if "campaign_leads" in present:
+            for row in src.execute("SELECT * FROM campaign_leads").fetchall():
+                if _insert_ignore(
+                    engine,
+                    """
+                    INSERT INTO campaign_leads (
+                        id, sheet_row, order_id, empresa, phone, email, contact_name,
+                        creative, campaign, city, uf, lead_date, created_at
+                    ) VALUES (
+                        :id, :sheet_row, :order_id, :empresa, :phone, :email, :contact_name,
+                        :creative, :campaign, :city, :uf, :lead_date, :created_at
+                    )
+                    ON CONFLICT (id) DO NOTHING
+                    """,
+                    {
+                        "id": row["id"],
+                        "sheet_row": int(_cell(row, "sheet_row", 0) or 0),
+                        "order_id": _cell(row, "order_id"),
+                        "empresa": _cell(row, "empresa"),
+                        "phone": _cell(row, "phone"),
+                        "email": _cell(row, "email"),
+                        "contact_name": _cell(row, "contact_name"),
+                        "creative": _cell(row, "creative"),
+                        "campaign": _cell(row, "campaign"),
+                        "city": _cell(row, "city"),
+                        "uf": _cell(row, "uf"),
+                        "lead_date": _cell(row, "lead_date"),
+                        "created_at": _cell(row, "created_at"),
+                    },
+                ):
+                    copied["campaign_leads"] += 1
         if any(copied.values()):
             logger.info("Cadastros copiados do SQLite para o Postgres: %s", copied)
     finally:

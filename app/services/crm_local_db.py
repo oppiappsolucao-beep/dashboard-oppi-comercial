@@ -196,6 +196,22 @@ def init_crm_local_db() -> None:
                 );
                 CREATE INDEX IF NOT EXISTS idx_service_order_events
                     ON service_order_events(order_id, created_at);
+
+                CREATE TABLE IF NOT EXISTS campaign_leads (
+                    id TEXT PRIMARY KEY,
+                    sheet_row INTEGER NOT NULL UNIQUE,
+                    order_id TEXT NOT NULL,
+                    empresa TEXT NOT NULL DEFAULT '',
+                    phone TEXT NOT NULL DEFAULT '',
+                    email TEXT NOT NULL DEFAULT '',
+                    contact_name TEXT NOT NULL DEFAULT '',
+                    creative TEXT NOT NULL DEFAULT '',
+                    campaign TEXT NOT NULL DEFAULT '',
+                    city TEXT NOT NULL DEFAULT '',
+                    uf TEXT NOT NULL DEFAULT '',
+                    lead_date TEXT NOT NULL DEFAULT '',
+                    created_at TEXT NOT NULL
+                );
                 """
             )
             # Migrações leves (idempotentes)

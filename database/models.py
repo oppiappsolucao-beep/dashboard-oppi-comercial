@@ -696,6 +696,26 @@ class ServiceOrderCounter(Base):
     last_seq = Column(Integer, nullable=False, default=0)
 
 
+class CampaignLead(Base):
+    """Lead da aba Leads Raissa ligado a um card da coluna Campanha."""
+
+    __tablename__ = "campaign_leads"
+
+    id = Column(String(40), primary_key=True)
+    sheet_row = Column(Integer, unique=True, nullable=False)
+    order_id = Column(String(40), nullable=False, index=True)
+    empresa = Column(String(255), nullable=False, default="")
+    phone = Column(String(40), nullable=False, default="")
+    email = Column(String(255), nullable=False, default="")
+    contact_name = Column(String(255), nullable=False, default="")
+    creative = Column(String(255), nullable=False, default="")
+    campaign = Column(String(255), nullable=False, default="")
+    city = Column(String(120), nullable=False, default="")
+    uf = Column(String(8), nullable=False, default="")
+    lead_date = Column(String(20), nullable=False, default="")
+    created_at = Column(String(40), nullable=False, default="")
+
+
 class ServiceOrderEvent(Base):
     """Histórico da ordem: criação, fila, conclusão, reabertura e atualizações."""
 

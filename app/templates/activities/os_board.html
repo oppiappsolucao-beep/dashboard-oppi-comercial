@@ -6,6 +6,18 @@
 .os-queue-form input, .os-sector-switch select { height: 40px; border: 1px solid var(--border); border-radius: 10px; padding: 0 10px; }
 .activities-kanban-card { cursor: pointer; }
 .activities-kanban-column.is-done .activities-kanban-column-title { color: #166534; }
+.activities-kanban-column.is-campaign .activities-kanban-column-title { color: #7C3AED; }
+.os-period { display: flex; flex-wrap: wrap; align-items: end; gap: 14px; padding: 14px 16px; margin-bottom: 16px; }
+.os-period label { display: flex; flex-direction: column; gap: 6px; font-size: 0.84rem; font-weight: 600; color: var(--muted); }
+.os-period input { min-height: 42px; padding: 0 12px; border: 1px solid var(--border); border-radius: 12px; background: #fff; font: inherit; }
+.os-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
+.os-summary article { padding: 16px; }
+.os-summary span { display: block; font-size: 0.78rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--purple, #7C3AED); }
+.os-summary strong { display: block; margin-top: 8px; font-size: 1.8rem; letter-spacing: -0.03em; }
+.os-summary p { margin: 8px 0 0; color: var(--muted); line-height: 1.45; }
+.os-detail-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+@media (max-width: 900px) { .os-summary { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 640px) { .os-summary { grid-template-columns: 1fr; } }
 .os-modal[hidden] { display: none; }
 .os-modal { position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; padding: 16px; }
 .os-modal-backdrop { position: absolute; inset: 0; background: rgba(15, 23, 42, 0.45); }
@@ -28,7 +40,9 @@
   <div>
     <div class="page-title">Kanban</div>
     <div class="page-subtitle">
-      {% if sector_name %}
+      {% if is_commercial %}
+      Comercial: o lead da campanha entra na coluna Campanha. Ao concluir, o cadastro abre com os dados da planilha.
+      {% elif sector_name %}
       {{ sector_name }}: as ordens entram em Análise e terminam em Concluída. Clique no card para ver o cliente e o histórico.
       {% else %}
       Escolha o setor para ver as ordens de serviço.
@@ -49,8 +63,40 @@
 {% if error %}<div class="alert-error">{{ error }}</div>{% endif %}
 {% if success %}<div class="alert-success">{{ success }}</div>{% endif %}
 
+<form class="os-period panel" method="get" action="/atividades">
+  {% if sector_id %}<input type="hidden" name="setor" value="{{ sector_id }}">{% endif %}
+  <label>De <input type="date" name="inicio" value="{{ inicio }}"></label>
+  <label>Até <input type="date" name="fim" value="{{ fim }}"></label>
+  <button type="submit" class="btn">Ver período</button>
+</form>
+
+<section class="os-summary" aria-label="Resumo do período">
+  <article class="panel">
+    <span>Resultado de conversas</span>
+    <strong>{{ summary.conversations }}</strong>
+    <p>{{ summary.conversations_note }}</p>
+  </article>
+  <article class="panel">
+    <span>Leads Raissa</span>
+    <strong>{{ summary.leads }}</strong>
+    <p>{{ summary.leads_note }}</p>
+  </article>
+  <article class="panel">
+    <span>Em andamento</span>
+    <strong>{{ summary.andamento }}</strong>
+    <p>{{ summary.andamento_note }}</p>
+  </article>
+  <article class="panel">
+    <span>Concluídos</span>
+    <strong>{{ summary.concluidos }}</strong>
+    <p>{{ summary.concluidos_note }}</p>
+  </article>
+</section>
+
 {% if is_admin and sectors %}
 <form method="get" action="/atividades" class="os-sector-switch">
+  <input type="hidden" name="inicio" value="{{ inicio }}">
+  <input type="hidden" name="fim" value="{{ fim }}">
   <label for="os-board-sector">Setor</label>
   <select id="os-board-sector" name="setor" onchange="this.form.requestSubmit()">
     {% for sector in sectors %}
@@ -62,7 +108,7 @@
 
 <div class="activities-kanban-board" id="os-kanban-board">
   {% for column in columns %}
-  <section class="activities-kanban-column{% if column.id == 'concluida' %} is-done{% endif %}">
+  <section class="activities-kanban-column{% if column.id == 'concluida' %} is-done{% endif %}{% if column.id == 'campanha' %} is-campaign{% endif %}">
     <header class="activities-kanban-column-header">
       <div class="activities-kanban-column-heading">
         <span class="activities-kanban-column-title">{{ column.name }}</span>
@@ -71,7 +117,7 @@
     </header>
     <div class="activities-kanban-column-body" data-drop-queue="{{ column.id }}">
       {% for card in column.cards %}
-      <article class="activities-kanban-card" draggable="true" data-order-id="{{ card.id }}" data-current-queue="{{ column.id }}">
+      <article class="activities-kanban-card" draggable="true" data-order-id="{{ card.id }}" data-current-queue="{{ column.id }}" {% if card.cadastro_url %}data-cadastro-url="{{ card.cadastro_url }}"{% endif %}>
         <span class="activities-kanban-card-grip" aria-hidden="true">⋮⋮</span>
         <div class="activities-kanban-card-title">{{ card.empresa }}</div>
         <div class="activities-kanban-card-action">{{ card.subject }}</div>
@@ -98,5 +144,5 @@
     <div id="os-order-modal-body">Carregando…</div>
   </div>
 </div>
-<script src="/static/js/os-kanban.js?v=2"></script>
+<script src="/static/js/os-kanban.js?v=3"></script>
 {% endblock %}

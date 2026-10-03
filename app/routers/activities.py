@@ -137,6 +137,11 @@ def _os_board_context(request: Request) -> dict:
             chosen = sectors[0]
             sector_id = chosen["id"]
         sector_name = chosen["name"] if chosen else ""
+    from app.services.kanban_summary import build_kanban_summary
+
+    inicio = normalize_text(request.query_params.get("inicio"))
+    fim = normalize_text(request.query_params.get("fim"))
+    summary = build_kanban_summary(sector_name, inicio, fim)
     columns = build_sector_board(sector_id, sector_name) if sector_id else []
     return {
         "active_page": "activities",
@@ -146,6 +151,10 @@ def _os_board_context(request: Request) -> dict:
         "sector_name": sector_name,
         "columns": columns,
         "can_manage_queues": bool(sector_id),
+        "inicio": summary["inicio"],
+        "fim": summary["fim"],
+        "summary": summary,
+        "is_commercial": "comercial" in sector_name.lower(),
         "success": request.session.pop("os_board_success", ""),
         "error": request.session.pop("os_board_error", ""),
     }

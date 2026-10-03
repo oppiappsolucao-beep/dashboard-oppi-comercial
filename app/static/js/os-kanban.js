@@ -99,11 +99,16 @@
       if (reopen) data.set("reopen", "1");
       var sector = document.getElementById("os-board-sector");
       if (sector) data.set("sector_id", sector.value);
+      var cadastroUrl = dragged.getAttribute("data-cadastro-url") || "";
       fetch("/atividades/os/" + encodeURIComponent(orderId) + "/fila", {
         method: "POST",
         body: data,
       }).then(function (response) {
-        if (!response.ok) window.location.reload();
+        if (!response.ok) {
+          window.location.reload();
+          return;
+        }
+        if (queueId === "concluida" && cadastroUrl) window.location.href = cadastroUrl;
       }).catch(function () {
         window.location.reload();
       });
