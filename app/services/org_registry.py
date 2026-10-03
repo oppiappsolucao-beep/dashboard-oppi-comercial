@@ -14,6 +14,7 @@ from app.services.legacy_core import normalize_text
 
 ACCESS_OPTIONS = [
     ("empresas", "Empresas"),
+    ("novo_cadastro", "Cadastro"),
     ("ordens", "Ordens de serviço"),
     ("kanban", "Kanban"),
     ("atendimentos", "Atendimentos"),

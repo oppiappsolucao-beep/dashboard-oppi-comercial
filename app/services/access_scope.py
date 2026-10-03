@@ -9,6 +9,7 @@ FULL_ACCESS = (
     "atendimentos",
     "kanban",
     "empresas",
+    "novo_cadastro",
     "financeiro",
     "propostas",
     "cadastro",
@@ -17,6 +18,7 @@ FULL_ACCESS = (
 HOME_BY_ACCESS = (
     ("kanban", "/atividades"),
     ("empresas", "/leads-e-empresas"),
+    ("novo_cadastro", "/cadastro/novo"),
     ("atendimentos", "/atendimentos"),
     ("gestao", "/gestao"),
     ("financeiro", "/financeiro"),
@@ -54,6 +56,8 @@ def home_url(request: Request) -> str:
 def _required_access(path: str) -> str | None:
     if path.startswith("/cadastros"):
         return "cadastro"
+    if path == "/cadastro/novo" or path.startswith("/cadastro/novo/"):
+        return "novo_cadastro"
     rules = (
         ("/gestao", "gestao"),
         ("/visao-geral", "gestao"),
