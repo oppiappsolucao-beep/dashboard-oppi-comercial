@@ -15,12 +15,17 @@ def isolated_storage(tmp_path, monkeypatch):
 
 
 def test_protocolo_e_gerado_e_nao_repete(isolated_storage):
+    from app.services.org_registry import list_sectors, save_person
+
+    sector = next(item for item in list_sectors() if item["name"] == "Suporte")
+    save_person(kind="funcionario", name="Ana", sector_id=sector["id"])
     first = create_service_order(
         tenant_id="default",
         sheet_row=42,
         empresa="Marmoraria Alfa",
         subject="Implantação do ponto",
         description="Primeiro acesso da equipe",
+        sector="Suporte",
         responsible="Ana",
         priority="Alta",
         created_by="Ana",
@@ -30,6 +35,7 @@ def test_protocolo_e_gerado_e_nao_repete(isolated_storage):
         sheet_row=42,
         empresa="Marmoraria Alfa",
         subject="Ajuste de acesso",
+        sector="Suporte",
         responsible="Ana",
         created_by="Ana",
     )
@@ -45,11 +51,16 @@ def test_protocolo_e_gerado_e_nao_repete(isolated_storage):
 
 
 def test_assunto_obrigatorio(isolated_storage):
+    from app.services.org_registry import list_sectors, save_person
+
+    sector = next(item for item in list_sectors() if item["name"] == "Suporte")
+    save_person(kind="funcionario", name="Ana", sector_id=sector["id"])
     with pytest.raises(ValueError, match="assunto"):
         create_service_order(
             tenant_id="default",
             sheet_row=7,
             empresa="Beta",
             subject="   ",
+            sector="Suporte",
             responsible="Ana",
         )

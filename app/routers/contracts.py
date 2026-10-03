@@ -47,6 +47,7 @@ from app.services.legacy_core import (
 )
 from app.services.lead_actions_storage import DEFAULT_TENANT_ID
 from app.services.activity_service import build_cadastro_activities_context
+from app.services.org_registry import list_people, list_sectors
 from app.services.service_orders import create_service_order, list_service_orders
 from config.crm_options import PRIORITY_OPTIONS
 from app.services.registration import (
@@ -368,6 +369,8 @@ async def contract_edit_page(request: Request, sheet_row: int):
             "cadastro_ativo": cadastro_ativo,
             "service_orders": service_orders,
             "service_orders_count": len(service_orders),
+            "org_sectors": list_sectors(),
+            "org_people": list_people(),
             "priority_options": PRIORITY_OPTIONS,
             "cadastro_tipo_options": CADASTRO_TIPO_OPTIONS,
             "active_tab": active_tab,
@@ -578,6 +581,7 @@ async def contract_create_service_order(
     sheet_row: int,
     subject: str = Form(""),
     description: str = Form(""),
+    sector: str = Form(""),
     responsible: str = Form(""),
     priority: str = Form("Média"),
     from_: str = Form("", alias="from"),
@@ -607,6 +611,7 @@ async def contract_create_service_order(
             empresa=empresa,
             subject=subject,
             description=description,
+            sector=sector,
             responsible=responsible,
             priority=priority,
             created_by=created_by,

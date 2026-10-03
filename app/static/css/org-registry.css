@@ -1,0 +1,117 @@
+.org-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  overflow-x: auto;
+}
+
+.org-tab {
+  padding: 10px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--text);
+  text-decoration: none;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.org-tab.is-active {
+  background: var(--violet);
+  border-color: var(--violet);
+  color: #fff;
+}
+
+.org-panel,
+.org-card,
+.org-empty {
+  padding: 18px;
+  margin-bottom: 12px;
+}
+
+.org-panel h2 {
+  margin: 0 0 4px;
+  font-size: 1.05rem;
+}
+
+.org-panel p,
+.org-empty {
+  margin: 0 0 14px;
+  color: var(--muted);
+}
+
+.org-form {
+  display: grid;
+  gap: 12px;
+}
+
+.org-access {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.org-access legend {
+  padding: 0 6px;
+  font-weight: 800;
+}
+
+.org-access-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.org-access-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fff;
+}
+
+.org-list {
+  display: grid;
+  gap: 10px;
+}
+
+.org-card-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.org-card-head span,
+.org-access-tags {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.org-access-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.org-access-tags span {
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #F5F3FF;
+  color: #6D28D9;
+  font-weight: 700;
+}
+
+.org-access-tags .is-empty {
+  background: #F3F4F6;
+  color: var(--muted);
+}
+
+@media (max-width: 700px) {
+  .org-access-list {
+    grid-template-columns: 1fr;
+  }
+}

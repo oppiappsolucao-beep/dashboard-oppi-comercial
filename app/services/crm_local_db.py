@@ -131,6 +131,7 @@ def init_crm_local_db() -> None:
                     description TEXT NOT NULL DEFAULT '',
                     status TEXT NOT NULL DEFAULT 'aberta',
                     priority TEXT NOT NULL DEFAULT '',
+                    sector TEXT NOT NULL DEFAULT '',
                     responsible TEXT NOT NULL DEFAULT '',
                     created_by TEXT NOT NULL DEFAULT '',
                     created_at TEXT NOT NULL,
@@ -143,6 +144,30 @@ def init_crm_local_db() -> None:
                     year INTEGER PRIMARY KEY,
                     last_seq INTEGER NOT NULL
                 );
+
+                CREATE TABLE IF NOT EXISTS org_sectors (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL UNIQUE,
+                    accesses_json TEXT NOT NULL DEFAULT '[]',
+                    active INTEGER NOT NULL DEFAULT 1,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS org_people (
+                    id TEXT PRIMARY KEY,
+                    kind TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    email TEXT NOT NULL DEFAULT '',
+                    phone TEXT NOT NULL DEFAULT '',
+                    sector_id TEXT NOT NULL DEFAULT '',
+                    region TEXT NOT NULL DEFAULT '',
+                    active INTEGER NOT NULL DEFAULT 1,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_org_people_sector
+                    ON org_people(kind, sector_id);
                 """
             )
             # Migrações leves (idempotentes)
@@ -153,6 +178,14 @@ def init_crm_local_db() -> None:
             if "remote_jid" not in cols:
                 conn.execute(
                     "ALTER TABLE attendance_conversations ADD COLUMN remote_jid TEXT NOT NULL DEFAULT ''"
+                )
+            order_cols = {
+                row[1]
+                for row in conn.execute("PRAGMA table_info(service_orders)").fetchall()
+            }
+            if order_cols and "sector" not in order_cols:
+                conn.execute(
+                    "ALTER TABLE service_orders ADD COLUMN sector TEXT NOT NULL DEFAULT ''"
                 )
             conn.commit()
         _initialized = True

@@ -62,6 +62,7 @@ def _row_to_view(row) -> dict:
         "status_label": SERVICE_ORDER_STATUS_LABELS.get(status, "Aberta"),
         "status_class": status,
         "priority": row["priority"] or "—",
+        "sector": row["sector"] if "sector" in row.keys() else "",
         "responsible": row["responsible"] or "—",
         "created_by": row["created_by"] or "—",
         "created_at_label": _format_when(row["created_at"]),
@@ -90,6 +91,7 @@ def create_service_order(
     empresa: str,
     subject: str,
     description: str = "",
+    sector: str = "",
     responsible: str = "",
     priority: str = "Média",
     created_by: str = "",
@@ -104,9 +106,9 @@ def create_service_order(
     if len(clean_description) > 2000:
         raise ValueError("A descrição da ordem de serviço pode ter no máximo 2000 caracteres.")
 
-    clean_responsible = normalize_text(responsible)
-    if not clean_responsible:
-        raise ValueError("Informe o responsável da ordem de serviço.")
+    from app.services.org_registry import validate_service_assignment
+
+    clean_sector, clean_responsible = validate_service_assignment(sector, responsible)
 
     clean_priority = normalize_text(priority)
     if clean_priority not in PRIORITY_OPTIONS:
@@ -124,8 +126,8 @@ def create_service_order(
             """
             INSERT INTO service_orders (
                 id, tenant_id, sheet_row, protocol, empresa, subject, description,
-                status, priority, responsible, created_by, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, 'aberta', ?, ?, ?, ?, ?)
+                status, priority, sector, responsible, created_by, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, 'aberta', ?, ?, ?, ?, ?, ?)
             """,
             (
                 order_id,
@@ -136,6 +138,7 @@ def create_service_order(
                 clean_subject,
                 clean_description,
                 clean_priority,
+                clean_sector,
                 clean_responsible,
                 normalize_text(created_by),
                 stamp,

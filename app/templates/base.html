@@ -48,6 +48,9 @@
         <a href="/leads-e-empresas" class="sidebar-link {% if active_page == 'leads' %}active{% endif %}">
           <span class="sidebar-link-icon">🏢</span> Empresas
         </a>
+        <a href="/cadastros" class="sidebar-link {% if active_page == 'org_registry' %}active{% endif %}">
+          <span class="sidebar-link-icon">✎</span> Cadastro
+        </a>
         <form class="sidebar-logout-form" method="post" action="/logout">
           <button type="submit" class="sidebar-link sidebar-link-logout">
             <span class="sidebar-link-icon" aria-hidden="true">⎋</span> Sair
@@ -113,6 +116,10 @@
     <a href="/leads-e-empresas" class="mobile-bottom-link {% if active_page == 'leads' %}active{% endif %}">
       <span class="mobile-bottom-icon" aria-hidden="true">🏢</span>
       <span class="mobile-bottom-label">Empresas</span>
+    </a>
+    <a href="/cadastros" class="mobile-bottom-link {% if active_page == 'org_registry' %}active{% endif %}">
+      <span class="mobile-bottom-icon" aria-hidden="true">✎</span>
+      <span class="mobile-bottom-label">Cadastro</span>
     </a>
   </nav>
 
