@@ -120,6 +120,29 @@ def init_crm_local_db() -> None:
                 CREATE UNIQUE INDEX IF NOT EXISTS idx_attendance_msg_evolution
                     ON attendance_messages(evolution_id)
                     WHERE evolution_id != '';
+
+                CREATE TABLE IF NOT EXISTS service_orders (
+                    id TEXT PRIMARY KEY,
+                    tenant_id TEXT NOT NULL DEFAULT 'default',
+                    sheet_row INTEGER NOT NULL,
+                    protocol TEXT NOT NULL UNIQUE,
+                    empresa TEXT NOT NULL DEFAULT '',
+                    subject TEXT NOT NULL DEFAULT '',
+                    description TEXT NOT NULL DEFAULT '',
+                    status TEXT NOT NULL DEFAULT 'aberta',
+                    priority TEXT NOT NULL DEFAULT '',
+                    responsible TEXT NOT NULL DEFAULT '',
+                    created_by TEXT NOT NULL DEFAULT '',
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_service_orders_client
+                    ON service_orders(tenant_id, sheet_row, created_at);
+
+                CREATE TABLE IF NOT EXISTS service_order_counters (
+                    year INTEGER PRIMARY KEY,
+                    last_seq INTEGER NOT NULL
+                );
                 """
             )
             # Migrações leves (idempotentes)

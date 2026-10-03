@@ -37,6 +37,8 @@ from app.services.legacy_core import (
 )
 from app.services.lead_actions_storage import DEFAULT_TENANT_ID
 from app.services.activity_service import build_cadastro_activities_context
+from app.services.service_orders import create_service_order, list_service_orders
+from config.crm_options import PRIORITY_OPTIONS
 from app.services.registration import (
     CADASTRO_TIPO_OPTIONS,
     build_cadastro_edit_page_context,
@@ -255,7 +257,9 @@ async def contract_edit_page(request: Request, sheet_row: int):
     tab_aliases = {
         "cadastro": "dados",
         "dados": "dados",
-        "atividades": "atividades",
+        "atividades": "ordens",
+        "ordens": "ordens",
+        "ordem": "ordens",
         "proposta": "proposta",
         "propostas": "proposta",
         "acesso": "acesso",
@@ -277,6 +281,7 @@ async def contract_edit_page(request: Request, sheet_row: int):
     if ponto_snapshot.get("funcionarios") and not normalize_text(values.get("colaboradores")):
         values["colaboradores"] = f"{ponto_snapshot['funcionarios']} colaboradores"
 
+    service_orders = list_service_orders(DEFAULT_TENANT_ID, sheet_row)
     activities_ctx = build_cadastro_activities_context(
         DEFAULT_TENANT_ID,
         sheet_row,
@@ -365,6 +370,9 @@ async def contract_edit_page(request: Request, sheet_row: int):
             "success": request.session.pop("edit_success", ""),
             "cadastro_tipo": cadastro_tipo,
             "cadastro_ativo": cadastro_ativo,
+            "service_orders": service_orders,
+            "service_orders_count": len(service_orders),
+            "priority_options": PRIORITY_OPTIONS,
             "cadastro_tipo_options": CADASTRO_TIPO_OPTIONS,
             "active_tab": active_tab,
             "oppi_ponto": oppi_ponto_ctx,
@@ -516,6 +524,53 @@ async def contract_delete(
         "activities": "/atividades",
         "funnel": "/funil-de-vendas",
     }.get(from_page, "/cadastro/todos"), status_code=303)
+
+
+@router.post("/cadastro/todos/{sheet_row}/ordens-servico")
+async def contract_create_service_order(
+    request: Request,
+    sheet_row: int,
+    subject: str = Form(""),
+    description: str = Form(""),
+    responsible: str = Form(""),
+    priority: str = Form("Média"),
+    from_: str = Form("", alias="from"),
+):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+
+    from_page = _resolve_edit_from_page(from_)
+    back_url = _edit_page_url(sheet_row, tab="ordens", from_page=from_page)
+    if not is_cadastro_ativo(DEFAULT_TENANT_ID, sheet_row):
+        request.session["edit_error"] = "Ative o cadastro para registrar uma ordem de serviço."
+        return RedirectResponse(url=back_url, status_code=303)
+
+    df, columns = get_prepared_data()
+    row = _get_row_by_sheet(df, sheet_row)
+    if row is None:
+        request.session["edit_error"] = "Cadastro não encontrado."
+        return RedirectResponse(url="/cadastro/todos", status_code=303)
+
+    empresa = _contract_edit_value(row, columns, "empresa")
+    created_by = normalize_text(request.session.get("username", "")) or "Usuário"
+    try:
+        order = create_service_order(
+            tenant_id=DEFAULT_TENANT_ID,
+            sheet_row=sheet_row,
+            empresa=empresa,
+            subject=subject,
+            description=description,
+            responsible=responsible,
+            priority=priority,
+            created_by=created_by,
+        )
+    except ValueError as error:
+        request.session["edit_error"] = str(error)
+        return RedirectResponse(url=back_url, status_code=303)
+
+    request.session["edit_success"] = f"Ordem de serviço {order['protocol']} registrada."
+    return RedirectResponse(url=back_url, status_code=303)
 
 
 @router.post("/cadastro/todos/{sheet_row}/ativo")
