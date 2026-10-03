@@ -37,6 +37,12 @@ def invalidate_prepared_cache() -> None:
     global _prepared_cache_df, _prepared_cache_columns
     _prepared_cache_df = None
     _prepared_cache_columns = None
+    try:
+        from app.dependencies import invalidate_merged_prepared_cache
+
+        invalidate_merged_prepared_cache()
+    except Exception:
+        pass
 
 
 def get_cached_prepared_data():
@@ -419,18 +425,29 @@ def as_datetime_series(series: pd.Series) -> pd.Series:
     return normalized
 
 
-def as_python_date(value) -> date | None:
-    """Converte valores da planilha para date, retornando None quando inválido/NaT."""
+def _is_missing_timestamp(value) -> bool:
+    """True for None/NaT/NA. Em alguns pandas, NaT é isinstance(datetime) e truthy."""
     if value is None:
-        return None
-
+        return True
     try:
         if pd.isna(value):
-            return None
+            return True
     except (TypeError, ValueError):
         pass
+    # NaTType: hasattr(strftime)=True mas strftime() levanta ValueError
+    if type(value).__name__ in {"NaTType", "NaT"}:
+        return True
+    return False
+
+
+def as_python_date(value) -> date | None:
+    """Converte valores da planilha para date, retornando None quando inválido/NaT."""
+    if _is_missing_timestamp(value):
+        return None
 
     if isinstance(value, datetime):
+        if isinstance(value, pd.Timestamp):
+            return value.to_pydatetime().date()
         return value.date()
 
     if isinstance(value, date):
@@ -438,7 +455,7 @@ def as_python_date(value) -> date | None:
 
     try:
         parsed = pd.to_datetime(value, errors="coerce", dayfirst=True)
-        if pd.isna(parsed):
+        if _is_missing_timestamp(parsed):
             return None
         return parsed.date()
     except Exception:
@@ -447,21 +464,18 @@ def as_python_date(value) -> date | None:
 
 def as_python_datetime(value) -> datetime | None:
     """Converte valores da planilha para datetime, retornando None quando inválido/NaT."""
-    if value is None:
+    if _is_missing_timestamp(value):
         return None
 
-    try:
-        if pd.isna(value):
-            return None
-    except (TypeError, ValueError):
-        pass
-
     if isinstance(value, datetime):
+        # pd.Timestamp é subclass de datetime; normaliza e rejeita NaT residual.
+        if isinstance(value, pd.Timestamp):
+            return value.to_pydatetime()
         return value
 
     try:
         parsed = pd.to_datetime(value, errors="coerce", dayfirst=True)
-        if pd.isna(parsed):
+        if _is_missing_timestamp(parsed):
             return None
         return parsed.to_pydatetime()
     except Exception:
@@ -1393,6 +1407,7 @@ SHEET_VALOR_SERVICO_ALIASES = [
 ]
 
 REGISTRATION_OPTIONAL_COLUMNS: list[tuple[str, list[str]]] = [
+    ("Nome do contato", ["Nome do contato", "Nome contato", "Contato WhatsApp"]),
     ("Serviços fechados", SHEET_SERVICO_ALIASES),
     ("Valor do serviço", SHEET_VALOR_SERVICO_ALIASES),
     ("Número", ["Número", "Numero", "Nº", "No"]),
@@ -1495,6 +1510,57 @@ def normalize_phone_for_duplicate(value) -> str:
     return digits if len(digits) >= 8 else ""
 
 
+def canonicalize_br_mobile_national(value) -> str:
+    """Garante o 9º dígito em celular BR (WhatsApp/JID às vezes vem sem o 9)."""
+    digits = normalize_phone_for_duplicate(value)
+    if not digits:
+        return ""
+    # DDD + 8 dígitos iniciando em 6–9 = celular no formato antigo → insere o 9
+    if len(digits) == 10 and digits[2] in "6789":
+        return digits[:2] + "9" + digits[2:]
+    return digits
+
+
+def format_br_whatsapp_display(value) -> str:
+    """Máscara de celular para gravar/exibir no cadastro, sempre com o 9 quando for móvel."""
+    digits = canonicalize_br_mobile_national(value)
+    if len(digits) == 11:
+        return f"({digits[:2]}) {digits[2:7]}-{digits[7:]}"
+    if len(digits) == 10:
+        return f"({digits[:2]}) {digits[2:6]}-{digits[6:]}"
+    return normalize_text(value)
+
+
+def phone_match_keys(value) -> set[str]:
+    """Chaves de comparação para telefone/WhatsApp (com e sem DDD)."""
+    digits = normalize_phone_for_duplicate(value)
+    if not digits:
+        return set()
+    keys = {digits}
+    # Inclui versão com/sem 9º dígito para não perder match nem “esconder” o 9 na busca
+    canon = canonicalize_br_mobile_national(digits)
+    if canon:
+        keys.add(canon)
+    if len(canon) == 11 and canon[2] == "9":
+        keys.add(canon[:2] + canon[3:])
+    if len(digits) >= 8:
+        keys.add(digits[-8:])
+    if len(digits) >= 10:
+        keys.add(digits[-10:])
+    if len(digits) >= 11:
+        keys.add(digits[-11:])
+    return keys
+
+
+def phones_match_for_duplicate(left, right) -> bool:
+    """True quando dois telefones representam o mesmo WhatsApp/número."""
+    left_keys = phone_match_keys(left)
+    right_keys = phone_match_keys(right)
+    if not left_keys or not right_keys:
+        return False
+    return bool(left_keys & right_keys)
+
+
 def normalize_cpf_for_duplicate(value) -> str:
     """Normaliza CPF para comparação, ignorando campos vazios ou incompletos."""
     digits = normalize_digits(value)
@@ -1517,6 +1583,7 @@ def validate_unique_company_registration(
     worksheet=None,
     ignore_sheet_row: Optional[int] = None,
     values: Optional[list[list[str]]] = None,
+    allow_duplicate_contact: bool = False,
 ) -> None:
     """
     Bloqueia cadastro ou edição quando qualquer telefone, CPF ou CNPJ informado já existe
@@ -1561,18 +1628,34 @@ def validate_unique_company_registration(
         or _header_matches_any(header, ["cnpj da empresa", "cnpj empresa"])
     ]
 
-    submitted_phones = {
-        normalize_phone_for_duplicate(payload.get(field))
-        for field in [
-            "telefone_b2b",
-            "telefone_fixo",
-            "telefone_alternativo",
-            "telefone_socio_1",
-            "telefone_socio_2",
-            "telefone_socio_3",
-        ]
-    }
-    submitted_phones.discard("")
+    skip_contact_duplicates = bool(allow_duplicate_contact)
+    if not skip_contact_duplicates:
+        try:
+            from app.services.registration import allows_duplicate_contact
+
+            skip_contact_duplicates = allows_duplicate_contact(payload or {})
+        except Exception:
+            skip_contact_duplicates = False
+
+    submitted_phones = set()
+    submitted_cnpjs = set()
+    if not skip_contact_duplicates:
+        submitted_phones = {
+            normalize_phone_for_duplicate(payload.get(field))
+            for field in [
+                "telefone_b2b",
+                "telefone_fixo",
+                "telefone_alternativo",
+                "telefone_socio_1",
+                "telefone_socio_2",
+                "telefone_socio_3",
+            ]
+        }
+        submitted_phones.discard("")
+        submitted_cnpjs = {
+            normalize_cnpj_for_duplicate(payload.get("cnpj"))
+        }
+        submitted_cnpjs.discard("")
 
     submitted_cpfs = {
         normalize_cpf_for_duplicate(payload.get(field))
@@ -1583,11 +1666,6 @@ def validate_unique_company_registration(
         ]
     }
     submitted_cpfs.discard("")
-
-    submitted_cnpjs = {
-        normalize_cnpj_for_duplicate(payload.get("cnpj"))
-    }
-    submitted_cnpjs.discard("")
 
     duplicate_phones = set()
     duplicate_cpfs = set()
@@ -1603,7 +1681,10 @@ def validate_unique_company_registration(
 
             existing_phone = normalize_phone_for_duplicate(row[index])
 
-            if existing_phone and existing_phone in submitted_phones:
+            if existing_phone and any(
+                phones_match_for_duplicate(existing_phone, submitted)
+                for submitted in submitted_phones
+            ):
                 duplicate_phones.add(existing_phone)
 
         for index in cpf_column_indexes:
@@ -1641,9 +1722,7 @@ def validate_unique_company_registration(
         cnpjs_text = ", ".join(sorted(duplicate_cnpjs))
         messages.append(f"CNPJ já cadastrado: {cnpjs_text}")
 
-    raise DuplicateRegistrationError(
-        "Não foi possível salvar porque já existe outro cadastro com os mesmos dados. " + " | ".join(messages)
-    )
+    raise DuplicateRegistrationError(" | ".join(messages))
 
 
 
@@ -1890,7 +1969,7 @@ def append_company_to_sheet(payload: dict) -> int:
                     "Nome Empresas", "CNPJ", "Data de abertura", "Capital",
                     "Endereço", "Número", "Complemento", "CEP", "Bairro", "Município", "UF",
                     "Email", "Site empresa",
-                    "Celular WhatsApp", "Telefone fixo", "Telefone lemitt",
+                    "Celular WhatsApp", "Nome do contato", "Telefone fixo", "Telefone lemitt",
                     "Sócio 1", "CPF", "E-mail Sócio 1", "Telefone",
                     "Sócio 2", "Telefone sócio 2", "CPF_2",
                     "Sócio 3", "Telefone sócio 3", "CPF_3",
@@ -1901,7 +1980,11 @@ def append_company_to_sheet(payload: dict) -> int:
             else:
                 raise
 
-    validate_unique_company_registration(payload, values=cached_values)
+    validate_unique_company_registration(
+        payload,
+        values=cached_values,
+        allow_duplicate_contact=bool(payload.get("is_filial") and payload.get("empresa_matriz_sheet_row")),
+    )
 
     if not headers:
         raise RuntimeError("A primeira linha da planilha precisa conter os cabeçalhos.")
@@ -1917,6 +2000,7 @@ def append_company_to_sheet(payload: dict) -> int:
     _set_sheet_value_by_header(row_values, headers, ["Site empresa", "Site", "Website"], payload.get("site"))
 
     _set_sheet_value_by_header(row_values, headers, ["Celular WhatsApp", "Telefone (b2b)", "Telefone b2b"], payload.get("telefone_b2b"))
+    _set_sheet_value_by_header(row_values, headers, ["Nome do contato", "Nome contato", "Contato WhatsApp"], payload.get("nome_contato"))
     _set_sheet_value_by_header(row_values, headers, ["Telefone fixo", "Fixo"], payload.get("telefone_fixo"))
     _set_sheet_value_by_header(row_values, headers, ["Telefone lemitt", "Telefone alternativo", "Outro telefone"], payload.get("telefone_alternativo"))
 
@@ -1963,6 +2047,7 @@ def append_company_to_sheet(payload: dict) -> int:
                     _set_sheet_value_by_header(row_values, headers, ["Email", "E-mail"], payload.get("email_empresa"))
                     _set_sheet_value_by_header(row_values, headers, ["Site empresa", "Site", "Website"], payload.get("site"))
                     _set_sheet_value_by_header(row_values, headers, ["Celular WhatsApp", "Telefone (b2b)", "Telefone b2b"], payload.get("telefone_b2b"))
+                    _set_sheet_value_by_header(row_values, headers, ["Nome do contato", "Nome contato", "Contato WhatsApp"], payload.get("nome_contato"))
                     _set_sheet_value_by_header(row_values, headers, ["Telefone fixo", "Fixo"], payload.get("telefone_fixo"))
                     _set_sheet_value_by_header(row_values, headers, ["Telefone lemitt", "Telefone alternativo", "Outro telefone"], payload.get("telefone_alternativo"))
                     _set_sheet_value_by_header(row_values, headers, ["Sócio 1", "Socio 1", "Sócio1", "Socio1"], payload.get("socio_1"))
@@ -2051,6 +2136,7 @@ def update_company_in_sheet(sheet_row: int, payload: dict) -> None:
         payload,
         worksheet,
         ignore_sheet_row=int(sheet_row),
+        allow_duplicate_contact=bool(payload.get("is_filial") and payload.get("empresa_matriz_sheet_row")),
     )
 
     current_row = worksheet.row_values(int(sheet_row))
@@ -2066,6 +2152,7 @@ def update_company_in_sheet(sheet_row: int, payload: dict) -> None:
     _set_sheet_value_by_header(row_values, headers, ["Site empresa", "Site", "Website"], payload.get("site"))
 
     _set_sheet_value_by_header(row_values, headers, ["Celular WhatsApp", "Telefone (b2b)", "Telefone b2b"], payload.get("telefone_b2b"))
+    _set_sheet_value_by_header(row_values, headers, ["Nome do contato", "Nome contato", "Contato WhatsApp"], payload.get("nome_contato"))
     _set_sheet_value_by_header(row_values, headers, ["Telefone fixo", "Fixo"], payload.get("telefone_fixo"))
     _set_sheet_value_by_header(row_values, headers, ["Telefone lemitt", "Telefone alternativo", "Outro telefone"], payload.get("telefone_alternativo"))
 
@@ -2142,7 +2229,8 @@ def identify_columns(df: pd.DataFrame) -> dict:
         "uf": first_existing_column(df, ["UF", "Estado"]),
         "email": first_existing_column(df, ["Email", "E-mail", "Email empresa", "E-mail empresa", "email_empresa"]),
         "site": first_existing_column(df, ["Site empresa", "Site", "Website"]),
-        "telefone_b2b": first_existing_column(df, ["Celular WhatsApp", "Telefone (b2b)", "Telefone b2b", "Telefone"]),
+        "telefone_b2b": first_existing_column(df, ["Celular WhatsApp", "Telefone WhatsApp", "Telefone (b2b)", "Telefone b2b", "Telefone"]),
+        "nome_contato": first_existing_column(df, ["Nome do contato", "Nome contato", "Contato WhatsApp"]),
         "telefone_fixo": first_existing_column(df, ["Telefone fixo", "Fixo"]),
         "telefone_alternativo": first_existing_column(df, ["Telefone lemitt", "Telefone alternativo", "Outro telefone"]),
         "socio_1": first_existing_column(df, ["Sócio 1", "Socio 1", "Sócio1", "Socio1"]),

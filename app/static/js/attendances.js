@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  // Poll no SQLite (leve). SSE desligado: costuma travar/estressar o proxy do painel.
+  // SSE em tempo real + poll de backup (celular chega rápido; UI acompanha o webhook).
   var POLL_MS = 4000;
   var pollTimer = null;
   var lastUnread = 0;
@@ -9,6 +9,7 @@
   var lastConversationToken = "";
   var soundEnabled = true;
   var syncInFlight = false;
+  var eventSource = null;
 
   function $(sel, root) {
     return (root || document).querySelector(sel);
@@ -35,20 +36,30 @@
       var Ctx = window.AudioContext || window.webkitAudioContext;
       if (!Ctx) return;
       var ctx = playNotify._ctx || (playNotify._ctx = new Ctx());
-      var osc = ctx.createOscillator();
-      var gain = ctx.createGain();
-      osc.type = "sine";
-      osc.frequency.value = 880;
-      gain.gain.value = 0.04;
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start();
-      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.18);
-      osc.stop(ctx.currentTime + 0.2);
+      if (ctx.state === "suspended") {
+        ctx.resume().catch(function () {});
+      }
+      // Dois tons curtos — próximo do “pop” do WhatsApp Web
+      function tone(freq, start, dur, vol) {
+        var osc = ctx.createOscillator();
+        var gain = ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.0001, start);
+        gain.gain.exponentialRampToValueAtTime(vol, start + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + dur);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(start);
+        osc.stop(start + dur + 0.02);
+      }
+      var t0 = ctx.currentTime;
+      tone(830, t0, 0.12, 0.055);
+      tone(1100, t0 + 0.11, 0.14, 0.045);
     } catch (e) { /* ignore */ }
   }
 
-  function updateUnreadBadge(count) {
+  function updateUnreadBadge(count, lines) {
     count = Number(count) || 0;
     var pill = $("#att-unread-pill");
     if (pill) {
@@ -68,6 +79,23 @@
       } else {
         side.hidden = true;
       }
+    }
+    if (lines && typeof lines === "object" && Object.keys(lines).length > 0) {
+      document.querySelectorAll(".att-line-pill").forEach(function (btn) {
+        var id = btn.getAttribute("data-line") || "";
+        var n = Number(lines[id]) || 0;
+        var badge = btn.querySelector(".att-line-pill-unread");
+        if (n > 0) {
+          if (!badge) {
+            badge = document.createElement("span");
+            badge.className = "att-line-pill-unread";
+            btn.appendChild(badge);
+          }
+          badge.textContent = String(n);
+        } else if (badge) {
+          badge.remove();
+        }
+      });
     }
     if (count > lastUnread && lastUnread >= 0) {
       playNotify();
@@ -101,14 +129,17 @@
       values: {
         search: ($("#att-search") || {}).value || "",
         status: ($("#att-status") || {}).value || "abertos",
-        conversation_id: selectedId(),
+        sector: ($("#att-sector") || {}).value || "todos",
+        tag: ($("#att-tag") || {}).value || "todos",
+        line: ($("#att-line") || {}).value || "",
+        conversation_id: opts.clearSelection ? "" : selectedId(),
       },
     });
     if (opts.bumpId) {
       setTimeout(function () {
         bumpConversationToTop(opts.bumpId);
       }, 120);
-    } else if (list) {
+    } else if (opts.scrollTop && list) {
       list.scrollTop = 0;
     }
   }
@@ -118,32 +149,93 @@
     if (!id || !window.htmx) return;
     var search = ($("#att-search") || {}).value || "";
     var status = ($("#att-status") || {}).value || "abertos";
+    var sector = ($("#att-sector") || {}).value || "todos";
+    var tag = ($("#att-tag") || {}).value || "todos";
+    var line = ($("#att-line") || {}).value || "";
     window.htmx.ajax(
       "GET",
       "/atendimentos/conversa/" + encodeURIComponent(id) +
         "?search=" + encodeURIComponent(search) +
-        "&status=" + encodeURIComponent(status),
+        "&status=" + encodeURIComponent(status) +
+        "&sector=" + encodeURIComponent(sector) +
+        "&tag=" + encodeURIComponent(tag) +
+        "&line=" + encodeURIComponent(line) +
+        "&soft=1",
       { target: "#att-chat-root", swap: "innerHTML" }
     );
+  }
+
+  function switchWhatsappLine(lineId) {
+    if (lineId === undefined || lineId === null) return;
+    lineId = String(lineId || "todos");
+    var input = $("#att-line");
+    var shell = $("#att-shell");
+    if (input) input.value = lineId;
+    if (shell) {
+      shell.setAttribute("data-line", lineId);
+      shell.setAttribute("data-selected", "");
+      shell.classList.remove("att-shell--chat-open");
+    }
+    document.querySelectorAll(".att-line-pill").forEach(function (btn) {
+      var active = btn.getAttribute("data-line") === lineId;
+      btn.classList.toggle("active", active);
+      btn.setAttribute("aria-selected", active ? "true" : "false");
+    });
+    var chat = $("#att-chat-root");
+    if (chat) {
+      chat.innerHTML =
+        '<div class="att-empty-state"><div class="att-empty-icon">💬</div>' +
+        "<h2>Selecione uma conversa</h2>" +
+        "<p>Mensagens do WhatsApp aparecem aqui.</p></div>";
+    }
+    var hiddenConv = document.querySelector('.att-filters input[name="conversation_id"]');
+    if (hiddenConv) hiddenConv.remove();
+    try {
+      var url = new URL(window.location.href);
+      url.searchParams.set("line", lineId);
+      url.searchParams.delete("c");
+      window.history.replaceState({}, "", url.toString());
+    } catch (e) {}
+    refreshList({ clearSelection: true, scrollTop: true });
   }
 
   function handleEvent(data) {
     if (!data || !data.type) return;
     if (data.type === "ping" || data.type === "connected") {
       if (typeof data.unread !== "undefined") updateUnreadBadge(data.unread);
+      fetch("/atendimentos/unread", { credentials: "same-origin" })
+        .then(function (r) { return r.json(); })
+        .then(function (j) { updateUnreadBadge(j.unread, j.lines); })
+        .catch(function () {});
+      return;
+    }
+    if (data.type === "conversations_finalized_bulk") {
+      lastInboxToken = "";
+      lastConversationToken = "";
+      refreshList({ clearSelection: true, scrollTop: true });
+      fetch("/atendimentos/unread", { credentials: "same-origin" })
+        .then(function (r) { return r.json(); })
+        .then(function (j) { updateUnreadBadge(j.unread, j.lines); })
+        .catch(function () {});
       return;
     }
     if (data.type === "typing") {
       var el = document.getElementById("att-typing-" + data.conversation_id);
       if (el) el.hidden = !data.typing;
-      if (data.typing) bumpConversationToTop(data.conversation_id);
+      return;
+    }
+    // Tag/nome: o formulário já atualiza a UI — NÃO refreshList (evita loop com SSE)
+    if (data.type === "conversation_meta") {
       return;
     }
     if (data.type === "message" || data.type === "conversation_upsert" || data.type === "conversation_read") {
-      if (data.type === "message" || data.type === "conversation_upsert") {
+      // Só sobe na lista quando chega mensagem real
+      if (data.type === "message") {
         bumpConversationToTop(data.conversation_id);
+        refreshList({ bumpId: data.conversation_id });
+      } else {
+        refreshList();
       }
-      refreshList({ bumpId: data.conversation_id });
       if (data.conversation_id && data.conversation_id === selectedId()) {
         refreshThread();
       }
@@ -152,7 +244,7 @@
       lastConversationToken = "";
       fetch("/atendimentos/unread", { credentials: "same-origin" })
         .then(function (r) { return r.json(); })
-        .then(function (j) { updateUnreadBadge(j.unread); })
+        .then(function (j) { updateUnreadBadge(j.unread, j.lines); })
         .catch(function () {});
     }
   }
@@ -170,16 +262,30 @@
         return r.json();
       })
       .then(function (j) {
-        updateUnreadBadge(j.unread);
+        var prevUnread = lastUnread;
+        updateUnreadBadge(j.unread, j.lines);
+        // Badges por linha: snapshot leve não traz — puxa /unread a cada ~3 polls
+        if (!pollSync._lineTick) pollSync._lineTick = 0;
+        pollSync._lineTick += 1;
+        if (pollSync._lineTick >= 3) {
+          pollSync._lineTick = 0;
+          fetch("/atendimentos/unread", { credentials: "same-origin" })
+            .then(function (r) { return r.json(); })
+            .then(function (u) { updateUnreadBadge(u.unread, u.lines); })
+            .catch(function () {});
+        }
 
-        var inboxChanged = lastInboxToken && j.inbox_token && j.inbox_token !== lastInboxToken;
+        var inboxChanged =
+          lastInboxToken && j.inbox_token && j.inbox_token !== lastInboxToken;
+        var unreadUp =
+          lastInboxToken && (Number(j.unread) || 0) > prevUnread && prevUnread >= 0;
         var convChanged =
           id &&
           lastConversationToken &&
           j.conversation_token &&
           j.conversation_token !== lastConversationToken;
 
-        if (inboxChanged) {
+        if (inboxChanged || unreadUp) {
           refreshList();
         }
         if (convChanged) {
@@ -205,6 +311,42 @@
     pollSync();
     pollTimer = setInterval(pollSync, POLL_MS);
   }
+
+  function startSSE() {
+    if (eventSource || !window.EventSource) return;
+    try {
+      eventSource = new EventSource("/atendimentos/stream");
+      eventSource.onmessage = function (ev) {
+        try {
+          handleEvent(JSON.parse(ev.data || "{}"));
+        } catch (e) { /* ignore */ }
+      };
+      eventSource.onerror = function () {
+        // Proxy às vezes derruba SSE — poll continua cobrindo.
+        try {
+          eventSource.close();
+        } catch (e) {}
+        eventSource = null;
+        setTimeout(startSSE, 8000);
+      };
+    } catch (e) {
+      eventSource = null;
+    }
+  }
+
+  // Browsers bloqueiam áudio até haver gesto do usuário
+  function unlockAudio() {
+    try {
+      var Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      var ctx = playNotify._ctx || (playNotify._ctx = new Ctx());
+      if (ctx.state === "suspended") ctx.resume();
+    } catch (e) {}
+    document.removeEventListener("pointerdown", unlockAudio);
+    document.removeEventListener("keydown", unlockAudio);
+  }
+  document.addEventListener("pointerdown", unlockAudio, { once: true });
+  document.addEventListener("keydown", unlockAudio, { once: true });
 
   function autoGrow(el) {
     if (!el) return;
@@ -288,9 +430,50 @@
       if (shell && thread) {
         shell.setAttribute("data-selected", thread.getAttribute("data-conversation-id") || "");
         shell.classList.add("att-shell--chat-open");
+      } else if (shell) {
+        shell.setAttribute("data-selected", "");
+        shell.classList.remove("att-shell--chat-open");
       }
       lastConversationToken = "";
     }
+  });
+
+  document.body.addEventListener("att-conversation-deleted", function () {
+    var shell = $("#att-shell");
+    if (shell) {
+      shell.setAttribute("data-selected", "");
+      shell.classList.remove("att-shell--chat-open");
+    }
+    refreshList({ clearSelection: true, scrollTop: true });
+  });
+
+  document.body.addEventListener("submit", function (ev) {
+    var form = ev.target;
+    if (!form || !form.classList || !form.classList.contains("att-delete-form")) return;
+    ev.preventDefault();
+    if (form.dataset.attDeleting === "1") return;
+    form.dataset.attDeleting = "1";
+    var btn = form.querySelector(".att-delete-conv-btn");
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "Excluindo…";
+    }
+    var action = form.getAttribute("action") || "";
+    var fd = new FormData(form);
+    var line = String(fd.get("line") || "");
+    var fallback = "/atendimentos?deleted=1" + (line ? "&line=" + encodeURIComponent(line) : "");
+    // Dispara exclusão e sai da tela NA HORA — nunca fica parado em /excluir
+    try {
+      fetch(action, {
+        method: "POST",
+        body: fd,
+        credentials: "same-origin",
+        keepalive: true,
+        redirect: "manual",
+        headers: { Accept: "text/html" },
+      }).catch(function () {});
+    } catch (err) {}
+    window.location.replace(fallback);
   });
 
   document.body.addEventListener("htmx:afterRequest", function (ev) {
@@ -321,6 +504,10 @@
       refreshList({ bumpId: id });
       lastInboxToken = "";
       lastConversationToken = "";
+      fetch("/atendimentos/unread", { credentials: "same-origin" })
+        .then(function (r) { return r.json(); })
+        .then(function (j) { updateUnreadBadge(j.unread, j.lines); })
+        .catch(function () {});
     }
   });
 
@@ -479,6 +666,7 @@
     lastUnread = pill ? Number(pill.getAttribute("data-count") || 0) : 0;
     scrollMessages();
     bindCrmSheet(document);
+    startSSE();
     startPoll();
   }
 
@@ -495,6 +683,17 @@
   if (newCallCancel && newCallPanel) {
     newCallCancel.addEventListener("click", function () {
       newCallPanel.setAttribute("hidden", "hidden");
+    });
+  }
+
+  var lineSwitcher = $("#att-line-switcher");
+  if (lineSwitcher) {
+    lineSwitcher.addEventListener("click", function (ev) {
+      var btn = ev.target && ev.target.closest ? ev.target.closest(".att-line-pill") : null;
+      if (!btn) return;
+      var lineId = btn.getAttribute("data-line") || "";
+      if (!lineId || btn.classList.contains("active")) return;
+      switchWhatsappLine(lineId);
     });
   }
 

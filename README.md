@@ -19,7 +19,7 @@ Sistema SaaS multiempresa para gestão comercial: leads, funil, atividades, prop
 ## Tecnologias
 
 - Python 3.11+
-- Streamlit
+- FastAPI
 - PostgreSQL / SQLite
 - SQLAlchemy
 - Pandas / Plotly
@@ -28,15 +28,11 @@ Sistema SaaS multiempresa para gestão comercial: leads, funil, atividades, prop
 ## Estrutura
 
 ```
-app.py                 # Entrada Streamlit
-config/                # Settings e tema
-database/              # Models, conexão, repositories, seed
-auth/                  # Login, senhas, permissões
-pages/                 → views/ (telas do CRM — evita conflito com Streamlit)
-services/              # Regras de negócio e integrações
-components/            # UI reutilizável
-utils/                 # Formatadores e validadores
-assets/styles.css      # Identidade visual
+app/main.py            # Entrada FastAPI
+app/templates/         # Telas HTML
+app/services/          # Regras de negócio
+config/                # Settings e opções do CRM
+database/              # Models, conexão e seed
 generated/proposals/   # PDFs gerados
 ```
 
@@ -48,7 +44,7 @@ python -m venv .venv
 pip install -r requirements.txt
 copy .env.example .env
 python -m database.seed
-streamlit run app.py
+uvicorn app.main:app --host 0.0.0.0 --port 8501
 ```
 
 Acesse: http://localhost:8501
@@ -71,7 +67,7 @@ docker compose up --build
 Comando de inicialização:
 
 ```bash
-streamlit run app.py --server.address=0.0.0.0 --server.port=8501
+uvicorn app.main:app --host 0.0.0.0 --port 8501
 ```
 
 ## EasyPanel / Hostinger
@@ -104,18 +100,6 @@ Principais:
 - Credenciais apenas via variáveis de ambiente
 - Sessão com expiração configurável
 
-## Integrações
+## Deploy
 
-Cada integração possui serviço adaptador em `services/`:
-
-- `whatsapp_service.py`
-- `n8n_service.py`
-- `asaas_service.py`
-- `zapsign_service.py`
-- `ai_service.py`
-
-Configure as variáveis e teste em **Configurações > Integrações**.
-
-## Migração
-
-Este repositório foi reconstruído como **Oppi CRM Comercial** em Streamlit. A estrutura FastAPI anterior (`app/`) permanece no repositório apenas como legado; o deploy deve usar `app.py` (Streamlit).
+O painel no ar é o FastAPI em `app/main.py`. O comando de início é o do `Dockerfile` (`uvicorn`).

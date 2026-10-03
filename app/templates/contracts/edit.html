@@ -14,6 +14,10 @@
             </span>
             <span class="client-edit-meta-sep" aria-hidden="true"></span>
             <span class="client-edit-id-badge">{{ header_id }}</span>
+            {% if values.is_filial %}
+            <span class="client-edit-meta-sep" aria-hidden="true"></span>
+            <span class="client-edit-registered">Filial{% if values.empresa_matriz_nome %} · Matriz {{ values.empresa_matriz_nome }}{% endif %}</span>
+            {% endif %}
           </div>
         </div>
       </div>
@@ -153,11 +157,21 @@
 
 {% include "partials/registration_delete_modal.html" %}
 
+<div id="activity-modal-root"></div>
+
 <form id="client-toggle-ativo-form" method="post" action="/cadastro/todos/{{ sheet_row }}/ativo" hidden>
   {% if from_page %}<input type="hidden" name="from" value="{{ from_page }}">{% endif %}
   <input type="hidden" name="tab" value="{{ active_tab }}">
   <input type="hidden" name="ativo" value="{% if cadastro_ativo %}0{% else %}1{% endif %}">
 </form>
+
+{% if active_tab == 'atividades' %}
+<link rel="stylesheet" href="/static/css/activities.css?v={{ static_version }}">
+<script>
+window.LOST_REASON_OPTIONS = {{ lost_reason_options|default([], true)|tojson }};
+</script>
+<script src="/static/js/activities.js?v={{ static_version }}"></script>
+{% endif %}
 
 <script src="/static/js/partners-form.js?v={{ static_version }}" defer></script>
 <script src="/static/js/registration-edit.js?v={{ static_version }}" defer></script>

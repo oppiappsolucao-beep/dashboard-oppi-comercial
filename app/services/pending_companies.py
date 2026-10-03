@@ -22,6 +22,38 @@ log = logging.getLogger(__name__)
 
 PENDENTES_TAB = "CadastrosPendentes"
 
+_REOPEN_MIGRATION_LAST = 0.0
+_REOPEN_MIGRATION_TTL_SEC = 300.0
+
+
+def reopen_synced_migration_pendings() -> int:
+    """Reabre pendentes de migração marcados como synced (eles sumiam da lista Empresas)."""
+    global _REOPEN_MIGRATION_LAST
+    now = time.monotonic()
+    if (now - _REOPEN_MIGRATION_LAST) < _REOPEN_MIGRATION_TTL_SEC:
+        return 0
+    _REOPEN_MIGRATION_LAST = now
+
+    from app.services.crm_local_db import mark_pending_company_pending
+
+    reopened = 0
+    for item in list_pending_companies(None) or []:
+        status = normalize_text(item.get("status")).lower()
+        if status == "pending":
+            continue
+        payload = item.get("payload") or {}
+        if not _is_migration_empresa_payload(payload):
+            continue
+        try:
+            mark_pending_company_pending(
+                int(item["id"]),
+                last_error="Reaberto: migração Oppi Ponto fica local até sync manual",
+            )
+            reopened += 1
+        except Exception:
+            continue
+    return reopened
+
 
 def remember_sheet_headers(headers: list[str]) -> None:
     if headers:
@@ -126,6 +158,7 @@ def enqueue_payload_locally(payload: dict, *, last_error: str = "Migração loca
     _set_sheet_value_by_header(row_values, headers, ["Email", "E-mail"], payload.get("email_empresa"))
     _set_sheet_value_by_header(row_values, headers, ["Site empresa", "Site", "Website"], payload.get("site"))
     _set_sheet_value_by_header(row_values, headers, ["Celular WhatsApp", "Telefone (b2b)", "Telefone b2b"], payload.get("telefone_b2b"))
+    _set_sheet_value_by_header(row_values, headers, ["Nome do contato", "Nome contato", "Contato WhatsApp"], payload.get("nome_contato"))
     _set_sheet_value_by_header(row_values, headers, ["Telefone fixo", "Fixo"], payload.get("telefone_fixo"))
     _set_sheet_value_by_header(row_values, headers, ["Telefone lemitt", "Telefone alternativo", "Outro telefone"], payload.get("telefone_alternativo"))
     _set_sheet_value_by_header(row_values, headers, ["Sócio 1", "Socio 1", "Sócio1", "Socio1"], payload.get("socio_1"))
@@ -211,29 +244,6 @@ def _pending_row_dict(item: dict) -> dict:
         "_pending_local": True,
         "_cadastro_tipo": normalize_text(payload.get("cadastro_tipo")).lower() or "lead",
     }
-
-
-def reopen_synced_migration_pendings() -> int:
-    """Reabre pendentes de migração marcados como synced (eles sumiam da lista Empresas)."""
-    from app.services.crm_local_db import mark_pending_company_pending
-
-    reopened = 0
-    for item in list_pending_companies(None) or []:
-        status = normalize_text(item.get("status")).lower()
-        if status == "pending":
-            continue
-        payload = item.get("payload") or {}
-        if not _is_migration_empresa_payload(payload):
-            continue
-        try:
-            mark_pending_company_pending(
-                int(item["id"]),
-                last_error="Reaberto: migração Oppi Ponto fica local até sync manual",
-            )
-            reopened += 1
-        except Exception:
-            continue
-    return reopened
 
 
 def merge_pending_companies_into_df(df: pd.DataFrame) -> pd.DataFrame:

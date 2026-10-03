@@ -147,7 +147,7 @@
 <div class="settings-goals-layout settings-services-tab">
   <div class="panel settings-single-card">
     <div class="section-heading">Serviços comerciais</div>
-    <div class="section-subtitle">Cadastre aqui os serviços disponíveis para propostas, cadastros e edição de clientes.</div>
+    <div class="section-subtitle">Cadastro interno de serviços (valor e quantidade). Não sincroniza com o Asaas.</div>
 
     {% if service_success %}
     <div class="settings-alert success">{{ service_success }}</div>
@@ -163,6 +163,14 @@
         <span class="settings-company-label">Novo serviço</span>
         <input type="text" name="service_name" placeholder="Ex.: Consultoria mensal" required maxlength="120" autocomplete="off">
       </label>
+      <label>
+        <span class="settings-company-label">Valor do serviço</span>
+        <input type="text" name="service_valor" placeholder="R$ 49,90" maxlength="40" autocomplete="off">
+      </label>
+      <label>
+        <span class="settings-company-label">Quantidade</span>
+        <input type="number" name="service_quantidade" value="1" min="1" step="1">
+      </label>
       <button type="submit" class="btn">Cadastrar serviço</button>
     </form>
     {% else %}
@@ -176,6 +184,7 @@
       {% for service in services %}
       <div class="settings-service-row">
         <span>{{ service.name }}</span>
+        <span class="settings-service-meta">{{ service.quantidade }} × {{ service.valor }}</span>
         <div class="settings-service-actions">
           <span class="settings-service-badge {{ service.status_class }}">{{ service.status_label }}</span>
           {% if is_admin %}
@@ -245,17 +254,57 @@
 {% if settings_params.tab == 'atendimentos' %}
 <div class="settings-goals-layout settings-services-tab">
   <div class="panel settings-single-card">
+    <div class="section-heading">Fila do WhatsApp</div>
+    <div class="section-subtitle">Finaliza todas as conversas abertas da linha escolhida e zera as não lidas. Use com cuidado — a inbox começa do zero.</div>
+    {% if finalize_queue_success %}<div class="settings-alert success">{{ finalize_queue_success }}</div>{% endif %}
+    {% if finalize_queue_error %}<div class="settings-alert error">{{ finalize_queue_error }}</div>{% endif %}
+    {% if is_admin %}
+    <form method="post"
+          action="/configuracoes/atendimentos/finalizar-fila"
+          class="settings-goals-form settings-service-form"
+          onsubmit="return confirm('Finalizar TODAS as conversas abertas desta linha e zerar as não lidas?\n\nA fila começa do zero.');">
+      <input type="hidden" name="tab" value="atendimentos">
+      <label>
+        <span class="settings-company-label">Linha</span>
+        <select name="line" class="att-input att-select" required>
+          <option value="">Todas as linhas</option>
+          {% for line in whatsapp_line_options or [] %}
+          <option value="{{ line.id }}">{{ line.label }}{% if line.phone %} · {{ line.phone }}{% endif %}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <button type="submit" class="btn btn-secondary">Finalizar todas desta linha</button>
+    </form>
+    {% else %}
+    <div class="settings-empty">Somente administradores podem reiniciar a fila.</div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="settings-goals-layout settings-services-tab" style="margin-top:16px">
+  <div class="panel settings-single-card">
     <div class="section-heading">Tags de atendimento</div>
-    <div class="section-subtitle">Padrão: Novo contato, Parceiros e Atendimento interno. Use nas conversas da inbox. Setores ficam em Usuários e Permissões.</div>
+    <div class="section-subtitle">Cadastre, edite o nome e escolha uma das 6 cores. As tags ficam no cadastro do cliente e aparecem na lista de Atendimentos.</div>
     {% if tag_success %}<div class="settings-alert success">{{ tag_success }}</div>{% endif %}
     {% if tag_error %}<div class="settings-alert error">{{ tag_error }}</div>{% endif %}
     {% if is_admin %}
-    <form method="post" action="/configuracoes/tags/adicionar" class="settings-goals-form settings-service-form">
+    <form method="post" action="/configuracoes/tags/adicionar" class="settings-goals-form settings-service-form settings-tag-form">
       <input type="hidden" name="tab" value="atendimentos">
       <label>
         <span class="settings-company-label">Nova tag</span>
         <input type="text" name="tag_name" placeholder="Ex.: VIP" required maxlength="120" autocomplete="off">
       </label>
+      <fieldset class="settings-tag-colors">
+        <legend class="settings-company-label">Cor</legend>
+        <div class="settings-tag-color-grid">
+          {% for color in tag_color_presets or [] %}
+          <label class="settings-tag-color-option" title="{{ color.label }}">
+            <input type="radio" name="tag_color" value="{{ color.id }}" {% if loop.first %}checked{% endif %}>
+            <span class="settings-tag-swatch" style="background:{{ color.bg }};color:{{ color.fg }}">{{ color.label }}</span>
+          </label>
+          {% endfor %}
+        </div>
+      </fieldset>
       <button type="submit" class="btn">Cadastrar tag</button>
     </form>
     {% else %}
@@ -266,19 +315,35 @@
     <div class="section-heading">Tags cadastradas</div>
     <div class="settings-service-list settings-service-list-full">
       {% for tag in attendance_tags %}
-      <div class="settings-service-row">
-        <span>{{ tag.name }}{% if tag.is_system %} <small class="settings-field-hint">(padrão)</small>{% endif %}</span>
+      <div class="settings-service-row settings-tag-row">
+        {% if is_admin %}
+        <form method="post" action="/configuracoes/tags/editar" class="settings-tag-edit-form">
+          <input type="hidden" name="tab" value="atendimentos">
+          <input type="hidden" name="tag_name" value="{{ tag.name }}">
+          <input type="text" name="new_name" value="{{ tag.name }}" maxlength="120" required class="settings-tag-name-input" aria-label="Nome da tag">
+          <div class="settings-tag-color-grid compact">
+            {% for color in tag_color_presets or [] %}
+            <label class="settings-tag-color-option" title="{{ color.label }}">
+              <input type="radio" name="tag_color" value="{{ color.id }}" {% if tag.color == color.id %}checked{% endif %}>
+              <span class="settings-tag-swatch sm" style="background:{{ color.bg }};color:{{ color.fg }}"></span>
+            </label>
+            {% endfor %}
+          </div>
+          <div class="settings-service-actions">
+            <span class="settings-service-badge {{ tag.status_class }}">{{ tag.status_label }}</span>
+            <button type="submit" class="settings-link-btn">Salvar</button>
+            <button type="submit" formaction="/configuracoes/tags/remover" class="settings-link-btn danger"
+                    onclick="return confirm('Remover/desativar esta tag?');">Remover</button>
+          </div>
+        </form>
+        {% else %}
+        <span class="settings-tag-preview"
+              style="background: {{ tag.preview_bg }}; color: {{ tag.preview_fg }}">{{ tag.name }}</span>
+        {% if tag.is_system %} <small class="settings-field-hint">(padrão)</small>{% endif %}
         <div class="settings-service-actions">
           <span class="settings-service-badge {{ tag.status_class }}">{{ tag.status_label }}</span>
-          {% if is_admin %}
-          <form method="post" action="/configuracoes/tags/remover" class="settings-inline-form"
-            onsubmit="return confirm('Remover/desativar esta tag?');">
-            <input type="hidden" name="tab" value="atendimentos">
-            <input type="hidden" name="tag_name" value="{{ tag.name }}">
-            <button type="submit" class="settings-link-btn danger">Remover</button>
-          </form>
-          {% endif %}
         </div>
+        {% endif %}
       </div>
       {% else %}
       <div class="settings-empty">Nenhuma tag cadastrada.</div>
@@ -605,7 +670,7 @@
         <div class="settings-service-list">
           {% for service in services[:6] %}
           <div class="settings-service-row">
-            <span>{{ service.name }}</span>
+            <span>{{ service.name }} · {{ service.quantidade }} × {{ service.valor }}</span>
             <span class="settings-service-badge {{ service.status_class }}">{{ service.status_label }}</span>
           </div>
           {% endfor %}
@@ -868,6 +933,45 @@
       <p class="settings-sheet-sync-hint">
         Use <em>Simular</em> primeiro para ver quantas linhas serão corrigidas. Depois clique em
         <em>Aplicar na planilha</em>.
+      </p>
+    </div>
+
+    <div class="panel settings-single-card">
+      <div class="section-heading">CRM → Postgres</div>
+      <div class="section-subtitle">
+        Fonte da verdade dos cadastros no banco. A planilha continua como espelho.
+        Status:
+        {% if crm_postgres_ready %}
+        <strong>ativo</strong> ({{ crm_registrations_count }} cadastros).
+        {% else %}
+        <strong>aguardando migração</strong>.
+        {% endif %}
+      </div>
+
+      {% if crm_migrate_success %}
+      <div class="settings-alert success">{{ crm_migrate_success }}</div>
+      {% endif %}
+      {% if crm_migrate_error %}
+      <div class="settings-alert error">{{ crm_migrate_error }}</div>
+      {% endif %}
+
+      <form method="post" action="/configuracoes/crm/migrar-postgres" class="settings-inline-form"
+        onsubmit="return confirm('Importar Folha1 para o Postgres e ativar o cutover?');">
+        <button type="submit" class="btn">
+          {% if crm_postgres_ready %}Reimportar Folha1{% else %}Migrar agora{% endif %}
+        </button>
+      </form>
+
+      <form method="post" action="/configuracoes/crm/reset-folha1" class="settings-inline-form"
+        style="margin-top:10px"
+        onsubmit="return confirm('APAGA todos os cadastros e atividades do CRM e cadastra de novo só pela Folha1. Atendimentos WhatsApp não são apagados. Continuar?');">
+        <button type="submit" class="btn btn-secondary">
+          Apagar e cadastrar de novo (Folha1)
+        </button>
+      </form>
+      <p class="section-subtitle" style="margin-top:8px">
+        Use o botão acima quando os leads/empresas/atividades estiverem com campos errados.
+        A fonte é a planilha base Folha1 — não usa a cópia auxiliar do Drive.
       </p>
     </div>
     {% endif %}

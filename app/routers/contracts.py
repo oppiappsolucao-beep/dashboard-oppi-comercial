@@ -6,7 +6,7 @@ from app.dependencies import get_prepared_data, get_pricing_store, require_auth
 from app.templating import render
 from app.services.filters import DashboardFilters, apply_dashboard_filters, apply_default_period_filters
 from app.services.filters import get_filter_options as get_dashboard_filter_options
-from app.services.commercial_services import get_commercial_service_options
+from app.services.commercial_services import get_commercial_service_catalog, get_commercial_service_options
 from app.services.closed_services import (
     PAYMENT_METHOD_OPTIONS,
     closed_services_has_data,
@@ -21,6 +21,16 @@ from app.services.payment_history import (
     parse_payment_history_from_form,
     save_payment_history,
 )
+from app.services.cadastro_billing import (
+    BILLING_FORM_OPTIONS,
+    PLAN_CYCLE_OPTIONS,
+    asaas_history_for_cadastro,
+    generate_asaas_invoice,
+    load_billing_plan,
+    parse_billing_plan_from_form,
+    save_billing_plan,
+)
+from app.services.asaas_client import AsaasError, is_configured as asaas_is_configured
 from app.services.legacy_core import (
     DuplicateRegistrationError,
     STATUS_OPTIONS,
@@ -60,6 +70,9 @@ from app.services.registration import (
 
 router = APIRouter()
 
+# Lista misturada /cadastro/todos foi descontinuada — Empresas aprovada.
+_CADASTRO_LIST_URL = "/leads-e-empresas"
+
 
 def _contract_edit_value(row, columns, key):
     column_name = columns.get(key)
@@ -77,9 +90,19 @@ def _get_row_by_sheet(df, sheet_row: int):
 
 def _resolve_edit_from_page(value: str) -> str:
     normalized = normalize_text(value).lower()
-    if normalized in {"leads", "activities", "funnel", "contracts"}:
+    if normalized in {"leads", "activities", "funnel", "attendances", "overview", "contracts"}:
         return normalized
     return ""
+
+
+def _list_url_for_from_page(from_page: str = "") -> str:
+    return {
+        "leads": "/leads-e-empresas",
+        "activities": "/atividades",
+        "funnel": "/funil-de-vendas",
+        "attendances": "/atendimentos",
+        "overview": "/",
+    }.get(normalize_text(from_page).lower(), _CADASTRO_LIST_URL)
 
 
 def _edit_page_url(sheet_row: int, *, tab: str = "", from_page: str = "") -> str:
@@ -94,89 +117,11 @@ def _edit_page_url(sheet_row: int, *, tab: str = "", from_page: str = "") -> str
 
 @router.get("/cadastro/todos", response_class=HTMLResponse)
 async def contracts_list(request: Request, order: str = "recentes"):
+    """Tela misturada descontinuada — redireciona para Empresas."""
     redirect = require_auth(request)
     if redirect:
         return redirect
-
-    refresh = request.query_params.get("refresh") == "1"
-    df, columns = get_prepared_data(refresh=refresh)
-    options = get_dashboard_filter_options(df)
-
-    filters = apply_default_period_filters(
-        DashboardFilters(
-            seller=request.query_params.get("seller", "Todos os vendedores"),
-            status=request.query_params.get("status", "Todos os status"),
-            period_start=date.fromisoformat(request.query_params["period_start"])
-            if request.query_params.get("period_start") else None,
-            period_end=date.fromisoformat(request.query_params["period_end"])
-            if request.query_params.get("period_end") else None,
-            niche=request.query_params.get("niche", "Todos os nichos"),
-            state=request.query_params.get("state", "Todos os estados"),
-            search=request.query_params.get("search", ""),
-        ),
-        df,
-    )
-
-    filtered_df = apply_dashboard_filters(df, columns, filters)
-
-    if normalize_text(filters.search):
-        term = normalize_search_text(filters.search)
-        filtered_df = filtered_df[
-            filtered_df["_empresa"].apply(lambda v: term in normalize_search_text(v))
-        ].copy()
-
-    names_df = filtered_df[["_empresa", "_sheet_row"]].copy()
-    names_df["Empresa"] = names_df["_empresa"].apply(normalize_text)
-    names_df = names_df[names_df["Empresa"] != ""].copy()
-
-    sort_mode = "alfabetica" if order == "alfabetica" else "recentes"
-    if sort_mode == "alfabetica":
-        names_df = names_df.sort_values("Empresa", key=lambda s: s.map(normalize_search_text))
-    else:
-        names_df = names_df.sort_values("_sheet_row", ascending=False)
-
-    companies = []
-    for _, row in names_df.iterrows():
-        full_row = _get_row_by_sheet(filtered_df, int(row["_sheet_row"]))
-        if full_row is None:
-            full_row = _get_row_by_sheet(df, int(row["_sheet_row"]))
-        status = "Novo Lead"
-        vendedor = "Sem vendedor"
-        nicho = "—"
-        estado = "—"
-        if full_row is not None:
-            status = resolve_company_status(full_row)
-            vendedor = normalize_text(full_row.get("_vendedor", "")) or "Sem vendedor"
-            nicho = normalize_text(full_row.get("_nicho", "")) or "—"
-            estado = normalize_text(full_row.get("_estado", "")) or "—"
-
-        empresa = row["Empresa"]
-        initials = "".join(part[0] for part in empresa.split()[:2]).upper() if empresa else "—"
-        companies.append({
-            "name": empresa,
-            "sheet_row": int(row["_sheet_row"]),
-            "initials": initials[:2],
-            "vendedor": vendedor,
-            "status": status,
-            "status_class": status_badge_class(status),
-            "nicho": nicho,
-            "estado": estado,
-        })
-
-    return render(
-        request,
-        "contracts/list.html",
-        {
-            "active_page": "contracts",
-            "companies": companies,
-            "count": len(companies),
-            "options": options,
-            "filters": filters,
-            "sort_mode": sort_mode,
-            "next_order": "alfabetica" if sort_mode == "recentes" else "recentes",
-            "status_options": STATUS_OPTIONS,
-        },
-    )
+    return RedirectResponse(url=_CADASTRO_LIST_URL, status_code=303)
 
 
 @router.get("/cadastro/todos/{sheet_row}", response_class=HTMLResponse)
@@ -202,7 +147,7 @@ async def contract_edit_page(request: Request, sheet_row: int):
     df, columns = get_prepared_data()
     row = _get_row_by_sheet(df, sheet_row)
     if row is None:
-        return RedirectResponse(url="/cadastro/todos", status_code=303)
+        return RedirectResponse(url=_CADASTRO_LIST_URL, status_code=303)
 
     current_status = status_group(row.get("_status_original", row.get("_status_grupo", "Novo Lead")))
     if current_status not in STATUS_OPTIONS:
@@ -217,7 +162,7 @@ async def contract_edit_page(request: Request, sheet_row: int):
     values = {key: _contract_edit_value(row, columns, key) for key in [
                 "empresa", "data_abertura", "capital", "cnpj", "endereco", "endereco_numero", "endereco_complemento",
                 "cep", "bairro", "municipio", "uf", "email", "site",
-                "telefone_b2b", "telefone_fixo", "telefone_alternativo",
+                "telefone_b2b", "nome_contato", "telefone_fixo", "telefone_alternativo",
                 "socio_1", "cpf_socio_1", "email_socio_1", "telefone_socio_1",
                 "socio_2", "telefone_socio_2", "cpf_socio_2",
                 "socio_3", "telefone_socio_3", "cpf_socio_3",
@@ -232,6 +177,32 @@ async def contract_edit_page(request: Request, sheet_row: int):
         empresa=values.get("empresa", ""),
         fallback=normalize_text(row.get("_nicho", "")),
     )
+    values["is_filial"] = False
+    values["empresa_matriz_sheet_row"] = ""
+    values["empresa_matriz_nome"] = ""
+    try:
+        from app.services.crm_registrations_storage import (
+            get_registration_by_sheet_row,
+            is_crm_postgres_ready,
+            registration_to_payload,
+        )
+
+        if is_crm_postgres_ready():
+            pg_row = get_registration_by_sheet_row(int(sheet_row))
+            if pg_row is not None:
+                pg = registration_to_payload(pg_row)
+                values["is_filial"] = bool(pg.get("is_filial"))
+                matriz_row = pg.get("empresa_matriz_sheet_row")
+                if matriz_row:
+                    values["empresa_matriz_sheet_row"] = str(int(matriz_row))
+                    matriz = get_registration_by_sheet_row(int(matriz_row))
+                    if matriz is not None:
+                        values["empresa_matriz_nome"] = normalize_text(
+                            registration_to_payload(matriz).get("empresa")
+                        )
+                values["nome_contato"] = normalize_text(pg.get("nome_contato"))
+    except Exception:
+        pass
     from app.services.lead_actions_storage import get_lead_action
     from app.services.sectors import list_sector_options
 
@@ -287,6 +258,7 @@ async def contract_edit_page(request: Request, sheet_row: int):
         sheet_row,
         values.get("empresa", ""),
         lead_created_at=row.get("_data_chamado") or data_chamado_raw or parsed_date,
+        from_page=from_page,
     )
     page_ctx = build_cadastro_edit_page_context(
         tenant_id=DEFAULT_TENANT_ID,
@@ -308,6 +280,24 @@ async def contract_edit_page(request: Request, sheet_row: int):
         valor_proposta=values.get("valor_proposta", ""),
     )
     payment_history = load_payment_history(DEFAULT_TENANT_ID, sheet_row)
+    billing_plan = load_billing_plan(DEFAULT_TENANT_ID, sheet_row)
+    asaas_payments_unique: list = []
+    summary_payments = payment_history
+    if active_tab == "financeiro":
+        asaas_payments = asaas_history_for_cadastro(values, plan=billing_plan)
+        asaas_ids = {item.get("asaas_payment_id") for item in payment_history if item.get("asaas_payment_id")}
+        asaas_payments_unique = [
+            item for item in asaas_payments if item.get("asaas_payment_id") not in asaas_ids
+        ]
+        summary_payments = payment_history + [
+            {
+                **item,
+                "status": "Pago" if item.get("status") == "Pago" else (
+                    "Atrasado" if item.get("status") == "Atrasado" else "Pendente"
+                ),
+            }
+            for item in asaas_payments_unique
+        ]
     if closed_services:
         page_ctx["proposals_count"] = len([
             item for item in closed_services
@@ -326,16 +316,14 @@ async def contract_edit_page(request: Request, sheet_row: int):
         "admin_email": ponto_snapshot.get("admin_email") or "",
     }
 
-    back_href = {
-        "leads": "/leads-e-empresas",
-        "activities": "/atividades",
-        "funnel": "/funil-de-vendas",
-    }.get(from_page, "/cadastro/todos")
+    back_href = _list_url_for_from_page(from_page)
     active_sidebar = {
         "leads": "leads",
         "activities": "activities",
         "funnel": "funnel",
-    }.get(from_page, "contracts")
+        "attendances": "attendances",
+        "overview": "overview",
+    }.get(from_page, "leads")
 
     return render(
         request,
@@ -348,7 +336,9 @@ async def contract_edit_page(request: Request, sheet_row: int):
                 "leads": "Empresas",
                 "activities": "Atividades",
                 "funnel": "Funil de Vendas",
-            }.get(from_page, "Todos os cadastros"),
+                "attendances": "Atendimentos",
+                "overview": "Visão Geral",
+            }.get(from_page, "Empresas"),
             "sheet_row": sheet_row,
             "seller_options": get_seller_options(df),
             "niche_options": niche_options,
@@ -359,11 +349,17 @@ async def contract_edit_page(request: Request, sheet_row: int):
             "values": values,
             "partners_count": infer_partners_count(values),
             "service_options": get_commercial_service_options(),
+            "service_catalog": get_commercial_service_catalog(),
             "payment_method_options": PAYMENT_METHOD_OPTIONS,
             "payment_status_options": PAYMENT_STATUS_OPTIONS,
             "closed_services": closed_services,
             "payment_history": payment_history,
-            "financial_summary": financial_summary(closed_services, payment_history),
+            "asaas_payments": asaas_payments_unique,
+            "billing_plan": billing_plan,
+            "plan_cycle_options": PLAN_CYCLE_OPTIONS,
+            "billing_form_options": BILLING_FORM_OPTIONS,
+            "asaas_configured": asaas_is_configured(),
+            "financial_summary": financial_summary(closed_services, summary_payments),
             "colaborador_options": get_colaborador_options(),
             "vendedor": normalize_text(row.get("_vendedor", "")) or "Sem vendedor",
             "error": request.session.pop("edit_error", ""),
@@ -405,11 +401,65 @@ async def contract_edit_submit(request: Request, sheet_row: int):
 
     try:
         if action == "save_financeiro":
-            closed_items = parse_closed_services_from_form(form)
-            save_closed_services(DEFAULT_TENANT_ID, sheet_row, closed_items)
             payments = parse_payment_history_from_form(form)
             save_payment_history(DEFAULT_TENANT_ID, sheet_row, payments)
+            closed_items = parse_closed_services_from_form(form)
+            save_closed_services(DEFAULT_TENANT_ID, sheet_row, closed_items, sync_sheet=False)
+            previous_plan = load_billing_plan(DEFAULT_TENANT_ID, sheet_row)
+            save_billing_plan(
+                DEFAULT_TENANT_ID,
+                sheet_row,
+                parse_billing_plan_from_form(form, previous=previous_plan),
+            )
             request.session["edit_success"] = "Financeiro atualizado com sucesso."
+            return RedirectResponse(
+                url=_edit_page_url(sheet_row, tab="financeiro", from_page=from_page),
+                status_code=303,
+            )
+
+        if action == "generate_invoice":
+            payments = parse_payment_history_from_form(form)
+            save_payment_history(DEFAULT_TENANT_ID, sheet_row, payments)
+            previous_plan = load_billing_plan(DEFAULT_TENANT_ID, sheet_row)
+            plan = save_billing_plan(
+                DEFAULT_TENANT_ID,
+                sheet_row,
+                parse_billing_plan_from_form(form, previous=previous_plan),
+            )
+            df, columns = get_prepared_data()
+            row = _get_row_by_sheet(df, sheet_row)
+            values = {
+                "empresa": _contract_edit_value(row, columns, "empresa") if row is not None else "",
+                "cnpj": _contract_edit_value(row, columns, "cnpj") if row is not None else "",
+                "telefone_b2b": _contract_edit_value(row, columns, "telefone_b2b") if row is not None else "",
+                "email": _contract_edit_value(row, columns, "email") if row is not None else "",
+                "nome_contato": _contract_edit_value(row, columns, "nome_contato") if row is not None else "",
+            }
+            try:
+                from app.services.crm_registrations_storage import (
+                    get_registration_by_sheet_row,
+                    is_crm_postgres_ready,
+                    registration_to_payload,
+                )
+
+                if is_crm_postgres_ready():
+                    pg_row = get_registration_by_sheet_row(int(sheet_row))
+                    if pg_row is not None:
+                        pg = registration_to_payload(pg_row)
+                        values["empresa"] = normalize_text(pg.get("empresa")) or values["empresa"]
+                        values["cnpj"] = normalize_text(pg.get("cnpj")) or values["cnpj"]
+                        values["telefone_b2b"] = normalize_text(pg.get("telefone_b2b")) or values["telefone_b2b"]
+                        values["email_empresa"] = normalize_text(pg.get("email_empresa")) or values["email"]
+                        values["nome_contato"] = normalize_text(pg.get("nome_contato")) or values["nome_contato"]
+            except Exception:
+                pass
+            try:
+                result = generate_asaas_invoice(DEFAULT_TENANT_ID, sheet_row, values, plan)
+                request.session["edit_success"] = result.get("message") or "Fatura gerada no Asaas."
+            except AsaasError as error:
+                request.session["edit_error"] = str(error)
+            except Exception as error:
+                request.session["edit_error"] = f"Não consegui gerar a fatura: {error}"
             return RedirectResponse(
                 url=_edit_page_url(sheet_row, tab="financeiro", from_page=from_page),
                 status_code=303,
@@ -508,7 +558,7 @@ async def contract_delete(
     row = _get_row_by_sheet(df, sheet_row)
     if row is None:
         request.session["edit_error"] = "Cadastro não encontrado."
-        return RedirectResponse(url="/cadastro/todos", status_code=303)
+        return RedirectResponse(url=_CADASTRO_LIST_URL, status_code=303)
 
     try:
         delete_company_registration(DEFAULT_TENANT_ID, sheet_row)
@@ -519,11 +569,7 @@ async def contract_delete(
         request.session["edit_error"] = f"Não consegui excluir o cadastro: {error}"
         return RedirectResponse(url=edit_url, status_code=303)
 
-    return RedirectResponse(url={
-        "leads": "/leads-e-empresas",
-        "activities": "/atividades",
-        "funnel": "/funil-de-vendas",
-    }.get(from_page, "/cadastro/todos"), status_code=303)
+    return RedirectResponse(url=_list_url_for_from_page(from_page), status_code=303)
 
 
 @router.post("/cadastro/todos/{sheet_row}/ordens-servico")
@@ -660,7 +706,7 @@ async def contract_oppi_ponto_action(
     row = _get_row_by_sheet(df, sheet_row)
     if row is None:
         request.session["edit_error"] = "Cadastro não encontrado."
-        return RedirectResponse(url="/cadastro/todos", status_code=303)
+        return RedirectResponse(url=_CADASTRO_LIST_URL, status_code=303)
 
     values = {key: _contract_edit_value(row, columns, key) for key in [
         "empresa", "cnpj", "email", "telefone_b2b", "telefone_fixo",
@@ -739,7 +785,7 @@ async def contract_update_status(request: Request, sheet_row: int, status: str =
     df, columns = get_prepared_data()
     row = _get_row_by_sheet(df, sheet_row)
     if row is None:
-        return RedirectResponse(url="/cadastro/todos", status_code=303)
+        return RedirectResponse(url=_CADASTRO_LIST_URL, status_code=303)
 
     new_status = normalize_text(status)
     if new_status not in STATUS_OPTIONS:
@@ -754,7 +800,7 @@ async def contract_update_status(request: Request, sheet_row: int, status: str =
                 status_code=500,
             )
         request.session["contracts_status_error"] = str(error)
-        return RedirectResponse(url=request.headers.get("referer", "/cadastro/todos"), status_code=303)
+        return RedirectResponse(url=request.headers.get("referer", _CADASTRO_LIST_URL), status_code=303)
 
     status_context = {
         "sheet_row": sheet_row,
@@ -766,7 +812,7 @@ async def contract_update_status(request: Request, sheet_row: int, status: str =
     if request.headers.get("HX-Request"):
         return render(request, "partials/contracts_status_cell.html", status_context)
 
-    return RedirectResponse(url=request.headers.get("referer", "/cadastro/todos"), status_code=303)
+    return RedirectResponse(url=request.headers.get("referer", _CADASTRO_LIST_URL), status_code=303)
 
 
 @router.post("/cadastro/todos/atualizar")
@@ -775,4 +821,4 @@ async def contracts_refresh(request: Request):
     if redirect:
         return redirect
     invalidate_sheet_cache()
-    return RedirectResponse(url="/cadastro/todos?refresh=1", status_code=303)
+    return RedirectResponse(url=f"{_CADASTRO_LIST_URL}?refresh=1", status_code=303)

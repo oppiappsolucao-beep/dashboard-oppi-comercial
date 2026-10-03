@@ -336,6 +336,15 @@ def user_exists_in_sheet(username: str) -> bool:
 
 
 def _persist_users(users: list[dict]) -> None:
+    try:
+        from app.services.crm_registrations_storage import is_crm_postgres_ready
+        from app.services.crm_aux_storage import persist_users_pg
+
+        if is_crm_postgres_ready():
+            persist_users_pg(users)
+            return
+    except Exception:
+        pass
     _save_to_file(users)
     if settings.sheets_configured and not _save_to_sheet(users):
         raise RuntimeError("Não foi possível salvar os usuários na aba Usuarios da planilha.")
@@ -343,6 +352,27 @@ def _persist_users(users: list[dict]) -> None:
 
 def load_account_users(force_refresh: bool = False) -> list[dict]:
     global _cache
+    try:
+        from app.services.crm_registrations_storage import is_crm_postgres_ready
+        from app.services.crm_aux_storage import load_users_pg
+
+        if is_crm_postgres_ready():
+            with _lock:
+                if not force_refresh and _cache is not None:
+                    return [dict(user) for user in _cache]
+                merged = load_users_pg()
+                # Enrich UI fields via serializer when possible
+                enriched = []
+                for user in merged:
+                    try:
+                        enriched.append(_serialize_user(user))
+                    except Exception:
+                        enriched.append(dict(user))
+                _cache = enriched
+                return [dict(user) for user in enriched]
+    except Exception:
+        pass
+
     with _lock:
         if not force_refresh and _cache is not None:
             return [dict(user) for user in _cache]
@@ -401,6 +431,24 @@ def verify_account_user_credentials(username: str, password: str) -> dict | None
     if not _verify_password(password, user.get("password_hash", "")):
         return None
     return user
+
+
+def set_account_user_password(username: str, password: str) -> bool:
+    """Troca a senha de um usuário ativo. Devolve False se o login não existir."""
+    target = normalize_text(username).lower()
+    if not target:
+        return False
+    users = load_account_users()
+    index = next((idx for idx, user in enumerate(users) if user["username"].lower() == target), None)
+    if index is None:
+        return False
+    users[index]["password_hash"] = _hash_password(password)
+    users[index]["updated_at"] = _now_iso()
+    _persist_users(users)
+    with _lock:
+        global _cache
+        _cache = users
+    return True
 
 
 def touch_account_user_last_access(user_id: str) -> None:

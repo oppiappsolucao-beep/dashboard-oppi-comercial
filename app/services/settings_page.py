@@ -85,7 +85,7 @@ def _as_datetime(value) -> datetime | None:
 
 def _format_last_access(value) -> str:
     dt = _as_datetime(value)
-    if not dt:
+    if dt is None:
         return "—"
     return dt.strftime("%d/%m/%Y %H:%M")
 

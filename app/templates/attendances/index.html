@@ -4,14 +4,8 @@
 <div class="page-header att-page-header">
   <div>
     <div class="page-title">Atendimentos</div>
-    <div class="page-subtitle">Inbox WhatsApp integrado ao CRM — responda leads e pause a IA quando assumir.</div>
   </div>
   <div class="page-actions att-page-actions">
-    {% if not evolution_configured %}
-    <span class="att-config-badge" title="Defina EVOLUTION_API_URL, EVOLUTION_API_KEY e EVOLUTION_INSTANCE">Evolution não configurada</span>
-    {% else %}
-    <span class="att-config-badge att-config-ok">Evolution conectada</span>
-    {% endif %}
     <span class="att-unread-pill" id="att-unread-pill" data-count="{{ unread_total }}" {% if unread_total <= 0 %}hidden{% endif %}>
       {{ unread_total }} nova{{ 's' if unread_total != 1 else '' }}
     </span>
@@ -21,6 +15,25 @@
 
 {% if flash %}<div class="att-page-flash ok">{{ flash }}</div>{% endif %}
 {% if error %}<div class="att-page-flash err">{{ error }}</div>{% endif %}
+
+<link rel="stylesheet" href="/static/css/gestao.css?v={{ static_version }}">
+<section class="att-compare" aria-label="Gestão e atendimento">
+  <article class="panel">
+    <span>Números da gestão</span>
+    <strong>0</strong>
+    <p>O espelho do tráfego ainda começa do zero.</p>
+  </article>
+  <article class="panel">
+    <span>Números de atendimento</span>
+    <strong>{{ conversations|length }}</strong>
+    <p>Conversas nesta lista, no filtro atual.</p>
+  </article>
+  <article class="panel">
+    <span>Já no cadastro</span>
+    <strong>{{ conversations|selectattr('sheet_row')|list|length }}</strong>
+    <p>Conversas desta lista que já têm empresa.</p>
+  </article>
+</section>
 
 <div class="att-new-call-panel" id="att-new-call-panel" hidden>
   <form method="post" action="/atendimentos/novo" class="att-new-call-form">
@@ -35,6 +48,18 @@
         <span>Nome / empresa</span>
         <input type="text" name="contact_name" class="att-input" placeholder="Opcional" autocomplete="off">
       </label>
+      {% if whatsapp_lines and whatsapp_lines|length > 1 %}
+      <label class="att-new-call-field">
+        <span>Linha WhatsApp</span>
+        <select name="line" class="att-input att-select">
+          {% for line in whatsapp_lines %}
+          <option value="{{ line.id }}" {% if line_filter == line.id %}selected{% endif %}>{{ line.label }}{% if line.phone %} ({{ line.phone }}){% endif %}</option>
+          {% endfor %}
+        </select>
+      </label>
+      {% else %}
+      <input type="hidden" name="line" value="{{ line_filter if line_filter != 'todos' else (whatsapp_lines[0].id if whatsapp_lines else '') }}">
+      {% endif %}
       <label class="att-new-call-field att-new-call-field-wide">
         <span>Mensagem inicial</span>
         <input type="text" name="first_message" class="att-input" placeholder="Opcional — envia ao abrir o chamado" autocomplete="off">
@@ -49,13 +74,15 @@
 
 <div class="att-shell {% if selected %}att-shell--chat-open{% endif %}" id="att-shell"
      data-selected="{{ selected.id if selected else '' }}"
-     data-evolution="{{ '1' if evolution_configured else '0' }}">
+     data-evolution="{{ '1' if evolution_configured else '0' }}"
+     data-line="{{ line_filter }}">
   <aside class="att-col att-col-list">
     <form class="att-filters"
           hx-post="/atendimentos/filtros"
           hx-target="#att-conversation-list"
           hx-swap="innerHTML"
-          hx-trigger="submit, keyup changed delay:300ms from:#att-search, change from:#att-status, change from:#att-sector">
+          hx-trigger="submit, keyup changed delay:300ms from:#att-search, change from:#att-status, change from:#att-sector, change from:#att-tag, change from:#att-line">
+      <input type="hidden" id="att-line" name="line" value="{{ line_filter }}">
       <input type="search" id="att-search" name="search" value="{{ search }}" placeholder="Buscar nome ou telefone…" class="att-input" autocomplete="off">
       <select id="att-status" name="status" class="att-input att-select">
         {% for value, label in status_options %}
@@ -75,8 +102,42 @@
       <input type="hidden" name="sector" value="{{ sector_filter }}">
       <small class="att-filter-hint">Fila do setor: {{ user_sector_name or 'seu departamento' }}</small>
       {% endif %}
+      <select id="att-tag" name="tag" class="att-input att-select">
+        <option value="todos" {% if tag_filter == 'todos' or not tag_filter %}selected{% endif %}>Todas as tags</option>
+        {% for tag in tag_options or [] %}
+        <option value="{{ tag }}" {% if tag_filter == tag %}selected{% endif %}>{{ tag }}</option>
+        {% endfor %}
+      </select>
       {% if selected %}<input type="hidden" name="conversation_id" value="{{ selected.id }}">{% endif %}
     </form>
+
+    {% if whatsapp_lines and whatsapp_lines|length >= 1 %}
+    <div class="att-line-switcher" id="att-line-switcher" role="tablist" aria-label="Linha WhatsApp">
+      {% if whatsapp_lines|length > 1 %}
+      <button type="button"
+              class="att-line-pill {% if line_filter == 'todos' %}active{% endif %}"
+              data-line="todos"
+              role="tab"
+              aria-selected="{{ 'true' if line_filter == 'todos' else 'false' }}"
+              title="Todas as linhas">
+        <span class="att-line-pill-label">Todas</span>
+        {% if lines_unread_total %}<span class="att-line-pill-unread">{{ lines_unread_total }}</span>{% endif %}
+      </button>
+      {% endif %}
+      {% for line in whatsapp_lines %}
+      <button type="button"
+              class="att-line-pill {% if line_filter == line.id %}active{% endif %}"
+              data-line="{{ line.id }}"
+              role="tab"
+              aria-selected="{{ 'true' if line_filter == line.id else 'false' }}"
+              title="{{ line.phone or line.id }}">
+        <span class="att-line-pill-label">{{ line.label }}</span>
+        {% if line.unread %}<span class="att-line-pill-unread">{{ line.unread }}</span>{% endif %}
+      </button>
+      {% endfor %}
+    </div>
+    {% endif %}
+
     <div id="att-conversation-list" class="att-conversation-list">
       {% include "partials/attendances_list.html" %}
     </div>

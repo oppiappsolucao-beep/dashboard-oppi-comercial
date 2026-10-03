@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import APP_BUILD, settings
-from app.routers import auth, activities, attendances, contracts, evolution_webhook, funnel, goals_reports, leads, overview, proposals, registration
+from app.routers import auth, activities, attendances, contracts, evolution_webhook, financeiro, funnel, gestao, goals_reports, leads, overview, proposals, registration
 from app.routers import migration_ponto
 from app.routers import settings as settings_router
 from app.templating import render
@@ -26,6 +26,7 @@ static_dir = Path(__file__).resolve().parent / "static"
 app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
 app.include_router(auth.router)
+app.include_router(gestao.router)
 app.include_router(overview.router)
 app.include_router(funnel.router)
 app.include_router(activities.router)
@@ -33,6 +34,7 @@ app.include_router(attendances.router)
 app.include_router(evolution_webhook.router)
 app.include_router(proposals.router)
 app.include_router(goals_reports.router)
+app.include_router(financeiro.router)
 app.include_router(leads.router)
 app.include_router(registration.router)
 app.include_router(contracts.router)
@@ -83,13 +85,22 @@ app.add_api_route("/metas-e-relatorios", goals_page, methods=["GET"], tags=["goa
 app.add_api_route("/metas-e-relatorios/filtros", goals_filters, methods=["POST"], tags=["goals"])
 app.add_api_route("/metas-e-relatorios/atualizar", goals_refresh, methods=["POST"], tags=["goals"])
 
+from app.routers.financeiro import financeiro_filters, financeiro_page, financeiro_refresh, financeiro_sync  # noqa: E402
+
+app.add_api_route("/financeiro", financeiro_page, methods=["GET"], tags=["financeiro"])
+app.add_api_route("/financeiro/filtros", financeiro_filters, methods=["POST"], tags=["financeiro"])
+app.add_api_route("/financeiro/atualizar", financeiro_refresh, methods=["POST"], tags=["financeiro"])
+app.add_api_route("/financeiro/sincronizar", financeiro_sync, methods=["POST"], tags=["financeiro"])
+
 from app.routers.settings import (  # noqa: E402
     settings_add_service,
+    settings_cleanup_whatsapp_cadastros,
     settings_filters,
     settings_page,
     settings_permissions_toggle,
     settings_refresh,
     settings_remove_service,
+    settings_restore_whatsapp_send_phones,
 )
 
 app.add_api_route("/configuracoes", settings_page, methods=["GET"], tags=["settings"])
@@ -98,6 +109,18 @@ app.add_api_route("/configuracoes/permissoes", settings_permissions_toggle, meth
 app.add_api_route("/configuracoes/atualizar", settings_refresh, methods=["POST"], tags=["settings"])
 app.add_api_route("/configuracoes/servicos/adicionar", settings_add_service, methods=["POST"], tags=["settings"])
 app.add_api_route("/configuracoes/servicos/remover", settings_remove_service, methods=["POST"], tags=["settings"])
+app.add_api_route(
+    "/configuracoes/limpeza-whatsapp-cadastros",
+    settings_cleanup_whatsapp_cadastros,
+    methods=["POST"],
+    tags=["settings"],
+)
+app.add_api_route(
+    "/configuracoes/restaurar-telefones-envio-whatsapp",
+    settings_restore_whatsapp_send_phones,
+    methods=["POST"],
+    tags=["settings"],
+)
 
 
 @app.on_event("startup")
@@ -133,6 +156,40 @@ async def startup_maintenance() -> None:
 
             Base.metadata.create_all(bind=engine)
             ensure_attendance_schema_columns()
+            try:
+                from app.services.crm_db_migrate import migrate_crm_to_postgres_if_needed
+                from app.services.crm_registrations_storage import is_crm_postgres_ready
+
+                crm_migrate = migrate_crm_to_postgres_if_needed(sheet_force_refresh=True)
+                log.info("CRM Postgres migrate: %s", crm_migrate)
+                if (crm_migrate or {}).get("reason") == "waiting_for_sheet_data":
+
+                    def _crm_migrate_retries() -> None:
+                        for delay in (20, 60, 120, 300):
+                            time.sleep(delay)
+                            try:
+                                if is_crm_postgres_ready():
+                                    return
+                                retry = migrate_crm_to_postgres_if_needed(
+                                    sheet_force_refresh=True
+                                )
+                                log.info("CRM Postgres migrate retry (+%ss): %s", delay, retry)
+                                if (retry or {}).get("reason") in {
+                                    "migrated",
+                                    "already_migrated",
+                                    "destination_already_has_data",
+                                }:
+                                    return
+                            except Exception as retry_error:
+                                log.error("CRM Postgres migrate retry: %s", retry_error)
+
+                    threading.Thread(
+                        target=_crm_migrate_retries,
+                        name="crm-postgres-migrate-retry",
+                        daemon=True,
+                    ).start()
+            except Exception as crm_error:
+                log.error("CRM Postgres migrate: %s", crm_error)
             ensure_default_niches()
             ensure_default_sectors()
             ensure_default_attendance_tags()
@@ -150,6 +207,43 @@ async def startup_maintenance() -> None:
                 log.info("Attendance named delete: %s", named)
             except Exception as purge_error:
                 log.error("Attendance group purge: %s", purge_error)
+            try:
+                from database.connection import SessionLocal
+                from database.models import AppMeta
+                from app.services.activities_storage import clear_all_activities
+                from app.services.crm_cleanup import purge_recent_leads_and_all_conversations
+
+                purge_key = "purge_leads30d_conversations_v1"
+                db = SessionLocal()
+                try:
+                    meta = db.get(AppMeta, purge_key)
+                    already = bool(meta and (meta.value or "").strip() in {"1", "true", "yes"})
+                finally:
+                    db.close()
+                if not already:
+                    cleared_acts = clear_all_activities()
+                    log.info("Activities full purge: %s", cleared_acts)
+                    cleaned = purge_recent_leads_and_all_conversations(days=30)
+                    log.info("Leads/conversations purge: %s", cleaned)
+                    db = SessionLocal()
+                    try:
+                        db.merge(AppMeta(key=purge_key, value="1"))
+                        # marca também a limpeza anterior de atividades
+                        db.merge(AppMeta(key="activities_cleared_contato_pipeline_v1", value="1"))
+                        db.commit()
+                    finally:
+                        db.close()
+                else:
+                    log.info("Leads/conversations purge: already done (%s)", purge_key)
+            except Exception as act_purge_error:
+                log.error("Leads/conversations purge: %s", act_purge_error)
+            try:
+                from app.services.attendance_media import backfill_all_conversations_media
+
+                fixed = backfill_all_conversations_media(limit=60)
+                log.info("Attendance media backfill: %s", fixed)
+            except Exception as media_error:
+                log.error("Attendance media backfill: %s", media_error)
         except Exception as error:
             log.error("Startup DATABASE_URL / attendance migrate: %s", error)
 
@@ -192,6 +286,13 @@ async def startup_maintenance() -> None:
                     fromlist=["ensure_fake_test_company_on_startup"],
                 ).ensure_fake_test_company_on_startup(),
             ),
+            (
+                "evolution_webhooks",
+                lambda: __import__(
+                    "app.services.evolution_client",
+                    fromlist=["ensure_webhooks_for_all_instances"],
+                ).ensure_webhooks_for_all_instances(),
+            ),
         ]
         for name, step in steps:
             try:
@@ -209,7 +310,191 @@ async def startup_maintenance() -> None:
 
 @app.get("/health")
 async def health():
+    # Mantém leve: load balancer / Easypanel não pode depender de Postgres/Sheets.
     return JSONResponse({"status": "ok", "build": APP_BUILD})
+
+
+@app.get("/health/crm")
+async def health_crm():
+    payload = {"status": "ok", "build": APP_BUILD, "crm_postgres": {"ready": False}}
+    try:
+        from app.services.crm_registrations_storage import (
+            count_registrations,
+            is_crm_postgres_ready,
+        )
+
+        ready = bool(is_crm_postgres_ready())
+        payload["crm_postgres"] = {
+            "ready": ready,
+            "registrations": int(count_registrations() or 0) if ready else 0,
+        }
+    except Exception as error:
+        payload["status"] = "degraded"
+        payload["crm_postgres"] = {"ready": False, "error": str(error)}
+    return JSONResponse(payload)
+
+
+_CRM_CUTOVER_LOCK = threading.Lock()
+_CRM_CUTOVER_RUNNING = False
+_CRM_CUTOVER_LAST: dict | None = None
+
+
+@app.get("/health/crm-cutover")
+async def health_crm_cutover():
+    """Dispara cutover em background — não bloqueia o worker HTTP."""
+    global _CRM_CUTOVER_RUNNING, _CRM_CUTOVER_LAST
+
+    try:
+        from app.services.crm_registrations_storage import (
+            count_registrations,
+            is_crm_postgres_ready,
+        )
+
+        if is_crm_postgres_ready():
+            return JSONResponse(
+                {
+                    "status": "ok",
+                    "build": APP_BUILD,
+                    "crm_postgres": {
+                        "ready": True,
+                        "registrations": int(count_registrations() or 0),
+                    },
+                    "migrate": {"reason": "already_migrated"},
+                    "last": _CRM_CUTOVER_LAST,
+                }
+            )
+    except Exception as error:
+        return JSONResponse(
+            {
+                "status": "error",
+                "build": APP_BUILD,
+                "error": str(error),
+            },
+            status_code=500,
+        )
+
+    started = False
+    with _CRM_CUTOVER_LOCK:
+        if not _CRM_CUTOVER_RUNNING:
+            _CRM_CUTOVER_RUNNING = True
+            started = True
+
+            def _run() -> None:
+                global _CRM_CUTOVER_RUNNING, _CRM_CUTOVER_LAST
+                try:
+                    from app.services.crm_db_migrate import migrate_crm_to_postgres_if_needed
+                    from app.services.crm_registrations_storage import (
+                        count_registrations,
+                        is_crm_postgres_ready,
+                    )
+                    from app.services.legacy_core import (
+                        hydrate_sheet_cache_from_disk,
+                        load_sheet_data,
+                    )
+
+                    hydrate_sheet_cache_from_disk()
+                    try:
+                        load_sheet_data(force_refresh=False)
+                    except Exception:
+                        pass
+                    result = migrate_crm_to_postgres_if_needed(
+                        force=True,
+                        sheet_force_refresh=True,
+                    )
+                    ready = bool(is_crm_postgres_ready())
+                    _CRM_CUTOVER_LAST = {
+                        "migrate": result,
+                        "crm_postgres": {
+                            "ready": ready,
+                            "registrations": int(count_registrations() or 0)
+                            if ready
+                            else 0,
+                        },
+                    }
+                except Exception as error:
+                    _CRM_CUTOVER_LAST = {"error": str(error)}
+                finally:
+                    with _CRM_CUTOVER_LOCK:
+                        _CRM_CUTOVER_RUNNING = False
+
+            threading.Thread(
+                target=_run, daemon=True, name="crm-cutover-health"
+            ).start()
+
+    return JSONResponse(
+        {
+            "status": "started" if started else "running",
+            "build": APP_BUILD,
+            "hint": "Recarregue em alguns segundos; resultado em 'last' quando terminar.",
+            "last": _CRM_CUTOVER_LAST,
+        }
+    )
+
+
+_CRM_RESET_LOCK = threading.Lock()
+_CRM_RESET_RUNNING = False
+_CRM_RESET_LAST: dict = {}
+
+
+@app.get("/health/crm-reset-folha1")
+async def health_crm_reset_folha1(confirm: str = ""):
+    """Apaga cadastros/atividades e reimporta Folha1. Exige ?confirm=APAGAR."""
+    global _CRM_RESET_RUNNING, _CRM_RESET_LAST
+    from app.services.legacy_core import normalize_text as _nt
+
+    if _nt(confirm) != "APAGAR":
+        return JSONResponse(
+            {
+                "ok": False,
+                "build": APP_BUILD,
+                "error": "passe ?confirm=APAGAR para executar",
+                "last": _CRM_RESET_LAST,
+            },
+            status_code=400,
+        )
+
+    started = False
+    with _CRM_RESET_LOCK:
+        if not _CRM_RESET_RUNNING:
+            _CRM_RESET_RUNNING = True
+            started = True
+
+            def _run() -> None:
+                global _CRM_RESET_RUNNING, _CRM_RESET_LAST
+                try:
+                    from app.services.crm_db_migrate import reset_and_reimport_crm_from_folha1
+                    from app.services.crm_registrations_storage import count_registrations
+                    from app.services.legacy_core import (
+                        hydrate_sheet_cache_from_disk,
+                        load_sheet_data,
+                    )
+
+                    hydrate_sheet_cache_from_disk()
+                    try:
+                        load_sheet_data(force_refresh=True)
+                    except Exception:
+                        pass
+                    result = reset_and_reimport_crm_from_folha1(dry_run=False)
+                    _CRM_RESET_LAST = {
+                        "result": result,
+                        "registrations": int(count_registrations() or 0),
+                    }
+                except Exception as error:
+                    _CRM_RESET_LAST = {"error": str(error)}
+                finally:
+                    with _CRM_RESET_LOCK:
+                        _CRM_RESET_RUNNING = False
+
+            threading.Thread(target=_run, daemon=True, name="crm-reset-folha1").start()
+
+    return JSONResponse(
+        {
+            "status": "started" if started else "running",
+            "build": APP_BUILD,
+            "hint": "Recarregue em ~30s; veja 'last'.",
+            "last": _CRM_RESET_LAST,
+        }
+    )
 
 
 @app.get("/health/pdf-engine")
@@ -224,7 +509,7 @@ async def health_pdf_engine():
 
 @app.get("/")
 async def root():
-    return RedirectResponse(url="/visao-geral", status_code=303)
+    return RedirectResponse(url="/gestao", status_code=303)
 
 
 @app.exception_handler(HTTPException)

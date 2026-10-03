@@ -9,7 +9,14 @@ from app.services.crm_validation_service import get_next_action_options, normali
 from app.services.followup_service import _email_for_row, _phone_for_row, _whatsapp_href
 from app.services.lead_actions_storage import append_interaction, get_lead_action, save_lead_action
 from app.services.registration import is_cadastro_ativo, resolve_cadastro_tipo
-from app.services.legacy_core import deal_value_from_row, normalize_text, row_field_value, safe_series, status_group
+from app.services.legacy_core import (
+    as_python_datetime,
+    deal_value_from_row,
+    normalize_text,
+    row_field_value,
+    safe_series,
+    status_group,
+)
 
 ETAPA_STAGES = PIPELINE_STAGE_OPTIONS
 ETAPA_BADGE = PIPELINE_STAGE_BADGE
@@ -49,24 +56,13 @@ def _format_money(value) -> str:
 
 
 def _as_datetime(value):
-    if value is None or (isinstance(value, float) and pd.isna(value)):
-        return None
-    if isinstance(value, datetime):
-        return value
-    try:
-        if pd.isna(value):
-            return None
-    except Exception:
-        pass
-    try:
-        return pd.to_datetime(value).to_pydatetime()
-    except Exception:
-        return None
+    # Não usar isinstance(datetime) antes de isna: em pandas, NaT é datetime e truthy.
+    return as_python_datetime(value)
 
 
 def _format_contact_date(value) -> str:
     dt = _as_datetime(value)
-    if not dt:
+    if dt is None:
         return "—"
     today = datetime.now().date()
     d = dt.date()
@@ -79,7 +75,7 @@ def _format_contact_date(value) -> str:
 
 def _format_relative_days(value) -> str:
     dt = _as_datetime(value)
-    if not dt:
+    if dt is None:
         return "—"
     days = max(0, (datetime.now().date() - dt.date()).days)
     if days == 0:
@@ -313,9 +309,16 @@ def _build_row(row, columns: dict, tab: str, tenant_id: str | None) -> dict:
     etapa = map_etapa(status_raw, stored)
     vendedor = str(row.get("_vendedor", "") or "Sem vendedor").strip() or "Sem vendedor"
     sheet_row = int(row.get("_sheet_row", 0) or 0)
-    empresa = str(row.get("_empresa", "") or "—")
-    socio = row_field_value(row, columns, "socio_1")
-    nome_display = socio or empresa
+    empresa = normalize_text(row.get("_empresa")) or "—"
+    fantasia = normalize_text(row_field_value(row, columns, "nome_fantasia"))
+    socio = normalize_text(row_field_value(row, columns, "socio_1"))
+    # Título da lista = sempre empresa (nunca sócio). Fantasia só se empresa vazia.
+    if empresa != "—":
+        nome_display = empresa
+    elif fantasia:
+        nome_display = fantasia
+    else:
+        nome_display = "—"
     telefone = _phone_for_row(row, columns) or "—"
     email = _email_for_row(row, columns) or "—"
     last_contact_raw = row.get("_ultima_atualizacao") or row.get("_data_chamado")
@@ -331,12 +334,19 @@ def _build_row(row, columns: dict, tab: str, tenant_id: str | None) -> dict:
     )
 
     tipo_label = "Empresa" if cadastro_tipo == "empresa" else "Lead"
+    contato = socio or "—"
+    if cadastro_tipo == "lead" and contato != "—" and contato != nome_display:
+        meta_label = f"{tipo_label} · {contato}"
+    else:
+        meta_label = tipo_label
 
     return {
         "nome": nome_display,
-        "empresa": empresa,
+        "empresa": empresa if empresa != "—" else nome_display,
         "empresa_initials": _initials(nome_display),
+        "contato": contato,
         "tipo_label": tipo_label,
+        "meta_label": meta_label,
         "telefone": telefone,
         "email": email,
         "vendedor": vendedor,
@@ -352,7 +362,7 @@ def _build_row(row, columns: dict, tab: str, tenant_id: str | None) -> dict:
         "valor_num": deal_value_from_row(row),
         "whatsapp_href": _whatsapp_href(telefone if telefone != "—" else ""),
         "sheet_row": sheet_row,
-        "href": f"/cadastro/todos/{sheet_row}/editar?from=leads" if sheet_row else "/cadastro/todos",
+        "href": f"/cadastro/todos/{sheet_row}/editar?from=leads" if sheet_row else "/leads-e-empresas",
     }
 
 

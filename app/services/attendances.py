@@ -13,6 +13,74 @@ from app.services.legacy_core import normalize_text
 logger = logging.getLogger(__name__)
 
 
+def annotate_messages_day_separators(messages: list[dict] | None) -> list[dict]:
+    """Insere rótulos de dia (Hoje / Ontem / dd/mm/aaaa) entre bolhas, estilo WhatsApp."""
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+
+    if not messages:
+        return []
+    tz = ZoneInfo("America/Sao_Paulo")
+    today = datetime.now(tz).date()
+    yesterday = today - timedelta(days=1)
+    last_day = None
+    out: list[dict] = []
+    for raw in messages:
+        item = dict(raw)
+        day = None
+        created = normalize_text(item.get("created_at") or "")
+        if created:
+            try:
+                # ISO local (sem Z) ou com timezone
+                stub = created.replace("Z", "+00:00")
+                dt = datetime.fromisoformat(stub)
+                if dt.tzinfo is not None:
+                    dt = dt.astimezone(tz).replace(tzinfo=None)
+                day = dt.date()
+                item["time_label"] = dt.strftime("%H:%M")
+            except Exception:
+                if len(created) >= 16:
+                    item["time_label"] = created[11:16]
+                else:
+                    item["time_label"] = ""
+        else:
+            item["time_label"] = ""
+
+        if day and day != last_day:
+            if day == today:
+                item["day_separator"] = "Hoje"
+            elif day == yesterday:
+                item["day_separator"] = "Ontem"
+            else:
+                item["day_separator"] = day.strftime("%d/%m/%Y")
+            last_day = day
+        else:
+            item["day_separator"] = ""
+        out.append(item)
+    return out
+
+
+def can_delete_attendance_conversation(
+    session_user: dict | None,
+    *,
+    request=None,
+) -> bool:
+    """Só perfil Administrador (e login master APP_USERNAME) pode excluir conversa."""
+    try:
+        if request is not None:
+            uname = normalize_text(getattr(request, "session", {}).get("username") or "")
+            if uname and uname.lower() == settings.app_username.lower():
+                return True
+            role_sess = normalize_text(getattr(request, "session", {}).get("user_role") or "")
+            if role_sess == "Administrador":
+                return True
+    except Exception:
+        pass
+    if not session_user:
+        return False
+    return normalize_text(session_user.get("role") or "") == "Administrador"
+
+
 def _resolve_sector_filter(session_user: dict | None, sector_filter: str) -> tuple[int | str | None, dict]:
     from app.services.sectors import attendance_scope_for_user
 
@@ -29,41 +97,173 @@ def _resolve_sector_filter(session_user: dict | None, sector_filter: str) -> tup
         return None, scope
 
 
+def _instance_display_name(name: str) -> str:
+    """oppi-comercial → Oppi Comercial; mantém nomes já legíveis (Oppi Tech)."""
+    raw = normalize_text(name)
+    if not raw:
+        return "WhatsApp"
+    spaced = raw.replace("-", " ").replace("_", " ")
+    parts: list[str] = []
+    for part in spaced.split():
+        if not part:
+            continue
+        if part.isupper() and len(part) <= 5:
+            parts.append(part)
+        elif any(ch.isupper() for ch in part[1:]):
+            parts.append(part)  # já camel/Title
+        else:
+            parts.append(part[:1].upper() + part[1:].lower())
+    return " ".join(parts) or raw
+
+
+def build_whatsapp_line_options(*, refresh_owners: bool = True) -> list[dict]:
+    """Linhas WhatsApp (rótulo = nome da instância Evolution)."""
+    lines: list[dict] = []
+    for name in settings.evolution_instances:
+        owner = ""
+        try:
+            owner = evolution_client.get_instance_owner_phone(
+                name, allow_network=refresh_owners
+            )
+        except Exception:
+            owner = ""
+        unread = 0
+        try:
+            unread = store.count_unread(evolution_instance=name)
+        except Exception:
+            unread = 0
+        lines.append({
+            "id": name,
+            "label": _instance_display_name(name),
+            "phone": owner,
+            "unread": unread,
+        })
+    return lines
+
+
+def _resolve_line_filter(line_filter: str, lines: list[dict] | None = None) -> str:
+    """Padrão: todas as linhas. Valor específico = nome da instância."""
+    configured = list(settings.evolution_instances or [])
+    wanted = normalize_text(line_filter).lower()
+    if wanted in ("", "todos", "all", "*"):
+        return "todos"
+    for name in configured:
+        if normalize_text(name).lower() == wanted:
+            return name
+    if lines:
+        for line in lines:
+            if normalize_text(line.get("id")).lower() == wanted:
+                return line["id"]
+    return "todos"
+
+
+_PAGE_MAINT_LAST = 0.0
+_PAGE_MAINT_MIN_INTERVAL_SEC = 300.0  # purge/inbox sync no máximo a cada 5 min
+
+
 def page_context(
     *,
     search: str = "",
     status: str = "",
     sector_filter: str = "",
+    line_filter: str = "",
+    tag_filter: str = "",
     selected_id: str = "",
     session_user: dict | None = None,
     flash: str = "",
     error: str = "",
+    light: bool = False,
+    soft: bool = False,
+    request=None,
 ) -> dict:
-    # Remove grupos reais (@g.us) e as conversas pedidas (Luiz / Skoob)
-    try:
-        store.purge_group_conversations()
-        store.delete_conversations_by_contact_names()
-    except Exception:
-        logger.exception("Falha ao limpar conversas indesejadas da inbox")
+    # Manutenção pesada só na carga completa — throttle forte (não a cada F5)
+    if not light:
+        import time as _time
 
-    # Compensa webhook perdido: puxa chats recentes sem bloquear a tela
-    try:
-        schedule_sync_inbox_from_evolution(force=False)
-    except Exception:
-        logger.exception("Falha ao agendar sync inbox Evolution")
+        global _PAGE_MAINT_LAST
+        now = _time.monotonic()
+        if (now - _PAGE_MAINT_LAST) >= _PAGE_MAINT_MIN_INTERVAL_SEC:
+            _PAGE_MAINT_LAST = now
+
+            def _maintenance() -> None:
+                try:
+                    store.purge_group_conversations()
+                    store.delete_conversations_by_contact_names()
+                except Exception:
+                    logger.exception("Falha ao limpar conversas indesejadas da inbox")
+                try:
+                    schedule_sync_inbox_from_evolution(force=False)
+                except Exception:
+                    logger.exception("Falha ao agendar sync inbox Evolution")
+
+            threading.Thread(target=_maintenance, daemon=True, name="att-page-maint").start()
 
     effective_sector, scope = _resolve_sector_filter(session_user, sector_filter)
+    # Rótulos das linhas: só cache (HTTP Evolution fora do hot path)
+    whatsapp_lines = build_whatsapp_line_options(refresh_owners=False)
+    if not light:
+        def _warm_owners() -> None:
+            try:
+                build_whatsapp_line_options(refresh_owners=True)
+            except Exception:
+                logger.exception("Falha ao aquecer rótulos das linhas WhatsApp")
+
+        threading.Thread(target=_warm_owners, daemon=True, name="att-warm-owners").start()
+    active_line = _resolve_line_filter(line_filter, whatsapp_lines)
+    active_tag = normalize_text(tag_filter)
+    if active_tag.lower() in ("", "todos", "all"):
+        active_tag = ""
+    list_instance = "" if active_line == "todos" else active_line
     conversations = store.list_conversations(
         search=search,
         status=status,
         sector_id=effective_sector,
+        evolution_instance=list_instance,
+        tag="",
     )
+    conversations = overlay_conversations_crm_names(conversations)
+    # Tags do cadastro → só overlay em memória na carga completa.
+    # NUNCA grava aqui: update_conversation + SSE gerava storm e derrubava o worker.
+    if not light:
+        try:
+            from app.services.crm_registrations_storage import get_registration_attendance_tags
+
+            hydrated: list[dict] = []
+            for conv in conversations:
+                if not conv.get("sheet_row") and not conv.get("registration_id"):
+                    hydrated.append(conv)
+                    continue
+                cadastro_tags = get_registration_attendance_tags(
+                    sheet_row=int(conv["sheet_row"]) if conv.get("sheet_row") else None,
+                    registration_id=int(conv["registration_id"]) if conv.get("registration_id") else None,
+                )
+                if not cadastro_tags:
+                    hydrated.append(conv)
+                    continue
+                current = [normalize_text(t) for t in (conv.get("tags") or [])]
+                if [t.lower() for t in current] != [t.lower() for t in cadastro_tags]:
+                    overlay = dict(conv)
+                    overlay["tags"] = cadastro_tags
+                    hydrated.append(overlay)
+                else:
+                    hydrated.append(conv)
+            conversations = hydrated
+        except Exception:
+            logger.exception("Falha ao overlay tags do cadastro na lista")
+    if active_tag:
+        wanted = active_tag.lower()
+        conversations = [
+            c
+            for c in conversations
+            if wanted in {normalize_text(t).lower() for t in (c.get("tags") or [])}
+        ]
     selected = None
     messages: list[dict] = []
     crm = attendance_crm.build_crm_panel(None)
     sector_options: list[dict] = []
     responsible_options: list[str] = []
     tag_options: list[str] = []
+    tag_styles: dict = {}
     quick_replies: list[dict] = []
     try:
         from app.services.sectors import list_sectors, responsible_options_for_sector
@@ -75,11 +275,20 @@ def page_context(
         sector_options = []
 
     try:
-        from app.services.attendance_tags import list_attendance_tag_options
+        from app.services.attendance_tags import list_attendance_tag_options, tag_style_map
 
         tag_options = list_attendance_tag_options()
+        # Inclui tags já aplicadas nas conversas (mesmo se saírem das opções ativas)
+        extra_tags: list[str] = []
+        for conv in conversations:
+            for t in conv.get("tags") or []:
+                name = normalize_text(t)
+                if name and name not in tag_options and name not in extra_tags:
+                    extra_tags.append(name)
+        tag_styles = tag_style_map(tag_options + extra_tags)
     except Exception:
         tag_options = []
+        tag_styles = {}
 
     try:
         from app.services.attendance_quick_replies import list_quick_reply_options
@@ -103,18 +312,56 @@ def page_context(
                 selected = None
                 selected_id = ""
             elif (
-                effective_sector is not None
+                scope.get("locked")
+                and effective_sector is not None
                 and selected.get("sector_id") not in (None, effective_sector)
                 and int(selected.get("sector_id") or 0) != int(effective_sector)
             ):
-                # Fora do escopo do usuário/filtro — não abre a conversa
+                # Usuário preso a um setor — não abre conversa de outro
                 selected = None
                 selected_id = ""
             else:
+                # Clique explícito: só alinha linha se o filtro já for uma linha específica
+                conv_line = normalize_text(selected.get("evolution_instance") or "")
+                if conv_line and active_line not in ("todos", "", "all"):
+                    active_line = _resolve_line_filter(conv_line, whatsapp_lines)
+
                 store.mark_conversation_read(selected_id)
                 selected = store.get_conversation(selected_id)
-                messages = store.list_messages(selected_id)
-                crm = attendance_crm.build_crm_panel(selected.get("sheet_row") if selected else None)
+                try:
+                    from app.services.legacy_core import format_br_whatsapp_display
+
+                    if selected:
+                        selected = dict(selected)
+                        selected["phone_display"] = (
+                            format_br_whatsapp_display(selected.get("phone_e164") or "")
+                            or selected.get("phone_e164")
+                            or ""
+                        )
+                except Exception:
+                    pass
+                try:
+                    selected = apply_registration_tags_to_conversation(selected) or selected
+                except Exception:
+                    logger.exception("apply tags do cadastro falhou")
+                messages = annotate_messages_day_separators(
+                    store.list_messages(selected_id)
+                )
+                # CRM / mídia nunca no request — travava o worker e o chat “não abria”
+                if not soft:
+                    try:
+                        schedule_open_enrichment(selected_id)
+                    except Exception:
+                        logger.exception("Falha ao agendar enriquecimento da conversa")
+                try:
+                    crm = attendance_crm.build_crm_panel(
+                        selected.get("sheet_row") if selected else None,
+                        fallback_name=(selected or {}).get("contact_name") or "",
+                        fallback_phone=(selected or {}).get("phone_e164") or "",
+                    )
+                except Exception:
+                    crm = attendance_crm.build_crm_panel(None)
+                selected = apply_crm_display_names_to_conversation(selected, crm)
                 try:
                     from app.services.sectors import responsible_options_for_sector
 
@@ -155,8 +402,15 @@ def page_context(
         "sector_filter": ui_sector_filter,
         "sector_filter_locked": bool(scope.get("locked")),
         "user_sector_name": scope.get("sector_name") or "",
+        "line_filter": active_line,
+        "whatsapp_lines": whatsapp_lines,
+        "lines_unread_total": sum(int(l.get("unread") or 0) for l in whatsapp_lines),
         "evolution_configured": settings.evolution_configured,
-        "unread_total": store.count_unread(),
+        "unread_total": (
+            store.count_unread()
+            if active_line in ("todos", "", "all")
+            else store.count_unread(evolution_instance=active_line)
+        ),
         "flash": flash,
         "error": error,
         "ai_mode_on": store.AI_MODE_ON,
@@ -164,7 +418,13 @@ def page_context(
         "sector_options": sector_options,
         "responsible_options": responsible_options,
         "tag_options": tag_options,
+        "tag_styles": tag_styles,
+        "tag_filter": active_tag or "todos",
         "quick_replies": quick_replies,
+        "is_admin": (session_user or {}).get("role") == "Administrador",
+        "can_delete_conversation": can_delete_attendance_conversation(
+            session_user, request=request
+        ),
     }
 
 
@@ -174,15 +434,78 @@ def ensure_crm_link(
     contact_name: str = "",
     vendedor: str = "",
 ) -> dict:
-    if conversation.get("sheet_row"):
+    """Garante vínculo CRM pelo WhatsApp da conversa (corrige vínculo errado)."""
+    if not conversation or not conversation.get("id"):
         return conversation
+    phone = conversation.get("phone_e164", "")
+    current_row = conversation.get("sheet_row")
+    if current_row and attendance_crm.sheet_row_matches_phone(current_row, phone):
+        if not conversation.get("registration_id"):
+            try:
+                from app.services.crm_registrations_storage import get_registration_by_sheet_row
+
+                reg = get_registration_by_sheet_row(int(current_row))
+                if reg:
+                    conversation = (
+                        store.update_conversation(
+                            conversation["id"],
+                            registration_id=int(reg.id),
+                        )
+                        or conversation
+                    )
+            except Exception:
+                pass
+        conversation = apply_registration_tags_to_conversation(conversation) or conversation
+        try:
+            attendance_crm.apply_whatsapp_name_to_crm(
+                conversation.get("sheet_row"),
+                whatsapp_name=contact_name or conversation.get("contact_name") or "",
+            )
+        except Exception:
+            pass
+        return conversation
+
+    # Vínculo ausente ou de outro contato — limpa e resolve de novo pelo telefone
+    if current_row:
+        store.update_conversation(
+            conversation["id"],
+            sheet_row=None,
+            registration_id=None,
+        )
+        conversation = {**conversation, "sheet_row": None, "registration_id": None}
+
     sheet_row = attendance_crm.resolve_or_create_lead(
-        phone=conversation.get("phone_e164", ""),
+        phone=phone,
         contact_name=contact_name or conversation.get("contact_name", ""),
         vendedor=vendedor or conversation.get("assignee", ""),
     )
     if sheet_row:
-        return store.update_conversation(conversation["id"], sheet_row=int(sheet_row)) or conversation
+        registration_id = None
+        try:
+            from app.services.crm_registrations_storage import get_registration_by_sheet_row
+
+            reg = get_registration_by_sheet_row(int(sheet_row))
+            if reg:
+                registration_id = int(reg.id)
+        except Exception:
+            pass
+        conversation = (
+            store.update_conversation(
+                conversation["id"],
+                sheet_row=int(sheet_row),
+                registration_id=registration_id,
+            )
+            or conversation
+        )
+        conversation = apply_registration_tags_to_conversation(conversation) or conversation
+        try:
+            attendance_crm.apply_whatsapp_name_to_crm(
+                int(sheet_row),
+                whatsapp_name=contact_name or conversation.get("contact_name") or "",
+            )
+        except Exception:
+            pass
+        return conversation
     return conversation
 
 
@@ -227,8 +550,11 @@ def send_text_message(
     if evolution_client.is_self_chat(
         conversation.get("phone_e164") or "",
         conversation.get("remote_jid") or "",
+        instance=conversation.get("evolution_instance") or "",
     ):
-        owner = evolution_client.get_instance_owner_phone()
+        owner = evolution_client.get_instance_owner_phone(
+            conversation.get("evolution_instance") or ""
+        )
         return None, (
             "Este chat é o mesmo número conectado na Evolution"
             + (f" ({owner})" if owner else "")
@@ -241,6 +567,7 @@ def send_text_message(
             conversation["phone_e164"],
             body,
             jid=conversation.get("remote_jid") or "",
+            instance=conversation.get("evolution_instance") or "",
         )
     except EvolutionClientError as error:
         return None, str(error)
@@ -279,13 +606,19 @@ def send_text_message(
     used = used_number or (
         conversation.get("remote_jid") or conversation.get("phone_e164") or ""
     )
-    if response.get("_oppi_delivery_pending"):
+    pending = bool(response.get("_oppi_delivery_pending")) or status.upper() in {
+        "PENDING",
+        "ERROR",
+        "0",
+        "",
+    }
+    if pending:
         has_lid = "@lid" in used.lower() or "@lid" in (resolved_lid or "").lower()
         if has_lid:
             warning = (
                 f"⚠ Entrega PENDING mesmo com @lid · destino {used}. "
-                "Provável Baileys desatualizado no servidor Evolution — "
-                "atualize baileys@7.0.0-rc13 no Easypanel e reconecte o QR."
+                "Confira se a instância Evolution está open e o Baileys atualizado; "
+                "peça uma mensagem nova do cliente e tente de novo."
             )
         else:
             warning = (
@@ -294,7 +627,8 @@ def send_text_message(
                 "em CRM → Atualizar @lid, depois envie de novo."
             )
     else:
-        warning = f"Enviado à Evolution · status {status} · destino {used}"
+        # Sucesso real — flash curto (evita assustar com "PENDING")
+        warning = ""
     return message, warning
 
 
@@ -323,6 +657,7 @@ def send_media_message(
             filename=filename,
             mimetype=mimetype,
             jid=conversation.get("remote_jid") or "",
+            instance=conversation.get("evolution_instance") or "",
         )
     except EvolutionClientError as error:
         return None, str(error)
@@ -362,6 +697,7 @@ def send_voice_message(
             audio_base64=audio_base64,
             jid=conversation.get("remote_jid") or "",
             mimetype=mimetype or "audio/ogg",
+            instance=conversation.get("evolution_instance") or "",
         )
     except EvolutionClientError as error:
         return None, str(error)
@@ -512,7 +848,55 @@ def finalize_conversation(conversation_id: str) -> dict | None:
         conversation_id,
         status=store.STATUS_FINALIZADO,
         ai_mode=store.AI_MODE_OFF,
+        unread_count=0,
     )
+
+
+def finalize_all_open_conversations(*, evolution_instance: str = "") -> dict:
+    """Zera a fila: finaliza abertos da linha e limpa badge de não lidas."""
+    return store.finalize_open_conversations(evolution_instance=evolution_instance)
+
+
+def update_conversation_cadastro_names(
+    conversation_id: str,
+    *,
+    empresa: str = "",
+    contato: str = "",
+    nome: str = "",
+) -> tuple[dict | None, str]:
+    """Edita o nome do contato no painel CRM (não altera o nome da empresa)."""
+    conversation = store.get_conversation(conversation_id)
+    if not conversation:
+        return None, "Conversa não encontrada."
+
+    display_name = normalize_text(nome) or normalize_text(contato)
+    if not display_name:
+        return conversation, "Informe o nome do contato."
+
+    conversation = (
+        store.update_conversation(conversation_id, contact_name=display_name)
+        or conversation
+    )
+
+    sheet_row = conversation.get("sheet_row")
+    if not sheet_row:
+        conversation = ensure_crm_link(
+            conversation,
+            contact_name=display_name,
+        ) or conversation
+        sheet_row = conversation.get("sheet_row")
+
+    if sheet_row:
+        try:
+            attendance_crm.update_cadastro_names(
+                int(sheet_row),
+                nome_contato=display_name,
+            )
+        except Exception as exc:
+            logger.exception("Falha ao salvar nome do CRM (%s)", conversation_id)
+            return conversation, f"Nome do chat atualizado, mas o cadastro falhou: {exc}"
+
+    return conversation, ""
 
 
 def delete_conversation(conversation_id: str) -> bool:
@@ -525,6 +909,7 @@ def start_whatsapp_call(
     contact_name: str = "",
     first_message: str = "",
     assignee: str = "",
+    evolution_instance: str = "",
 ) -> tuple[dict | None, str]:
     """Abre chamado WhatsApp: cria/vincula lead e conversa na inbox."""
     from app.services.evolution_client import normalize_phone_from_jid
@@ -543,12 +928,14 @@ def start_whatsapp_call(
         crm = attendance_crm.build_crm_panel(sheet_row)
         name = normalize_text(crm.get("contato") or crm.get("empresa"))
 
+    instance = normalize_text(evolution_instance) or settings.evolution_primary_instance
     conversation = store.upsert_conversation_by_phone(
         phone_e164,
         contact_name=name or f"WhatsApp {phone_e164}",
         sheet_row=sheet_row,
         status=store.STATUS_EM_ATENDIMENTO if first_message or assignee else store.STATUS_NOVO_LEAD,
         remote_jid=f"{phone_e164}@s.whatsapp.net",
+        evolution_instance=instance,
     )
     if not conversation:
         return None, "Não foi possível abrir a conversa."
@@ -601,7 +988,7 @@ def maybe_ai_reply(conversation_id: str, inbound_text: str) -> None:
 
 
 _SYNC_LAST_AT: dict[str, float] = {}
-_SYNC_MIN_INTERVAL_SEC = 30.0
+_SYNC_MIN_INTERVAL_SEC = 10.0
 _SYNC_IN_FLIGHT: set[str] = set()
 _SYNC_GUARD = threading.Lock()
 
@@ -609,6 +996,39 @@ _SYNC_GUARD = threading.Lock()
 _INBOX_SYNC_LAST = 0.0
 _INBOX_SYNC_MIN_INTERVAL_SEC = 45.0
 _INBOX_SYNC_LOCK = threading.Lock()
+_INBOX_SYNC_IN_FLIGHT = False
+
+
+def schedule_open_enrichment(conversation_id: str) -> None:
+    """CRM + mídia em background ao abrir o chat (não bloqueia o worker)."""
+    conversation_id = normalize_text(conversation_id)
+    if not conversation_id:
+        return
+
+    def _run() -> None:
+        try:
+            conv = store.get_conversation(conversation_id)
+            if not conv:
+                return
+            try:
+                ensure_crm_link(conv)
+            except Exception:
+                logger.exception("ensure_crm_link em background falhou (%s)", conversation_id)
+            try:
+                from app.services.attendance_media import hydrate_messages_media
+
+                messages = store.list_messages(conversation_id)
+                hydrate_messages_media(messages, conversation=conv, limit=8)
+            except Exception:
+                logger.exception("hydrate media em background falhou (%s)", conversation_id)
+        except Exception:
+            logger.exception("schedule_open_enrichment falhou (%s)", conversation_id)
+
+    threading.Thread(
+        target=_run,
+        daemon=True,
+        name=f"att-open-{conversation_id[:10]}",
+    ).start()
 
 
 def schedule_sync_inbox_from_evolution(*, force: bool = False) -> None:
@@ -623,53 +1043,78 @@ def schedule_sync_inbox_from_evolution(*, force: bool = False) -> None:
     threading.Thread(target=_run, daemon=True, name="evo-inbox-sync").start()
 
 
-def sync_inbox_from_evolution(*, force: bool = False, limit: int = 40) -> int:
+def sync_inbox_from_evolution(*, force: bool = False, limit: int = 20) -> int:
+    """Lista chats e puxa msgs só dos N mais recentes — sem empilhar threads."""
     import time
 
-    global _INBOX_SYNC_LAST
+    global _INBOX_SYNC_LAST, _INBOX_SYNC_IN_FLIGHT
     with _INBOX_SYNC_LOCK:
         now = time.monotonic()
+        if _INBOX_SYNC_IN_FLIGHT:
+            return 0
         if not force and (now - _INBOX_SYNC_LAST) < _INBOX_SYNC_MIN_INTERVAL_SEC:
             return 0
+        _INBOX_SYNC_IN_FLIGHT = True
         _INBOX_SYNC_LAST = now
 
-    if not settings.evolution_configured:
-        return 0
-
     try:
-        chats = evolution_client.fetch_recent_chats(limit=limit)
-    except Exception:
-        logger.exception("fetch_recent_chats falhou")
-        return 0
+        if not settings.evolution_configured:
+            return 0
 
-    imported = 0
-    for chat in chats:
-        remote_jid = normalize_text(chat.get("remote_jid") or "")
-        phone = normalize_text(chat.get("phone_e164") or "")
-        name = normalize_text(chat.get("contact_name") or "")
-        if not remote_jid:
-            continue
-        try:
-            if phone:
-                conversation = store.upsert_conversation_by_phone(
-                    phone,
-                    contact_name=name,
-                    remote_jid=remote_jid,
+        instances = settings.evolution_instances or [settings.evolution_primary_instance]
+        imported = 0
+        # findMessages é caro — só nos chats mais recentes por linha
+        message_sync_budget = 6
+        chat_limit = max(1, min(int(limit or 20), 30))
+
+        for instance in instances:
+            try:
+                chats = evolution_client.fetch_recent_chats(
+                    limit=chat_limit, instance=instance
                 )
-            else:
-                conversation = store.upsert_conversation_by_remote_jid(
-                    remote_jid,
-                    contact_name=name,
-                    phone_e164=phone,
-                )
-            if not conversation:
+            except Exception:
+                logger.exception("fetch_recent_chats falhou instance=%s", instance)
                 continue
-            # Puxa mensagens recentes desse chat (já tem throttle por conversa)
-            sync_messages_from_evolution(conversation["id"], limit=15, force=False)
-            imported += 1
-        except Exception:
-            logger.exception("Falha ao importar chat %s", remote_jid)
-    return imported
+
+            synced_msgs = 0
+            for chat in chats:
+                remote_jid = normalize_text(chat.get("remote_jid") or "")
+                phone = normalize_text(chat.get("phone_e164") or "")
+                name = normalize_text(chat.get("contact_name") or "")
+                line = normalize_text(chat.get("evolution_instance") or "") or instance
+                if not remote_jid:
+                    continue
+                try:
+                    if phone:
+                        conversation = store.upsert_conversation_by_phone(
+                            phone,
+                            contact_name=name,
+                            remote_jid=remote_jid,
+                            evolution_instance=line,
+                            ignore_suppression=True,
+                        )
+                    else:
+                        conversation = store.upsert_conversation_by_remote_jid(
+                            remote_jid,
+                            contact_name=name,
+                            phone_e164=phone,
+                            evolution_instance=line,
+                            ignore_suppression=True,
+                        )
+                    if not conversation:
+                        continue
+                    imported += 1
+                    if synced_msgs < message_sync_budget:
+                        sync_messages_from_evolution(
+                            conversation["id"], limit=12, force=False
+                        )
+                        synced_msgs += 1
+                except Exception:
+                    logger.exception("Falha ao importar chat %s", remote_jid)
+        return imported
+    finally:
+        with _INBOX_SYNC_LOCK:
+            _INBOX_SYNC_IN_FLIGHT = False
 
 
 def schedule_sync_messages_from_evolution(
@@ -744,10 +1189,11 @@ def sync_messages_from_evolution(
 
         from app.routers.evolution_webhook import ingest_evolution_message_item
 
+        instance = normalize_text(conversation.get("evolution_instance") or "")
         imported = 0
         for jid in targets:
             try:
-                records = evolution_client.find_messages(jid, limit=limit)
+                records = evolution_client.find_messages(jid, limit=limit, instance=instance)
             except Exception:
                 logger.exception("findMessages falhou para %s", jid)
                 continue
@@ -756,6 +1202,8 @@ def sync_messages_from_evolution(
                     if ingest_evolution_message_item(
                         item,
                         push_name=conversation.get("contact_name") or "",
+                        evolution_instance=instance,
+                        allow_reopen=True,
                     ):
                         imported += 1
                 except Exception:
@@ -781,4 +1229,129 @@ def update_notes_tags(
         fields["tags"] = tags
     if not fields:
         return store.get_conversation(conversation_id)
-    return store.update_conversation(conversation_id, **fields)
+    conversation = store.update_conversation(conversation_id, **fields)
+    if tags is not None and conversation:
+        try:
+            sync_conversation_tags_to_registration(conversation, tags)
+        except Exception:
+            logger.exception(
+                "Falha ao gravar tags no cadastro conversa=%s", conversation_id
+            )
+    return conversation
+
+
+def sync_conversation_tags_to_registration(
+    conversation: dict,
+    tags: list[str] | None = None,
+) -> None:
+    """Persiste tags no cadastro do cliente (extras.attendance_tags)."""
+    if not conversation:
+        return
+    from app.services.crm_registrations_storage import save_registration_attendance_tags
+
+    clean = [normalize_text(t) for t in (tags if tags is not None else conversation.get("tags") or []) if normalize_text(t)]
+    sheet_row = conversation.get("sheet_row")
+    registration_id = conversation.get("registration_id")
+    if not sheet_row and not registration_id:
+        return
+    save_registration_attendance_tags(
+        clean,
+        sheet_row=int(sheet_row) if sheet_row else None,
+        registration_id=int(registration_id) if registration_id else None,
+    )
+
+
+def overlay_conversations_crm_names(conversations: list[dict]) -> list[dict]:
+    """Lista: nome do contato em cima, empresa abaixo (sem gravar na conversa)."""
+    if not conversations:
+        return conversations
+    sheet_rows: list[int] = []
+    for conv in conversations:
+        raw = conv.get("sheet_row")
+        if not raw:
+            continue
+        try:
+            sheet_rows.append(int(raw))
+        except (TypeError, ValueError):
+            continue
+    if not sheet_rows:
+        return conversations
+    try:
+        from app.services.crm_registrations_storage import get_registration_names_by_sheet_rows
+
+        names = get_registration_names_by_sheet_rows(sheet_rows)
+    except Exception:
+        logger.exception("Falha ao overlay nomes CRM na lista de atendimentos")
+        return conversations
+    if not names:
+        return conversations
+    hydrated: list[dict] = []
+    for conv in conversations:
+        try:
+            sheet_row = int(conv["sheet_row"]) if conv.get("sheet_row") else None
+        except (TypeError, ValueError):
+            sheet_row = None
+        info = names.get(sheet_row) if sheet_row else None
+        if not info:
+            hydrated.append(conv)
+            continue
+        overlay = dict(conv)
+        contato = normalize_text(info.get("nome_contato") or "")
+        empresa = normalize_text(info.get("empresa") or "")
+        if contato:
+            overlay["contact_name"] = contato
+            overlay["initials"] = store._initials(contato)
+        overlay["empresa_name"] = empresa
+        hydrated.append(overlay)
+    return hydrated
+
+
+def apply_crm_display_names_to_conversation(
+    conversation: dict | None,
+    crm: dict | None,
+) -> dict | None:
+    """Cabeçalho do chat: contato + empresa do cadastro."""
+    if not conversation:
+        return conversation
+    overlay = dict(conversation)
+    crm = crm or {}
+    contato = normalize_text(crm.get("contato") or "")
+    if contato in ("—", "-"):
+        contato = ""
+    empresa = normalize_text(crm.get("empresa") or "")
+    if empresa in ("—", "-"):
+        empresa = ""
+    if contato:
+        overlay["contact_name"] = contato
+        overlay["initials"] = store._initials(contato)
+    overlay["empresa_name"] = empresa
+    return overlay
+
+
+def apply_registration_tags_to_conversation(conversation: dict | None) -> dict | None:
+    """Copia tags do cadastro para a conversa (toda vez que o cliente chamar)."""
+    if not conversation or not conversation.get("id"):
+        return conversation
+    sheet_row = conversation.get("sheet_row")
+    registration_id = conversation.get("registration_id")
+    if not sheet_row and not registration_id:
+        return conversation
+    try:
+        from app.services.crm_registrations_storage import get_registration_attendance_tags
+
+        cadastro_tags = get_registration_attendance_tags(
+            sheet_row=int(sheet_row) if sheet_row else None,
+            registration_id=int(registration_id) if registration_id else None,
+        )
+    except Exception:
+        logger.exception("Falha ao ler tags do cadastro")
+        return conversation
+    if not cadastro_tags:
+        return conversation
+    current = [normalize_text(t) for t in (conversation.get("tags") or []) if normalize_text(t)]
+    if [t.lower() for t in current] == [t.lower() for t in cadastro_tags]:
+        return conversation
+    return (
+        store.update_conversation(conversation["id"], tags=cadastro_tags)
+        or conversation
+    )

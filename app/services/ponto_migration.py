@@ -7,6 +7,8 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Any
 
+import pandas as pd
+
 from app.services.closed_services import save_closed_services
 from app.services.legacy_core import (
     DuplicateRegistrationError,
@@ -134,7 +136,16 @@ def _format_cnpj_display(digits: str) -> str:
 def _iso_or_empty(value: Any) -> str:
     if value is None or value == "":
         return ""
+    try:
+        if pd.isna(value):
+            return ""
+    except (TypeError, ValueError):
+        pass
+    if type(value).__name__ in {"NaTType", "NaT"}:
+        return ""
     if isinstance(value, datetime):
+        if isinstance(value, pd.Timestamp):
+            value = value.to_pydatetime()
         return value.date().isoformat()
     if isinstance(value, date):
         return value.isoformat()

@@ -301,6 +301,14 @@ def _tenant_activities(tenant_id: str | None = None) -> dict:
 
 
 def list_activities(tenant_id: str | None = None, include_deleted: bool = False) -> list[dict]:
+    try:
+        from app.services.crm_registrations_storage import is_crm_postgres_ready
+        from app.services.crm_aux_storage import list_activities_pg
+
+        if is_crm_postgres_ready():
+            return list_activities_pg(tenant_id, include_deleted=include_deleted)
+    except Exception:
+        pass
     activities = _tenant_activities(tenant_id)
     rows = []
     for activity_id, record in activities.items():
@@ -317,6 +325,14 @@ def list_activities(tenant_id: str | None = None, include_deleted: bool = False)
 def get_activity(tenant_id: str | None, activity_id: str) -> dict | None:
     if not activity_id:
         return None
+    try:
+        from app.services.crm_registrations_storage import is_crm_postgres_ready
+        from app.services.crm_aux_storage import get_activity_pg
+
+        if is_crm_postgres_ready():
+            return get_activity_pg(tenant_id, activity_id)
+    except Exception:
+        pass
     record = _tenant_activities(tenant_id).get(activity_id)
     if not isinstance(record, dict) or record.get("deleted"):
         return None
@@ -331,6 +347,29 @@ def save_activity(
     sync_pipeline: bool = True,
 ) -> dict:
     global _cache
+    try:
+        from app.services.crm_registrations_storage import is_crm_postgres_ready
+        from app.services.crm_aux_storage import save_activity_pg
+
+        if is_crm_postgres_ready():
+            current = save_activity_pg(tenant_id, activity_id, payload)
+            stage_changed = any(key in payload for key in ("stage", "move_stage", "stage_entered_at"))
+            sheet_row = int(current.get("sheet_row") or 0)
+            stage = normalize_text(current.get("stage") or current.get("move_stage"))
+            if sync_pipeline and sheet_row and stage and stage_changed:
+                def _sync_stage(row: int = sheet_row, stage_value: str = stage) -> None:
+                    try:
+                        from app.services.legacy_core import sync_pipeline_stage_to_sheet
+
+                        sync_pipeline_stage_to_sheet(row, stage_value)
+                    except Exception:
+                        pass
+
+                threading.Thread(target=_sync_stage, daemon=True).start()
+            return {"id": current.get("id"), **current}
+    except Exception:
+        pass
+
     from app.services.crm_local_db import upsert_activity
 
     with _lock:
@@ -380,6 +419,56 @@ def soft_delete_activity(tenant_id: str | None, activity_id: str) -> bool:
         return False
     save_activity(tenant_id, activity_id, {"deleted": True, "deleted_at": _now().isoformat(timespec="seconds")})
     return True
+
+
+def clear_all_activities(*, tenant_id: str | None = None) -> dict:
+    """Apaga todas as atividades (Postgres + JSON + SQLite local)."""
+    global _cache
+    result = {"postgres": 0, "local_sqlite": 0, "json_cleared": False}
+    tenant = normalize_text(tenant_id) or DEFAULT_TENANT_ID
+
+    try:
+        from database.connection import SessionLocal
+        from database.models import CrmActivity
+
+        db = SessionLocal()
+        try:
+            q = db.query(CrmActivity)
+            if tenant:
+                q = q.filter(CrmActivity.tenant_id == tenant)
+            result["postgres"] = int(q.delete() or 0)
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
+        finally:
+            db.close()
+    except Exception:
+        pass
+
+    try:
+        from app.services.crm_local_db import save_activities_store
+
+        save_activities_store({})
+        result["local_sqlite"] = 1
+    except Exception:
+        pass
+
+    try:
+        path = _storage_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("{}", encoding="utf-8")
+        result["json_cleared"] = True
+    except Exception:
+        pass
+
+    with _lock:
+        _cache = _empty_store()
+    try:
+        invalidate_activities_cache()
+    except Exception:
+        pass
+    return result
 
 
 def activity_exists(tenant_id: str | None, activity_id: str) -> bool:

@@ -417,6 +417,9 @@
   window.activityHandleCreateResponse = function (event) {
     if (event.detail.successful) {
       window.activityCloseModal();
+      if (!document.getElementById("activities-root")) {
+        return;
+      }
       initActivitiesInline();
       return;
     }

@@ -10,7 +10,7 @@ import uuid
 from pathlib import Path
 
 from fastapi import APIRouter, File, Form, Request, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 
 from app.dependencies import get_session_user, require_auth
 from app.services import attendances as attendances_service
@@ -41,7 +41,7 @@ def _seller_label(request: Request) -> str:
     return _username(request)
 
 
-def _filters(request: Request, form: dict | None = None) -> tuple[str, str, str, str]:
+def _filters(request: Request, form: dict | None = None) -> tuple[str, str, str, str, str, str]:
     data = form or {}
     search = normalize_text(data.get("search") or request.query_params.get("search", ""))
     # Padrão: só abertos (finalizados saem da fila)
@@ -52,7 +52,18 @@ def _filters(request: Request, form: dict | None = None) -> tuple[str, str, str,
         data.get("conversation_id") or request.query_params.get("c", "")
     )
     sector = normalize_text(data.get("sector") or request.query_params.get("sector", ""))
-    return search, status, selected, sector
+    line = normalize_text(
+        data.get("line")
+        or data.get("wa")
+        or request.query_params.get("line", "")
+        or request.query_params.get("wa", "")
+    )
+    if not line:
+        line = "todos"
+    tag = normalize_text(data.get("tag") or request.query_params.get("tag", ""))
+    if tag.lower() in ("todos", "all"):
+        tag = ""
+    return search, status, selected, sector, line, tag
 
 
 def _page_ctx(
@@ -62,16 +73,23 @@ def _page_ctx(
     selected_id: str | None = None,
     flash: str = "",
     error: str = "",
+    light: bool = False,
+    soft: bool = False,
 ) -> dict:
-    search, status, selected, sector = _filters(request, form)
+    search, status, selected, sector, line, tag = _filters(request, form)
     return attendances_service.page_context(
         search=search,
         status=status,
         sector_filter=sector,
+        line_filter=line,
+        tag_filter=tag,
         selected_id=selected if selected_id is None else selected_id,
         session_user=get_session_user(request),
         flash=flash,
         error=error,
+        light=light,
+        soft=soft,
+        request=request,
     )
 
 
@@ -131,6 +149,7 @@ async def attendances_start_call(
     phone: str = Form(""),
     contact_name: str = Form(""),
     first_message: str = Form(""),
+    line: str = Form(""),
 ):
     require_auth(request)
     conversation, error = attendances_service.start_whatsapp_call(
@@ -138,6 +157,7 @@ async def attendances_start_call(
         contact_name=contact_name,
         first_message=first_message,
         assignee=_seller_label(request),
+        evolution_instance=line,
     )
     selected_id = (conversation or {}).get("id") or ""
     flash = ""
@@ -156,29 +176,66 @@ async def attendances_start_call(
 @router.get("/atendimentos", response_class=HTMLResponse)
 def attendances_page(request: Request):
     require_auth(request)
-    return render(request, "attendances/index.html", _page_ctx(request))
+    flash = ""
+    error = ""
+    light = False
+    if request.query_params.get("deleted") == "1":
+        flash = "Conversa excluída do atendimento. O cadastro no CRM foi mantido."
+        light = True  # sem sync Evolution — evita demora e ressurreição imediata
+    flash_q = normalize_text(request.query_params.get("flash") or "")
+    if flash_q:
+        flash = flash_q
+        light = True
+    err = normalize_text(request.query_params.get("error") or "")
+    if err == "sem_permissao":
+        error = "Apenas o administrador pode excluir conversas."
+    elif err == "nao_encontrada":
+        error = "Conversa não encontrada ou já excluída."
+    return render(
+        request,
+        "attendances/index.html",
+        _page_ctx(
+            request,
+            selected_id="" if light else None,
+            flash=flash,
+            error=error,
+            light=light,
+        ),
+    )
 
 
 @router.post("/atendimentos/filtros", response_class=HTMLResponse)
 async def attendances_filters(request: Request):
     require_auth(request)
     form = dict(await request.form())
-    return render(request, "partials/attendances_list.html", _page_ctx(request, form=form))
+    return render(
+        request,
+        "partials/attendances_list.html",
+        _page_ctx(request, form=form, light=True),
+    )
 
 
 @router.get("/atendimentos/conversa/{conversation_id}", response_class=HTMLResponse)
-def attendances_conversation(request: Request, conversation_id: str):
+def attendances_conversation(request: Request, conversation_id: str, soft: int = 0):
     require_auth(request)
-    # Sync em background — se for síncrono, trava o único worker e o webhook para de receber
-    try:
-        attendances_service.schedule_sync_messages_from_evolution(
-            conversation_id, limit=40, force=True
-        )
-    except Exception:
-        pass
-    ctx = _page_ctx(request, selected_id=conversation_id)
+    is_soft = bool(soft)
+    # Soft = refresh do poll: não dispara Evolution de novo (quebrava o worker único).
+    if not is_soft:
+        try:
+            attendances_service.schedule_sync_messages_from_evolution(
+                conversation_id, limit=40, force=False
+            )
+        except Exception:
+            pass
+    ctx = _page_ctx(
+        request,
+        selected_id=conversation_id,
+        light=True,
+        soft=is_soft,
+    )
+    # Sempre 200: HTMX ignora 404 e o clique parece “não abrir”
     if not ctx.get("selected"):
-        return HTMLResponse("<div class='att-empty'>Conversa não encontrada.</div>", status_code=404)
+        return render(request, "partials/attendances_thread.html", ctx)
     return render(request, "partials/attendances_thread.html", ctx)
 
 
@@ -419,12 +476,114 @@ def attendances_finalize(request: Request, conversation_id: str):
     return render(request, "partials/attendances_thread.html", ctx)
 
 
-@router.post("/atendimentos/conversa/{conversation_id}/excluir", response_class=HTMLResponse)
-def attendances_delete(request: Request, conversation_id: str):
+@router.post("/atendimentos/finalizar-todas")
+def attendances_finalize_all(request: Request, line: str = Form("")):
+    """Finaliza todas as conversas abertas da linha e zera o badge 555."""
+    auth = require_auth(request)
+    if isinstance(auth, RedirectResponse):
+        return auth
+    from urllib.parse import urlencode
+
+    line = normalize_text(line or request.query_params.get("line", ""))
+    result = attendances_service.finalize_all_open_conversations(evolution_instance=line)
+    finalized = int(result.get("finalized") or 0)
+    cleared = int(result.get("cleared_unread") or 0)
+    qs = urlencode(
+        {
+            **({"line": line} if line else {}),
+            "flash": f"Fila reiniciada: {finalized} finalizada(s), {cleared} não lida(s) zerada(s).",
+        }
+    )
+    return RedirectResponse(url=f"/atendimentos?{qs}", status_code=303)
+
+
+@router.post("/atendimentos/conversa/{conversation_id}/cadastro-nome", response_class=HTMLResponse)
+async def attendances_cadastro_nome(request: Request, conversation_id: str):
     require_auth(request)
-    attendances_service.delete_conversation(conversation_id)
-    ctx = _page_ctx(request, selected_id="", flash="Conversa removida da inbox.")
-    return render(request, "partials/attendances_thread.html", ctx)
+    form = await request.form()
+    nome = normalize_text(form.get("nome", "")) or normalize_text(form.get("contato", "")) or normalize_text(form.get("empresa", ""))
+    _, error = attendances_service.update_conversation_cadastro_names(
+        conversation_id,
+        nome=nome,
+    )
+    if error:
+        ctx = _page_ctx(request, selected_id=conversation_id, error=error)
+    else:
+        ctx = _page_ctx(request, selected_id=conversation_id, flash="Nome salvo no cadastro.")
+    return render(request, "partials/attendances_crm_panel.html", ctx)
+
+
+@router.get("/atendimentos/conversa/{conversation_id}/excluir")
+def attendances_delete_get(request: Request, conversation_id: str):
+    """GET acidental (refresh/proxy) — nunca processa exclusão; volta à inbox."""
+    auth = require_auth(request)
+    if isinstance(auth, RedirectResponse):
+        return auth
+    line = normalize_text(request.query_params.get("line", ""))
+    from urllib.parse import urlencode
+
+    qs = urlencode({"line": line} if line else {})
+    return RedirectResponse(url=f"/atendimentos?{qs}" if qs else "/atendimentos", status_code=303)
+
+
+@router.post("/atendimentos/conversa/{conversation_id}/excluir", response_class=HTMLResponse)
+def attendances_delete(
+    request: Request,
+    conversation_id: str,
+    line: str = Form(""),
+):
+    """Responde 303 na hora; exclusão roda em thread (não derruba o worker)."""
+    import logging
+    import threading
+
+    log = logging.getLogger(__name__)
+    from urllib.parse import urlencode
+
+    try:
+        auth = require_auth(request)
+        if isinstance(auth, RedirectResponse):
+            return auth
+    except Exception:
+        return RedirectResponse(url="/login", status_code=303)
+
+    line = normalize_text(line or request.query_params.get("line", ""))
+    qs_ok = urlencode({"line": line, "deleted": "1"} if line else {"deleted": "1"})
+    redirect_ok = RedirectResponse(url=f"/atendimentos?{qs_ok}", status_code=303)
+
+    try:
+        session_user = get_session_user(request)
+        if not attendances_service.can_delete_attendance_conversation(
+            session_user, request=request
+        ):
+            qs = urlencode({"line": line, "error": "sem_permissao"} if line else {"error": "sem_permissao"})
+            return RedirectResponse(url=f"/atendimentos?{qs}", status_code=303)
+    except Exception:
+        log.exception("can_delete falhou — bloqueando exclusão")
+        qs = urlencode({"line": line, "error": "sem_permissao"} if line else {"error": "sem_permissao"})
+        return RedirectResponse(url=f"/atendimentos?{qs}", status_code=303)
+
+    cid = normalize_text(conversation_id)
+
+    def _run_delete() -> None:
+        try:
+            attendances_service.delete_conversation(cid)
+        except Exception:
+            log.exception("delete_conversation em background falhou (%s)", cid)
+
+    try:
+        threading.Thread(
+            target=_run_delete,
+            daemon=True,
+            name=f"att-del-http-{cid[:10]}",
+        ).start()
+    except Exception:
+        # Último recurso: tenta sincronizado, mas nunca propaga crash
+        try:
+            attendances_service.delete_conversation(cid)
+        except Exception:
+            log.exception("delete_conversation sync falhou (%s)", cid)
+
+    return redirect_ok
 
 
 @router.post("/atendimentos/conversa/{conversation_id}/notas", response_class=HTMLResponse)
@@ -439,34 +598,37 @@ async def attendances_notes(request: Request, conversation_id: str):
     else:
         tags = [normalize_text(t) for t in raw_tags if normalize_text(t)]
     attendances_service.update_notes_tags(conversation_id, notes=notes, tags=tags)
-    ctx = _page_ctx(request, selected_id=conversation_id, flash="Observações salvas.")
+    ctx = _page_ctx(request, selected_id=conversation_id, flash="")
     return render(request, "partials/attendances_crm_panel.html", ctx)
 
 
 @router.get("/atendimentos/unread")
 def attendances_unread(request: Request):
     require_auth(request)
-    return JSONResponse({"unread": store.count_unread()})
+    from app.config import settings
+
+    lines = {}
+    for name in settings.evolution_instances or []:
+        try:
+            lines[name] = store.count_unread(evolution_instance=name)
+        except Exception:
+            lines[name] = 0
+    return JSONResponse({"unread": store.count_unread(), "lines": lines})
 
 
 @router.get("/atendimentos/sync")
 def attendances_sync(request: Request, conversation_id: str = ""):
-    """Poll leve baseado no SQLite — mensagens novas aparecem sem F5."""
+    """Poll leve — só lê o banco. Inbox nova vem do webhook."""
     require_auth(request)
     try:
-        # NÃO chama Evolution aqui: o poll a cada 4s travava o worker e o webhook parava.
-        if conversation_id:
-            try:
-                attendances_service.schedule_sync_messages_from_evolution(
-                    conversation_id, limit=20, force=False
-                )
-            except Exception:
-                pass
+        # NÃO agenda Evolution aqui: poll a cada poucos segundos derrubava o worker.
+        # Sync Evolution fica ao abrir a conversa / manutenção periódica.
         return JSONResponse(store.get_sync_snapshot(conversation_id))
     except Exception:
         return JSONResponse(
             {
                 "unread": 0,
+                "lines": {},
                 "inbox_token": "",
                 "conversation_id": conversation_id or None,
                 "conversation_token": None,
@@ -497,6 +659,7 @@ def attendances_test_send(request: Request, conversation_id: str):
             conversation.get("phone_e164") or "",
             body,
             jid=conversation.get("remote_jid") or "",
+            instance=conversation.get("evolution_instance") or "",
         )
         msg_id = evolution_client.extract_message_id(data)
         status = evolution_client.extract_message_status(data) or data.get("_oppi_send_status") or "UNKNOWN"
@@ -571,10 +734,29 @@ def attendances_evolution_diag(request: Request, conversation_id: str = ""):
     state_error = ""
     resolved = ""
     names: list[str] = []
+    instances_diag: list[dict] = []
     try:
         names = evolution_client.fetch_instance_names()
         resolved = evolution_client.resolved_instance_name()
         state = evolution_client.get_connection_state()
+        for name in settings.evolution_instances or []:
+            inst_state = ""
+            owner = ""
+            try:
+                inst_state = evolution_client.get_connection_state(name)
+            except Exception as err:
+                inst_state = f"error:{err}"[:80]
+            try:
+                owner = evolution_client.get_instance_owner_phone(name)
+            except Exception:
+                owner = ""
+            instances_diag.append(
+                {
+                    "instance": name,
+                    "state": inst_state or None,
+                    "owner_phone": owner or None,
+                }
+            )
     except Exception as error:
         state_error = str(error)
 
@@ -610,6 +792,7 @@ def attendances_evolution_diag(request: Request, conversation_id: str = ""):
             "instance_resolved": resolved or None,
             "instance_owner_phone": owner_phone or None,
             "instances_available": names,
+            "instances": instances_diag,
             "api_key_masked": masked,
             "connection_state": state or None,
             "connection_error": state_error or None,

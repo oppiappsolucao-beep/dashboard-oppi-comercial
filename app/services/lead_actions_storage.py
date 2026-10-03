@@ -274,6 +274,13 @@ def _tenant_bucket(tenant_id: str | None = None) -> dict:
 
 
 def get_all_lead_actions(tenant_id: str | None) -> dict[str, dict]:
+    try:
+        from app.services.crm_registrations_storage import get_all_actions, is_crm_postgres_ready
+
+        if is_crm_postgres_ready():
+            return get_all_actions(tenant_id)
+    except Exception:
+        pass
     bucket = _tenant_bucket(tenant_id)
     return {
         key: value
@@ -285,6 +292,20 @@ def get_all_lead_actions(tenant_id: str | None) -> dict[str, dict]:
 def get_lead_action(tenant_id: str | None, sheet_row: int) -> dict | None:
     if not sheet_row:
         return None
+    try:
+        from app.services.crm_registrations_storage import (
+            actions_from_registration,
+            get_registration_by_sheet_row,
+            is_crm_postgres_ready,
+        )
+
+        if is_crm_postgres_ready():
+            row = get_registration_by_sheet_row(int(sheet_row), tenant_id=tenant_id)
+            if not row:
+                return None
+            return actions_from_registration(row)
+    except Exception:
+        pass
     bucket = _tenant_bucket(tenant_id)
     record = bucket.get(str(sheet_row))
     return record if isinstance(record, dict) else None
@@ -300,6 +321,34 @@ def save_lead_action(
     global _cache
     if not sheet_row:
         raise ValueError("sheet_row é obrigatório")
+
+    try:
+        from app.services.crm_registrations_storage import (
+            is_crm_postgres_ready,
+            update_registration_actions,
+        )
+
+        if is_crm_postgres_ready():
+            current = update_registration_actions(
+                int(sheet_row),
+                payload,
+                tenant_id=tenant_id,
+                mirror_sheet=True,
+            )
+            stage_override = normalize_text(current.get("stage_override"))
+            if sync_pipeline and stage_override:
+                def _sync_stage(row: int = int(sheet_row), stage_value: str = stage_override) -> None:
+                    try:
+                        from app.services.legacy_core import sync_pipeline_stage_to_sheet
+
+                        sync_pipeline_stage_to_sheet(row, stage_value)
+                    except Exception:
+                        pass
+
+                threading.Thread(target=_sync_stage, daemon=True).start()
+            return current
+    except Exception:
+        pass
 
     from app.services.crm_local_db import upsert_lead_action
 
@@ -450,6 +499,29 @@ def delete_lead_action(tenant_id: str | None, sheet_row: int) -> None:
     global _cache
     if not sheet_row:
         return
+
+    try:
+        from app.services.crm_registrations_storage import (
+            is_crm_postgres_ready,
+            update_registration_actions,
+        )
+
+        if is_crm_postgres_ready():
+            # Zera actions sem apagar o cadastro (delete_company_registration trata exclusão completa)
+            update_registration_actions(
+                int(sheet_row),
+                {
+                    "cadastro_ativo": False,
+                    "deleted_actions": True,
+                    "payment_history": [],
+                    "closed_services": [],
+                },
+                tenant_id=tenant_id,
+                mirror_sheet=True,
+            )
+            return
+    except Exception:
+        pass
 
     with _lock:
         cached = json.loads(json.dumps(_cache, default=str)) if _cache is not None else None

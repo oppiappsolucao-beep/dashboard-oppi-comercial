@@ -18,7 +18,23 @@ from sqlalchemy.orm import declarative_base, sessionmaker
 from config.settings import settings
 
 connect_args = {"check_same_thread": False} if settings.database_url.startswith("sqlite") else {}
-engine = create_engine(settings.database_url, connect_args=connect_args, pool_pre_ping=True)
+_engine_kwargs: dict = {"pool_pre_ping": True}
+if settings.database_url.startswith("postgresql"):
+    connect_args = {"connect_timeout": 5}
+    _engine_kwargs.update(
+        {
+            "pool_size": 15,
+            "max_overflow": 10,
+            "pool_timeout": 15,
+            "pool_recycle": 280,
+        }
+    )
+
+engine = create_engine(
+    settings.database_url,
+    connect_args=connect_args,
+    **_engine_kwargs,
+)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
@@ -59,4 +75,6 @@ if settings.database_url.startswith("sqlite"):
     def set_sqlite_pragma(dbapi_connection, connection_record):
         cursor = dbapi_connection.cursor()
         cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA busy_timeout=5000")
         cursor.close()

@@ -1,15 +1,21 @@
 from datetime import date
 
 from fastapi import APIRouter, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from app.dependencies import get_prepared_data, is_admin, require_auth
 from app.services.activities_storage import DEFAULT_TENANT_ID
 from app.services.activity_service import criar_atividade
 from app.services.closed_services import PAYMENT_METHOD_OPTIONS, closed_services_has_data, closed_services_sheet_values, load_closed_services, parse_closed_services_from_form, save_closed_services
-from app.services.commercial_services import get_commercial_service_options
+from app.services.commercial_services import get_commercial_service_catalog, get_commercial_service_options
 from app.services.crm_validation_service import get_actions_for_stage, normalize_legacy_stage
 from app.services.legacy_core import DuplicateRegistrationError, STATUS_OPTIONS, get_colaborador_options, normalize_text
+from app.services.cadastro_billing import (
+    BILLING_FORM_OPTIONS,
+    PLAN_CYCLE_OPTIONS,
+    parse_billing_plan_from_form,
+    save_billing_plan,
+)
 from app.services.registration import (
     CADASTRO_TIPO_OPTIONS,
     build_cadastro_new_page_context,
@@ -70,11 +76,11 @@ def _registration_page_context(request: Request, df, *, error: str = "", values:
     back_href = {
         "leads": "/leads-e-empresas",
         "activities": "/atividades",
-    }.get(from_page, "/cadastro/todos")
+    }.get(from_page, "/leads-e-empresas")
     back_label = {
         "leads": "Empresas",
         "activities": "Atividades",
-    }.get(from_page, "Todos os cadastros")
+    }.get(from_page, "Empresas")
 
     page_ctx = build_cadastro_new_page_context(
         values=values,
@@ -92,6 +98,7 @@ def _registration_page_context(request: Request, df, *, error: str = "", values:
         "sector_options": sector_options,
         "status_options": STATUS_OPTIONS,
         "service_options": get_commercial_service_options(),
+        "service_catalog": get_commercial_service_catalog(),
         "payment_method_options": PAYMENT_METHOD_OPTIONS,
         "colaborador_options": get_colaborador_options(),
         "pipeline_stages": PIPELINE_STAGE_OPTIONS,
@@ -107,9 +114,42 @@ def _registration_page_context(request: Request, df, *, error: str = "", values:
         "cadastro_tipo": cadastro_tipo,
         "cadastro_tipo_options": CADASTRO_TIPO_OPTIONS,
         "closed_services": load_closed_services(DEFAULT_TENANT_ID, 0),
+        "billing_plan": {
+            "ciclo": normalize_text(values.get("billing_ciclo")).lower(),
+            "forma": normalize_text(values.get("billing_forma")).lower(),
+            "servico": normalize_text(values.get("billing_servico")),
+            "valor": normalize_text(values.get("billing_valor")),
+            "vencimento": normalize_text(values.get("billing_vencimento"))[:10],
+        },
+        "plan_cycle_options": PLAN_CYCLE_OPTIONS,
+        "billing_form_options": BILLING_FORM_OPTIONS,
         "error": error or request.session.pop("registration_error", ""),
         **page_ctx,
     }
+
+
+@router.get("/cadastro/api/empresas-matriz")
+async def api_empresas_matriz(request: Request, q: str = "", exclude: int | None = None):
+    redirect = require_auth(request)
+    if redirect:
+        return JSONResponse({"items": []}, status_code=401)
+    try:
+        from app.services.crm_registrations_storage import (
+            is_crm_postgres_ready,
+            search_matriz_companies,
+        )
+
+        if not is_crm_postgres_ready():
+            return JSONResponse({"items": []})
+        items = search_matriz_companies(
+            q or "",
+            exclude_sheet_row=exclude,
+            limit=20,
+            tenant_id=DEFAULT_TENANT_ID,
+        )
+        return JSONResponse({"items": items})
+    except Exception:
+        return JSONResponse({"items": []})
 
 
 @router.get("/cadastro/novo", response_class=HTMLResponse)
@@ -170,7 +210,17 @@ async def new_registration_submit(request: Request):
                 (setor or {}).get("name", ""),
             )
         if closed_services_has_data(closed_items):
-            save_closed_services(DEFAULT_TENANT_ID, sheet_row, closed_items)
+            save_closed_services(DEFAULT_TENANT_ID, sheet_row, closed_items, sync_sheet=False)
+        if int(sheet_row or 0) != 0 and (
+            normalize_text(form.get("billing_forma"))
+            or normalize_text(form.get("billing_valor"))
+            or normalize_text(form.get("billing_servico"))
+        ):
+            save_billing_plan(
+                DEFAULT_TENANT_ID,
+                sheet_row,
+                parse_billing_plan_from_form(form),
+            )
 
         empresa = normalize_text(form_dict.get("empresa"))
         status = normalize_text(form_dict.get("status"))
@@ -178,7 +228,7 @@ async def new_registration_submit(request: Request):
         create_activity = normalize_text(form_dict.get("create_first_activity")) in {"1", "on", "true", "yes"}
         activity_warning = ""
         if create_activity and int(sheet_row or 0) != 0:
-            stage = normalize_legacy_stage(form_dict.get("status")) or "Novo Lead"
+            stage = normalize_legacy_stage(form_dict.get("status")) or "Contato"
             scheduled_date = normalize_text(form_dict.get("activity_date")) or date.today().isoformat()
             scheduled_time = normalize_text(form_dict.get("activity_time")) or "09:00"
             responsible = (

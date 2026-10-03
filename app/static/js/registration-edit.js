@@ -28,6 +28,26 @@
     });
   }
 
+  function bindServiceSelects(root) {
+    if (!root) return;
+    root.querySelectorAll("[data-service-select]").forEach(function (select) {
+      if (select.dataset.bound === "1") return;
+      select.dataset.bound = "1";
+      select.addEventListener("change", function () {
+        var option = select.options[select.selectedIndex];
+        if (!option) return;
+        var row = select.closest(".contracted-service-row, .client-closed-services-slide");
+        if (!row) return;
+        var valor = option.getAttribute("data-valor") || "";
+        var quantidade = option.getAttribute("data-quantidade") || "";
+        var valorInput = row.querySelector('input[name="closed_valor"]');
+        var qtyInput = row.querySelector('input[name="closed_quantidade"]');
+        if (valorInput && valor) valorInput.value = valor;
+        if (qtyInput && quantidade) qtyInput.value = quantidade;
+      });
+    });
+  }
+
   function initClosedServices() {
     var root = document.getElementById("client-closed-services");
     if (!root) return;
@@ -39,9 +59,11 @@
     var prevButton = root.querySelector(".client-closed-services-nav.prev");
     var nextButton = root.querySelector(".client-closed-services-nav.next");
     var index = 0;
+    var isCarousel = Boolean(root.querySelector(".client-closed-services-viewport"));
 
     function slides() {
-      return track ? Array.prototype.slice.call(track.querySelectorAll(".client-closed-services-slide")) : [];
+      if (!track) return [];
+      return Array.prototype.slice.call(track.querySelectorAll(".client-closed-services-slide, .contracted-service-row"));
     }
 
     function total() {
@@ -50,13 +72,17 @@
 
     function updateView() {
       var count = total();
-      if (!count) return;
+      if (!count || !isCarousel) {
+        bindServiceSelects(root);
+        return;
+      }
       if (index >= count) index = count - 1;
       if (index < 0) index = 0;
       track.style.transform = "translateX(-" + (index * 100) + "%)";
       if (counter) counter.textContent = (index + 1) + " / " + count;
       if (prevButton) prevButton.disabled = index <= 0;
       if (nextButton) nextButton.disabled = index >= count - 1;
+      bindServiceSelects(root);
     }
 
     if (prevButton) {
@@ -135,9 +161,117 @@
     });
   }
 
+  function initFilialMatriz() {
+    var toggle = document.querySelector("[data-filial-toggle]");
+    var block = document.querySelector("[data-filial-matriz-block]");
+    var searchInput = document.querySelector("[data-filial-matriz-search]");
+    var hiddenRow = document.querySelector("[data-filial-matriz-row]");
+    var resultsBox = document.querySelector("[data-filial-matriz-results]");
+    var selectedHint = document.querySelector("[data-filial-matriz-selected]");
+    if (!toggle || !block || !searchInput || !hiddenRow || !resultsBox) return;
+
+    var searchTimer = null;
+
+    function setSelected(sheetRow, name) {
+      hiddenRow.value = sheetRow ? String(sheetRow) : "";
+      if (name) searchInput.value = name;
+      if (selectedHint) {
+        if (name) {
+          selectedHint.textContent = "Selecionada: " + name;
+          selectedHint.hidden = false;
+        } else {
+          selectedHint.textContent = "";
+          selectedHint.hidden = true;
+        }
+      }
+    }
+
+    function clearSelected() {
+      setSelected("", "");
+    }
+
+    function syncBlock() {
+      var enabled = !!toggle.checked;
+      block.hidden = !enabled;
+      if (!enabled) {
+        clearSelected();
+        resultsBox.hidden = true;
+        resultsBox.innerHTML = "";
+      }
+    }
+
+    function renderResults(items) {
+      resultsBox.innerHTML = "";
+      if (!items || !items.length) {
+        resultsBox.hidden = true;
+        return;
+      }
+      items.forEach(function (item) {
+        var button = document.createElement("button");
+        button.type = "button";
+        button.className = "registration-filial-matriz-item";
+        button.textContent = item.empresa || ("Empresa #" + item.sheet_row);
+        if (item.cnpj) {
+          var meta = document.createElement("small");
+          meta.textContent = item.cnpj;
+          button.appendChild(meta);
+        }
+        button.addEventListener("click", function () {
+          setSelected(item.sheet_row, item.empresa || "");
+          resultsBox.hidden = true;
+          resultsBox.innerHTML = "";
+        });
+        resultsBox.appendChild(button);
+      });
+      resultsBox.hidden = false;
+    }
+
+    async function searchMatriz(query) {
+      var params = new URLSearchParams();
+      params.set("q", query || "");
+      var exclude = searchInput.getAttribute("data-exclude-sheet-row");
+      if (exclude) params.set("exclude", exclude);
+      var response = await fetch("/cadastro/api/empresas-matriz?" + params.toString());
+      var data = await response.json();
+      return data.items || [];
+    }
+
+    toggle.addEventListener("change", syncBlock);
+    syncBlock();
+
+    searchInput.addEventListener("input", function () {
+      hiddenRow.value = "";
+      if (selectedHint) {
+        selectedHint.hidden = true;
+        selectedHint.textContent = "";
+      }
+      clearTimeout(searchTimer);
+      var query = searchInput.value.trim();
+      searchTimer = setTimeout(function () {
+        if (!toggle.checked) return;
+        searchMatriz(query).then(renderResults).catch(function () {
+          resultsBox.hidden = true;
+        });
+      }, 250);
+    });
+
+    searchInput.addEventListener("focus", function () {
+      if (!toggle.checked) return;
+      searchMatriz(searchInput.value.trim()).then(renderResults).catch(function () {
+        resultsBox.hidden = true;
+      });
+    });
+
+    document.addEventListener("click", function (event) {
+      if (block.contains(event.target)) return;
+      resultsBox.hidden = true;
+    });
+  }
+
   document.addEventListener("DOMContentLoaded", function () {
     document.querySelectorAll(".registration-tipo-switch").forEach(initTipoSwitch);
     initClosedServices();
     initDeleteModal();
+    initFilialMatriz();
   });
 })();

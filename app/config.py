@@ -6,8 +6,7 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-APP_BUILD = os.getenv("APP_BUILD", "20260728-force20-noperiod-v86").strip() or "20260728-force20-noperiod-v86"
-
+APP_BUILD = os.getenv("APP_BUILD", "20260822-visao-fin-servicos-v3").strip() or "20260822-visao-fin-servicos-v3"
 
 class Settings:
     sheet_id: str = "1GAbrca0NSiJfPXaSte1qGxXCsGkQPacoRsm0PVB51gE"
@@ -25,6 +24,8 @@ class Settings:
     ai_attendance_enabled: bool = False
     oppi_ponto_api_url: str = "https://ponto.oppitech.com.br"
     oppi_ponto_crm_api_key: str = ""
+    asaas_api_key: str = ""
+    asaas_api_url: str = "https://api.asaas.com/v3"
 
     app_username: str
     app_password: str
@@ -73,16 +74,60 @@ class Settings:
         self.evolution_api_key = os.getenv("EVOLUTION_API_KEY", "").strip()
         self.evolution_instance = os.getenv("EVOLUTION_INSTANCE", "").strip()
         self.evolution_webhook_token = os.getenv("EVOLUTION_WEBHOOK_TOKEN", "").strip()
+        self.public_app_url = (
+            os.getenv("PUBLIC_APP_URL", "https://comercial.oppitech.com.br").strip().rstrip("/")
+            or "https://comercial.oppitech.com.br"
+        )
         self.ai_attendance_prompt = os.getenv("AI_ATTENDANCE_PROMPT", "").strip()
         self.ai_attendance_enabled = os.getenv("AI_ATTENDANCE_ENABLED", "").strip().lower() in {
             "1", "true", "sim", "yes", "on",
         }
         self.oppi_ponto_api_url = os.getenv("OPPI_PONTO_API_URL", "https://ponto.oppitech.com.br").strip().rstrip("/")
         self.oppi_ponto_crm_api_key = os.getenv("OPPI_PONTO_CRM_API_KEY", "").strip()
+        self.meta_ad_account_id = os.getenv("META_AD_ACCOUNT_ID", "").strip()
+        self.meta_access_token = os.getenv("META_ACCESS_TOKEN", "").strip()
+        self.asaas_api_key = os.getenv("ASAAS_API_KEY", "").strip()
+        self.asaas_api_url = (
+            os.getenv("ASAAS_API_URL", "https://api.asaas.com/v3").strip().rstrip("/")
+            or "https://api.asaas.com/v3"
+        )
+
+    @property
+    def evolution_instances(self) -> list[str]:
+        """Lista de instâncias Evolution (EVOLUTION_INSTANCE com vírgulas)."""
+        seen: set[str] = set()
+        out: list[str] = []
+        for part in (self.evolution_instance or "").split(","):
+            name = part.strip()
+            if not name:
+                continue
+            key = name.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(name)
+        return out
+
+    @property
+    def evolution_primary_instance(self) -> str:
+        instances = self.evolution_instances
+        return instances[0] if instances else ""
+
+    @property
+    def meta_configured(self) -> bool:
+        return bool(self.meta_ad_account_id and self.meta_access_token)
+
+    @property
+    def asaas_configured(self) -> bool:
+        return bool(self.asaas_api_key)
 
     @property
     def evolution_configured(self) -> bool:
-        return bool(self.evolution_api_url and self.evolution_api_key and self.evolution_instance)
+        return bool(
+            self.evolution_api_url
+            and self.evolution_api_key
+            and self.evolution_primary_instance
+        )
 
     @property
     def support_whatsapp_url(self) -> str:

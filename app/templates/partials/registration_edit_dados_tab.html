@@ -10,6 +10,38 @@
     <div class="form-grid">
       <div class="form-group"><label>Nome da empresa <span class="req">*</span></label><input name="empresa" required value="{{ values.empresa }}"></div>
       <div class="form-group"><label>CNPJ</label><input name="cnpj" value="{{ values.cnpj }}"></div>
+      <div class="form-group full">
+        <label class="registration-filial-check">
+          <input
+            type="checkbox"
+            name="is_filial"
+            value="1"
+            data-filial-toggle
+            {% if values.is_filial %}checked{% endif %}
+          >
+          É filial (só assim pode repetir telefone/CNPJ da matriz)
+        </label>
+      </div>
+      <div class="form-group full registration-filial-matriz" data-filial-matriz-block {% if not values.is_filial %}hidden{% endif %}>
+        <label for="empresa_matriz_search">Empresa matriz <span class="req">*</span></label>
+        <input type="hidden" name="empresa_matriz_sheet_row" id="empresa_matriz_sheet_row" value="{{ values.empresa_matriz_sheet_row or '' }}" data-filial-matriz-row>
+        <div class="registration-filial-matriz-search">
+          <input
+            type="search"
+            id="empresa_matriz_search"
+            name="empresa_matriz_search"
+            placeholder="Buscar empresa matriz por nome…"
+            autocomplete="off"
+            value="{{ values.empresa_matriz_nome or '' }}"
+            data-filial-matriz-search
+            {% if sheet_row %}data-exclude-sheet-row="{{ sheet_row }}"{% endif %}
+          >
+          <div class="registration-filial-matriz-results" data-filial-matriz-results hidden></div>
+        </div>
+        <p class="registration-filial-matriz-hint" data-filial-matriz-selected {% if not values.empresa_matriz_nome %}hidden{% endif %}>
+          {% if values.empresa_matriz_nome %}Selecionada: {{ values.empresa_matriz_nome }}{% endif %}
+        </p>
+      </div>
       <div class="form-group"><label>Nicho</label>
         <select name="nicho" id="nicho-select">
           <option value="">Selecione (opcional)</option>
@@ -35,8 +67,23 @@
       </div>
     </div>
     <div class="form-grid">
-      <div class="form-group"><label>E-mail principal</label><input name="email" type="email" value="{{ values.email }}"></div>
-      <div class="form-group"><label>Celular / WhatsApp</label><input name="telefone_b2b" value="{{ values.telefone_b2b }}"></div>
+      <div class="form-group full"><label>E-mail principal</label><input name="email" type="email" value="{{ values.email }}"></div>
+      <div class="form-group">
+        <label>Celular / WhatsApp{% if not sheet_row %} *{% endif %}</label>
+        <input name="telefone_b2b"
+          value="{{ values.telefone_b2b }}"
+          inputmode="tel"
+          autocomplete="tel"
+          placeholder="Ex.: 11999998888"
+          {% if not sheet_row %}required{% endif %}>
+      </div>
+      <div class="form-group">
+        <label>Nome do contato</label>
+        <input name="nome_contato"
+          value="{{ values.nome_contato }}"
+          autocomplete="name"
+          placeholder="Nome de quem atende no WhatsApp">
+      </div>
       <div class="form-group"><label>Telefone fixo</label><input name="telefone_fixo" value="{{ values.telefone_fixo }}"></div>
       <div class="form-group"><label>Telefone alternativo</label><input name="telefone_alternativo" value="{{ values.telefone_alternativo }}"></div>
     </div>

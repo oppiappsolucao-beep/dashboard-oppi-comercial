@@ -49,6 +49,9 @@ def _normalize_payment(raw: dict | None) -> dict:
         "status": status,
         "forma_pagamento": normalize_text(data.get("forma_pagamento")) or "PIX",
         "data_display": _format_date_display(normalize_text(data.get("data"))),
+        "asaas_payment_id": normalize_text(data.get("asaas_payment_id")),
+        "invoice_url": normalize_text(data.get("invoice_url")),
+        "fonte": normalize_text(data.get("fonte")) or ("asaas" if data.get("asaas_payment_id") else "manual"),
     }
 
 
@@ -104,6 +107,8 @@ def save_payment_history(tenant_id: str | None, sheet_row: int, items: list[dict
             "valor": item.get("valor", ""),
             "status": item.get("status", "Pendente"),
             "forma_pagamento": item.get("forma_pagamento", "PIX"),
+            "asaas_payment_id": item.get("asaas_payment_id", ""),
+            "invoice_url": item.get("invoice_url", ""),
         }
         for item in normalized
     ]

@@ -49,7 +49,7 @@ STAGE_SUMMARY_HINTS = {
 REGISTRATION_FIELDS = [
     "empresa", "data_abertura", "capital", "cnpj", "endereco", "endereco_numero", "endereco_complemento",
     "cep", "bairro", "municipio", "uf", "email_empresa", "site",
-    "telefone_b2b", "telefone_fixo", "telefone_alternativo",
+    "telefone_b2b", "nome_contato", "telefone_fixo", "telefone_alternativo",
     "socio_1", "cpf_socio_1", "email_socio_1", "telefone_socio_1",
     "socio_2", "telefone_socio_2", "cpf_socio_2",
     "socio_3", "telefone_socio_3", "cpf_socio_3",
@@ -70,7 +70,7 @@ def infer_partners_count(values: dict) -> int:
     return 0
 
 
-def validate_registration_form(form: dict) -> str | None:
+def validate_registration_form(form: dict, *, require_whatsapp: bool = False) -> str | None:
     empresa = normalize_text(form.get("empresa"))
     cnpj = normalize_text(form.get("cnpj"))
     telefone_b2b = normalize_text(form.get("telefone_b2b"))
@@ -79,26 +79,281 @@ def validate_registration_form(form: dict) -> str | None:
 
     if not empresa:
         return "Preencha o nome da empresa para concluir o cadastro."
+    if require_whatsapp and not telefone_b2b:
+        return "Preencha o Celular / WhatsApp para concluir o cadastro."
+    if telefone_b2b and not normalize_phone_for_duplicate(telefone_b2b):
+        return "Digite um número válido no campo Celular / WhatsApp."
     if cnpj and not normalize_cnpj_for_duplicate(cnpj):
         return "Digite um CNPJ válido com 14 números."
 
     for label, phone in [
-        ("Celular WhatsApp", telefone_b2b),
         ("Telefone fixo", telefone_fixo),
         ("Telefone alternativo", telefone_alternativo),
     ]:
         if phone and not normalize_phone_for_duplicate(phone):
             return f"Digite um número válido no campo {label}."
 
+    if parse_is_filial(form.get("is_filial")):
+        matriz = parse_empresa_matriz_sheet_row(form.get("empresa_matriz_sheet_row"))
+        if not matriz:
+            return "Selecione a empresa matriz para cadastro de filial."
+
     return None
+
+
+def parse_is_filial(value) -> bool:
+    if isinstance(value, bool):
+        return value
+    return normalize_text(value).lower() in {"1", "true", "sim", "yes", "on"}
+
+
+def parse_empresa_matriz_sheet_row(value) -> int | None:
+    try:
+        row = int(value or 0)
+    except (TypeError, ValueError):
+        return None
+    return row if row > 0 else None
+
+
+def allows_duplicate_contact(form_or_payload: dict) -> bool:
+    """Filial com matriz selecionada pode repetir telefone/WhatsApp/CNPJ."""
+    if not parse_is_filial(form_or_payload.get("is_filial")):
+        return False
+    return bool(parse_empresa_matriz_sheet_row(form_or_payload.get("empresa_matriz_sheet_row")))
+
+
+def find_existing_by_whatsapp(
+    whatsapp: str,
+    *,
+    ignore_sheet_row: int | None = None,
+) -> dict | None:
+    """Localiza cadastro com o mesmo WhatsApp (Postgres + planilha + pendentes)."""
+    from app.services.legacy_core import phones_match_for_duplicate
+
+    target = normalize_phone_for_duplicate(whatsapp)
+    if not target:
+        return None
+
+    ignore = int(ignore_sheet_row) if ignore_sheet_row else None
+
+    # 0) Postgres SoT
+    try:
+        from app.services.crm_registrations_storage import (
+            find_registration_by_phone,
+            is_crm_postgres_ready,
+        )
+
+        if is_crm_postgres_ready():
+            hit = find_registration_by_phone(target, ignore_sheet_row=ignore)
+            if hit:
+                return {
+                    "sheet_row": hit.get("sheet_row") or 0,
+                    "empresa": hit.get("empresa") or "",
+                    "whatsapp": hit.get("telefone") or target,
+                }
+    except Exception:
+        pass
+
+    # 1) Dataframe preparado (inclui pendentes mesclados)
+    try:
+        from app.dependencies import get_prepared_data
+
+        df, columns = get_prepared_data()
+    except Exception:
+        df, columns = None, {}
+
+    if df is not None and not getattr(df, "empty", True):
+        phone_keys = [
+            key
+            for key in (
+                "telefone_b2b",
+                "telefone_fixo",
+                "telefone_alternativo",
+                "telefone_socio_1",
+                "telefone_socio_2",
+                "telefone_socio_3",
+            )
+            if columns.get(key)
+        ]
+        for _, row in df.iterrows():
+            sheet_row = int(row.get("_sheet_row", 0) or 0)
+            if ignore and sheet_row == ignore:
+                continue
+            phones = []
+            for key in phone_keys:
+                col = columns.get(key)
+                if col and col in row.index:
+                    phones.append(row.get(col, ""))
+            phones.append(row.get("_telefone", ""))
+            for phone in phones:
+                if phones_match_for_duplicate(target, phone):
+                    return {
+                        "sheet_row": sheet_row,
+                        "empresa": normalize_text(row.get("_empresa") or row.get("Nome Empresas") or ""),
+                        "whatsapp": normalize_phone_for_duplicate(phone) or target,
+                    }
+
+    # 2) Pendentes locais ainda não sincronizados
+    try:
+        from app.services.crm_local_db import list_pending_companies
+
+        for item in list_pending_companies("pending"):
+            payload = item.get("payload") if isinstance(item.get("payload"), dict) else {}
+            pending_id = int(item.get("id") or 0)
+            pseudo_row = -pending_id if pending_id else None
+            if ignore and pseudo_row and pseudo_row == ignore:
+                continue
+            for field in (
+                "telefone_b2b",
+                "telefone_fixo",
+                "telefone_alternativo",
+                "telefone_socio_1",
+                "telefone_socio_2",
+                "telefone_socio_3",
+            ):
+                if phones_match_for_duplicate(target, payload.get(field)):
+                    return {
+                        "sheet_row": pseudo_row or 0,
+                        "empresa": normalize_text(payload.get("empresa") or item.get("empresa") or ""),
+                        "whatsapp": normalize_phone_for_duplicate(payload.get(field)) or target,
+                    }
+    except Exception:
+        pass
+
+    return None
+
+
+def find_existing_by_cnpj(
+    cnpj: str,
+    *,
+    ignore_sheet_row: int | None = None,
+) -> dict | None:
+    """Localiza cadastro com o mesmo CNPJ (Postgres + planilha + pendentes)."""
+    target = normalize_cnpj_for_duplicate(cnpj)
+    if not target:
+        return None
+
+    ignore = int(ignore_sheet_row) if ignore_sheet_row else None
+
+    try:
+        from app.services.crm_registrations_storage import (
+            find_registration_by_cnpj,
+            is_crm_postgres_ready,
+        )
+
+        if is_crm_postgres_ready():
+            hit = find_registration_by_cnpj(target, ignore_sheet_row=ignore)
+            if hit:
+                return hit
+    except Exception:
+        pass
+
+    try:
+        from app.dependencies import get_prepared_data
+
+        df, columns = get_prepared_data()
+    except Exception:
+        df, columns = None, {}
+
+    cnpj_col = (columns or {}).get("cnpj")
+    if df is not None and not getattr(df, "empty", True) and cnpj_col:
+        for _, row in df.iterrows():
+            sheet_row = int(row.get("_sheet_row", 0) or 0)
+            if ignore and sheet_row == ignore:
+                continue
+            existing = normalize_cnpj_for_duplicate(row.get(cnpj_col, ""))
+            if existing and existing == target:
+                return {
+                    "sheet_row": sheet_row,
+                    "empresa": normalize_text(row.get("_empresa") or row.get("Nome Empresas") or ""),
+                    "cnpj": existing,
+                }
+
+    try:
+        from app.services.crm_local_db import list_pending_companies
+
+        for item in list_pending_companies("pending"):
+            payload = item.get("payload") if isinstance(item.get("payload"), dict) else {}
+            pending_id = int(item.get("id") or 0)
+            pseudo_row = -pending_id if pending_id else None
+            if ignore and pseudo_row and pseudo_row == ignore:
+                continue
+            existing = normalize_cnpj_for_duplicate(payload.get("cnpj"))
+            if existing and existing == target:
+                return {
+                    "sheet_row": pseudo_row or 0,
+                    "empresa": normalize_text(payload.get("empresa") or item.get("empresa") or ""),
+                    "cnpj": existing,
+                }
+    except Exception:
+        pass
+
+    return None
+
+
+def assert_whatsapp_not_registered(
+    whatsapp: str,
+    *,
+    ignore_sheet_row: int | None = None,
+) -> None:
+    """Bloqueia cadastro/edição com telefone/WhatsApp já existente."""
+    hit = find_existing_by_whatsapp(whatsapp, ignore_sheet_row=ignore_sheet_row)
+    if not hit:
+        return
+    digits = hit.get("whatsapp") or normalize_phone_for_duplicate(whatsapp)
+    empresa = hit.get("empresa") or ""
+    if empresa:
+        raise DuplicateRegistrationError(
+            f"Telefone já cadastrado: {digits} (cadastro: {empresa})."
+        )
+    raise DuplicateRegistrationError(f"Telefone já cadastrado: {digits}.")
+
+
+def assert_cnpj_not_registered(
+    cnpj: str,
+    *,
+    ignore_sheet_row: int | None = None,
+) -> None:
+    """Bloqueia cadastro/edição com CNPJ já existente."""
+    hit = find_existing_by_cnpj(cnpj, ignore_sheet_row=ignore_sheet_row)
+    if not hit:
+        return
+    digits = hit.get("cnpj") or normalize_cnpj_for_duplicate(cnpj)
+    empresa = hit.get("empresa") or ""
+    if empresa:
+        raise DuplicateRegistrationError(
+            f"CNPJ já cadastrado: {digits} (cadastro: {empresa})."
+        )
+    raise DuplicateRegistrationError(f"CNPJ já cadastrado: {digits}.")
+
+
+def assert_unique_registration_contacts(
+    payload: dict,
+    *,
+    ignore_sheet_row: int | None = None,
+) -> None:
+    """Exige unicidade de telefone/CNPJ, exceto filial com matriz."""
+    if allows_duplicate_contact(payload):
+        return
+
+    for field in ("telefone_b2b", "telefone_fixo", "telefone_alternativo"):
+        phone = normalize_text(payload.get(field))
+        if phone:
+            assert_whatsapp_not_registered(phone, ignore_sheet_row=ignore_sheet_row)
+
+    cnpj = normalize_text(payload.get("cnpj"))
+    if cnpj:
+        assert_cnpj_not_registered(cnpj, ignore_sheet_row=ignore_sheet_row)
 
 
 def build_registration_payload(form: dict) -> dict:
     now_text = pd.Timestamp.now(tz="America/Sao_Paulo").strftime("%d/%m/%Y %H:%M")
     data_chamado = form.get("data_chamado") or date.today().strftime("%d/%m/%Y")
 
-    if hasattr(data_chamado, "strftime"):
-        data_chamado = data_chamado.strftime("%d/%m/%Y")
+    # Não usar hasattr(..., "strftime"): NaT tem strftime e levanta ValueError.
+    parsed_chamado = as_python_date(data_chamado)
+    if parsed_chamado is not None:
+        data_chamado = parsed_chamado.strftime("%d/%m/%Y")
     else:
         raw = normalize_text(data_chamado)
         # Converte ISO (input date) para o padrão da planilha.
@@ -111,23 +366,66 @@ def build_registration_payload(form: dict) -> dict:
             data_chamado = raw
 
     payload = {field: normalize_text(form.get(field, "")) for field in REGISTRATION_FIELDS}
+    # Celular WhatsApp: sempre grava com o 9º dígito quando for móvel BR
+    if payload.get("telefone_b2b"):
+        from app.services.legacy_core import format_br_whatsapp_display
+
+        payload["telefone_b2b"] = format_br_whatsapp_display(payload["telefone_b2b"]) or payload["telefone_b2b"]
     payload["data_chamado"] = normalize_text(data_chamado)
     payload["ultima_atualizacao"] = now_text
     tipo = normalize_text(form.get("cadastro_tipo")).lower()
     payload["cadastro_tipo"] = "empresa" if tipo == "empresa" else "lead"
+    is_filial = parse_is_filial(form.get("is_filial"))
+    payload["is_filial"] = is_filial
+    matriz = parse_empresa_matriz_sheet_row(form.get("empresa_matriz_sheet_row")) if is_filial else None
+    payload["empresa_matriz_sheet_row"] = matriz
     return payload
 
 
 def save_new_company(form: dict) -> int:
-    error = validate_registration_form(form)
+    error = validate_registration_form(form, require_whatsapp=True)
     if error:
         raise ValueError(error)
-    return append_company_to_sheet(build_registration_payload(form))
+    payload = build_registration_payload(form)
+    assert_unique_registration_contacts(payload)
+    try:
+        from app.services.crm_registrations_storage import (
+            is_crm_postgres_ready,
+            upsert_registration_from_payload,
+        )
+
+        if is_crm_postgres_ready():
+            return upsert_registration_from_payload(payload, mirror_sheet=True)
+    except DuplicateRegistrationError:
+        raise
+    except Exception:
+        pass
+    return append_company_to_sheet(payload)
 
 
 def _existing_edit_field_values(sheet_row: int) -> dict[str, str]:
     from app.dependencies import get_prepared_data
     from app.services.legacy_core import status_group
+
+    try:
+        from app.services.crm_registrations_storage import (
+            get_registration_by_sheet_row,
+            is_crm_postgres_ready,
+            registration_to_payload,
+        )
+
+        if is_crm_postgres_ready():
+            row = get_registration_by_sheet_row(int(sheet_row))
+            if row:
+                payload = registration_to_payload(row)
+                return {
+                    "status": status_group(payload.get("status") or "Novo Lead"),
+                    "data_chamado": normalize_text(payload.get("data_chamado")),
+                    "servico": normalize_text(payload.get("servico")),
+                    "valor_proposta": normalize_text(payload.get("valor_proposta")),
+                }
+    except Exception:
+        pass
 
     df, columns = get_prepared_data()
     matches = df[df["_sheet_row"] == int(sheet_row)]
@@ -151,7 +449,7 @@ def _existing_edit_field_values(sheet_row: int) -> dict[str, str]:
 
 
 def save_company_edit(sheet_row: int, form: dict) -> None:
-    error = validate_registration_form(form)
+    error = validate_registration_form(form, require_whatsapp=False)
     if error:
         raise ValueError(error)
     payload = build_registration_payload(form)
@@ -159,12 +457,42 @@ def save_company_edit(sheet_row: int, form: dict) -> None:
     for field in EDIT_FIELDS_PRESERVE_WHEN_ABSENT:
         if field not in form:
             payload[field] = normalize_text(existing.get(field, ""))
+    assert_unique_registration_contacts(payload, ignore_sheet_row=int(sheet_row))
+    try:
+        from app.services.crm_registrations_storage import (
+            is_crm_postgres_ready,
+            upsert_registration_from_payload,
+        )
+
+        if is_crm_postgres_ready():
+            upsert_registration_from_payload(
+                payload,
+                sheet_row=int(sheet_row),
+                mirror_sheet=True,
+            )
+            return
+    except DuplicateRegistrationError:
+        raise
+    except Exception:
+        pass
     update_company_in_sheet(sheet_row, payload)
 
 
 def delete_company_registration(tenant_id: str | None, sheet_row: int) -> None:
     from app.services.legacy_core import delete_company_from_sheet
     from app.services.lead_actions_storage import delete_lead_action
+
+    try:
+        from app.services.crm_registrations_storage import (
+            delete_registration,
+            is_crm_postgres_ready,
+        )
+
+        if is_crm_postgres_ready():
+            delete_registration(int(sheet_row), tenant_id=tenant_id, mirror_sheet=True)
+            return
+    except Exception:
+        pass
 
     delete_company_from_sheet(sheet_row)
     delete_lead_action(tenant_id, sheet_row)

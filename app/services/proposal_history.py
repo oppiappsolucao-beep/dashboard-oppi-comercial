@@ -24,6 +24,14 @@ def _now() -> datetime:
 
 
 def load_proposal_history(company: str | None = None, limit: int = 50) -> list[dict]:
+    try:
+        from app.services.crm_registrations_storage import is_crm_postgres_ready
+        from app.services.crm_aux_storage import load_proposals_pg
+
+        if is_crm_postgres_ready():
+            return load_proposals_pg(company=company, limit=limit)
+    except Exception:
+        pass
     path = _history_path()
     if not path.exists():
         return []
@@ -42,6 +50,37 @@ def load_proposal_history(company: str | None = None, limit: int = 50) -> list[d
 
 
 def save_proposal_history_entry(entry: dict) -> dict:
+    try:
+        from app.services.crm_registrations_storage import is_crm_postgres_ready
+        from app.services.crm_aux_storage import save_proposal_pg
+
+        if is_crm_postgres_ready():
+            record = {
+                "id": normalize_text(entry.get("id")) or str(uuid.uuid4()),
+                "created_at": normalize_text(entry.get("created_at")) or _now().isoformat(timespec="seconds"),
+                "date": normalize_text(entry.get("date")) or _now().strftime("%d/%m/%Y"),
+                "time": normalize_text(entry.get("time")) or _now().strftime("%H:%M"),
+                "cliente": normalize_text(entry.get("cliente")),
+                "cnpj_cpf": normalize_text(entry.get("cnpj_cpf")),
+                "colaboradores": int(entry.get("colaboradores") or 0),
+                "quantidade_adicional": int(entry.get("quantidade_adicional") or 0),
+                "plano": normalize_text(entry.get("plano")),
+                "forma_pagamento": normalize_text(entry.get("forma_pagamento")),
+                "valor_mensal": normalize_text(entry.get("valor_mensal")),
+                "valor_anual": normalize_text(entry.get("valor_anual")),
+                "valor_final": normalize_text(entry.get("valor_final")),
+                "validade": normalize_text(entry.get("validade")),
+                "usuario": normalize_text(entry.get("usuario")),
+                "filename": normalize_text(entry.get("filename")),
+                "pdf_cache_key": normalize_text(entry.get("pdf_cache_key")),
+                "preview_url": normalize_text(entry.get("preview_url")),
+                "download_url": normalize_text(entry.get("download_url")),
+                "snapshot": entry.get("snapshot") if isinstance(entry.get("snapshot"), dict) else {},
+            }
+            return save_proposal_pg(record)
+    except Exception:
+        pass
+
     path = _history_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     with _lock:
@@ -77,6 +116,14 @@ def delete_proposal_history_entry(entry_id: str) -> bool:
     entry_id = normalize_text(entry_id)
     if not entry_id:
         return False
+    try:
+        from app.services.crm_registrations_storage import is_crm_postgres_ready
+        from app.services.crm_aux_storage import delete_proposal_pg
+
+        if is_crm_postgres_ready():
+            return delete_proposal_pg(entry_id)
+    except Exception:
+        pass
     path = _history_path()
     with _lock:
         rows = load_proposal_history(limit=5000)
@@ -89,6 +136,14 @@ def delete_proposal_history_entry(entry_id: str) -> bool:
 
 def get_proposal_history_entry(entry_id: str) -> dict | None:
     entry_id = normalize_text(entry_id)
+    try:
+        from app.services.crm_registrations_storage import is_crm_postgres_ready
+        from app.services.crm_aux_storage import get_proposal_pg
+
+        if is_crm_postgres_ready():
+            return get_proposal_pg(entry_id)
+    except Exception:
+        pass
     for item in load_proposal_history(limit=5000):
         if normalize_text(item.get("id")) == entry_id:
             return item

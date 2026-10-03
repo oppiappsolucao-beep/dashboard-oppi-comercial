@@ -1,5 +1,5 @@
 from fastapi import APIRouter, File, Form, Request, UploadFile
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from app.config import settings
 from app.dependencies import get_prepared_data, is_admin, require_auth
@@ -83,20 +83,25 @@ def _settings_context(request: Request, settings_params: dict):
     niches_rows: list[dict] = []
     sectors_rows: list[dict] = []
     attendance_tags_rows: list[dict] = []
+    tag_color_presets: list[dict] = []
     quick_replies_rows: list[dict] = []
     account_users_options: list[dict] = []
+    whatsapp_line_options: list[dict] = []
     try:
         from app.services.niches import list_niches_rows
         from app.services.sectors import enrich_sectors_for_settings, list_sectors
-        from app.services.attendance_tags import list_attendance_tags
+        from app.services.attendance_tags import list_attendance_tags, PRESET_COLORS
         from app.services.attendance_quick_replies import list_quick_replies
         from app.services.account_users import ensure_default_account_users, load_account_users
+        from app.services.attendances import build_whatsapp_line_options
 
         ensure_default_account_users()
         niches_rows = list_niches_rows()
         sectors_rows = enrich_sectors_for_settings(list_sectors(active_only=False))
         attendance_tags_rows = list_attendance_tags(active_only=False)
+        tag_color_presets = list(PRESET_COLORS)
         quick_replies_rows = list_quick_replies(active_only=False)
+        whatsapp_line_options = build_whatsapp_line_options(refresh_owners=False)
         account_users_options = [
             {
                 "id": u.get("id"),
@@ -110,8 +115,24 @@ def _settings_context(request: Request, settings_params: dict):
         niches_rows = []
         sectors_rows = []
         attendance_tags_rows = []
+        tag_color_presets = []
         quick_replies_rows = []
         account_users_options = []
+        whatsapp_line_options = []
+
+    crm_postgres_ready = False
+    crm_registrations_count = 0
+    try:
+        from app.services.crm_registrations_storage import (
+            count_registrations,
+            is_crm_postgres_ready,
+        )
+
+        crm_postgres_ready = bool(is_crm_postgres_ready())
+        if crm_postgres_ready:
+            crm_registrations_count = int(count_registrations() or 0)
+    except Exception:
+        pass
 
     return {
         "active_page": "settings",
@@ -133,6 +154,8 @@ def _settings_context(request: Request, settings_params: dict):
         "niches": niches_rows,
         "sectors": sectors_rows,
         "attendance_tags": attendance_tags_rows,
+        "tag_color_presets": tag_color_presets,
+        "whatsapp_line_options": whatsapp_line_options,
         "quick_replies": quick_replies_rows,
         "sector_options": [{"id": s["id"], "name": s["name"]} for s in sectors_rows if s.get("active", True)],
         "account_users_options": account_users_options,
@@ -154,12 +177,18 @@ def _settings_context(request: Request, settings_params: dict):
         "sector_error": request.session.pop("settings_sector_error", ""),
         "tag_success": request.session.pop("settings_tag_success", ""),
         "tag_error": request.session.pop("settings_tag_error", ""),
+        "finalize_queue_success": request.session.pop("settings_finalize_queue_success", ""),
+        "finalize_queue_error": request.session.pop("settings_finalize_queue_error", ""),
         "quick_reply_success": request.session.pop("settings_quick_reply_success", ""),
         "quick_reply_error": request.session.pop("settings_quick_reply_error", ""),
         "user_success": request.session.pop("settings_user_success", ""),
         "user_error": request.session.pop("settings_user_error", ""),
         "sheet_sync_success": request.session.pop("settings_sheet_sync_success", ""),
         "sheet_sync_error": request.session.pop("settings_sheet_sync_error", ""),
+        "crm_migrate_success": request.session.pop("settings_crm_migrate_success", ""),
+        "crm_migrate_error": request.session.pop("settings_crm_migrate_error", ""),
+        "crm_postgres_ready": crm_postgres_ready,
+        "crm_registrations_count": crm_registrations_count,
     }
 
 
@@ -298,6 +327,8 @@ async def settings_remove_goal(
 async def settings_add_service(
     request: Request,
     service_name: str = Form(...),
+    service_valor: str = Form(""),
+    service_quantidade: str = Form("1"),
     tab: str = Form("servicos"),
 ):
     redirect = require_auth(request)
@@ -311,7 +342,7 @@ async def settings_add_service(
     from app.services.commercial_services import add_commercial_service
 
     try:
-        add_commercial_service(service_name)
+        add_commercial_service(service_name, valor=service_valor, quantidade=service_quantidade)
         request.session["settings_service_success"] = "Serviço cadastrado com sucesso."
     except ValueError as error:
         request.session["settings_service_error"] = str(error)
@@ -467,10 +498,78 @@ async def settings_remove_sector(
     return RedirectResponse(url="/configuracoes?tab=usuarios&subtab=setores", status_code=303)
 
 
+@router.post("/configuracoes/atendimentos/finalizar-fila")
+async def settings_finalize_attendance_queue(
+    request: Request,
+    line: str = Form(""),
+    tab: str = Form("atendimentos"),
+):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+    if not is_admin(request):
+        request.session["settings_finalize_queue_error"] = (
+            "Apenas o administrador pode finalizar a fila."
+        )
+        return RedirectResponse(url="/configuracoes?tab=atendimentos", status_code=303)
+    from app.services import attendances as attendances_service
+
+    try:
+        wanted = normalize_text(line)
+        if wanted.lower() in ("", "todos", "all"):
+            wanted = ""
+        result = attendances_service.finalize_all_open_conversations(
+            evolution_instance=wanted
+        )
+        finalized = int(result.get("finalized") or 0)
+        cleared = int(result.get("cleared_unread") or 0)
+        request.session["settings_finalize_queue_success"] = (
+            f"Fila reiniciada: {finalized} finalizada(s), {cleared} não lida(s) zerada(s)."
+        )
+    except Exception as error:
+        request.session["settings_finalize_queue_error"] = (
+            f"Não consegui finalizar a fila: {error}"
+        )
+    return RedirectResponse(url="/configuracoes?tab=atendimentos", status_code=303)
+
+
+@router.post("/configuracoes/restaurar-telefones-envio-whatsapp")
+async def settings_restore_whatsapp_send_phones(request: Request):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+    if not is_admin(request):
+        return JSONResponse({"ok": False, "error": "Apenas o administrador pode executar."}, status_code=403)
+    from app.services.crm_phone_cleanup import restore_evolution_send_phones
+
+    try:
+        result = restore_evolution_send_phones(apply=True)
+        return JSONResponse({"ok": True, **result})
+    except Exception as error:
+        return JSONResponse({"ok": False, "error": str(error)}, status_code=500)
+
+
+@router.post("/configuracoes/limpeza-whatsapp-cadastros")
+async def settings_cleanup_whatsapp_cadastros(request: Request):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+    if not is_admin(request):
+        return JSONResponse({"ok": False, "error": "Apenas o administrador pode executar."}, status_code=403)
+    from app.services.crm_phone_cleanup import cleanup_evolution_phones_and_duplicates
+
+    try:
+        result = cleanup_evolution_phones_and_duplicates(apply=True)
+        return JSONResponse({"ok": True, **result})
+    except Exception as error:
+        return JSONResponse({"ok": False, "error": str(error)}, status_code=500)
+
+
 @router.post("/configuracoes/tags/adicionar")
 async def settings_add_tag(
     request: Request,
     tag_name: str = Form(...),
+    tag_color: str = Form("verde"),
     tab: str = Form("atendimentos"),
 ):
     redirect = require_auth(request)
@@ -482,12 +581,38 @@ async def settings_add_tag(
     from app.services.attendance_tags import add_attendance_tag
 
     try:
-        add_attendance_tag(tag_name)
+        add_attendance_tag(tag_name, color=tag_color)
         request.session["settings_tag_success"] = "Tag cadastrada com sucesso."
     except ValueError as error:
         request.session["settings_tag_error"] = str(error)
     except Exception as error:
         request.session["settings_tag_error"] = f"Não consegui cadastrar a tag: {error}"
+    return RedirectResponse(url="/configuracoes?tab=atendimentos", status_code=303)
+
+
+@router.post("/configuracoes/tags/editar")
+async def settings_edit_tag(
+    request: Request,
+    tag_name: str = Form(...),
+    new_name: str = Form(...),
+    tag_color: str = Form("verde"),
+    tab: str = Form("atendimentos"),
+):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+    if not is_admin(request):
+        request.session["settings_tag_error"] = "Apenas o administrador pode editar tags."
+        return RedirectResponse(url="/configuracoes?tab=atendimentos", status_code=303)
+    from app.services.attendance_tags import update_attendance_tag
+
+    try:
+        update_attendance_tag(tag_name, new_name=new_name, color=tag_color)
+        request.session["settings_tag_success"] = "Tag atualizada."
+    except ValueError as error:
+        request.session["settings_tag_error"] = str(error)
+    except Exception as error:
+        request.session["settings_tag_error"] = f"Não consegui editar a tag: {error}"
     return RedirectResponse(url="/configuracoes?tab=atendimentos", status_code=303)
 
 
@@ -796,5 +921,90 @@ async def settings_sync_sheet(request: Request, apply: str = Form("0"), limit: s
         )
     except Exception as error:
         request.session["settings_sheet_sync_error"] = f"Não consegui sincronizar a planilha: {error}"
+
+    return RedirectResponse(url="/configuracoes?tab=integracoes", status_code=303)
+
+
+@router.post("/configuracoes/crm/migrar-postgres")
+async def settings_migrate_crm_postgres(request: Request):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+
+    if not is_admin(request):
+        request.session["settings_crm_migrate_error"] = (
+            "Somente administradores podem migrar o CRM para o Postgres."
+        )
+        return RedirectResponse(url="/configuracoes?tab=integracoes", status_code=303)
+
+    try:
+        from app.services.crm_db_migrate import migrate_crm_to_postgres_if_needed
+        from app.services.crm_registrations_storage import (
+            count_registrations,
+            is_crm_postgres_ready,
+        )
+
+        result = migrate_crm_to_postgres_if_needed(force=True, sheet_force_refresh=True)
+        reason = normalize_text((result or {}).get("reason"))
+        regs = (result or {}).get("registrations") or {}
+        imported = int(regs.get("imported") or 0)
+        ready = bool(is_crm_postgres_ready())
+        total = int(count_registrations() or 0) if ready else 0
+
+        if ready:
+            request.session["settings_crm_migrate_success"] = (
+                f"CRM no Postgres ativo ({reason or 'ok'}). "
+                f"Importados agora: {imported}. Total de cadastros: {total}."
+            )
+        elif reason == "waiting_for_sheet_data":
+            request.session["settings_crm_migrate_error"] = (
+                "A Folha1 veio vazia (cache frio ou cota Google). "
+                "Aguarde 1–2 minutos e tente de novo."
+            )
+        else:
+            request.session["settings_crm_migrate_error"] = (
+                f"Migração não concluiu (motivo: {reason or 'desconhecido'})."
+            )
+    except Exception as error:
+        request.session["settings_crm_migrate_error"] = (
+            f"Não consegui migrar o CRM para o Postgres: {error}"
+        )
+
+    return RedirectResponse(url="/configuracoes?tab=integracoes", status_code=303)
+
+
+@router.post("/configuracoes/crm/reset-folha1")
+async def settings_reset_crm_folha1(request: Request):
+    """Apaga cadastros/atividades no Postgres e reimporta só da Folha1."""
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+
+    if not is_admin(request):
+        request.session["settings_crm_migrate_error"] = (
+            "Somente administradores podem resetar o CRM a partir da Folha1."
+        )
+        return RedirectResponse(url="/configuracoes?tab=integracoes", status_code=303)
+
+    try:
+        from app.services.crm_db_migrate import reset_and_reimport_crm_from_folha1
+        from app.services.crm_registrations_storage import count_registrations
+
+        result = reset_and_reimport_crm_from_folha1(dry_run=False)
+        if result.get("ok"):
+            total = int(count_registrations() or 0)
+            request.session["settings_crm_migrate_success"] = (
+                f"CRM resetado pela Folha1: apaguei {result.get('deleted_registrations') or 0} "
+                f"cadastros e {result.get('deleted_activities') or 0} atividades; "
+                f"reimportei {result.get('imported') or 0}. Total agora: {total}."
+            )
+        else:
+            request.session["settings_crm_migrate_error"] = (
+                f"Reset Folha1 não concluiu (motivo: {result.get('reason') or 'desconhecido'})."
+            )
+    except Exception as error:
+        request.session["settings_crm_migrate_error"] = (
+            f"Não consegui resetar o CRM pela Folha1: {error}"
+        )
 
     return RedirectResponse(url="/configuracoes?tab=integracoes", status_code=303)
