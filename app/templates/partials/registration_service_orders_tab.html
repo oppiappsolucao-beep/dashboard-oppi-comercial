@@ -40,6 +40,10 @@
           {% endfor %}
         </select>
       </div>
+      <div class="form-group">
+        <label for="os-day">Dia <span class="req">*</span></label>
+        <input id="os-day" name="scheduled_date" type="date" form="os-create-form" required value="{{ today_iso }}">
+      </div>
       <div class="form-group full">
         <label for="os-description">Descrição</label>
         <textarea id="os-description" name="description" form="os-create-form" rows="3" maxlength="2000" placeholder="Descreva o que precisa ser feito nesta ordem de serviço."></textarea>
@@ -91,7 +95,7 @@
           <div class="service-order-protocol">{{ order.protocol }}</div>
           <div class="registration-activity-title">{{ order.subject }}</div>
           <div class="registration-activity-meta">
-            {% if order.sector %}{{ order.sector }} · {% endif %}{{ order.responsible }} · {{ order.priority }} · {{ order.created_at_label }}
+            {% if order.sector %}{{ order.sector }} · {% endif %}{{ order.scheduled_date_label }} · {{ order.responsible }} · {{ order.priority }}
           </div>
         </div>
         <span class="registration-activity-status status-{{ order.status_class }}">{{ order.status_label }}</span>

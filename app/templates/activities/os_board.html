@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block content %}
+<link rel="stylesheet" href="/static/css/activities.css?v={{ static_version }}">
+<style>
+.os-queue-form, .os-sector-switch { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
+.os-queue-form input, .os-sector-switch select { height: 40px; border: 1px solid var(--border); border-radius: 10px; padding: 0 10px; }
+.activities-kanban-card .btn { margin-top: 8px; }
+</style>
+<div class="page-header">
+  <div>
+    <div class="page-title">Kanban</div>
+    <div class="page-subtitle">
+      {% if sector_name %}
+      {{ sector_name }}: as ordens entram em Análise. Arraste para a direita nas filas do setor.
+      {% else %}
+      Escolha o setor para ver as ordens de serviço.
+      {% endif %}
+    </div>
+  </div>
+  {% if can_manage_queues and sector_id %}
+  <div class="page-actions">
+    <form method="post" action="/atividades/filas" class="os-queue-form">
+      <input type="hidden" name="sector_id" value="{{ sector_id }}">
+      <input type="text" name="queue_name" maxlength="40" placeholder="Nova fila" required aria-label="Nome da nova fila">
+      <button type="submit" class="btn">＋ Fila</button>
+    </form>
+  </div>
+  {% endif %}
+</div>
+
+{% if error %}<div class="alert-error">{{ error }}</div>{% endif %}
+{% if success %}<div class="alert-success">{{ success }}</div>{% endif %}
+
+{% if is_admin and sectors %}
+<form method="get" action="/atividades" class="os-sector-switch">
+  <label for="os-board-sector">Setor</label>
+  <select id="os-board-sector" name="setor" onchange="this.form.requestSubmit()">
+    {% for sector in sectors %}
+    <option value="{{ sector.id }}" {% if sector.id == sector_id %}selected{% endif %}>{{ sector.name }}</option>
+    {% endfor %}
+  </select>
+</form>
+{% endif %}
+
+<div class="activities-kanban-board" id="os-kanban-board">
+  {% for column in columns %}
+  <section class="activities-kanban-column">
+    <header class="activities-kanban-column-header">
+      <div class="activities-kanban-column-heading">
+        <span class="activities-kanban-column-title">{{ column.name }}</span>
+      </div>
+      <span class="activities-kanban-column-count" data-kanban-count>{{ column.cards|length }}</span>
+    </header>
+    <div class="activities-kanban-column-body" data-drop-queue="{{ column.id }}">
+      {% for card in column.cards %}
+      <article class="activities-kanban-card" draggable="true" data-order-id="{{ card.id }}" data-current-queue="{{ column.id }}">
+        <span class="activities-kanban-card-grip" aria-hidden="true">⋮⋮</span>
+        <div class="activities-kanban-card-title">{{ card.empresa }}</div>
+        <div class="activities-kanban-card-action">{{ card.subject }}</div>
+        <div class="activities-kanban-card-meta">
+          <span>{{ card.protocol }}</span>
+          <span>{{ card.responsible }}</span>
+        </div>
+        <div class="activities-kanban-card-when">
+          <span aria-hidden="true">📅</span>
+          <span>{{ card.scheduled_date_label }}</span>
+        </div>
+        {% if card.sheet_row %}
+        <a class="btn btn-small btn-secondary" href="/cadastro/todos/{{ card.sheet_row }}/editar?tab=ordens&from=activities">Abrir cliente</a>
+        {% endif %}
+      </article>
+      {% else %}
+      <div class="activities-kanban-empty">Nenhuma ordem</div>
+      {% endfor %}
+    </div>
+  </section>
+  {% endfor %}
+</div>
+<script src="/static/js/os-kanban.js?v=1"></script>
+{% endblock %}

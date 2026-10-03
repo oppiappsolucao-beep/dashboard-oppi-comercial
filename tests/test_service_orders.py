@@ -26,6 +26,7 @@ def test_protocolo_e_gerado_e_nao_repete(isolated_storage):
         subject="Implantação do ponto",
         description="Primeiro acesso da equipe",
         sector="Suporte",
+        scheduled_date="2026-10-03",
         responsible="Ana",
         priority="Alta",
         created_by="Ana",
@@ -36,6 +37,7 @@ def test_protocolo_e_gerado_e_nao_repete(isolated_storage):
         empresa="Marmoraria Alfa",
         subject="Ajuste de acesso",
         sector="Suporte",
+        scheduled_date="2026-10-04",
         responsible="Ana",
         created_by="Ana",
     )
@@ -62,5 +64,6 @@ def test_assunto_obrigatorio(isolated_storage):
             empresa="Beta",
             subject="   ",
             sector="Suporte",
+            scheduled_date="2026-10-03",
             responsible="Ana",
         )

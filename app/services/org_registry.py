@@ -291,6 +291,91 @@ def remove_person(person_id: str) -> None:
         )
 
 
+def authenticate_employee(username: str, password: str) -> dict | None:
+    """Login de funcionário. Representante fica cadastrado, mas ainda não entra no sistema."""
+    clean_username = normalize_text(username).lower()
+    clean_password = str(password or "")
+    if not clean_username or not clean_password:
+        return None
+    init_crm_local_db()
+    with _lock, _connect() as conn:
+        row = conn.execute(
+            """
+            SELECT people.*, sectors.name AS sector_name, sectors.accesses_json
+            FROM org_people AS people
+            LEFT JOIN org_sectors AS sectors ON sectors.id = people.sector_id AND sectors.active = 1
+            WHERE lower(people.username) = ? AND people.active = 1 AND people.kind = 'funcionario'
+            """,
+            (clean_username,),
+        ).fetchone()
+    if row is None:
+        return None
+    stored = row["password_hash"] or ""
+    try:
+        valid = bool(stored) and bcrypt.checkpw(clean_password.encode("utf-8"), stored.encode("utf-8"))
+    except ValueError:
+        valid = False
+    if not valid:
+        return None
+    accesses = _loads(row["accesses_json"] or "[]")
+    return {
+        "id": row["id"],
+        "name": row["name"],
+        "username": row["username"],
+        "sector_id": row["sector_id"] or "",
+        "sector_name": row["sector_name"] or "",
+        "accesses": accesses,
+    }
+
+
+def list_sector_queues(sector_id: str) -> list[dict]:
+    init_crm_local_db()
+    with _lock, _connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, name, position
+            FROM org_queues
+            WHERE sector_id = ? AND active = 1
+            ORDER BY position, name COLLATE NOCASE
+            """,
+            (normalize_text(sector_id),),
+        ).fetchall()
+    return [{"id": row["id"], "name": row["name"], "position": row["position"]} for row in rows]
+
+
+def add_sector_queue(sector_id: str, name: str) -> dict:
+    clean_name = normalize_text(name)
+    if len(clean_name) < 2:
+        raise ValueError("Informe o nome da fila.")
+    if len(clean_name) > 40:
+        raise ValueError("O nome da fila pode ter no máximo 40 caracteres.")
+    if clean_name.lower() == "análise" or clean_name.lower() == "analise":
+        raise ValueError("A primeira coluna já é Análise.")
+    init_crm_local_db()
+    stamp = _now()
+    queue_id = f"fila_{uuid.uuid4().hex[:12]}"
+    with _lock, _connect() as conn:
+        sector = conn.execute(
+            "SELECT id FROM org_sectors WHERE id = ? AND active = 1",
+            (normalize_text(sector_id),),
+        ).fetchone()
+        if sector is None:
+            raise ValueError("Setor não encontrado.")
+        last = conn.execute(
+            "SELECT COALESCE(MAX(position), 0) AS last_pos FROM org_queues WHERE sector_id = ? AND active = 1",
+            (sector["id"],),
+        ).fetchone()
+        position = int(last["last_pos"] or 0) + 1
+        conn.execute(
+            """
+            INSERT INTO org_queues (id, sector_id, name, position, active, created_at)
+            VALUES (?, ?, ?, ?, 1, ?)
+            """,
+            (queue_id, sector["id"], clean_name, position, stamp),
+        )
+    return {"id": queue_id, "name": clean_name, "position": position}
+
+
 def validate_service_assignment(sector_name: str, responsible_name: str) -> tuple[str, str]:
     sector = normalize_text(sector_name)
     responsible = normalize_text(responsible_name)

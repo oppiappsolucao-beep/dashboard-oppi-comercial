@@ -31,6 +31,11 @@ async def login_submit(
         request.session["authenticated"] = True
         request.session["username"] = username.strip()
         request.session["auth_error"] = ""
+        request.session.pop("org_person_id", None)
+        request.session.pop("org_person_name", None)
+        request.session.pop("org_sector_id", None)
+        request.session.pop("org_sector_name", None)
+        request.session.pop("org_accesses", None)
 
         from app.services.account_users import (
             get_account_user_by_username,
@@ -48,8 +53,35 @@ async def login_submit(
 
         return RedirectResponse(url="/gestao", status_code=303)
 
+    from app.services.access_scope import home_url
+    from app.services.org_registry import authenticate_employee
+
+    employee = authenticate_employee(username, password)
+    if employee:
+        request.session["authenticated"] = True
+        request.session["username"] = employee["username"]
+        request.session["user_id"] = employee["id"]
+        request.session["user_role"] = "Funcionário"
+        request.session["org_person_id"] = employee["id"]
+        request.session["org_person_name"] = employee["name"]
+        request.session["org_sector_id"] = employee["sector_id"]
+        request.session["org_sector_name"] = employee["sector_name"]
+        request.session["org_accesses"] = employee["accesses"]
+        request.session["auth_error"] = ""
+        return RedirectResponse(url=home_url(request), status_code=303)
+
     request.session["auth_error"] = "Usuário ou senha inválidos."
     return RedirectResponse(url="/login", status_code=303)
+
+
+@router.get("/sem-acesso", response_class=HTMLResponse)
+async def no_access_page(request: Request):
+    from app.dependencies import require_auth
+
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+    return render(request, "no_access.html", {"active_page": ""})
 
 
 @router.post("/logout")

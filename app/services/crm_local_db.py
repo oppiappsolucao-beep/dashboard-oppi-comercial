@@ -132,6 +132,8 @@ def init_crm_local_db() -> None:
                     status TEXT NOT NULL DEFAULT 'aberta',
                     priority TEXT NOT NULL DEFAULT '',
                     sector TEXT NOT NULL DEFAULT '',
+                    scheduled_date TEXT NOT NULL DEFAULT '',
+                    queue_id TEXT NOT NULL DEFAULT 'analise',
                     responsible TEXT NOT NULL DEFAULT '',
                     created_by TEXT NOT NULL DEFAULT '',
                     created_at TEXT NOT NULL,
@@ -172,6 +174,17 @@ def init_crm_local_db() -> None:
                 );
                 CREATE INDEX IF NOT EXISTS idx_org_people_sector
                     ON org_people(kind, sector_id);
+
+                CREATE TABLE IF NOT EXISTS org_queues (
+                    id TEXT PRIMARY KEY,
+                    sector_id TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    position INTEGER NOT NULL DEFAULT 1,
+                    active INTEGER NOT NULL DEFAULT 1,
+                    created_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_org_queues_sector
+                    ON org_queues(sector_id, position);
                 """
             )
             # Migrações leves (idempotentes)
@@ -190,6 +203,14 @@ def init_crm_local_db() -> None:
             if order_cols and "sector" not in order_cols:
                 conn.execute(
                     "ALTER TABLE service_orders ADD COLUMN sector TEXT NOT NULL DEFAULT ''"
+                )
+            if order_cols and "scheduled_date" not in order_cols:
+                conn.execute(
+                    "ALTER TABLE service_orders ADD COLUMN scheduled_date TEXT NOT NULL DEFAULT ''"
+                )
+            if order_cols and "queue_id" not in order_cols:
+                conn.execute(
+                    "ALTER TABLE service_orders ADD COLUMN queue_id TEXT NOT NULL DEFAULT 'analise'"
                 )
             people_cols = {
                 row[1]
