@@ -9,7 +9,16 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Stre
 from app.dependencies import get_prepared_data, require_auth
 from app.services.filters import apply_dashboard_filters, apply_last_days_period_filters, get_filter_options, parse_dashboard_filters
 from app.services.lead_actions_storage import DEFAULT_TENANT_ID
-from app.services.leads import ETAPA_STAGES, atualizar_proxima_acao_lead, apply_leads_view, build_leads_export_rows, build_leads_kpi_cards, build_leads_table
+from app.services.leads import (
+    COMPANY_ALPHABET,
+    ETAPA_STAGES,
+    apply_leads_view,
+    atualizar_proxima_acao_lead,
+    build_company_alphabet,
+    build_leads_export_rows,
+    build_leads_kpi_cards,
+    build_leads_table,
+)
 from app.services.legacy_core import invalidate_sheet_cache, normalize_text
 from app.templating import render
 
@@ -24,6 +33,9 @@ def _parse_leads_params(request: Request, form: dict | None = None) -> dict:
     tab = data.get("tab", "empresas")
     stage = data.get("stage", "Todas as etapas")
     sort = data.get("sort", "recent")
+    letter = normalize_text(data.get("letter") or "A").upper()[:1] or "A"
+    if letter not in COMPANY_ALPHABET and letter != "#":
+        letter = "A"
     try:
         page = int(data.get("page", 1))
     except (TypeError, ValueError):
@@ -37,6 +49,7 @@ def _parse_leads_params(request: Request, form: dict | None = None) -> dict:
         "tab": "empresas",
         "stage": stage,
         "sort": sort if sort in ("recent", "name") else "recent",
+        "letter": letter,
         "page": max(1, page),
         "per_page": per_page if per_page in (10, 25, 50) else 50,
     }
@@ -66,6 +79,7 @@ def _leads_context(request: Request, filters, leads_params: dict):
         tenant_id=DEFAULT_TENANT_ID,
         columns=columns,
     )
+    searching = bool(normalize_text(filters.search))
     table = build_leads_table(
         filtered_df,
         columns,
@@ -75,7 +89,20 @@ def _leads_context(request: Request, filters, leads_params: dict):
         page=leads_params["page"],
         per_page=leads_params["per_page"],
         tenant_id=DEFAULT_TENANT_ID,
+        letter=leads_params["letter"],
+        apply_letter=not searching,
     )
+    if searching:
+        base_df = apply_dashboard_filters(df, columns, replace(filters, search=""))
+        base_view = apply_leads_view(
+            base_df,
+            tab=leads_params["tab"],
+            stage=leads_params["stage"],
+            sort=leads_params["sort"],
+            tenant_id=DEFAULT_TENANT_ID,
+            columns=columns,
+        )
+        table["alphabet"] = build_company_alphabet(base_view)
 
     return {
         "active_page": "leads",
@@ -111,6 +138,7 @@ async def leads_filters(
     tab: str = Form("leads"),
     stage: str = Form("Todas as etapas"),
     sort: str = Form("recent"),
+    letter: str = Form("A"),
     page: int = Form(1),
     per_page: int = Form(10),
 ):
@@ -131,6 +159,7 @@ async def leads_filters(
         "tab": tab,
         "stage": stage,
         "sort": sort,
+        "letter": letter,
         "page": page,
         "per_page": per_page,
     })
@@ -174,6 +203,8 @@ async def leads_export(request: Request):
         stage=leads_params["stage"],
         sort=leads_params["sort"],
         tenant_id=DEFAULT_TENANT_ID,
+        letter=leads_params["letter"],
+        apply_letter=not bool(normalize_text(filters.search)),
     )
 
     buffer = io.StringIO()

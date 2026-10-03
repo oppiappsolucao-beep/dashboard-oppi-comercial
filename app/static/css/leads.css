@@ -173,6 +173,44 @@
   border-radius: var(--radius);
 }
 
+.leads-alphabet {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 14px 16px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.leads-alphabet-letter {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text);
+  font-weight: 800;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.leads-alphabet-letter.is-active {
+  background: var(--violet);
+  border-color: var(--violet);
+  color: #fff;
+}
+
+.leads-alphabet-letter:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.leads-alphabet-hint {
+  margin: 0;
+  padding: 8px 16px 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
 .leads-table {
   margin: 0;
   width: 100%;
@@ -580,5 +618,19 @@ a.table-company-link:hover {
   .leads-table-card {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
+  }
+
+  .leads-alphabet {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 14px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .leads-alphabet-letter {
+    flex: 0 0 40px;
+    width: 40px;
+    height: 40px;
+    font-size: 0.95rem;
   }
 }

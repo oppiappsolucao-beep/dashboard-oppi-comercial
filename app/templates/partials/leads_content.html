@@ -5,6 +5,7 @@
 >
   <input type="hidden" name="tab" value="empresas" id="leads-tab-input">
   <input type="hidden" name="page" value="{{ table.page }}" id="leads-page-input">
+  <input type="hidden" name="letter" value="{{ leads_params.letter }}" id="leads-letter-input">
 
   <div class="metric-grid metric-grid-leads">
     {% for card in kpi_cards %}
@@ -87,6 +88,20 @@
   </div>
 
   <div class="panel-card panel leads-table-card">
+    <nav class="leads-alphabet" aria-label="Empresas por letra">
+      {% for item in table.alphabet %}
+      <button type="button"
+        class="leads-alphabet-letter {% if not filters.search and item.letter == leads_params.letter %}is-active{% endif %}"
+        {% if not item.count %}disabled{% endif %}
+        aria-pressed="{{ 'true' if not filters.search and item.letter == leads_params.letter else 'false' }}"
+        onclick="document.getElementById('leads-letter-input').value='{{ item.letter }}'; document.getElementById('leads-page-input').value='1'; var search=document.querySelector('#leads-filters input[name=search]'); if(search){search.value='';} document.getElementById('leads-filters').requestSubmit();">
+        {{ item.letter }}
+      </button>
+      {% endfor %}
+    </nav>
+    {% if filters.search %}
+    <p class="leads-alphabet-hint">Busca em todas as letras. Toque numa letra para voltar ao alfabeto.</p>
+    {% endif %}
     {% if table.rows %}
     <table class="data-table leads-table">
       <thead>
@@ -203,7 +218,11 @@
     </div>
     {% else %}
     <div class="empty-note leads-empty">
-      Nenhuma empresa encontrada com os filtros atuais.
+      {% if filters.search %}
+      Nenhuma empresa encontrada para essa busca.
+      {% else %}
+      Nenhuma empresa na letra {{ leads_params.letter }}.
+      {% endif %}
     </div>
     {% endif %}
   </div>
