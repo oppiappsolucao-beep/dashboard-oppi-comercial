@@ -142,7 +142,11 @@ def _os_board_context(request: Request) -> dict:
     inicio = normalize_text(request.query_params.get("inicio"))
     fim = normalize_text(request.query_params.get("fim"))
     summary = build_kanban_summary(sector_name, inicio, fim)
-    columns = build_sector_board(sector_id, sector_name) if sector_id else []
+    columns = (
+        build_sector_board(sector_id, sector_name, summary["inicio"], summary["fim"])
+        if sector_id
+        else []
+    )
     return {
         "active_page": "activities",
         "is_admin": not employee,
@@ -173,6 +177,8 @@ async def activities_add_queue(
     request: Request,
     sector_id: str = Form(""),
     queue_name: str = Form(""),
+    inicio: str = Form(""),
+    fim: str = Form(""),
 ):
     redirect = require_auth(request)
     if redirect:
@@ -183,15 +189,81 @@ async def activities_add_queue(
     target = employee_sector or normalize_text(sector_id)
     if employee_sector and normalize_text(sector_id) not in {"", employee_sector}:
         request.session["os_board_error"] = "Você só cria filas do seu setor."
-        return RedirectResponse(url="/atividades", status_code=303)
+        return _board_redirect(employee_sector, True, inicio, fim)
     try:
         add_sector_queue(target, queue_name)
     except ValueError as error:
         request.session["os_board_error"] = str(error)
     else:
-        request.session["os_board_success"] = "Fila criada à direita de Análise."
-    query = f"?setor={target}" if not employee_sector and target else ""
+        request.session["os_board_success"] = "Fila criada."
+    return _board_redirect(target, bool(employee_sector), inicio, fim)
+
+
+def _board_redirect(sector_id: str, employee: bool, inicio: str = "", fim: str = ""):
+    from urllib.parse import urlencode
+
+    params = {}
+    if not employee and sector_id:
+        params["setor"] = sector_id
+    if normalize_text(inicio):
+        params["inicio"] = normalize_text(inicio)
+    if normalize_text(fim):
+        params["fim"] = normalize_text(fim)
+    query = f"?{urlencode(params)}" if params else ""
     return RedirectResponse(url=f"/atividades{query}", status_code=303)
+
+
+@router.post("/atividades/filas/{queue_id}/mover")
+async def activities_move_queue(
+    request: Request,
+    queue_id: str,
+    sector_id: str = Form(""),
+    direction: str = Form("direita"),
+    inicio: str = Form(""),
+    fim: str = Form(""),
+):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+    from app.services.org_registry import move_sector_queue
+
+    employee_sector = normalize_text(request.session.get("org_sector_id"))
+    target = employee_sector or normalize_text(sector_id)
+    if employee_sector and normalize_text(sector_id) not in {"", employee_sector}:
+        request.session["os_board_error"] = "Você só organiza as colunas do seu setor."
+        return _board_redirect(employee_sector, True, inicio, fim)
+    try:
+        move_sector_queue(target, queue_id, direction)
+    except ValueError as error:
+        request.session["os_board_error"] = str(error)
+    return _board_redirect(target, bool(employee_sector), inicio, fim)
+
+
+@router.post("/atividades/filas/{queue_id}/remover")
+async def activities_remove_queue(
+    request: Request,
+    queue_id: str,
+    sector_id: str = Form(""),
+    inicio: str = Form(""),
+    fim: str = Form(""),
+):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+    from app.services.org_registry import remove_sector_queue
+
+    employee_sector = normalize_text(request.session.get("org_sector_id"))
+    target = employee_sector or normalize_text(sector_id)
+    if employee_sector and normalize_text(sector_id) not in {"", employee_sector}:
+        request.session["os_board_error"] = "Você só exclui colunas do seu setor."
+        return _board_redirect(employee_sector, True, inicio, fim)
+    try:
+        name = remove_sector_queue(target, queue_id)
+    except ValueError as error:
+        request.session["os_board_error"] = str(error)
+    else:
+        request.session["os_board_success"] = f"Coluna {name} excluída. As ordens dela voltaram para Análise."
+    return _board_redirect(target, bool(employee_sector), inicio, fim)
 
 
 @router.post("/atividades/os/{order_id}/fila")

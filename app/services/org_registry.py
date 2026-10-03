@@ -467,6 +467,64 @@ def add_sector_queue(sector_id: str, name: str) -> dict:
     return {"id": queue_id, "name": clean_name, "position": position}
 
 
+def move_sector_queue(sector_id: str, queue_id: str, direction: str) -> None:
+    step = -1 if normalize_text(direction).lower() in {"esquerda", "left", "-1"} else 1
+    init_crm_local_db()
+    with _lock, _connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, position
+            FROM org_queues
+            WHERE sector_id = ? AND active = 1
+            ORDER BY position, name COLLATE NOCASE
+            """,
+            (normalize_text(sector_id),),
+        ).fetchall()
+        ordered = [row["id"] for row in rows]
+        if queue_id not in ordered:
+            raise ValueError("Coluna não encontrada.")
+        index = ordered.index(queue_id)
+        target = index + step
+        if target < 0 or target >= len(ordered):
+            return
+        ordered[index], ordered[target] = ordered[target], ordered[index]
+        for position, item_id in enumerate(ordered, start=1):
+            conn.execute(
+                "UPDATE org_queues SET position = ? WHERE id = ?",
+                (position, item_id),
+            )
+
+
+def remove_sector_queue(sector_id: str, queue_id: str) -> str:
+    init_crm_local_db()
+    with _lock, _connect() as conn:
+        sector = conn.execute(
+            "SELECT id, name FROM org_sectors WHERE id = ? AND active = 1",
+            (normalize_text(sector_id),),
+        ).fetchone()
+        if sector is None:
+            raise ValueError("Setor não encontrado.")
+        column = conn.execute(
+            "SELECT id, name FROM org_queues WHERE id = ? AND sector_id = ? AND active = 1",
+            (normalize_text(queue_id), sector["id"]),
+        ).fetchone()
+        if column is None:
+            raise ValueError("Coluna não encontrada.")
+        conn.execute(
+            "UPDATE org_queues SET active = 0 WHERE id = ?",
+            (column["id"],),
+        )
+        conn.execute(
+            """
+            UPDATE service_orders
+            SET queue_id = 'analise', updated_at = ?
+            WHERE queue_id = ? AND lower(sector) = lower(?)
+            """,
+            (_now(), column["id"], sector["name"]),
+        )
+    return column["name"]
+
+
 def validate_service_assignment(sector_name: str, responsible_name: str) -> tuple[str, str]:
     sector = normalize_text(sector_name)
     responsible = normalize_text(responsible_name)

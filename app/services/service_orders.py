@@ -320,9 +320,24 @@ def is_commercial_sector(sector_name: str) -> bool:
     return "comercial" in name
 
 
-def build_sector_board(sector_id: str, sector_name: str) -> list[dict]:
+def _campaign_visible(card: dict, start: str, end: str) -> bool:
+    """A coluna Campanha segue a data do lead, não o dia em que o card foi importado."""
+    day = normalize_text(card.get("scheduled_date"))[:10]
+    if not day:
+        return True
+    return start <= day <= end
+
+
+def build_sector_board(sector_id: str, sector_name: str, inicio: str = "", fim: str = "") -> list[dict]:
     from app.services.campaign_leads import attach_campaign_cards, sync_campaign_leads
     from app.services.org_registry import list_sector_queues
+
+    period_start = ""
+    period_end = ""
+    if inicio or fim:
+        from app.services.kanban_summary import period_bounds
+
+        period_start, period_end = period_bounds(inicio, fim)
 
     if is_commercial_sector(sector_name):
         try:
@@ -346,6 +361,8 @@ def build_sector_board(sector_id: str, sector_name: str) -> list[dict]:
         queue_id = card.get("queue_id") or ENTRY_QUEUE_ID
         if queue_id not in known:
             queue_id = ENTRY_QUEUE_ID
+        if queue_id == CAMPAIGN_QUEUE_ID and period_start and not _campaign_visible(card, period_start, period_end):
+            continue
         buckets[queue_id]["cards"].append(card)
     return columns
 

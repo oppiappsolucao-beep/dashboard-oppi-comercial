@@ -52,7 +52,7 @@ def build_kanban_summary(sector_name: str, inicio: str, fim: str) -> dict:
         "leads": leads,
         "leads_note": leads_note,
         "andamento": andamento,
-        "andamento_note": "Ordens deste setor em aberto, criadas no período.",
+        "andamento_note": "Em aberto neste período. Na Campanha, conta a data do lead.",
         "concluidos": concluidos,
         "concluidos_note": "Ordens deste setor concluídas no período.",
     }
@@ -79,12 +79,21 @@ def _orders(sector_name: str, start: str, end: str) -> tuple[int, int]:
     andamento = 0
     concluidos = 0
     for card in list_orders_by_sector(sector_name):
-        created = _stamp_day(card.get("created_at") or "") or _stamp_day(card.get("scheduled_date") or "")
+        campaign = card.get("queue_id") == "campanha" or normalize_text(card.get("created_by")) == "Leads Raissa"
+        lead_day = _stamp_day(card.get("scheduled_date") or "")
+        created = _stamp_day(card.get("created_at") or "") or lead_day
         updated = _stamp_day(card.get("updated_at") or "") or created
+        if campaign:
+            in_period = (not lead_day) or (start <= lead_day <= end)
+        else:
+            in_period = start <= created <= end
         if card.get("queue_id") == DONE_QUEUE_ID or card.get("status") == "concluida":
-            if start <= updated <= end:
+            if campaign:
+                if in_period:
+                    concluidos += 1
+            elif start <= updated <= end:
                 concluidos += 1
             continue
-        if start <= created <= end:
+        if in_period:
             andamento += 1
     return andamento, concluidos

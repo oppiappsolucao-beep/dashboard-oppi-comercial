@@ -16,6 +16,9 @@
 .os-summary strong { display: block; margin-top: 8px; font-size: 1.8rem; letter-spacing: -0.03em; }
 .os-summary p { margin: 8px 0 0; color: var(--muted); line-height: 1.45; }
 .os-detail-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.os-column-tools { display: flex; gap: 4px; margin-top: 6px; }
+.os-column-tools form { margin: 0; }
+.os-column-tools button { min-height: 28px; padding: 0 8px; border-radius: 8px; font-size: 0.75rem; }
 @media (max-width: 900px) { .os-summary { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 640px) { .os-summary { grid-template-columns: 1fr; } }
 .os-modal[hidden] { display: none; }
@@ -53,6 +56,8 @@
   <div class="page-actions">
     <form method="post" action="/atividades/filas" class="os-queue-form">
       <input type="hidden" name="sector_id" value="{{ sector_id }}">
+      <input type="hidden" name="inicio" value="{{ inicio }}">
+      <input type="hidden" name="fim" value="{{ fim }}">
       <input type="text" name="queue_name" maxlength="40" placeholder="Nova fila" required aria-label="Nome da nova fila">
       <button type="submit" class="btn">＋ Fila</button>
     </form>
@@ -115,6 +120,30 @@
       </div>
       <span class="activities-kanban-column-count" data-kanban-count>{{ column.cards|length }}</span>
     </header>
+    {% if not column.fixed %}
+    <div class="os-column-tools">
+      <form method="post" action="/atividades/filas/{{ column.id }}/mover">
+        <input type="hidden" name="sector_id" value="{{ sector_id }}">
+        <input type="hidden" name="inicio" value="{{ inicio }}">
+        <input type="hidden" name="fim" value="{{ fim }}">
+        <input type="hidden" name="direction" value="esquerda">
+        <button type="submit" class="btn btn-secondary btn-small" aria-label="Mover {{ column.name }} para a esquerda">←</button>
+      </form>
+      <form method="post" action="/atividades/filas/{{ column.id }}/mover">
+        <input type="hidden" name="sector_id" value="{{ sector_id }}">
+        <input type="hidden" name="inicio" value="{{ inicio }}">
+        <input type="hidden" name="fim" value="{{ fim }}">
+        <input type="hidden" name="direction" value="direita">
+        <button type="submit" class="btn btn-secondary btn-small" aria-label="Mover {{ column.name }} para a direita">→</button>
+      </form>
+      <form method="post" action="/atividades/filas/{{ column.id }}/remover" onsubmit="return confirm('Excluir esta coluna? As ordens dela voltam para Análise.');">
+        <input type="hidden" name="sector_id" value="{{ sector_id }}">
+        <input type="hidden" name="inicio" value="{{ inicio }}">
+        <input type="hidden" name="fim" value="{{ fim }}">
+        <button type="submit" class="btn btn-secondary btn-small">Excluir</button>
+      </form>
+    </div>
+    {% endif %}
     <div class="activities-kanban-column-body" data-drop-queue="{{ column.id }}">
       {% for card in column.cards %}
       <article class="activities-kanban-card" draggable="true" data-order-id="{{ card.id }}" data-current-queue="{{ column.id }}" {% if card.cadastro_url %}data-cadastro-url="{{ card.cadastro_url }}"{% endif %}>
