@@ -195,6 +195,13 @@ async def startup_maintenance() -> None:
             ensure_default_sectors()
             ensure_default_attendance_tags()
             ensure_default_account_users()
+            try:
+                from app.services.registry_store import init_store
+
+                init_store()
+                log.info("Cadastros de setor, funcionário e OS prontos no banco persistente")
+            except Exception as registry_error:
+                log.error("Cadastros persistentes: %s", registry_error)
             migrate_info = migrate_attendance_from_sqlite_if_needed()
             log.info("Attendance DB migrate: %s", migrate_info)
             try:

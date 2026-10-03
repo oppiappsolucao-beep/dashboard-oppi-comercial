@@ -9,7 +9,8 @@ from zoneinfo import ZoneInfo
 from config.crm_options import PRIORITY_OPTIONS
 from config.settings import settings as runtime_settings
 
-from app.services.crm_local_db import DEFAULT_TENANT_ID, _connect, _lock, init_crm_local_db
+from app.services.crm_local_db import DEFAULT_TENANT_ID
+from app.services.registry_store import _lock, connect as _connect, init_store as init_crm_local_db
 from app.services.legacy_core import normalize_text
 
 SERVICE_ORDER_STATUS_LABELS = {

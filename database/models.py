@@ -615,3 +615,82 @@ class CrmMonthlyGoal(Base):
     amount = Column(Float, nullable=False, default=0)
     commission_rate = Column(Float, nullable=False, default=8.0)
     updated_at = Column(String(40), nullable=False, default="")
+
+
+class OrgSector(Base):
+    """Setor do Sistema (acessos do funcionário). Sobrevive ao redeploy."""
+
+    __tablename__ = "org_sectors"
+
+    id = Column(String(40), primary_key=True)
+    name = Column(String(80), unique=True, nullable=False)
+    accesses_json = Column(Text, nullable=False, default="[]")
+    active = Column(Integer, nullable=False, default=1)
+    created_at = Column(String(40), nullable=False, default="")
+    updated_at = Column(String(40), nullable=False, default="")
+
+
+class OrgPerson(Base):
+    """Funcionário ou representante nacional."""
+
+    __tablename__ = "org_people"
+
+    id = Column(String(40), primary_key=True)
+    kind = Column(String(30), nullable=False, default="")
+    name = Column(String(255), nullable=False, default="")
+    email = Column(String(255), nullable=False, default="")
+    phone = Column(String(40), nullable=False, default="")
+    sector_id = Column(String(40), nullable=False, default="")
+    region = Column(String(8), nullable=False, default="")
+    username = Column(String(80), nullable=False, default="")
+    password_hash = Column(String(255), nullable=False, default="")
+    state_name = Column(String(80), nullable=False, default="")
+    city = Column(String(120), nullable=False, default="")
+    active = Column(Integer, nullable=False, default=1)
+    created_at = Column(String(40), nullable=False, default="")
+    updated_at = Column(String(40), nullable=False, default="")
+
+
+class OrgQueue(Base):
+    """Fila extra do Kanban de um setor. Análise é fixa e não entra aqui."""
+
+    __tablename__ = "org_queues"
+
+    id = Column(String(40), primary_key=True)
+    sector_id = Column(String(40), nullable=False, index=True)
+    name = Column(String(40), nullable=False, default="")
+    position = Column(Integer, nullable=False, default=1)
+    active = Column(Integer, nullable=False, default=1)
+    created_at = Column(String(40), nullable=False, default="")
+
+
+class ServiceOrderRecord(Base):
+    """Ordem de serviço do cliente. O protocolo não volta atrás."""
+
+    __tablename__ = "service_orders"
+
+    id = Column(String(40), primary_key=True)
+    tenant_id = Column(String(80), nullable=False, default="default", index=True)
+    sheet_row = Column(Integer, nullable=False, index=True)
+    protocol = Column(String(32), unique=True, nullable=False)
+    empresa = Column(String(255), nullable=False, default="")
+    subject = Column(String(180), nullable=False, default="")
+    description = Column(Text, nullable=False, default="")
+    status = Column(String(30), nullable=False, default="aberta")
+    priority = Column(String(30), nullable=False, default="")
+    sector = Column(String(80), nullable=False, default="")
+    scheduled_date = Column(String(20), nullable=False, default="")
+    queue_id = Column(String(40), nullable=False, default="analise")
+    responsible = Column(String(255), nullable=False, default="")
+    created_by = Column(String(255), nullable=False, default="")
+    created_at = Column(String(40), nullable=False, default="")
+    updated_at = Column(String(40), nullable=False, default="")
+
+
+class ServiceOrderCounter(Base):
+    """Sequência anual do protocolo OS-AAAA-000001."""
+
+    __tablename__ = "service_order_counters"
+
+    year = Column(Integer, primary_key=True)
+    last_seq = Column(Integer, nullable=False, default=0)

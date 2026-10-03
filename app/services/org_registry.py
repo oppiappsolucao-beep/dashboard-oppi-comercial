@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo
 
 import bcrypt
 
-from app.services.crm_local_db import _connect, _lock, init_crm_local_db
+from app.services.registry_store import _lock, connect as _connect, init_store as init_crm_local_db
 from app.services.legacy_core import normalize_text
 
 ACCESS_OPTIONS = [
