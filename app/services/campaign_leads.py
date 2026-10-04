@@ -35,27 +35,56 @@ def _parse_day(value: str) -> str:
     text = normalize_text(value)
     if re.match(r"^\d{4}-\d{2}-\d{2}", text):
         return text[:10]
-    match = re.match(r"^(\d{1,2})/(\d{1,2})/(\d{2,4})", text)
-    if not match:
-        return ""
-    day, month, year = match.groups()
-    if len(year) == 2:
-        year = f"20{year}"
-    try:
-        return datetime(int(year), int(month), int(day)).date().isoformat()
-    except ValueError:
-        return ""
+    match = re.match(r"^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})", text)
+    if match:
+        day, month, year = match.groups()
+        if len(year) == 2:
+            year = f"20{year}"
+        try:
+            return datetime(int(year), int(month), int(day)).date().isoformat()
+        except ValueError:
+            return ""
+    if re.fullmatch(r"\d{5}", text):
+        serial = int(text)
+        if 30000 <= serial <= 65000:
+            from datetime import timedelta
+
+            return (datetime(1899, 12, 30) + timedelta(days=serial)).date().isoformat()
+    return ""
 
 
 def _pick_columns(headers: list[str]) -> dict[str, int]:
     found: dict[str, int] = {}
     normalized = [_plain(header) for header in headers]
     for key, aliases in _HEADER_ALIASES.items():
+        if key == "lead_date":
+            continue
         for index, header in enumerate(normalized):
             if header in aliases:
                 found[key] = index
                 break
+    for index, header in enumerate(normalized):
+        if header in _HEADER_ALIASES["lead_date"] or header.startswith("data"):
+            found["lead_date"] = index
+            break
     return found
+
+
+def _detect_date_column(headers: list[str], rows: list[list[str]]) -> int | None:
+    picked = _pick_columns(headers).get("lead_date")
+    if picked is not None:
+        return picked
+    best_index = None
+    best_score = 0
+    width = max((len(row) for row in rows[:40]), default=0)
+    for index in range(width):
+        score = sum(1 for row in rows[:40] if index < len(row) and _parse_day(row[index]))
+        if score > best_score:
+            best_score = score
+            best_index = index
+    if best_score >= 3:
+        return best_index
+    return None
 
 
 def _cell(row: list[str], index: int | None) -> str:
@@ -88,10 +117,12 @@ def read_raissa_leads() -> tuple[list[dict], str]:
         values = get_cached_worksheet_values(worksheet.title, worksheet.get_all_values)
         if not values or len(values) < 2:
             return [], ""
-        columns = _pick_columns([str(cell) for cell in values[0]])
+        header_row = [str(cell) for cell in values[0]]
+        body = [[str(cell) for cell in raw] for raw in values[1:]]
+        columns = _pick_columns(header_row)
+        columns["lead_date"] = _detect_date_column(header_row, body)
         leads = []
-        for offset, raw in enumerate(values[1:], start=2):
-            row = [str(cell) for cell in raw]
+        for offset, row in enumerate(body, start=2):
             empresa = _cell(row, columns.get("empresa"))
             phone = _cell(row, columns.get("phone"))
             if not empresa and not phone:
@@ -122,20 +153,23 @@ def count_raissa_leads(start: str, end: str) -> tuple[int, str]:
     total = 0
     for lead in leads:
         day = lead.get("lead_date") or ""
-        if day and not (start <= day <= end):
+        if not day or not (start <= day <= end):
             continue
         total += 1
     note = warning or "Leads da aba Leads Raissa neste período."
     return total, note
 
 
-def _existing_rows(conn) -> set[int]:
-    rows = conn.execute("SELECT sheet_row FROM campaign_leads").fetchall()
-    return {int(row["sheet_row"]) for row in rows}
+def _lead_key(phone: str, empresa: str) -> str:
+    digits = "".join(ch for ch in (phone or "") if ch.isdigit())
+    if len(digits) >= 8:
+        return f"tel:{digits[-11:]}"
+    name = normalize_text(empresa).lower()
+    return f"nome:{name}" if name and name != "lead de campanha" else ""
 
 
 def sync_campaign_leads(sector_name: str) -> int:
-    """Cria um card em Campanha para cada lead novo da aba. Não duplica."""
+    """Cria o card só quando o lead tem data. Atualiza a data dos que já existem."""
     from app.services.service_orders import create_campaign_card
 
     leads, _warning = read_raissa_leads()
@@ -144,9 +178,22 @@ def sync_campaign_leads(sector_name: str) -> int:
     init_store()
     created = 0
     with _lock, connect() as conn:
-        taken = _existing_rows(conn)
+        existing = conn.execute(
+            "SELECT id, sheet_row, order_id, phone, empresa, lead_date FROM campaign_leads"
+        ).fetchall()
+    by_row = {int(row["sheet_row"]): row for row in existing}
+    by_key = {}
+    for row in existing:
+        key = _lead_key(row["phone"] or "", row["empresa"] or "")
+        if key:
+            by_key[key] = row
     for lead in leads:
-        if int(lead["sheet_row"]) in taken:
+        if not lead["lead_date"]:
+            continue
+        key = _lead_key(lead["phone"], lead["empresa"])
+        current = by_row.get(int(lead["sheet_row"])) or (by_key.get(key) if key else None)
+        if current is not None:
+            _refresh_lead_date(current, lead)
             continue
         parts = [
             f"Campanha: {lead['campaign']}" if lead["campaign"] else "",
@@ -190,7 +237,33 @@ def sync_campaign_leads(sector_name: str) -> int:
                 ),
             )
         created += 1
+        by_row[int(lead["sheet_row"])] = {"order_id": order_id, "lead_date": lead["lead_date"]}
+        if key:
+            by_key[key] = by_row[int(lead["sheet_row"])]
     return created
+
+
+def _refresh_lead_date(current, lead: dict) -> None:
+    with _lock, connect() as conn:
+        if normalize_text(current["lead_date"]) != lead["lead_date"]:
+            conn.execute(
+                """
+                UPDATE campaign_leads
+                SET lead_date = ?, sheet_row = ?, phone = ?, empresa = ?
+                WHERE id = ?
+                """,
+                (
+                    lead["lead_date"],
+                    int(lead["sheet_row"]),
+                    lead["phone"],
+                    lead["empresa"],
+                    current["id"],
+                ),
+            )
+        conn.execute(
+            "UPDATE service_orders SET scheduled_date = ? WHERE id = ? AND scheduled_date != ?",
+            (lead["lead_date"], current["order_id"], lead["lead_date"]),
+        )
 
 
 def cadastro_url(link: dict) -> str:
@@ -228,6 +301,7 @@ def _link_view(row) -> dict:
         "campaign": row["campaign"] or "",
         "city": row["city"] or "",
         "uf": row["uf"] or "",
+        "lead_date": row["lead_date"] if "lead_date" in row.keys() else "",
     }
     link["cadastro_url"] = cadastro_url(link)
     return link
@@ -262,6 +336,7 @@ def campaign_card_extra(order_id: str) -> dict | None:
         "contact_name": link["contact_name"],
         "city": link["city"],
         "uf": link["uf"],
+        "lead_date": link.get("lead_date") or "",
     }
 
 
@@ -276,3 +351,5 @@ def attach_campaign_cards(cards: list[dict]) -> None:
         card["source"] = "campanha"
         card["cadastro_url"] = link["cadastro_url"]
         card["creative"] = link["creative"]
+        if link.get("lead_date"):
+            card["lead_date"] = link["lead_date"]

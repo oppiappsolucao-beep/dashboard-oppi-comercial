@@ -276,7 +276,7 @@ def create_campaign_card(
     now = _now()
     stamp = now.isoformat(timespec="seconds")
     order_id = f"os_{uuid.uuid4().hex[:12]}"
-    day = scheduled_date if re.match(r"^\d{4}-\d{2}-\d{2}$", scheduled_date or "") else now.date().isoformat()
+    day = scheduled_date if re.match(r"^\d{4}-\d{2}-\d{2}$", scheduled_date or "") else ""
     with _lock, _connect() as conn:
         protocol = _allocate_protocol(conn, now.year)
         conn.execute(
@@ -322,9 +322,9 @@ def is_commercial_sector(sector_name: str) -> bool:
 
 def _campaign_visible(card: dict, start: str, end: str) -> bool:
     """A coluna Campanha segue a data do lead, não o dia em que o card foi importado."""
-    day = normalize_text(card.get("scheduled_date"))[:10]
-    if not day:
-        return True
+    day = normalize_text(card.get("lead_date") or card.get("scheduled_date"))[:10]
+    if len(day) != 10:
+        return False
     return start <= day <= end
 
 
