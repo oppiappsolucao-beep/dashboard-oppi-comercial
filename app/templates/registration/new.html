@@ -19,8 +19,60 @@
     justify-content: center;
     text-align: center;
   }
+  .cadastro-closes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 12px; }
+  .cadastro-close-card { display: block; width: 100%; text-align: left; border: 1px solid var(--border); background: #fff; border-radius: 16px; padding: 16px; cursor: pointer; font: inherit; color: inherit; }
+  .cadastro-close-card.is-open { border-color: #7C3AED; background: #FCFAFF; }
+  .cadastro-close-card span { display: block; font-size: 0.78rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: #7C3AED; }
+  .cadastro-close-card strong { display: block; margin-top: 8px; font-size: 1.8rem; letter-spacing: -0.03em; }
+  .cadastro-close-card p { margin: 8px 0 0; color: var(--muted); line-height: 1.45; }
+  .cadastro-close-list { display: grid; gap: 10px; padding: 14px; margin-bottom: 14px; }
+  .cadastro-close-list[hidden] { display: none; }
+  .cadastro-close-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .cadastro-close-row:last-child { border-bottom: 0; padding-bottom: 0; }
+  .cadastro-close-row strong, .cadastro-close-row span { display: block; }
+  .cadastro-close-row span { color: var(--muted); font-size: 0.86rem; }
+  @media (max-width: 720px) { .cadastro-closes { grid-template-columns: 1fr; } .cadastro-close-row { flex-direction: column; align-items: flex-start; } }
 </style>
   {% if error %}<div class="alert-error">{{ error }}</div>{% endif %}
+
+  <section class="cadastro-closes" aria-label="Clientes concluídos pelo comercial">
+    <button type="button" class="cadastro-close-card" data-close-list="pending" aria-expanded="false" aria-controls="cadastro-close-pending">
+      <span>Concluídos no Kanban</span>
+      <strong>{{ registration_closes.pending_total }}</strong>
+      <p>Clientes que o comercial colocou em Concluída e ainda vão para o cadastro.</p>
+    </button>
+    <button type="button" class="cadastro-close-card" data-close-list="registered" aria-expanded="false" aria-controls="cadastro-close-registered">
+      <span>Fechados no mês</span>
+      <strong>{{ registration_closes.registered_total }}</strong>
+      <p>Leads que o comercial fechou em {{ registration_closes.month_label }} e já estão em Empresas.</p>
+    </button>
+  </section>
+  <div id="cadastro-close-pending" class="cadastro-close-list panel" hidden>
+    {% for item in registration_closes.pending %}
+    <div class="cadastro-close-row">
+      <div>
+        <strong>{{ item.empresa }}</strong>
+        <span>{{ item.phone }}{% if item.contact_name %} · {{ item.contact_name }}{% endif %}</span>
+      </div>
+      <a class="btn btn-small" href="{{ item.transfer_url }}">Transferir para o formulário</a>
+    </div>
+    {% else %}
+    <p>Nenhum cliente aguardando cadastro.</p>
+    {% endfor %}
+  </div>
+  <div id="cadastro-close-registered" class="cadastro-close-list panel" hidden>
+    {% for item in registration_closes.registered %}
+    <div class="cadastro-close-row">
+      <div>
+        <strong>{{ item.empresa }}</strong>
+        <span>{{ item.phone }}{% if item.contact_name %} · {{ item.contact_name }}{% endif %}</span>
+      </div>
+      <a class="btn btn-small btn-secondary" href="{{ item.company_url }}">Ver em empresas</a>
+    </div>
+    {% else %}
+    <p>Nenhum lead fechado neste mês.</p>
+    {% endfor %}
+  </div>
 
   <nav class="client-edit-tabs panel client-edit-tabs-interactive client-edit-tabs-new" aria-label="Abas do cadastro">
     <button type="button" class="client-edit-tab is-active" data-registration-tab="dados">
@@ -68,6 +120,23 @@
 </div>
 
 <script>
+  document.querySelectorAll("[data-close-list]").forEach(function (card) {
+    card.addEventListener("click", function () {
+      var name = card.getAttribute("data-close-list");
+      var list = document.getElementById("cadastro-close-" + name);
+      var open = list && list.hidden;
+      document.querySelectorAll(".cadastro-close-list").forEach(function (panel) { panel.hidden = true; });
+      document.querySelectorAll("[data-close-list]").forEach(function (item) {
+        item.classList.remove("is-open");
+        item.setAttribute("aria-expanded", "false");
+      });
+      if (open && list) {
+        list.hidden = false;
+        card.classList.add("is-open");
+        card.setAttribute("aria-expanded", "true");
+      }
+    });
+  });
   document.getElementById("cadastro-enviar-ponto")?.addEventListener("click", function () {
     var note = document.getElementById("cadastro-ponto-note");
     if (note) note.hidden = false;

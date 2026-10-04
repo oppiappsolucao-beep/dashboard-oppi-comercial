@@ -38,6 +38,21 @@ def _resolve_registration_from_page(value: str) -> str:
     return normalized if normalized in {"leads", "activities"} else ""
 
 
+def _registration_closes() -> dict:
+    try:
+        from app.services.cadastro_closes import build_registration_closes
+
+        return build_registration_closes()
+    except Exception:
+        return {
+            "pending": [],
+            "pending_total": 0,
+            "registered": [],
+            "registered_total": 0,
+            "month_label": "",
+        }
+
+
 def _training_trainers() -> list[dict]:
     from app.services.org_registry import list_people
 
@@ -233,6 +248,7 @@ def _registration_page_context(request: Request, df, *, error: str = "", values:
         "plan_cycle_options": PLAN_CYCLE_OPTIONS,
         "billing_form_options": BILLING_FORM_OPTIONS,
         "error": error or request.session.pop("registration_error", ""),
+        "registration_closes": _registration_closes(),
         **page_ctx,
     }
 
