@@ -93,6 +93,72 @@ def _cell(row: list[str], index: int | None) -> str:
     return normalize_text(row[index])
 
 
+def _find_raissa_worksheet(spreadsheet):
+    wanted = {_plain(name) for name in TAB_NAMES} | {_plain(name).replace(" ", "") for name in TAB_NAMES}
+    fallback = None
+    for item in spreadsheet.worksheets():
+        title = _plain(item.title)
+        compact = title.replace(" ", "")
+        if title in wanted or compact in wanted:
+            return item
+        if "raissa" in compact and fallback is None:
+            fallback = item
+    return fallback
+
+
+def read_raissa_sheet() -> dict:
+    """Lê a aba Raissa inteira, com as colunas como estão na planilha."""
+    empty = {"aba": "", "total": 0, "colunas": [], "clientes": [], "aviso": ""}
+    try:
+        from app.config import settings
+        from app.services.legacy_core import get_gsheet_client
+        from app.services.sheet_read_cache import get_cached_worksheet_values
+
+        if not settings.sheets_configured:
+            empty["aviso"] = "Planilha não configurada."
+            return empty
+        client = get_gsheet_client()
+        spreadsheet = client.open_by_key(settings.sheet_id)
+        worksheet = _find_raissa_worksheet(spreadsheet)
+        if worksheet is None:
+            empty["aviso"] = "Aba Raissa não encontrada na planilha."
+            return empty
+        values = get_cached_worksheet_values(worksheet.title, worksheet.get_all_values) or []
+        if not values:
+            empty["aba"] = worksheet.title
+            return empty
+        headers = []
+        used = set()
+        for index, cell in enumerate(values[0], start=1):
+            name = normalize_text(cell) or f"Coluna {index}"
+            key = name
+            suffix = 2
+            while key.lower() in used:
+                key = f"{name} {suffix}"
+                suffix += 1
+            used.add(key.lower())
+            headers.append(key)
+        clientes = []
+        for offset, raw in enumerate(values[1:], start=2):
+            row = [normalize_text(cell) for cell in raw]
+            if not any(row):
+                continue
+            item = {"linha": offset}
+            for index, header in enumerate(headers):
+                item[header] = row[index] if index < len(row) else ""
+            clientes.append(item)
+        return {
+            "aba": worksheet.title,
+            "total": len(clientes),
+            "colunas": headers,
+            "clientes": clientes,
+            "aviso": "",
+        }
+    except Exception:
+        empty["aviso"] = "Não consegui ler a aba Raissa."
+        return empty
+
+
 def read_raissa_leads() -> tuple[list[dict], str]:
     """Lê a aba. O segundo valor é um aviso quando a planilha não abre."""
     try:
@@ -104,13 +170,7 @@ def read_raissa_leads() -> tuple[list[dict], str]:
             return [], "Planilha não configurada."
         client = get_gsheet_client()
         spreadsheet = client.open_by_key(settings.sheet_id)
-        worksheet = None
-        wanted = {_plain(name) for name in TAB_NAMES} | {_plain(name).replace(" ", "") for name in TAB_NAMES}
-        for item in spreadsheet.worksheets():
-            title = _plain(item.title)
-            if title in wanted or title.replace(" ", "") in wanted:
-                worksheet = item
-                break
+        worksheet = _find_raissa_worksheet(spreadsheet)
         if worksheet is None:
             return [], "Aba Leads Raissa não encontrada na planilha."
 

@@ -115,6 +115,19 @@ def _leads_context(request: Request, filters, leads_params: dict):
     }
 
 
+@router.get("/api/raissa/clientes")
+async def api_raissa_clientes(request: Request):
+    redirect = require_auth(request)
+    if redirect:
+        return JSONResponse(
+            {"aba": "", "total": 0, "colunas": [], "clientes": [], "aviso": "Faça login para consultar a aba Raissa."},
+            status_code=401,
+        )
+    from app.services.campaign_leads import read_raissa_sheet
+
+    return JSONResponse(read_raissa_sheet())
+
+
 @router.get("/leads-e-empresas", response_class=HTMLResponse)
 async def leads_page(request: Request):
     redirect = require_auth(request)
