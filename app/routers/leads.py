@@ -18,6 +18,8 @@ from app.services.leads import (
     build_leads_export_rows,
     build_leads_kpi_cards,
     build_leads_table,
+    build_raissa_empresas_table,
+    raissa_kpi_cards,
 )
 from app.services.legacy_core import invalidate_sheet_cache, normalize_text
 from app.templating import render
@@ -33,8 +35,10 @@ def _parse_leads_params(request: Request, form: dict | None = None) -> dict:
     tab = data.get("tab", "empresas")
     stage = data.get("stage", "Todas as etapas")
     sort = data.get("sort", "recent")
-    letter = normalize_text(data.get("letter") or "A").upper()[:1] or "A"
-    if letter not in COMPANY_ALPHABET and letter != "#":
+    raw_letter = normalize_text(data.get("letter") or "")
+    letter_explicit = bool(raw_letter)
+    letter = raw_letter.upper()[:1] if letter_explicit else ""
+    if letter_explicit and letter not in COMPANY_ALPHABET and letter != "#":
         letter = "A"
     try:
         page = int(data.get("page", 1))
@@ -50,12 +54,18 @@ def _parse_leads_params(request: Request, form: dict | None = None) -> dict:
         "stage": stage,
         "sort": sort if sort in ("recent", "name") else "recent",
         "letter": letter,
+        "letter_explicit": letter_explicit,
         "page": max(1, page),
         "per_page": per_page if per_page in (10, 25, 50) else 50,
     }
 
 
 def _leads_context(request: Request, filters, leads_params: dict):
+    if leads_params.get("tab") == "empresas":
+        raissa_context = _raissa_empresas_context(filters, leads_params)
+        if raissa_context is not None:
+            return raissa_context
+
     df, columns = get_prepared_data()
     options = get_filter_options(df)
     # Empresas: lista completa — sem janela de datas (migração não pode sumir por período).
@@ -112,6 +122,55 @@ def _leads_context(request: Request, filters, leads_params: dict):
         "stage_options": ["Todas as etapas"] + ETAPA_STAGES,
         "kpi_cards": build_leads_kpi_cards(empresas_df),
         "table": table,
+        "raissa_aviso": "",
+    }
+
+
+def _raissa_empresas_context(filters, leads_params: dict):
+    from app.services.campaign_leads import read_raissa_companies
+
+    loaded = read_raissa_companies()
+    empresas = loaded.get("empresas") or []
+    searching = bool(normalize_text(filters.search))
+    apply_letter = bool(leads_params.get("letter_explicit")) and not searching
+    table, _page_rows = build_raissa_empresas_table(
+        empresas,
+        search=filters.search,
+        letter=leads_params["letter"] or "A",
+        page=leads_params["page"],
+        per_page=leads_params["per_page"],
+        apply_letter=apply_letter,
+    )
+    if searching:
+        full_table, _rows = build_raissa_empresas_table(
+            empresas,
+            search="",
+            letter=leads_params["letter"],
+            page=1,
+            per_page=leads_params["per_page"],
+            apply_letter=False,
+        )
+        table["alphabet"] = full_table["alphabet"]
+    return {
+        "active_page": "leads",
+        "filters": filters,
+        "options": {
+            "seller_options": [],
+            "niche_options": [],
+            "state_options": [],
+            "date_min": None,
+            "date_max": None,
+            "has_reference_dates": False,
+            "status_options": [],
+            "total_companies": len(empresas),
+            "total_capital": 0.0,
+        },
+        "leads_params": leads_params,
+        "stage_options": ["Todas as etapas"],
+        "kpi_cards": raissa_kpi_cards(empresas),
+        "table": table,
+        "raissa_aviso": "" if empresas else (loaded.get("aviso") or "A aba Raissa não trouxe empresas."),
+        "raissa_total": loaded.get("total") or len(empresas),
     }
 
 
@@ -206,54 +265,50 @@ async def leads_export(request: Request):
 
     filters = parse_dashboard_filters(request)
     leads_params = _parse_leads_params(request)
-    df, columns = get_prepared_data()
-    filters = apply_default_period_filters(filters, df)
-    filtered_df = apply_dashboard_filters(df, columns, filters)
-    rows = build_leads_export_rows(
-        filtered_df,
-        columns,
-        tab=leads_params["tab"],
-        stage=leads_params["stage"],
-        sort=leads_params["sort"],
-        tenant_id=DEFAULT_TENANT_ID,
-        letter=leads_params["letter"],
-        apply_letter=not bool(normalize_text(filters.search)),
-    )
+    from app.services.campaign_leads import read_raissa_companies
 
+    loaded = read_raissa_companies()
+    searching = bool(normalize_text(filters.search))
+    table, _listed = build_raissa_empresas_table(
+        loaded.get("empresas") or [],
+        search=filters.search,
+        letter=leads_params["letter"] or "A",
+        page=1,
+        per_page=max(len(loaded.get("empresas") or []), 1),
+        apply_letter=bool(leads_params.get("letter_explicit")) and not searching,
+    )
+    rows = [
+        {
+            "nome": item["nome"],
+            "empresa": item["empresa"],
+            "tipo_label": item["tipo_label"],
+            "telefone": item["telefone"],
+            "email": item["email"],
+            "etapa": item["etapa"],
+            "vendedor": item["vendedor"],
+            "ultimo_contato": item["ultimo_contato"],
+            "closed_services_title": item["closed_services_title"],
+            "closed_services_meta": item["closed_services_meta"],
+        }
+        for item in table["rows"]
+    ]
     buffer = io.StringIO()
     writer = csv.writer(buffer)
     writer.writerow([
-        "Nome",
-        "Empresa",
-        "Tipo",
-        "Telefone",
-        "E-mail",
-        "Etapa",
-        "Responsável",
-        "Último contato",
-        "Serviços fechados",
-        "Proposta",
+        "Nome", "Empresa", "Tipo", "Telefone", "E-mail",
+        "Etapa", "Responsável", "Último contato", "Serviços fechados", "Proposta",
     ])
     for row in rows:
         writer.writerow([
-            row["nome"],
-            row["empresa"],
-            row["tipo_label"],
-            row["telefone"],
-            row["email"],
-            row["etapa"],
-            row["vendedor"],
-            row["ultimo_contato"],
-            row["closed_services_title"],
-            row["closed_services_meta"],
+            row["nome"], row["empresa"], row["tipo_label"], row["telefone"], row["email"],
+            row["etapa"], row["vendedor"], row["ultimo_contato"],
+            row["closed_services_title"], row["closed_services_meta"],
         ])
-
     buffer.seek(0)
-    filename = f"leads-e-empresas-{leads_params['tab']}.csv"
     return StreamingResponse(
         iter([buffer.getvalue()]),
         media_type="text/csv; charset=utf-8",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={"Content-Disposition": "attachment; filename=empresas-raissa.csv"},
     )
 
 

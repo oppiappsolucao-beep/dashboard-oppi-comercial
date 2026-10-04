@@ -11,6 +11,7 @@ from app.services.legacy_core import normalize_text
 from app.services.registry_store import _lock, connect, init_store
 
 TAB_NAMES = ("Leads Raissa", "Leads Raíssa", "LeadsRaissa")
+COMPANY_TAB_NAMES = ("Raissa", "Raíssa")
 
 _HEADER_ALIASES = {
     "empresa": ("empresa", "nome empresa", "nome empresas", "cliente", "razao social", "nome"),
@@ -93,6 +94,131 @@ def _cell(row: list[str], index: int | None) -> str:
     return normalize_text(row[index])
 
 
+def _find_raissa_company_worksheet(spreadsheet):
+    """Aba dos clientes atuais (matriz e filial). Não é a aba Leads Raissa."""
+    exact = []
+    loose = []
+    for item in spreadsheet.worksheets():
+        plain = _plain(item.title)
+        compact = plain.replace(" ", "")
+        if "lead" in compact:
+            continue
+        if plain in {"raissa", "raisa"} or compact in {"raissa", "raisa"}:
+            exact.append(item)
+            continue
+        words = [word for word in plain.split() if word not in {"aba", "planilha", "clientes", "base", "dados"}]
+        if words == ["raissa"] or "raissa" in compact:
+            loose.append(item)
+    if exact:
+        return exact[0]
+    if loose:
+        loose.sort(key=lambda item: len(_plain(item.title)))
+        return loose[0]
+    return None
+
+
+def _header_index(headers: list[str], aliases: tuple[str, ...], *, skip_words: tuple[str, ...] = ()) -> int | None:
+    normalized = [_plain(header) for header in headers]
+    for alias in aliases:
+        for index, header in enumerate(normalized):
+            if any(word in header for word in skip_words):
+                continue
+            if header == alias:
+                return index
+    return None
+
+
+def _company_kind(tipo: str, parent: str, filial_flag: str) -> str:
+    flag = _plain(filial_flag)
+    if flag in {"sim", "s", "1", "x", "true", "yes", "filial"}:
+        return "Filial"
+    if flag in {"nao", "não", "n", "0", "matriz"}:
+        return "Matriz"
+    text = _plain(tipo)
+    if "filial" in text:
+        return "Filial"
+    if "matriz" in text or text in {"sede", "principal"}:
+        return "Matriz"
+    parent_text = _plain(parent)
+    if parent_text in {"matriz", "filial", "sede", "principal", "sim", "nao", "s", "n"}:
+        parent = ""
+        parent_text = ""
+    if parent_text:
+        return "Filial"
+    return "Matriz"
+
+
+def read_raissa_companies() -> dict:
+    """Clientes atualizados da aba Raissa: matrizes e filiais."""
+    empty = {"aba": "", "total": 0, "empresas": [], "aviso": ""}
+    sheet = read_raissa_sheet()
+    if sheet.get("aviso") and not sheet.get("clientes"):
+        empty["aviso"] = sheet["aviso"]
+        empty["aba"] = sheet.get("aba") or ""
+        return empty
+    headers = list(sheet.get("colunas") or [])
+    name_index = _header_index(
+        headers,
+        ("empresa", "nome da empresa", "razao social", "nome fantasia", "cliente", "nome"),
+        skip_words=("matriz", "filial"),
+    )
+    if name_index is None:
+        for index, header in enumerate(headers):
+            plain = _plain(header)
+            if "matriz" in plain or "filial" in plain:
+                continue
+            if "empresa" in plain or plain.startswith("nome") or "razao" in plain or "cliente" in plain:
+                name_index = index
+                break
+    if name_index is None and headers:
+        best_index = 0
+        best_count = -1
+        for index, header in enumerate(headers):
+            count = sum(1 for item in sheet.get("clientes") or [] if normalize_text(item.get(header)))
+            if count > best_count:
+                best_count = count
+                best_index = index
+        name_index = best_index
+    tipo_index = _header_index(headers, ("tipo", "tipo empresa", "categoria", "vinculo", "classificacao"))
+    flag_index = _header_index(headers, ("filial", "e filial", "is filial"))
+    parent_index = _header_index(headers, ("empresa matriz", "nome da matriz", "matriz vinculada", "matriz"))
+    phone_index = _header_index(headers, ("whatsapp", "telefone", "celular", "fone", "telefone b2b"))
+    email_index = _header_index(headers, ("email", "e-mail", "email empresa"))
+    contact_index = _header_index(
+        headers,
+        ("contato", "nome contato", "nome do contato", "responsavel", "socio"),
+        skip_words=("matriz",),
+    )
+    empresas = []
+    for item in sheet.get("clientes") or []:
+        values = [item.get(header, "") for header in headers]
+        empresa = values[name_index] if name_index is not None and name_index < len(values) else ""
+        empresa = normalize_text(empresa)
+        if not empresa:
+            continue
+        parent = values[parent_index] if parent_index is not None and parent_index < len(values) else ""
+        tipo = values[tipo_index] if tipo_index is not None and tipo_index < len(values) else ""
+        flag = values[flag_index] if flag_index is not None and flag_index < len(values) else ""
+        kind = _company_kind(tipo, parent, flag)
+        empresas.append(
+            {
+                "linha": item.get("linha") or 0,
+                "empresa": empresa,
+                "tipo": kind,
+                "matriz": normalize_text(parent),
+                "telefone": normalize_text(values[phone_index]) if phone_index is not None and phone_index < len(values) else "",
+                "email": normalize_text(values[email_index]) if email_index is not None and email_index < len(values) else "",
+                "contato": normalize_text(values[contact_index]) if contact_index is not None and contact_index < len(values) else "",
+            }
+        )
+    return {
+        "aba": sheet.get("aba") or "",
+        "total": len(empresas),
+        "empresas": empresas,
+        "aviso": "" if empresas else "A aba Raissa não trouxe empresas.",
+    }
+
+
 def _find_raissa_worksheet(spreadsheet):
     wanted = {_plain(name) for name in TAB_NAMES} | {_plain(name).replace(" ", "") for name in TAB_NAMES}
     fallback = None
@@ -119,17 +245,29 @@ def read_raissa_sheet() -> dict:
             return empty
         client = get_gsheet_client()
         spreadsheet = client.open_by_key(settings.sheet_id)
-        worksheet = _find_raissa_worksheet(spreadsheet)
+        worksheet = _find_raissa_company_worksheet(spreadsheet)
         if worksheet is None:
-            empty["aviso"] = "Aba Raissa não encontrada na planilha."
+            titles = ", ".join(item.title for item in spreadsheet.worksheets())
+            empty["aviso"] = f"Aba Raissa não encontrada. Abas na planilha: {titles}."
             return empty
-        values = get_cached_worksheet_values(worksheet.title, worksheet.get_all_values) or []
+        values = get_cached_worksheet_values(worksheet.title, worksheet.get_all_values)
+        if values is None:
+            empty["aba"] = worksheet.title
+            empty["aviso"] = "Não consegui ler a aba Raissa."
+            return empty
         if not values:
             empty["aba"] = worksheet.title
+            empty["aviso"] = "A aba Raissa está vazia."
             return empty
+        header_at = 0
+        if len(values) > 1:
+            filled_first = sum(1 for cell in values[0] if normalize_text(cell))
+            filled_second = sum(1 for cell in values[1] if normalize_text(cell))
+            if filled_first <= 1 and filled_second >= 3:
+                header_at = 1
         headers = []
         used = set()
-        for index, cell in enumerate(values[0], start=1):
+        for index, cell in enumerate(values[header_at], start=1):
             name = normalize_text(cell) or f"Coluna {index}"
             key = name
             suffix = 2
@@ -139,7 +277,7 @@ def read_raissa_sheet() -> dict:
             used.add(key.lower())
             headers.append(key)
         clientes = []
-        for offset, raw in enumerate(values[1:], start=2):
+        for offset, raw in enumerate(values[header_at + 1 :], start=header_at + 2):
             row = [normalize_text(cell) for cell in raw]
             if not any(row):
                 continue
@@ -154,8 +292,9 @@ def read_raissa_sheet() -> dict:
             "clientes": clientes,
             "aviso": "",
         }
-    except Exception:
-        empty["aviso"] = "Não consegui ler a aba Raissa."
+    except Exception as exc:
+        detail = normalize_text(str(exc))[:140]
+        empty["aviso"] = f"Não consegui ler a aba Raissa. {detail}".strip()
         return empty
 
 

@@ -409,6 +409,116 @@ def _build_row(row, columns: dict, tab: str, tenant_id: str | None) -> dict:
     }
 
 
+def build_raissa_empresas_table(
+    empresas: list[dict],
+    *,
+    search: str = "",
+    letter: str = "A",
+    page: int = 1,
+    per_page: int = 50,
+    apply_letter: bool = True,
+) -> tuple[dict, list[dict]]:
+    """Lista da aba Raissa no mesmo formato da tabela de Empresas."""
+    query = normalize_text(search).lower()
+    rows_all = []
+    for item in empresas:
+        blob = " ".join(
+            (
+                item.get("empresa") or "",
+                item.get("telefone") or "",
+                item.get("email") or "",
+                item.get("contato") or "",
+                item.get("matriz") or "",
+                item.get("tipo") or "",
+            )
+        ).lower()
+        if query and query not in blob:
+            continue
+        rows_all.append(item)
+    rows_all.sort(key=lambda item: normalize_text(item.get("empresa")).lower())
+    view = pd.DataFrame({"_empresa": [item.get("empresa") or "" for item in rows_all]}) if rows_all else pd.DataFrame({"_empresa": []})
+    alphabet = build_company_alphabet(view)
+    selected = letter if letter in COMPANY_ALPHABET or letter == "#" else "A"
+    if apply_letter and rows_all:
+        rows_all = [
+            item for item in rows_all
+            if company_index_letter(item.get("empresa") or "") == selected
+        ]
+    total = len(rows_all)
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    page = max(1, min(page, total_pages))
+    start = (page - 1) * per_page
+    page_rows = rows_all[start : start + per_page]
+    table_rows = [_raissa_table_row(item) for item in page_rows]
+    return {
+        "rows": table_rows,
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+        "total_pages": total_pages,
+        "from_record": start + 1 if total else 0,
+        "to_record": min(start + per_page, total),
+        "page_numbers": list(range(max(1, page - 2), min(total_pages, page + 2) + 1)),
+        "alphabet": alphabet,
+        "letter": selected,
+    }, rows_all
+
+
+def raissa_kpi_cards(empresas: list[dict]) -> list[dict]:
+    total = len(empresas)
+    matrizes = sum(1 for item in empresas if item.get("tipo") == "Matriz")
+    filiais = sum(1 for item in empresas if item.get("tipo") == "Filial")
+    com_contato = sum(1 for item in empresas if normalize_text(item.get("telefone") or item.get("email")))
+    return [
+        {"label": "Total de Empresas", "value": total, "note": "Aba Raissa", "icon": "🏢", "tone": "purple"},
+        {"label": "Matrizes", "value": matrizes, "note": "Na aba Raissa", "icon": "📋", "tone": "blue"},
+        {"label": "Filiais", "value": filiais, "note": "Na aba Raissa", "icon": "🏬", "tone": "orange"},
+        {"label": "Com contato", "value": com_contato, "note": "Telefone ou e-mail", "icon": "📞", "tone": "pink"},
+    ]
+
+
+def _raissa_table_row(item: dict) -> dict:
+    empresa = normalize_text(item.get("empresa")) or "—"
+    kind = item.get("tipo") or "Matriz"
+    parent = normalize_text(item.get("matriz"))
+    if kind == "Filial" and parent and _plain_parent(parent):
+        meta = f"Filial · {parent}"
+    else:
+        meta = kind
+    telefone = normalize_text(item.get("telefone")) or "—"
+    email = normalize_text(item.get("email")) or "—"
+    contato = normalize_text(item.get("contato")) or "—"
+    return {
+        "nome": empresa,
+        "empresa": empresa,
+        "empresa_initials": _initials(empresa),
+        "contato": contato,
+        "tipo_label": kind,
+        "meta_label": meta,
+        "telefone": telefone,
+        "email": email,
+        "vendedor": "Raissa",
+        "vendedor_initials": "RA",
+        "etapa": kind,
+        "etapa_class": "ganho" if kind == "Matriz" else "novo-lead",
+        "status": kind,
+        "ultimo_contato": "—",
+        "ultimo_contato_relativo": "—",
+        "closed_services_title": "—",
+        "closed_services_meta": "",
+        "valor": "—",
+        "valor_num": 0,
+        "whatsapp_href": _whatsapp_href(telefone if telefone != "—" else ""),
+        "sheet_row": 0,
+        "href": "/leads-e-empresas",
+    }
+
+
+def _plain_parent(value: str) -> bool:
+    text = unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode("ascii").lower()
+    return text not in {"matriz", "filial", "sede", "principal", "sim", "nao", "s", "n"}
+
+
 def build_leads_table(
     filtered_df: pd.DataFrame,
     columns: dict,
