@@ -20,63 +20,7 @@
     text-align: center;
   }
 </style>
-  <header class="client-edit-header panel">
-    <div class="client-edit-header-main">
-      <div class="client-edit-identity">
-        <span class="client-edit-avatar">{{ header_initials }}</span>
-        <div class="client-edit-identity-text">
-          <h1 class="client-edit-title" id="registration-client-title">{{ client_edit_title }}</h1>
-          <div class="client-edit-meta">
-            <span class="client-edit-registered">
-              <span class="client-edit-meta-icon" aria-hidden="true">📅</span>
-              {{ header_subtitle }}
-            </span>
-            <span class="client-edit-meta-sep" aria-hidden="true"></span>
-            <span class="client-edit-id-badge">{{ header_id }}</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="client-edit-header-center">
-        {% with form_id='registration-new-form' %}
-        {% include "partials/registration_tipo_switch.html" %}
-        {% endwith %}
-      </div>
-
-      <div class="client-edit-status-block" aria-label="Status do negócio">
-        <div class="client-edit-status-title">Status do negócio</div>
-        <div class="client-edit-pipeline">
-          {% for step in pipeline_steps %}
-          <div class="client-edit-pipeline-step {% if step.is_active %}is-active{% elif step.is_done %}is-done{% endif %}">
-            <span class="client-edit-pipeline-dot"></span>
-            <span class="client-edit-pipeline-label">{{ step.label }}</span>
-          </div>
-          {% endfor %}
-        </div>
-      </div>
-    </div>
-  </header>
-
-  <div class="cadastro-release">
-    <button type="button" class="btn" id="cadastro-gerar-pdf">Gerar PDF</button>
-    <button type="button" class="btn btn-secondary" id="cadastro-enviar-ponto">Enviar ao Ponto</button>
-    <p class="page-subtitle" id="cadastro-ponto-note" hidden>Salve o cadastro. Quando a venda estiver liberada, o envio manda esses dados ao Ponto Oppi RH.</p>
-  </div>
-
   {% if error %}<div class="alert-error">{{ error }}</div>{% endif %}
-
-  <div class="client-edit-summary-grid">
-    {% for card in summary_cards %}
-    <article class="client-edit-summary-card panel">
-      <span class="client-edit-summary-icon" aria-hidden="true">{{ card.icon }}</span>
-      <div class="client-edit-summary-body">
-        <span class="client-edit-summary-label">{{ card.label }}</span>
-        <strong class="client-edit-summary-value">{{ card.value }}</strong>
-        <span class="client-edit-summary-hint">{{ card.hint }}</span>
-      </div>
-    </article>
-    {% endfor %}
-  </div>
 
   <nav class="client-edit-tabs panel client-edit-tabs-interactive client-edit-tabs-new" aria-label="Abas do cadastro">
     <button type="button" class="client-edit-tab is-active" data-registration-tab="dados">
@@ -94,6 +38,7 @@
   </nav>
 
   <form method="post" action="/cadastro/novo" class="client-edit-form" id="registration-new-form">
+    <input type="hidden" name="cadastro_tipo" value="lead">
     <input type="hidden" name="create_training" id="create-first-activity" value="0">
     <input type="hidden" name="status" value="Novo Lead">
     <input type="hidden" name="data_chamado" value="{{ today }}">
@@ -114,17 +59,15 @@
     <footer class="client-edit-footer panel">
       <div class="client-edit-footer-actions">
         <button type="submit" class="btn">Salvar cadastro</button>
+        <button type="button" class="btn btn-secondary" id="cadastro-enviar-ponto">Enviar ao Ponto</button>
         <a href="{{ back_href }}" class="btn btn-secondary">Cancelar</a>
       </div>
+      <p class="page-subtitle" id="cadastro-ponto-note" hidden>Salve o cadastro. Quando a venda estiver liberada, o envio manda esses dados ao Ponto Oppi RH.</p>
     </footer>
   </form>
 </div>
 
 <script>
-  document.getElementById("cadastro-gerar-pdf")?.addEventListener("click", function () {
-    var tab = document.querySelector('[data-registration-tab="proposta"]');
-    if (tab) tab.click();
-  });
   document.getElementById("cadastro-enviar-ponto")?.addEventListener("click", function () {
     var note = document.getElementById("cadastro-ponto-note");
     if (note) note.hidden = false;
