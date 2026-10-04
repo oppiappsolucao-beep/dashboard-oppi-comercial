@@ -20,7 +20,7 @@ from app.templating import render
 
 router = APIRouter()
 
-TABS = {"funcionarios", "setores", "representantes", "servicos"}
+TABS = {"funcionarios", "setores", "representantes", "treinadores", "servicos"}
 
 
 def _tab(value: str) -> str:
@@ -36,7 +36,10 @@ def _page(request: Request, tab: str):
         editing_sector_id = edit_id
     elif edit_id:
         editing = get_person(edit_id)
-        expected = "representante" if tab == "representantes" else "funcionario"
+        expected = {
+            "representantes": "representante",
+            "treinadores": "treinador",
+        }.get(tab, "funcionario")
         if editing and editing["kind"] != expected:
             editing = None
     return render(
@@ -48,6 +51,7 @@ def _page(request: Request, tab: str):
             "sectors": list_sectors(),
             "funcionarios": list_people("funcionario"),
             "representantes": list_people("representante"),
+            "treinadores": list_people("treinador"),
             "access_options": ACCESS_OPTIONS,
             "ufs": BRAZIL_UFS,
             "editing": editing,
@@ -134,7 +138,10 @@ async def org_save_person(request: Request):
         return redirect
     form = await request.form()
     kind = normalize_text(form.get("kind")).lower()
-    tab = "representantes" if kind == "representante" else "funcionarios"
+    tab = {
+        "representante": "representantes",
+        "treinador": "treinadores",
+    }.get(kind, "funcionarios")
     try:
         person = save_person(
             kind=kind,
@@ -152,7 +159,10 @@ async def org_save_person(request: Request):
     except ValueError as error:
         request.session["org_error"] = str(error)
     else:
-        label = "Representante" if kind == "representante" else "Funcionário"
+        label = {
+            "representante": "Representante",
+            "treinador": "Treinador",
+        }.get(kind, "Funcionário")
         if person.get("updated"):
             request.session["org_success"] = f"{label} {person['name']} atualizado."
         elif person.get("sector_name"):
@@ -170,6 +180,9 @@ async def org_remove_person(request: Request, person_id: str, kind: str = ""):
     form = await request.form()
     kind = normalize_text(form.get("kind") or kind).lower()
     remove_person(person_id)
-    tab = "representantes" if kind == "representante" else "funcionarios"
+    tab = {
+        "representante": "representantes",
+        "treinador": "treinadores",
+    }.get(kind, "funcionarios")
     request.session["org_success"] = "Cadastro removido."
     return RedirectResponse(url=f"/cadastros?tipo={tab}", status_code=303)

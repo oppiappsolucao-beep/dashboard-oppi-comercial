@@ -64,22 +64,18 @@
       <span class="client-edit-tab-title">Dados gerais</span>
       <span class="client-edit-tab-sub">Informações da empresa</span>
     </button>
-    <button type="button" class="client-edit-tab" data-registration-tab="atividades">
-      <span class="client-edit-tab-title">Atividades</span>
-      <span class="client-edit-tab-sub">Primeira atividade comercial</span>
-    </button>
-    <button type="button" class="client-edit-tab" data-registration-tab="proposta">
-      <span class="client-edit-tab-title">Proposta</span>
-      <span class="client-edit-tab-sub">Resumo comercial</span>
-    </button>
     <button type="button" class="client-edit-tab" data-registration-tab="financeiro">
       <span class="client-edit-tab-title">Financeiro</span>
       <span class="client-edit-tab-sub">Forma de pagamento</span>
     </button>
+    <button type="button" class="client-edit-tab" data-registration-tab="treinamento">
+      <span class="client-edit-tab-title">Treinamento</span>
+      <span class="client-edit-tab-sub">Agendamento e treinador</span>
+    </button>
   </nav>
 
   <form method="post" action="/cadastro/novo" class="client-edit-form" id="registration-new-form">
-    <input type="hidden" name="create_first_activity" id="create-first-activity" value="0">
+    <input type="hidden" name="create_training" id="create-first-activity" value="0">
     <input type="hidden" name="status" value="Novo Lead">
     <input type="hidden" name="data_chamado" value="{{ today }}">
     {% if from_page %}<input type="hidden" name="from" value="{{ from_page }}">{% endif %}
@@ -88,16 +84,12 @@
       {% include "partials/registration_edit_dados_tab.html" %}
     </div>
 
-    <div class="client-edit-tab-panel is-hidden" data-registration-panel="atividades">
-      {% include "partials/registration_new_activities_tab.html" %}
-    </div>
-
-    <div class="client-edit-tab-panel is-hidden" data-registration-panel="proposta">
-      {% include "partials/registration_new_proposta_tab.html" %}
-    </div>
-
     <div class="client-edit-tab-panel is-hidden" data-registration-panel="financeiro">
       {% include "partials/registration_new_financeiro_tab.html" %}
+    </div>
+
+    <div class="client-edit-tab-panel is-hidden" data-registration-panel="treinamento">
+      {% include "partials/registration_new_activities_tab.html" %}
     </div>
 
     <footer class="client-edit-footer panel">

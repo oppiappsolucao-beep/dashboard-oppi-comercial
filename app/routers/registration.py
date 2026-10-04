@@ -1,11 +1,11 @@
+import re
 from datetime import date
 
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
-from app.dependencies import get_prepared_data, is_admin, require_auth
+from app.dependencies import get_prepared_data, require_auth
 from app.services.activities_storage import DEFAULT_TENANT_ID
-from app.services.activity_service import criar_atividade
 from app.services.closed_services import PAYMENT_METHOD_OPTIONS, closed_services_has_data, closed_services_sheet_values, load_closed_services, parse_closed_services_from_form, save_closed_services
 from app.services.commercial_services import get_commercial_service_catalog, get_commercial_service_options
 from app.services.crm_validation_service import get_actions_for_stage, normalize_legacy_stage
@@ -36,6 +36,114 @@ router = APIRouter()
 def _resolve_registration_from_page(value: str) -> str:
     normalized = normalize_text(value)
     return normalized if normalized in {"leads", "activities"} else ""
+
+
+def _training_trainers() -> list[dict]:
+    from app.services.org_registry import list_people
+
+    return [
+        {"id": person["id"], "name": person["name"]}
+        for person in list_people("treinador")
+        if person.get("name")
+    ]
+
+
+def _validate_training(form_dict: dict) -> None:
+    responsible = normalize_text(form_dict.get("training_responsible"))
+    if len(responsible) < 2:
+        raise ValueError("Informe o nome do responsável do treinamento.")
+    try:
+        quantity = int(normalize_text(form_dict.get("training_employees")))
+    except ValueError:
+        quantity = 0
+    if quantity < 1:
+        raise ValueError("Informe a quantidade de funcionários do treinamento.")
+    if not normalize_text(form_dict.get("training_trainer_id")):
+        raise ValueError("Selecione o treinador.")
+    if len(normalize_text(form_dict.get("training_link"))) < 8:
+        raise ValueError("Informe o link da videoconferência.")
+    if not re.match(r"^\d{4}-\d{2}-\d{2}$", normalize_text(form_dict.get("training_date"))):
+        raise ValueError("Informe a data do treinamento.")
+
+
+def _creator_assignment(request: Request, vendedor: str) -> tuple[str, str] | None:
+    from app.services.org_registry import list_people
+
+    people = [person for person in list_people() if person.get("sector_name") and person["sector_name"] != "—"]
+    sector = normalize_text(request.session.get("org_sector_name"))
+    name = normalize_text(request.session.get("org_person_name"))
+    if sector and name:
+        for person in people:
+            if person["sector_name"].lower() == sector.lower() and person["name"].lower() == name.lower():
+                return person["sector_name"], person["name"]
+    seller = normalize_text(vendedor)
+    if seller:
+        for person in people:
+            if person["name"].lower() == seller.lower():
+                return person["sector_name"], person["name"]
+    return None
+
+
+def _open_registration_orders(request: Request, form_dict: dict, sheet_row: int, empresa: str, created_by: str) -> str:
+    from app.services.org_registry import get_person
+    from app.services.service_orders import create_service_order
+
+    notes: list[str] = []
+    creator = _creator_assignment(request, form_dict.get("vendedor", ""))
+    if creator is None:
+        notes.append("a OS de entrada não foi gerada porque quem salvou não está em um setor")
+    else:
+        try:
+            create_service_order(
+                tenant_id=DEFAULT_TENANT_ID,
+                sheet_row=sheet_row,
+                empresa=empresa,
+                subject="Entrada",
+                description="Cliente entrou no cadastro.",
+                sector=creator[0],
+                scheduled_date=date.today().isoformat(),
+                responsible=creator[1],
+                priority="Média",
+                created_by=created_by,
+            )
+        except ValueError as error:
+            notes.append(f"a OS de entrada não foi gerada: {error}")
+
+    if normalize_text(form_dict.get("create_training")) not in {"1", "on", "true", "yes"}:
+        return f" Atenção: {'; '.join(notes)}." if notes else ""
+
+    trainer = get_person(form_dict.get("training_trainer_id", ""))
+    if trainer is None or trainer.get("kind") != "treinador" or not trainer.get("sector_name"):
+        notes.append("a OS de treinamento não foi gerada: selecione um treinador cadastrado em Sistema")
+        return f" Atenção: {'; '.join(notes)}." if notes else ""
+
+    quantity = normalize_text(form_dict.get("training_employees"))
+    responsible = normalize_text(form_dict.get("training_responsible"))
+    link = normalize_text(form_dict.get("training_link"))
+    hour = normalize_text(form_dict.get("training_time")) or "09:00"
+    description = (
+        f"Responsável: {responsible}. "
+        f"Quantidade de funcionários: {quantity}. "
+        f"Treinador: {trainer['name']}. "
+        f"Videoconferência: {link}. "
+        f"Horário: {hour}."
+    )
+    try:
+        create_service_order(
+            tenant_id=DEFAULT_TENANT_ID,
+            sheet_row=sheet_row,
+            empresa=empresa,
+            subject="Treinamento",
+            description=description,
+            sector=trainer["sector_name"],
+            scheduled_date=normalize_text(form_dict.get("training_date")),
+            responsible=trainer["name"],
+            priority="Média",
+            created_by=created_by,
+        )
+    except ValueError as error:
+        notes.append(f"a OS de treinamento não foi gerada: {error}")
+    return f" Atenção: {'; '.join(notes)}." if notes else ""
 
 
 def _edit_page_url(sheet_row: int, *, from_page: str = "") -> str:
@@ -111,6 +219,7 @@ def _registration_page_context(request: Request, df, *, error: str = "", values:
         "partners_count": infer_partners_count(values),
         "values": values,
         "vendedor": vendedor,
+        "trainers": _training_trainers(),
         "cadastro_tipo": cadastro_tipo,
         "cadastro_tipo_options": CADASTRO_TIPO_OPTIONS,
         "closed_services": load_closed_services(DEFAULT_TENANT_ID, 0),
@@ -183,6 +292,8 @@ async def new_registration_submit(request: Request):
     from_page = _resolve_registration_from_page(form_dict.get("from"))
 
     try:
+        if normalize_text(form_dict.get("create_training")) in {"1", "on", "true", "yes"}:
+            _validate_training(form_dict)
         closed_items = parse_closed_services_from_form(form)
         if closed_services_has_data(closed_items):
             mirror = closed_services_sheet_values(closed_items)
@@ -225,44 +336,14 @@ async def new_registration_submit(request: Request):
         empresa = normalize_text(form_dict.get("empresa"))
         status = normalize_text(form_dict.get("status"))
 
-        create_activity = normalize_text(form_dict.get("create_first_activity")) in {"1", "on", "true", "yes"}
-        activity_warning = ""
-        if create_activity and int(sheet_row or 0) != 0:
-            stage = normalize_legacy_stage(form_dict.get("status")) or "Contato"
-            scheduled_date = normalize_text(form_dict.get("activity_date")) or date.today().isoformat()
-            scheduled_time = normalize_text(form_dict.get("activity_time")) or "09:00"
-            responsible = (
-                normalize_text(form_dict.get("activity_responsible"))
-                or normalize_text(form_dict.get("vendedor"))
-            )
-            _, activity_error = criar_atividade(
-                DEFAULT_TENANT_ID,
-                {
-                    "sheet_row": sheet_row,
-                    "empresa": empresa,
-                    "contato": normalize_text(form_dict.get("socio_1")) or "—",
-                    "stage": stage,
-                    "activity_type": "Contato",
-                    "process_action": normalize_text(form_dict.get("activity_action")) or "Fazer primeiro contato",
-                    "channel": normalize_text(form_dict.get("activity_channel")) or "WhatsApp",
-                    "assigned_user_id": responsible,
-                    "scheduled_date": scheduled_date,
-                    "scheduled_time": scheduled_time,
-                    "status": "pendente",
-                    "priority": normalize_text(form_dict.get("activity_priority")) or "Média",
-                    "description": normalize_text(form_dict.get("activity_description")),
-                    "next_action": normalize_text(form_dict.get("activity_next_action")),
-                },
-                user,
-                is_admin_user=is_admin(request),
-            )
-            if activity_error:
-                activity_warning = f" Cadastro criado, mas a primeira atividade não foi criada: {activity_error}"
+        order_warning = ""
+        if int(sheet_row or 0) != 0:
+            order_warning = _open_registration_orders(request, form_dict, int(sheet_row), empresa, user)
 
         if int(sheet_row or 0) < 0:
             request.session["company_registration_success"] = (
                 f'"{empresa}" foi salvo e já aparece no sistema. '
-                f"A sincronização com a planilha acontece automaticamente.{activity_warning}"
+                f"A sincronização com a planilha acontece automaticamente.{order_warning}"
             )
             tab = "empresas" if normalize_text(form_dict.get("cadastro_tipo")).lower() == "empresa" else "leads"
             try:
@@ -289,7 +370,7 @@ async def new_registration_submit(request: Request):
             return RedirectResponse(url=f"/leads-e-empresas?tab={tab}", status_code=303)
 
         request.session["company_registration_success"] = (
-            f'"{empresa}" cadastrado com sucesso com o status "{status}".{activity_warning}'
+            f'"{empresa}" cadastrado com sucesso com o status "{status}".{order_warning}'
         )
         try:
             if normalize_text(form_dict.get("cadastro_tipo")).lower() == "empresa":

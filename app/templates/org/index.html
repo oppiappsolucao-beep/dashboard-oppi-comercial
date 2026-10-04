@@ -4,7 +4,7 @@
 <div class="page-header">
   <div>
     <div class="page-title">Sistema</div>
-    <div class="page-subtitle">Funcionários, setores, representantes e serviços. O setor define quem pode atender e quais acessos estão liberados.</div>
+    <div class="page-subtitle">Funcionários, setores, representantes, treinadores e serviços. O setor define quem pode atender e quais acessos estão liberados.</div>
   </div>
 </div>
 
@@ -15,6 +15,7 @@
   <a href="/cadastros?tipo=funcionarios" class="org-tab {% if active_tab == 'funcionarios' %}is-active{% endif %}">Funcionários</a>
   <a href="/cadastros?tipo=setores" class="org-tab {% if active_tab == 'setores' %}is-active{% endif %}">Setores</a>
   <a href="/cadastros?tipo=representantes" class="org-tab {% if active_tab == 'representantes' %}is-active{% endif %}">Representantes</a>
+  <a href="/cadastros?tipo=treinadores" class="org-tab {% if active_tab == 'treinadores' %}is-active{% endif %}">Treinadores</a>
   <a href="/cadastros?tipo=servicos" class="org-tab {% if active_tab == 'servicos' %}is-active{% endif %}">Serviços</a>
 </nav>
 
@@ -277,6 +278,53 @@
   </article>
   {% else %}
   <div class="panel org-empty">Nenhum representante cadastrado ainda.</div>
+  {% endfor %}
+</section>
+
+{% elif active_tab == 'treinadores' %}
+<section class="panel org-panel">
+  <h2>{% if editing %}Editar treinador{% else %}Treinador{% endif %}</h2>
+  <p>Quem entra aqui aparece na lista do agendamento de treinamento.</p>
+  <form method="post" action="/cadastros/pessoas" class="org-form">
+    <input type="hidden" name="kind" value="treinador">
+    {% if editing %}<input type="hidden" name="person_id" value="{{ editing.id }}">{% endif %}
+    <div class="form-grid">
+      <div class="form-group"><label>Nome</label><input name="name" required maxlength="120" placeholder="Nome do treinador" value="{{ editing.name if editing else '' }}"></div>
+      <div class="form-group">
+        <label>Setor</label>
+        <select name="sector_id" required>
+          <option value="">Selecione</option>
+          {% for sector in sectors %}<option value="{{ sector.id }}" {% if editing and editing.sector_id == sector.id %}selected{% elif not editing and sector.name == 'Treinamento' %}selected{% endif %}>{{ sector.name }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="form-group"><label>Telefone</label><input name="phone" maxlength="40" value="{{ editing.phone if editing else '' }}"></div>
+      <div class="form-group"><label>E-mail</label><input name="email" type="email" maxlength="120" value="{{ editing.email if editing else '' }}"></div>
+    </div>
+    <div class="org-form-actions">
+      <button type="submit" class="btn">{% if editing %}Salvar alterações{% else %}Cadastrar treinador{% endif %}</button>
+      {% if editing %}<a class="btn btn-secondary" href="/cadastros?tipo=treinadores">Cancelar</a>{% endif %}
+    </div>
+  </form>
+</section>
+<section class="org-list">
+  {% for person in treinadores %}
+  <article class="panel org-card">
+    <div class="org-card-head">
+      <div>
+        <strong>{{ person.name }}</strong>
+        <span>{{ person.sector_name }}{% if person.phone != '—' %} · {{ person.phone }}{% endif %}</span>
+      </div>
+      <div class="org-card-actions">
+        <a class="btn btn-secondary btn-small" href="/cadastros?tipo=treinadores&editar={{ person.id }}">Editar</a>
+        <form method="post" action="/cadastros/pessoas/{{ person.id }}/remover">
+          <input type="hidden" name="kind" value="treinador">
+          <button type="submit" class="btn btn-secondary btn-small">Remover</button>
+        </form>
+      </div>
+    </div>
+  </article>
+  {% else %}
+  <div class="panel org-empty">Nenhum treinador cadastrado ainda.</div>
   {% endfor %}
 </section>
 

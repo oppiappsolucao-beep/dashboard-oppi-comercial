@@ -25,7 +25,7 @@ ACCESS_OPTIONS = [
 ]
 
 ACCESS_KEYS = {key for key, _label in ACCESS_OPTIONS}
-PERSON_KINDS = {"funcionario", "representante"}
+PERSON_KINDS = {"funcionario", "representante", "treinador"}
 BRAZIL_UFS = [
     "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG",
     "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO",
@@ -75,10 +75,34 @@ def _ensure_seed(conn) -> None:
         )
 
 
+def _ensure_training_sector(conn) -> None:
+    row = conn.execute(
+        "SELECT id FROM org_sectors WHERE lower(name) = ? AND active = 1",
+        ("treinamento",),
+    ).fetchone()
+    if row:
+        return
+    stamp = _now()
+    conn.execute(
+        """
+        INSERT INTO org_sectors (id, name, accesses_json, active, created_at, updated_at)
+        VALUES (?, ?, ?, 1, ?, ?)
+        """,
+        (
+            f"sec_{uuid.uuid4().hex[:12]}",
+            "Treinamento",
+            json.dumps(["kanban", "ordens"]),
+            stamp,
+            stamp,
+        ),
+    )
+
+
 def list_sectors() -> list[dict]:
     init_crm_local_db()
     with _lock, _connect() as conn:
         _ensure_seed(conn)
+        _ensure_training_sector(conn)
         rows = conn.execute(
             "SELECT * FROM org_sectors WHERE active = 1 ORDER BY name COLLATE NOCASE"
         ).fetchall()
@@ -259,15 +283,19 @@ def save_person(
     clean_name = normalize_text(name)
     if len(clean_name) < 2:
         raise ValueError("Informe o nome.")
-    clean_username = _normalize_username(username)
     clean_person_id = normalize_text(person_id)
     password_text = str(password or "").strip()
-    if password_text:
-        password_hash = _hash_password(password_text)
-    elif clean_person_id:
+    if kind == "treinador":
+        clean_username = ""
         password_hash = ""
     else:
-        password_hash = _hash_password(password)
+        clean_username = _normalize_username(username)
+        if password_text:
+            password_hash = _hash_password(password_text)
+        elif clean_person_id:
+            password_hash = ""
+        else:
+            password_hash = _hash_password(password)
     clean_region = normalize_text(region).upper()
     clean_state = normalize_text(state_name)
     clean_city = normalize_text(city)
@@ -293,8 +321,13 @@ def save_person(
                 raise ValueError("Cadastro não encontrado.")
             if current["kind"] != kind:
                 raise ValueError("Tipo de cadastro inválido.")
-            if not password_hash:
+            if kind == "treinador":
+                clean_username = normalize_text(current["username"]) or f"tr.{uuid.uuid4().hex[:10]}"
                 password_hash = current["password_hash"] or ""
+            elif not password_hash:
+                password_hash = current["password_hash"] or ""
+        if kind == "treinador" and not clean_username:
+            clean_username = f"tr.{uuid.uuid4().hex[:10]}"
         taken = conn.execute(
             "SELECT id FROM org_people WHERE lower(username) = ? AND active = 1 AND id != ?",
             (clean_username, clean_person_id),
@@ -303,7 +336,7 @@ def save_person(
             raise ValueError("Este login já está em uso.")
         sector_name = ""
         stored_sector_id = ""
-        if kind == "funcionario":
+        if kind in {"funcionario", "treinador"}:
             sector = conn.execute(
                 "SELECT id, name FROM org_sectors WHERE id = ? AND active = 1",
                 (normalize_text(sector_id),),
