@@ -187,9 +187,10 @@ def _registration_page_context(request: Request, df, *, error: str = "", values:
 
     seller_options = get_seller_options(df)
     current_user = normalize_text(request.session.get("username", "")) or "Usuário"
-    vendedor = normalize_text(values.get("vendedor"))
-    if not vendedor:
-        vendedor = current_user if current_user in seller_options else (seller_options[0] if seller_options else "Sem vendedor")
+    from app.dependencies import get_session_user
+
+    session_user = get_session_user(request) or {}
+    vendedor = normalize_text(session_user.get("name")) or current_user
 
     from app.services.sectors import list_sector_options
 
@@ -234,6 +235,7 @@ def _registration_page_context(request: Request, df, *, error: str = "", values:
         "partners_count": infer_partners_count(values),
         "values": values,
         "vendedor": vendedor,
+        "lock_responsible": True,
         "trainers": _training_trainers(),
         "cadastro_tipo": cadastro_tipo,
         "cadastro_tipo_options": CADASTRO_TIPO_OPTIONS,
