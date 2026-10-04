@@ -1424,6 +1424,11 @@
   width: 100%;
 }
 
+.client-edit-tabs-new.client-edit-tabs-interactive .client-edit-tab {
+  align-items: center;
+  text-align: center;
+}
+
 .client-edit-tab-panel.is-hidden {
   display: none;
 }
