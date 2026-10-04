@@ -45,6 +45,35 @@
   gap: 12px;
 }
 
+.org-services-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.org-services-head h2,
+.org-services-head p {
+  margin-bottom: 0;
+}
+
+.org-services-head p {
+  margin-top: 4px;
+}
+
+.org-service-row {
+  grid-template-columns: minmax(180px, 1.4fr) 120px minmax(140px, 1fr) minmax(160px, 1fr);
+  align-items: end;
+  padding-bottom: 12px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+.org-service-remove {
+  grid-column: 1 / -1;
+}
+
 .org-access {
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -129,7 +158,12 @@
 }
 
 @media (max-width: 700px) {
-  .org-access-list {
+  .org-access-list,
+  .org-service-row {
     grid-template-columns: 1fr;
+  }
+
+  .org-services-head {
+    flex-direction: column;
   }
 }

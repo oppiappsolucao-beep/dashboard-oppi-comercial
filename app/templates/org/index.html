@@ -1,10 +1,10 @@
 {% extends "base.html" %}
 {% block content %}
-<link rel="stylesheet" href="/static/css/org-registry.css?v=2">
+<link rel="stylesheet" href="/static/css/org-registry.css?v=3">
 <div class="page-header">
   <div>
     <div class="page-title">Sistema</div>
-    <div class="page-subtitle">Funcionários, setores e representantes nacionais. O setor define quem pode atender e quais acessos estão liberados.</div>
+    <div class="page-subtitle">Funcionários, setores, representantes e serviços. O setor define quem pode atender e quais acessos estão liberados.</div>
   </div>
 </div>
 
@@ -15,6 +15,7 @@
   <a href="/cadastros?tipo=funcionarios" class="org-tab {% if active_tab == 'funcionarios' %}is-active{% endif %}">Funcionários</a>
   <a href="/cadastros?tipo=setores" class="org-tab {% if active_tab == 'setores' %}is-active{% endif %}">Setores</a>
   <a href="/cadastros?tipo=representantes" class="org-tab {% if active_tab == 'representantes' %}is-active{% endif %}">Representantes</a>
+  <a href="/cadastros?tipo=servicos" class="org-tab {% if active_tab == 'servicos' %}is-active{% endif %}">Serviços</a>
 </nav>
 
 {% if active_tab == 'setores' %}
@@ -101,6 +102,130 @@
   }
   select.addEventListener("change", sync);
   if (select.value) sync();
+})();
+</script>
+
+{% elif active_tab == 'servicos' %}
+<section class="panel org-panel" id="org-services">
+  <div class="org-services-head">
+    <div>
+      <h2>Serviços contratados</h2>
+      <p>Controle interno: nome, quantidade e valor. Estes serviços aparecem no cadastro da empresa. Não vai para o Asaas.</p>
+    </div>
+    <button type="button" class="btn" id="org-service-add">+ Adicionar serviço</button>
+  </div>
+  <form method="post" action="/cadastros/servicos" class="org-form">
+    <div id="org-service-list">
+      {% for item in services %}
+      <div class="org-service-row form-grid">
+        <div class="form-group">
+          <label>Serviço</label>
+          <input type="text" name="service_name" value="{{ item.name }}" maxlength="120" placeholder="Nome do serviço" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label>Quantidade</label>
+          <input type="number" name="service_quantidade" min="1" step="1" value="{{ item.quantidade or 1 }}">
+        </div>
+        <div class="form-group">
+          <label>Valor do serviço</label>
+          <input type="text" name="service_valor" value="{{ item.valor }}" placeholder="R$ 0,00" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label>Forma de pagamento</label>
+          <select name="service_forma">
+            {% for option in payment_method_options %}
+            <option value="{{ option }}" {% if item.forma_pagamento == option %}selected{% endif %}>{{ option }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="org-service-remove">
+          <button type="button" class="btn btn-secondary btn-small">Remover</button>
+        </div>
+      </div>
+      {% else %}
+      <div class="org-service-row form-grid">
+        <div class="form-group">
+          <label>Serviço</label>
+          <input type="text" name="service_name" value="" maxlength="120" placeholder="Nome do serviço" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label>Quantidade</label>
+          <input type="number" name="service_quantidade" min="1" step="1" value="1">
+        </div>
+        <div class="form-group">
+          <label>Valor do serviço</label>
+          <input type="text" name="service_valor" value="" placeholder="R$ 0,00" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label>Forma de pagamento</label>
+          <select name="service_forma">
+            {% for option in payment_method_options %}
+            <option value="{{ option }}" {% if option == 'Mensal' %}selected{% endif %}>{{ option }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="org-service-remove">
+          <button type="button" class="btn btn-secondary btn-small">Remover</button>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="org-form-actions">
+      <button type="submit" class="btn">Salvar serviços</button>
+    </div>
+  </form>
+  <template id="org-service-template">
+    <div class="org-service-row form-grid">
+      <div class="form-group">
+        <label>Serviço</label>
+        <input type="text" name="service_name" value="" maxlength="120" placeholder="Nome do serviço" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label>Quantidade</label>
+        <input type="number" name="service_quantidade" min="1" step="1" value="1">
+      </div>
+      <div class="form-group">
+        <label>Valor do serviço</label>
+        <input type="text" name="service_valor" value="" placeholder="R$ 0,00" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label>Forma de pagamento</label>
+        <select name="service_forma">
+          {% for option in payment_method_options %}
+          <option value="{{ option }}" {% if option == 'Mensal' %}selected{% endif %}>{{ option }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="org-service-remove">
+        <button type="button" class="btn btn-secondary btn-small">Remover</button>
+      </div>
+    </div>
+  </template>
+</section>
+<script>
+(function () {
+  var list = document.getElementById("org-service-list");
+  var add = document.getElementById("org-service-add");
+  var template = document.getElementById("org-service-template");
+  if (!list || !add || !template) return;
+  function bindRemove(row) {
+    var button = row.querySelector(".org-service-remove button");
+    if (!button || button.dataset.bound === "1") return;
+    button.dataset.bound = "1";
+    button.addEventListener("click", function () {
+      row.remove();
+      if (!list.querySelector(".org-service-row")) {
+        list.appendChild(template.content.cloneNode(true));
+        bindRemove(list.querySelector(".org-service-row"));
+      }
+    });
+  }
+  list.querySelectorAll(".org-service-row").forEach(bindRemove);
+  add.addEventListener("click", function () {
+    list.appendChild(template.content.cloneNode(true));
+    var rows = list.querySelectorAll(".org-service-row");
+    bindRemove(rows[rows.length - 1]);
+  });
 })();
 </script>
 

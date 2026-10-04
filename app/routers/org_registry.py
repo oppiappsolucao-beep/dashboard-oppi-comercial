@@ -2,6 +2,8 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from app.dependencies import require_auth
+from app.services.closed_services import PAYMENT_METHOD_OPTIONS
+from app.services.commercial_services import get_commercial_service_catalog, replace_commercial_services
 from app.services.legacy_core import normalize_text
 from app.services.org_registry import (
     ACCESS_OPTIONS,
@@ -18,7 +20,7 @@ from app.templating import render
 
 router = APIRouter()
 
-TABS = {"funcionarios", "setores", "representantes"}
+TABS = {"funcionarios", "setores", "representantes", "servicos"}
 
 
 def _tab(value: str) -> str:
@@ -50,6 +52,8 @@ def _page(request: Request, tab: str):
             "ufs": BRAZIL_UFS,
             "editing": editing,
             "editing_sector_id": editing_sector_id,
+            "services": get_commercial_service_catalog() if tab == "servicos" else [],
+            "payment_method_options": PAYMENT_METHOD_OPTIONS,
             "success": request.session.pop("org_success", ""),
             "error": request.session.pop("org_error", ""),
         },
@@ -91,6 +95,36 @@ async def org_remove_sector(request: Request, sector_id: str):
     remove_sector(sector_id)
     request.session["org_success"] = "Setor removido."
     return RedirectResponse(url="/cadastros?tipo=setores", status_code=303)
+
+
+@router.post("/cadastros/servicos")
+async def org_save_services(request: Request):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+    form = await request.form()
+    names = form.getlist("service_name")
+    valores = form.getlist("service_valor")
+    quantidades = form.getlist("service_quantidade")
+    formas = form.getlist("service_forma")
+    total = max(len(names), len(valores), len(quantidades), len(formas))
+    rows = []
+    for index in range(total):
+        rows.append(
+            {
+                "name": names[index] if index < len(names) else "",
+                "valor": valores[index] if index < len(valores) else "",
+                "quantidade": quantidades[index] if index < len(quantidades) else "1",
+                "forma_pagamento": formas[index] if index < len(formas) else "Mensal",
+            }
+        )
+    try:
+        replace_commercial_services(rows)
+    except ValueError as error:
+        request.session["org_error"] = str(error)
+    else:
+        request.session["org_success"] = "Serviços salvos."
+    return RedirectResponse(url="/cadastros?tipo=servicos", status_code=303)
 
 
 @router.post("/cadastros/pessoas")
