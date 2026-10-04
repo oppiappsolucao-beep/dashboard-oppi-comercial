@@ -1,6 +1,25 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="client-edit-page">
+<style>
+  .client-edit-tabs-new {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: 100%;
+  }
+  .client-edit-tabs-new .client-edit-tab {
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+  }
+  .client-edit-tabs-new .client-edit-tab-title,
+  .client-edit-tabs-new .client-edit-tab-sub {
+    display: flex;
+    width: 100%;
+    justify-content: center;
+    text-align: center;
+  }
+</style>
   <header class="client-edit-header panel">
     <div class="client-edit-header-main">
       <div class="client-edit-identity">
