@@ -5,7 +5,7 @@
 >
   <input type="hidden" name="tab" value="empresas" id="leads-tab-input">
   <input type="hidden" name="page" value="{{ table.page }}" id="leads-page-input">
-  <input type="hidden" name="letter" value="{% if leads_params.letter_explicit %}{{ leads_params.letter }}{% endif %}" id="leads-letter-input">
+  <input type="hidden" name="letter" value="{{ leads_params.letter or 'A' }}" id="leads-letter-input">
 
   <div class="metric-grid metric-grid-leads">
     {% for card in kpi_cards %}
@@ -91,9 +91,9 @@
     <nav class="leads-alphabet" aria-label="Empresas por letra">
       {% for item in table.alphabet %}
       <button type="button"
-        class="leads-alphabet-letter {% if leads_params.letter_explicit and not filters.search and item.letter == leads_params.letter %}is-active{% endif %}"
+        class="leads-alphabet-letter {% if not filters.search and item.letter == leads_params.letter %}is-active{% endif %}"
         {% if not item.count %}disabled{% endif %}
-        aria-pressed="{{ 'true' if leads_params.letter_explicit and not filters.search and item.letter == leads_params.letter else 'false' }}"
+        aria-pressed="{{ 'true' if not filters.search and item.letter == leads_params.letter else 'false' }}"
         onclick="document.getElementById('leads-letter-input').value='{{ item.letter }}'; document.getElementById('leads-page-input').value='1'; var search=document.querySelector('#leads-filters input[name=search]'); if(search){search.value='';} document.getElementById('leads-filters').requestSubmit();">
         {{ item.letter }}
       </button>
@@ -226,10 +226,8 @@
       {% else %}
       {% if raissa_aviso %}
       {{ raissa_aviso }}
-      {% elif leads_params.letter_explicit %}
-      Nenhuma empresa na letra {{ leads_params.letter }}.
       {% else %}
-      Nenhuma empresa na aba Raissa.
+      Nenhuma empresa na letra {{ leads_params.letter }}.
       {% endif %}
       {% endif %}
     </div>

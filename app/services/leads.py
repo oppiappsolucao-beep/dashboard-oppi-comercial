@@ -312,11 +312,10 @@ def company_index_letter(name: str) -> str:
         return "#"
     folded = unicodedata.normalize("NFD", text)
     folded = "".join(ch for ch in folded if unicodedata.category(ch) != "Mn").strip()
-    if not folded:
-        return "#"
-    first = folded[0].upper()
-    if "A" <= first <= "Z":
-        return first
+    for char in folded:
+        letter = char.upper()
+        if "A" <= letter <= "Z":
+            return letter
     return "#"
 
 

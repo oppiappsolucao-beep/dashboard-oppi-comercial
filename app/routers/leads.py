@@ -35,10 +35,8 @@ def _parse_leads_params(request: Request, form: dict | None = None) -> dict:
     tab = data.get("tab", "empresas")
     stage = data.get("stage", "Todas as etapas")
     sort = data.get("sort", "recent")
-    raw_letter = normalize_text(data.get("letter") or "")
-    letter_explicit = bool(raw_letter)
-    letter = raw_letter.upper()[:1] if letter_explicit else ""
-    if letter_explicit and letter not in COMPANY_ALPHABET and letter != "#":
+    letter = normalize_text(data.get("letter") or "A").upper()[:1] or "A"
+    if letter not in COMPANY_ALPHABET and letter != "#":
         letter = "A"
     try:
         page = int(data.get("page", 1))
@@ -54,7 +52,6 @@ def _parse_leads_params(request: Request, form: dict | None = None) -> dict:
         "stage": stage,
         "sort": sort if sort in ("recent", "name") else "recent",
         "letter": letter,
-        "letter_explicit": letter_explicit,
         "page": max(1, page),
         "per_page": per_page if per_page in (10, 25, 50) else 50,
     }
@@ -132,14 +129,13 @@ def _raissa_empresas_context(filters, leads_params: dict):
     loaded = read_raissa_companies()
     empresas = loaded.get("empresas") or []
     searching = bool(normalize_text(filters.search))
-    apply_letter = bool(leads_params.get("letter_explicit")) and not searching
     table, _page_rows = build_raissa_empresas_table(
         empresas,
         search=filters.search,
         letter=leads_params["letter"] or "A",
         page=leads_params["page"],
         per_page=leads_params["per_page"],
-        apply_letter=apply_letter,
+        apply_letter=not searching,
     )
     if searching:
         full_table, _rows = build_raissa_empresas_table(
@@ -275,7 +271,7 @@ async def leads_export(request: Request):
         letter=leads_params["letter"] or "A",
         page=1,
         per_page=max(len(loaded.get("empresas") or []), 1),
-        apply_letter=bool(leads_params.get("letter_explicit")) and not searching,
+        apply_letter=not searching,
     )
     rows = [
         {
