@@ -38,6 +38,25 @@ class RaissaCompanySyncTest(unittest.TestCase):
         self.assertEqual(row[5], "R$ 197,00")
         self.assertEqual(row[6], "Boleto recorrente")
 
+    def test_atualiza_email_de_cobranca_e_coluna_cobranca_whatsapp(self):
+        headers = ["Empresa", "E-mail de cobrança", "Cobrança / WhatsApp", "WhatsApp"]
+        payload = payload_for_raissa(
+            {
+                "empresa": "CLEAR SERVICOS JURIDICOS LTDA",
+                "email_cobranca": "financeiro@clear.com",
+                "telefone_b2b": "11988887777",
+            }
+        )
+        row = apply_raissa_values(
+            ["CLEAR SERVICOS JURIDICOS LTDA", "antigo@clear.com", "11911112222", "11911112222"],
+            headers,
+            payload,
+            only_filled=True,
+        )
+        self.assertEqual(row[1], "financeiro@clear.com")
+        self.assertEqual(row[2], "11988887777")
+        self.assertEqual(row[3], "11988887777")
+
     def test_atualizacao_nao_apaga_celula_vazia(self):
         headers = ["Empresa", "CNPJ", "Plano"]
         row = apply_raissa_values(

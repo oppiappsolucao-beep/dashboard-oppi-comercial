@@ -147,8 +147,19 @@ _FIELD_ALIASES: dict[str, tuple[str, ...]] = {
     "municipio": ("municipio", "cidade"),
     "uf": ("uf", "estado"),
     "email": ("email", "e-mail", "email empresa"),
+    "email_cobranca": ("email de cobranca", "e-mail de cobranca", "email cobranca", "e-mail cobranca"),
     "site": ("site", "site empresa", "website"),
-    "telefone": ("whatsapp", "celular whatsapp", "telefone b2b", "telefone (b2b)", "telefone", "celular", "fone"),
+    "telefone": (
+        "cobranca / whatsapp",
+        "cobranca/whatsapp",
+        "whatsapp",
+        "celular whatsapp",
+        "telefone b2b",
+        "telefone (b2b)",
+        "telefone",
+        "celular",
+        "fone",
+    ),
     "nome_contato": ("nome do contato", "nome contato", "contato"),
     "telefone_fixo": ("telefone fixo", "fixo"),
     "socio_1": ("socio 1", "socio1"),
@@ -195,17 +206,36 @@ def _header_map(headers: list[str]) -> dict[str, int]:
     return found
 
 
+def _header_indexes(headers: list[str], aliases: tuple[str, ...]) -> list[int]:
+    wanted = set(aliases)
+    return [
+        index
+        for index, header in enumerate(headers)
+        if normalize_search_text(header) in wanted
+    ]
+
+
 def apply_raissa_values(row: list[str], headers: list[str], payload: dict, *, only_filled: bool) -> list[str]:
     """Preenche a linha pelos cabeçalhos que já existem. Não apaga célula com valor vazio."""
     width = max(len(headers), len(row))
     values = list(row) + [""] * (width - len(row))
     mapping = _header_map(headers)
+    multi_fields = {"telefone", "email_cobranca"}
     for field, index in mapping.items():
+        if field in multi_fields:
+            continue
         incoming = normalize_text(payload.get(field))
         if only_filled and not incoming:
             continue
         if index < len(values):
             values[index] = incoming
+    for field in multi_fields:
+        incoming = normalize_text(payload.get(field))
+        if only_filled and not incoming:
+            continue
+        for index in _header_indexes(headers, _FIELD_ALIASES[field]):
+            if index < len(values):
+                values[index] = incoming
     return values[: max(len(headers), 1)]
 
 
@@ -279,6 +309,7 @@ def payload_for_raissa(form: dict, billing: dict | None = None) -> dict:
         "municipio": normalize_text(form.get("municipio")),
         "uf": normalize_text(form.get("uf")).upper()[:2],
         "email": normalize_text(form.get("email_empresa") or form.get("email")),
+        "email_cobranca": normalize_text(form.get("email_cobranca")),
         "site": normalize_text(form.get("site")),
         "telefone": normalize_text(form.get("telefone_b2b")),
         "nome_contato": normalize_text(form.get("nome_contato") or form.get("socio_1")),

@@ -182,7 +182,10 @@ def read_raissa_companies() -> dict:
     tipo_index = _header_index(headers, ("tipo", "tipo empresa", "categoria", "vinculo", "classificacao"))
     flag_index = _header_index(headers, ("filial", "e filial", "is filial"))
     parent_index = _header_index(headers, ("empresa matriz", "nome da matriz", "matriz vinculada", "matriz"))
-    phone_index = _header_index(headers, ("whatsapp", "telefone", "celular", "fone", "telefone b2b"))
+    phone_index = _header_index(
+        headers,
+        ("cobranca / whatsapp", "cobranca/whatsapp", "whatsapp", "telefone", "celular", "fone", "telefone b2b"),
+    )
     email_index = _header_index(headers, ("email", "e-mail", "email empresa"))
     cnpj_index = _header_index(headers, ("cnpj", "cnpj empresa"))
     if cnpj_index is None:
