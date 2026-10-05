@@ -106,9 +106,17 @@
       }).then(function (response) {
         if (!response.ok) {
           window.location.reload();
+          return "";
+        }
+        return response.text();
+      }).then(function (body) {
+        var target = "";
+        if (body && body.indexOf("/cadastro/") === 0) target = body.trim();
+        if (!target && queueId === "concluida") target = cadastroUrl;
+        if (queueId === "concluida" && target) {
+          window.location.href = target;
           return;
         }
-        if (queueId === "concluida" && cadastroUrl) window.location.href = cadastroUrl;
       }).catch(function () {
         window.location.reload();
       });

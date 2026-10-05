@@ -39,7 +39,8 @@ def build_registration_closes() -> dict:
             "phone": normalize_text(link["phone"]) or "Sem número",
             "contact_name": normalize_text(link["contact_name"]),
         }
-        if match is None:
+        concluded_on = card.get("updated_at") or ""
+        if match is None or not _saved_for_this_close(match, concluded_on):
             item["transfer_url"] = cadastro_url(link)
             pending.append(item)
             continue
@@ -130,6 +131,15 @@ def _registration_index() -> list[dict]:
         }
         for row in rows
     ]
+
+
+def _saved_for_this_close(match: dict, concluded_on: str) -> bool:
+    """Só sai da fila de cadastro se o cadastro foi salvo neste fechamento."""
+    closed = _stamp_day(concluded_on)
+    created = _stamp_day(match.get("created_at")) or _stamp_day(match.get("data_chamado"))
+    if not closed or not created:
+        return False
+    return created >= closed
 
 
 def _find_registration(link: dict, index: list[dict]) -> dict | None:

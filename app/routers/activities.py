@@ -297,6 +297,17 @@ async def activities_move_order(
         )
     except ValueError as error:
         return HTMLResponse(str(error), status_code=400)
+    if normalize_text(queue_id) == "concluida":
+        from app.services.campaign_leads import cadastro_url, campaign_card_extra
+
+        extra = campaign_card_extra(order_id) or {}
+        target = normalize_text(extra.get("cadastro_url"))
+        if target.startswith("/cadastro/"):
+            return HTMLResponse(target)
+        if extra:
+            target = cadastro_url(extra)
+            if target.startswith("/cadastro/novo"):
+                return HTMLResponse(target)
     return HTMLResponse("ok")
 
 

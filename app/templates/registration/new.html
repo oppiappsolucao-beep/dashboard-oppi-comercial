@@ -62,6 +62,7 @@
         <strong>{{ item.empresa }}</strong>
         <span>{{ item.phone }}{% if item.contact_name %} · {{ item.contact_name }}{% endif %}</span>
       </a>
+      <a class="btn btn-small" href="{{ item.transfer_url }}#cadastro-bot">Cadastrar</a>
     </div>
     {% else %}
     <p>Nenhum cliente aguardando cadastro.</p>
