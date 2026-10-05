@@ -37,6 +37,37 @@ class CadastroBotPasteTest(unittest.TestCase):
         self.assertEqual(fields["email_cobranca"], "silvia@example.com")
         self.assertTrue(fields["senha_acesso"])
 
+    def test_cartao_cnpj_separa_empresa_fantasia_whatsapp_e_senha(self):
+        text = """
+        NOME EMPRESARIAL
+        CLEAR SERVICOS JURIDICOS LTDA
+        TÍTULO DO ESTABELECIMENTO (NOME DE FANTASIA)
+        CLEAR JURIDICO
+        TELEFONE
+        (11) 3333-4444
+        Celular / WhatsApp
+        11988887777
+        Senha
+        Ab12cd34
+        """
+        fields = read_dados_gerais(text)["fields"]
+        self.assertEqual(fields["empresa"], "CLEAR SERVICOS JURIDICOS LTDA")
+        self.assertEqual(fields["nome_fantasia"], "CLEAR JURIDICO")
+        self.assertEqual(fields["telefone_b2b"], "(11) 98888-7777")
+        self.assertEqual(fields["telefone_fixo"], "(11) 3333-4444")
+        self.assertEqual(fields["senha_acesso"], "Ab12cd34")
+
+    def test_fantasia_mascarada_nao_vira_asterisco(self):
+        text = """
+        NOME EMPRESARIAL
+        CLEAR SERVICOS JURIDICOS LTDA
+        TÍTULO DO ESTABELECIMENTO (NOME DE FANTASIA)
+        ********
+        """
+        fields = read_dados_gerais(text)["fields"]
+        self.assertEqual(fields["empresa"], "CLEAR SERVICOS JURIDICOS LTDA")
+        self.assertNotIn("nome_fantasia", fields)
+
 
 if __name__ == "__main__":
     unittest.main()
