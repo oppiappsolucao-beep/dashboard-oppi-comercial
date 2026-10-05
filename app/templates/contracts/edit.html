@@ -72,11 +72,6 @@
       <span class="client-edit-tab-title"><span class="client-edit-tab-icon" aria-hidden="true">📋</span> Ordens de serviço{% if service_orders_count %} ({{ service_orders_count }}){% endif %}</span>
       <span class="client-edit-tab-sub">Protocolo do atendimento</span>
     </a>
-    <a href="/cadastro/todos/{{ sheet_row }}/editar?tab=proposta{% if from_page %}&from={{ from_page }}{% endif %}"
-      class="client-edit-tab {% if active_tab == 'proposta' %}is-active{% endif %}">
-      <span class="client-edit-tab-title"><span class="client-edit-tab-icon" aria-hidden="true">📄</span> Propostas</span>
-      <span class="client-edit-tab-sub">Propostas enviadas{% if proposals_count %}<span class="client-edit-tab-badge">{{ proposals_count }}</span>{% endif %}</span>
-    </a>
     <a href="/cadastro/todos/{{ sheet_row }}/editar?tab=acesso{% if from_page %}&from={{ from_page }}{% endif %}"
       class="client-edit-tab {% if active_tab == 'acesso' %}is-active{% endif %}">
       <span class="client-edit-tab-title"><span class="client-edit-tab-icon" aria-hidden="true">🔐</span> Acesso</span>
@@ -111,11 +106,6 @@
     </footer>
     {% elif active_tab == 'ordens' %}
     {% include "partials/registration_service_orders_tab.html" %}
-    <footer class="client-edit-footer panel client-edit-footer-compact">
-      {% include "partials/registration_danger_actions.html" %}
-    </footer>
-    {% elif active_tab == 'proposta' %}
-    {% include "partials/registration_proposta_tab.html" %}
     <footer class="client-edit-footer panel client-edit-footer-compact">
       {% include "partials/registration_danger_actions.html" %}
     </footer>
