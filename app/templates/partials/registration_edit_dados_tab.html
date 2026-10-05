@@ -69,7 +69,7 @@
       </div>
     </div>
     <div class="form-grid">
-      <div class="form-group full"><label>E-mail principal</label><input name="email" type="email" value="{{ values.email }}"></div>
+      <input type="hidden" name="email" value="{{ values.email }}">
       <div class="form-group">
         <label>Celular / WhatsApp{% if not sheet_row %} *{% endif %}</label>
         <input name="telefone_b2b"
@@ -128,13 +128,13 @@
       <span class="client-edit-section-icon">🌐</span>
       <div>
         <h2>Redes sociais e acompanhamento</h2>
-        <p>Redes sociais, responsável e observações.</p>
+        <p>Redes sociais, vendedor e observações.</p>
       </div>
     </div>
     <div class="form-grid">
       <div class="form-group"><label>Instagram</label><input name="instagram" value="{{ values.instagram }}"></div>
       <div class="form-group"><label>LinkedIn</label><input name="linkedin" value="{{ values.linkedin }}"></div>
-      <div class="form-group"><label>Responsável</label>
+      <div class="form-group"><label>Vendedor</label>
         {% if lock_responsible %}
         <input name="vendedor" value="{{ vendedor }}" readonly>
         {% else %}
