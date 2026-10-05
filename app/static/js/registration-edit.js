@@ -331,14 +331,15 @@
     }
 
     function fillAccess(email, password) {
-      if (!email) return false;
       ensureOnePartner();
-      setIfEmpty("email", email);
-      setIfEmpty("email_socio_1", email);
-      setIfEmpty("email_login_gestor", email);
-      setIfEmpty("email_confirmacao_admin", email);
-      setIfEmpty("email_cobranca", email);
-      if (!password) return true;
+      if (email) {
+        setIfEmpty("email", email);
+        setIfEmpty("email_socio_1", email);
+        setIfEmpty("email_login_gestor", email);
+        setIfEmpty("email_confirmacao_admin", email);
+        setIfEmpty("email_cobranca", email);
+      }
+      if (!password) return Boolean(email);
       form.querySelectorAll('input[name="senha_acesso"]').forEach(function (field) {
         if (field.disabled || String(field.value || "").trim()) return;
         field.type = "text";
@@ -355,8 +356,9 @@
       var emailInput = form.querySelector('input[name="email"]');
       var existingEmail = emailInput ? String(emailInput.value || "").trim() : "";
       var email = existingEmail || String((data && data.email) || "").trim();
-      if (email) {
-        fillAccess(email, form.dataset.generatedPassword || (data && data.senha_acesso) || "");
+      var password = form.dataset.generatedPassword || (data && data.senha_acesso) || "";
+      if (email || password) {
+        fillAccess(email, password);
       }
       if (data) {
         setIfEmpty("socio_1", data.socio_1 || "");

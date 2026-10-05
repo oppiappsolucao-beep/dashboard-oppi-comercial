@@ -194,6 +194,7 @@
           if (match) input.value = match.value;
           return;
         }
+        if (name === "senha_acesso") input.type = "text";
         input.value = fields[name];
       });
       var cnpjField = form ? form.querySelector('[name="cnpj"]') : null;

@@ -135,6 +135,8 @@ _FIELD_LABELS = {
     "telefone_socio_1": "Telefone do sócio 1",
     "cpf_socio_1": "CPF do sócio 1",
     "email_socio_1": "E-mail do sócio 1",
+    "email_login_gestor": "E-mail de login",
+    "senha_acesso": "Senha de acesso",
     "socio_2": "Sócio 2",
     "telefone_socio_2": "Telefone do sócio 2",
     "cpf_socio_2": "CPF do sócio 2",
@@ -493,6 +495,30 @@ def formulario_dados_gerais() -> dict:
     }
 
 
+def ensure_login_fields(fields: dict) -> None:
+    """Copia o e-mail da empresa para o login e gera a senha quando ainda estiver vazia."""
+    email = str(
+        fields.get("email")
+        or fields.get("email_socio_1")
+        or fields.get("email_login_gestor")
+        or ""
+    ).strip()
+    if email:
+        for key in (
+            "email",
+            "email_socio_1",
+            "email_login_gestor",
+            "email_confirmacao_admin",
+            "email_cobranca",
+        ):
+            if not str(fields.get(key) or "").strip():
+                fields[key] = email
+    if not str(fields.get("senha_acesso") or "").strip():
+        from app.services.cnpj_lookup import generate_access_password
+
+        fields["senha_acesso"] = generate_access_password()
+
+
 def read_dados_gerais(text: str, niche_options: list[str] | None = None) -> dict:
     """Extrai Dados gerais. Não devolve serviço, valor nem forma de pagamento."""
     raw = str(text or "").replace("\r\n", "\n").replace("\r", "\n").strip()
@@ -619,6 +645,7 @@ def read_dados_gerais(text: str, niche_options: list[str] | None = None) -> dict
             fields["nicho"] = niche
     if not fields.get("data_fechamento"):
         fields["data_fechamento"] = date.today().isoformat()
+    ensure_login_fields(fields)
 
     filled = [label for key, label in _FIELD_LABELS.items() if fields.get(key)]
     if not filled:

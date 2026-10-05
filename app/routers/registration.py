@@ -293,24 +293,39 @@ def _complete_pasted_registration(fields: dict) -> None:
     cnpj = normalize_text(fields.get("cnpj"))
     if len("".join(ch for ch in cnpj if ch.isdigit())) != 14:
         return
-    missing = not fields.get("nicho") or not fields.get("data_abertura") or not fields.get("responsavel_legal")
-    if not missing and fields.get("nome_fantasia"):
-        return
     try:
         from app.services.cnpj_lookup import CnpjLookupError, lookup_cnpj
 
         looked = lookup_cnpj(cnpj)
     except CnpjLookupError:
-        return
+        looked = {}
     except Exception:
-        return
-    for key in ("nicho", "data_abertura", "nome_fantasia", "capital", "responsavel_legal", "socio_1", "cpf_socio_1"):
+        looked = {}
+    for key in (
+        "nicho",
+        "data_abertura",
+        "nome_fantasia",
+        "capital",
+        "responsavel_legal",
+        "socio_1",
+        "cpf_socio_1",
+        "email",
+        "email_socio_1",
+        "email_login_gestor",
+        "email_confirmacao_admin",
+        "email_cobranca",
+    ):
         if not normalize_text(fields.get(key)) and normalize_text(looked.get(key)):
             fields[key] = looked[key]
+    if not normalize_text(fields.get("senha_acesso")) and normalize_text(looked.get("senha_acesso")):
+        fields["senha_acesso"] = looked["senha_acesso"]
     if fields.get("socio_1") and not fields.get("quantidade_socios"):
         fields["quantidade_socios"] = "1"
     if fields.get("socio_1") and not fields.get("responsavel_legal"):
         fields["responsavel_legal"] = fields["socio_1"]
+    from app.services.cadastro_bot import ensure_login_fields
+
+    ensure_login_fields(fields)
 
 
 @router.get("/cadastro/bot/dados-gerais")
