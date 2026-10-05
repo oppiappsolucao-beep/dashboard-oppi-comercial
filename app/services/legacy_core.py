@@ -2065,7 +2065,7 @@ def append_company_to_sheet(payload: dict) -> int:
                     remember_sheet_headers(headers)
                     row_values = [""] * len(headers)
                     _set_sheet_value_by_header(row_values, headers, ["Nome Empresas", "Nome da empresa", "Empresa", "Nome Empresa", "Nome empresas", "Nome Empresa(s)"], payload.get("empresa"))
-    _apply_registration_profile_fields(row_values, headers, payload)
+                    _apply_registration_profile_fields(row_values, headers, payload)
                     _set_sheet_value_by_header(row_values, headers, ["Data de abertura", "Data abertura"], payload.get("data_abertura"))
                     _set_sheet_value_by_header(row_values, headers, ["Capital", "Capital social"], payload.get("capital"))
                     _set_sheet_value_by_header(row_values, headers, ["CNPJ"], payload.get("cnpj"))
