@@ -147,7 +147,20 @@ _FIELD_ALIASES: dict[str, tuple[str, ...]] = {
     "municipio": ("municipio", "cidade"),
     "uf": ("uf", "estado"),
     "email": ("email", "e-mail", "email empresa"),
-    "email_cobranca": ("email de cobranca", "e-mail de cobranca", "email cobranca", "e-mail cobranca"),
+    "email_cobranca": (
+        "email de cobranca",
+        "e-mail de cobranca",
+        "email cobranca",
+        "e-mail cobranca",
+        "email para cobranca",
+        "e-mail para cobranca",
+        "cobranca / email",
+        "cobranca / e-mail",
+        "cobranca/email",
+        "cobranca/e-mail",
+        "email / cobranca",
+        "e-mail / cobranca",
+    ),
     "site": ("site", "site empresa", "website"),
     "telefone": (
         "cobranca / whatsapp",
@@ -215,6 +228,17 @@ def _header_indexes(headers: list[str], aliases: tuple[str, ...]) -> list[int]:
     ]
 
 
+def _is_billing_email_header(header: str) -> bool:
+    """Coluna de e-mail de cobrança, mesmo com barra ou a palavra 'para'."""
+    plain = normalize_search_text(header)
+    folded = plain.replace("-", "").replace("/", " ")
+    folded = re.sub(r"\s+", " ", folded)
+    has_mail = "email" in folded or "e mail" in plain
+    has_bill = "cobranca" in folded
+    has_phone = any(word in folded for word in ("whatsapp", "telefone", "celular", "fone"))
+    return has_mail and has_bill and not has_phone
+
+
 def apply_raissa_values(row: list[str], headers: list[str], payload: dict, *, only_filled: bool) -> list[str]:
     """Preenche a linha pelos cabeçalhos que já existem. Não apaga célula com valor vazio."""
     width = max(len(headers), len(row))
@@ -233,7 +257,14 @@ def apply_raissa_values(row: list[str], headers: list[str], payload: dict, *, on
         incoming = normalize_text(payload.get(field))
         if only_filled and not incoming:
             continue
-        for index in _header_indexes(headers, _FIELD_ALIASES[field]):
+        indexes = _header_indexes(headers, _FIELD_ALIASES[field])
+        if field == "email_cobranca":
+            indexes = [
+                index
+                for index, header in enumerate(headers)
+                if _is_billing_email_header(header)
+            ]
+        for index in indexes:
             if index < len(values):
                 values[index] = incoming
     return values[: max(len(headers), 1)]

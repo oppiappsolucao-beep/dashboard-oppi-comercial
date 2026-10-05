@@ -57,6 +57,25 @@ class RaissaCompanySyncTest(unittest.TestCase):
         self.assertEqual(row[2], "11988887777")
         self.assertEqual(row[3], "11988887777")
 
+    def test_atualiza_email_de_cobranca_com_barra_ou_para(self):
+        headers = ["Empresa", "Cobrança / E-mail", "E-mail para cobrança", "E-mail"]
+        payload = payload_for_raissa(
+            {
+                "empresa": "CLEAR SERVICOS JURIDICOS LTDA",
+                "email": "contato@clear.com",
+                "email_cobranca": "financeiro@clear.com",
+            }
+        )
+        row = apply_raissa_values(
+            ["CLEAR SERVICOS JURIDICOS LTDA", "antigo@clear.com", "antigo@clear.com", "contato@clear.com"],
+            headers,
+            payload,
+            only_filled=True,
+        )
+        self.assertEqual(row[1], "financeiro@clear.com")
+        self.assertEqual(row[2], "financeiro@clear.com")
+        self.assertEqual(row[3], "contato@clear.com")
+
     def test_atualizacao_nao_apaga_celula_vazia(self):
         headers = ["Empresa", "CNPJ", "Plano"]
         row = apply_raissa_values(
