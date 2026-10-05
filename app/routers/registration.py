@@ -255,6 +255,31 @@ def _registration_page_context(request: Request, df, *, error: str = "", values:
     }
 
 
+@router.get("/cadastro/bot/dados-gerais")
+async def cadastro_bot_formulario(request: Request):
+    redirect = require_auth(request)
+    if redirect:
+        return JSONResponse({"campos": [], "aviso": "Faça login para ver o formulário do bot."}, status_code=401)
+    from app.services.cadastro_bot import formulario_dados_gerais
+
+    return JSONResponse(formulario_dados_gerais())
+
+
+@router.post("/cadastro/bot/dados-gerais")
+async def cadastro_bot_dados_gerais(request: Request):
+    redirect = require_auth(request)
+    if redirect:
+        return JSONResponse({"fields": {}, "preenchidos": [], "aviso": "Faça login para usar o bot."}, status_code=401)
+    try:
+        payload = await request.json()
+    except Exception:
+        payload = {}
+    text = payload.get("text") if isinstance(payload, dict) else ""
+    from app.services.cadastro_bot import read_dados_gerais
+
+    return JSONResponse(read_dados_gerais(str(text or ""), niche_options=get_niche_options()))
+
+
 @router.get("/cadastro/api/empresas-matriz")
 async def api_empresas_matriz(request: Request, q: str = "", exclude: int | None = None):
     redirect = require_auth(request)

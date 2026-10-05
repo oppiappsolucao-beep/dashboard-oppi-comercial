@@ -32,6 +32,11 @@
   .cadastro-close-row strong, .cadastro-close-row span { display: block; }
   .cadastro-close-row span { color: var(--muted); font-size: 0.86rem; }
   @media (max-width: 720px) { .cadastro-closes { grid-template-columns: 1fr; } .cadastro-close-row { flex-direction: column; align-items: flex-start; } }
+  .cadastro-bot { display: grid; gap: 10px; margin-bottom: 12px; }
+  .cadastro-bot h2 { margin: 0; font-size: 1rem; }
+  .cadastro-bot p { margin: 0; color: var(--muted); line-height: 1.45; }
+  .cadastro-bot textarea { width: 100%; min-height: 140px; padding: 12px; border: 1px solid var(--border); border-radius: 12px; font: inherit; resize: vertical; }
+  .cadastro-bot-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 </style>
   {% if error %}<div class="alert-error">{{ error }}</div>{% endif %}
 
@@ -97,6 +102,15 @@
     {% if from_page %}<input type="hidden" name="from" value="{{ from_page }}">{% endif %}
 
     <div class="client-edit-tab-panel" data-registration-panel="dados">
+      <section class="cadastro-bot panel">
+        <h2>Ler mensagem do cliente</h2>
+        <p>Cole o texto que o cliente enviou. O bot preenche só Dados gerais. Financeiro continua com o comercial.</p>
+        <textarea id="cadastro-bot-text" placeholder="Cole aqui a mensagem do cliente"></textarea>
+        <div class="cadastro-bot-actions">
+          <button type="button" class="btn" id="cadastro-bot-run">Analisar e preencher</button>
+          <p id="cadastro-bot-note" hidden></p>
+        </div>
+      </section>
       {% include "partials/registration_edit_dados_tab.html" %}
     </div>
 
@@ -136,6 +150,66 @@
         card.setAttribute("aria-expanded", "true");
       }
     });
+  });
+  document.getElementById("cadastro-bot-run")?.addEventListener("click", async function () {
+    var note = document.getElementById("cadastro-bot-note");
+    var source = document.getElementById("cadastro-bot-text");
+    var text = source ? source.value.trim() : "";
+    if (note) {
+      note.hidden = false;
+      note.textContent = "Lendo a mensagem…";
+    }
+    if (!text) {
+      if (note) note.textContent = "Cole a mensagem do cliente antes de analisar.";
+      return;
+    }
+    try {
+      var response = await fetch("/cadastro/bot/dados-gerais", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: text }),
+      });
+      var data = await response.json();
+      var fields = data.fields || {};
+      var form = document.getElementById("registration-new-form");
+      if (fields.quantidade_socios) {
+        var count = document.getElementById("partners-count");
+        if (count) {
+          count.value = String(fields.quantidade_socios);
+          count.dispatchEvent(new Event("change"));
+        }
+      }
+      Object.keys(fields).forEach(function (name) {
+        if (name === "is_filial" || name === "matriz_nome" || name === "quantidade_socios") return;
+        var input = form ? form.querySelector('[name="' + name + '"]') : null;
+        if (!input || input.readOnly) return;
+        if (input.tagName === "SELECT") {
+          var exists = Array.prototype.some.call(input.options, function (option) {
+            return option.value === fields[name];
+          });
+          if (exists) input.value = fields[name];
+          return;
+        }
+        input.value = fields[name];
+      });
+      if (fields.is_filial) {
+        var filial = form ? form.querySelector("[data-filial-toggle]") : null;
+        if (filial && !filial.checked) {
+          filial.checked = true;
+          filial.dispatchEvent(new Event("change", { bubbles: true }));
+        }
+      }
+      if (fields.matriz_nome) {
+        var matriz = document.getElementById("empresa_matriz_search");
+        if (matriz) matriz.value = fields.matriz_nome;
+      }
+      if (note) {
+        var names = (data.preenchidos || []).join(", ");
+        note.textContent = names ? data.aviso + " " + names + "." : (data.aviso || "Nada para preencher.");
+      }
+    } catch (error) {
+      if (note) note.textContent = "Não consegui ler a mensagem agora.";
+    }
   });
   document.getElementById("cadastro-enviar-ponto")?.addEventListener("click", function () {
     var note = document.getElementById("cadastro-ponto-note");
