@@ -31,6 +31,9 @@
   .cadastro-close-row:last-child { border-bottom: 0; padding-bottom: 0; }
   .cadastro-close-row strong, .cadastro-close-row span { display: block; }
   .cadastro-close-row span { color: var(--muted); font-size: 0.86rem; }
+  .cadastro-close-name { color: inherit; text-decoration: none; display: block; }
+  .cadastro-close-name:hover strong { color: #7C3AED; }
+  #cadastro-fill[hidden] { display: none; }
   @media (max-width: 720px) { .cadastro-closes { grid-template-columns: 1fr; } .cadastro-close-row { flex-direction: column; align-items: flex-start; } }
   .cadastro-bot { display: grid; gap: 10px; margin-bottom: 12px; }
   .cadastro-bot h2 { margin: 0; font-size: 1rem; }
@@ -55,11 +58,10 @@
   <div id="cadastro-close-pending" class="cadastro-close-list panel" hidden>
     {% for item in registration_closes.pending %}
     <div class="cadastro-close-row">
-      <div>
+      <a class="cadastro-close-name" href="{{ item.transfer_url }}#cadastro-fill">
         <strong>{{ item.empresa }}</strong>
         <span>{{ item.phone }}{% if item.contact_name %} · {{ item.contact_name }}{% endif %}</span>
-      </div>
-      <a class="btn btn-small" href="{{ item.transfer_url }}">Transferir para o formulário</a>
+      </a>
     </div>
     {% else %}
     <p>Nenhum cliente aguardando cadastro.</p>
@@ -107,11 +109,13 @@
         <p>Cole o texto que o cliente enviou. O bot preenche só Dados gerais. Financeiro continua com o comercial.</p>
         <textarea id="cadastro-bot-text" placeholder="Cole aqui a mensagem do cliente"></textarea>
         <div class="cadastro-bot-actions">
-          <button type="button" class="btn" id="cadastro-bot-run">Analisar e preencher</button>
+          <button type="button" class="btn" id="cadastro-bot-run">Enviar para cadastro</button>
           <p id="cadastro-bot-note" hidden></p>
         </div>
       </section>
+      <div id="cadastro-fill" {% if not values.empresa %}hidden{% endif %}>
       {% include "partials/registration_edit_dados_tab.html" %}
+      </div>
     </div>
 
     <div class="client-edit-tab-panel is-hidden" data-registration-panel="financeiro">
@@ -203,6 +207,8 @@
         var matriz = document.getElementById("empresa_matriz_search");
         if (matriz) matriz.value = fields.matriz_nome;
       }
+      var fill = document.getElementById("cadastro-fill");
+      if (fill) fill.hidden = false;
       if (note) {
         var names = (data.preenchidos || []).join(", ");
         note.textContent = names ? data.aviso + " " + names + "." : (data.aviso || "Nada para preencher.");
