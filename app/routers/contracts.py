@@ -106,6 +106,19 @@ def _list_url_for_from_page(from_page: str = "") -> str:
     }.get(normalize_text(from_page).lower(), _CADASTRO_LIST_URL)
 
 
+def _raissa_save_note(form_dict: dict, billing_plan: dict | None) -> str:
+    try:
+        from app.services.raissa_company_sync import save_registration_on_raissa
+
+        result = save_registration_on_raissa(form_dict, billing_plan)
+    except Exception:
+        return " Não consegui gravar na aba Raissa agora."
+    if result.get("ok"):
+        return " Dados gerais e financeiro atualizados na aba Raissa."
+    aviso = normalize_text(result.get("aviso"))
+    return f" {aviso}" if aviso else ""
+
+
 def _edit_page_url(sheet_row: int, *, tab: str = "", from_page: str = "") -> str:
     params: list[str] = []
     if tab:
@@ -410,12 +423,12 @@ async def contract_edit_submit(request: Request, sheet_row: int):
             closed_items = parse_closed_services_from_form(form)
             save_closed_services(DEFAULT_TENANT_ID, sheet_row, closed_items, sync_sheet=False)
             previous_plan = load_billing_plan(DEFAULT_TENANT_ID, sheet_row)
-            save_billing_plan(
+            saved_plan = save_billing_plan(
                 DEFAULT_TENANT_ID,
                 sheet_row,
                 parse_billing_plan_from_form(form, previous=previous_plan),
             )
-            request.session["edit_success"] = "Financeiro atualizado com sucesso."
+            request.session["edit_success"] = "Financeiro atualizado com sucesso." + _raissa_save_note(form_dict, saved_plan)
             return RedirectResponse(
                 url=_edit_page_url(sheet_row, tab="financeiro", from_page=from_page),
                 status_code=303,
@@ -528,7 +541,9 @@ async def contract_edit_submit(request: Request, sheet_row: int):
         except Exception:
             pass
 
-        request.session["edit_success"] = f"Cadastro salvo com sucesso.{onboard_note}"
+        request.session["edit_success"] = (
+            f"Cadastro salvo com sucesso.{_raissa_save_note(form_dict, load_billing_plan(DEFAULT_TENANT_ID, sheet_row))}{onboard_note}"
+        )
         return RedirectResponse(url=_edit_page_url(sheet_row, from_page=from_page), status_code=303)
     except DuplicateRegistrationError as error:
         request.session["edit_error"] = str(error)

@@ -1,0 +1,55 @@
+"""Aba Raissa recebe dados gerais e financeiro do cadastro, sem apagar o que já existe."""
+from __future__ import annotations
+
+import sys
+import unittest
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
+from app.services.raissa_company_sync import apply_raissa_values, ensure_raissa_columns, payload_for_raissa
+
+
+class RaissaCompanySyncTest(unittest.TestCase):
+    def test_preenche_dados_gerais_e_financeiro_pelos_cabecalhos(self):
+        headers = ["Empresa", "CNPJ", "WhatsApp", "Nicho", "Plano", "Valor", "Forma de pagamento"]
+        payload = payload_for_raissa(
+            {
+                "empresa": "BRASIL AUTO PECAS",
+                "cnpj": "18.088.253/0001-24",
+                "telefone_b2b": "11999998888",
+                "nicho": "Automotivo",
+                "email": "contato@brasil.com",
+            },
+            {"servico": "Oppi Ponto Mensal", "valor": "R$ 197,00", "forma": "boleto_recorrente", "ciclo": "mensal"},
+        )
+        row = apply_raissa_values([""] * len(headers), headers, payload, only_filled=False)
+        self.assertEqual(row[0], "BRASIL AUTO PECAS")
+        self.assertEqual(row[1], "18.088.253/0001-24")
+        self.assertEqual(row[2], "11999998888")
+        self.assertEqual(row[3], "Automotivo")
+        self.assertEqual(row[4], "Oppi Ponto Mensal")
+        self.assertEqual(row[5], "R$ 197,00")
+        self.assertEqual(row[6], "Boleto recorrente")
+
+    def test_atualizacao_nao_apaga_celula_vazia(self):
+        headers = ["Empresa", "CNPJ", "Plano"]
+        row = apply_raissa_values(
+            ["BRASIL AUTO PECAS", "18.088.253/0001-24", "Oppi Ponto Mensal"],
+            headers,
+            {"empresa": "BRASIL AUTO PECAS", "cnpj": "", "plano": ""},
+            only_filled=True,
+        )
+        self.assertEqual(row[1], "18.088.253/0001-24")
+        self.assertEqual(row[2], "Oppi Ponto Mensal")
+
+    def test_cria_colunas_de_financeiro_se_faltarem(self):
+        headers = ensure_raissa_columns(["Empresa", "CNPJ"])
+        self.assertIn("Plano", headers)
+        self.assertIn("Valor", headers)
+        self.assertIn("Nicho", headers)
+
+
+if __name__ == "__main__":
+    unittest.main()

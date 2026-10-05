@@ -33,6 +33,20 @@ from config.crm_options import CHANNEL_OPTIONS, PIPELINE_STAGE_OPTIONS, PRIORITY
 router = APIRouter()
 
 
+def _save_on_raissa_note(form_dict: dict, billing_plan: dict | None) -> str:
+    try:
+        from app.services.raissa_company_sync import save_registration_on_raissa
+
+        result = save_registration_on_raissa(form_dict, billing_plan)
+    except Exception:
+        return " Não consegui gravar na aba Raissa agora."
+    if result.get("ok"):
+        aba = result.get("aba") or "Raissa"
+        return f" Dados gerais e financeiro gravados na aba {aba}. O cliente entra em Empresas."
+    aviso = normalize_text(result.get("aviso"))
+    return f" {aviso}" if aviso else ""
+
+
 def _resolve_registration_from_page(value: str) -> str:
     normalized = normalize_text(value)
     return normalized if normalized in {"leads", "activities"} else ""
@@ -384,16 +398,18 @@ async def new_registration_submit(request: Request):
             )
         if closed_services_has_data(closed_items):
             save_closed_services(DEFAULT_TENANT_ID, sheet_row, closed_items, sync_sheet=False)
+        billing_plan = None
         if int(sheet_row or 0) != 0 and (
             normalize_text(form.get("billing_forma"))
             or normalize_text(form.get("billing_valor"))
             or normalize_text(form.get("billing_servico"))
         ):
-            save_billing_plan(
+            billing_plan = save_billing_plan(
                 DEFAULT_TENANT_ID,
                 sheet_row,
                 parse_billing_plan_from_form(form),
             )
+        raissa_note = _save_on_raissa_note(form_dict, billing_plan)
 
         empresa = normalize_text(form_dict.get("empresa"))
         status = normalize_text(form_dict.get("status"))
@@ -405,7 +421,7 @@ async def new_registration_submit(request: Request):
         if int(sheet_row or 0) < 0:
             request.session["company_registration_success"] = (
                 f'"{empresa}" foi salvo e já aparece no sistema. '
-                f"A sincronização com a planilha acontece automaticamente.{order_warning}"
+                f"A sincronização com a planilha acontece automaticamente.{raissa_note}{order_warning}"
             )
             tab = "empresas" if normalize_text(form_dict.get("cadastro_tipo")).lower() == "empresa" else "leads"
             try:
@@ -432,7 +448,7 @@ async def new_registration_submit(request: Request):
             return RedirectResponse(url=f"/leads-e-empresas?tab={tab}", status_code=303)
 
         request.session["company_registration_success"] = (
-            f'"{empresa}" cadastrado com sucesso com o status "{status}".{order_warning}'
+            f'"{empresa}" cadastrado com sucesso com o status "{status}".{raissa_note}{order_warning}'
         )
         try:
             if normalize_text(form_dict.get("cadastro_tipo")).lower() == "empresa":
