@@ -144,12 +144,17 @@ def _with_cadastro_sheet_rows(empresas: list[dict]) -> list[dict]:
                 continue
             if sheet_row <= 0:
                 continue
+            phones = [
+                row_field_value(row, columns, key)
+                for key in ("telefone_b2b", "telefone_fixo", "telefone_alternativo", "telefone_socio_1")
+            ]
             cadastros.append(
                 {
                     "sheet_row": sheet_row,
                     "empresa": row.get("_empresa") or "",
                     "nome_fantasia": row_field_value(row, columns, "nome_fantasia"),
                     "cnpj": row_field_value(row, columns, "cnpj"),
+                    "telefones": [phone for phone in phones if phone],
                 }
             )
         return match_cadastro_sheet_rows(empresas, cadastros)

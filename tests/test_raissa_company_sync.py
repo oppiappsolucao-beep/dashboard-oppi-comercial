@@ -70,7 +70,21 @@ class RaissaCompanySyncTest(unittest.TestCase):
         linked = match_cadastro_sheet_rows(empresas, cadastros)
         self.assertEqual(linked[0]["sheet_row"], 12)
         self.assertEqual(linked[1]["sheet_row"], 40)
-        self.assertEqual(linked[2]["sheet_row"], 0)
+        self.assertEqual(linked[2]["sheet_row"], 8)
+
+    def test_liga_pelo_telefone_quando_o_numero_e_unico(self):
+        empresas = [{"empresa": "Outro Nome", "cnpj": "", "telefone": "(11) 98888-7766"}]
+        cadastros = [
+            {"sheet_row": 3, "empresa": "Academia Alfa", "cnpj": "", "telefones": ["11988887766"]},
+            {"sheet_row": 9, "empresa": "Academia Beta", "cnpj": "", "telefones": ["11988887766"]},
+        ]
+        same_phone = match_cadastro_sheet_rows(empresas, cadastros)
+        self.assertEqual(same_phone[0]["sheet_row"], 0)
+        unique = match_cadastro_sheet_rows(
+            empresas,
+            [{"sheet_row": 3, "empresa": "Academia Alfa", "cnpj": "", "telefones": ["11988887766"]}],
+        )
+        self.assertEqual(unique[0]["sheet_row"], 3)
 
 
 if __name__ == "__main__":

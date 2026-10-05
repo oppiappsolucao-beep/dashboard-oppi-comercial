@@ -22,22 +22,61 @@ def cnpj_digits(value) -> str:
     return digits if len(digits) == 14 else ""
 
 
+def phone_key(value) -> str:
+    digits = "".join(character for character in normalize_text(value) if character.isdigit())
+    if len(digits) >= 11:
+        return digits[-11:]
+    if len(digits) >= 8:
+        return digits
+    return ""
+
+
+def _remember_latest(index: dict[str, int], key: str, sheet_row: int) -> None:
+    if not key:
+        return
+    if sheet_row >= index.get(key, 0):
+        index[key] = sheet_row
+
+
+def _remember_unique(index: dict[str, int], ambiguous: set[str], key: str, sheet_row: int) -> None:
+    if not key or key in ambiguous:
+        return
+    previous = index.get(key)
+    if previous and previous != sheet_row:
+        ambiguous.add(key)
+        index.pop(key, None)
+        return
+    index[key] = sheet_row
+
+
+def _name_keys(item: dict) -> list[str]:
+    keys = []
+    for field in ("empresa", "nome_fantasia"):
+        key = normalize_search_text(item.get(field))
+        if key and key not in keys:
+            keys.append(key)
+    return keys
+
+
+def _phone_keys(item: dict) -> list[str]:
+    values = list(item.get("telefones") or [])
+    if item.get("telefone"):
+        values.append(item.get("telefone"))
+    keys = []
+    for value in values:
+        key = phone_key(value)
+        if key and key not in keys:
+            keys.append(key)
+    return keys
+
+
 def match_cadastro_sheet_rows(empresas: list[dict], cadastros: list[dict]) -> list[dict]:
-    """Liga a empresa da aba Raissa ao cadastro do CRM para o botão Ver."""
+    """Liga cada empresa da aba Raissa ao cadastro, para o botão Ver aparecer."""
     by_cnpj: dict[str, int] = {}
     by_name: dict[str, int] = {}
-    ambiguous: set[str] = set()
-
-    def remember_name(name, sheet_row: int) -> None:
-        key = normalize_search_text(name)
-        if not key or key in ambiguous:
-            return
-        previous = by_name.get(key)
-        if previous and previous != sheet_row:
-            ambiguous.add(key)
-            by_name.pop(key, None)
-            return
-        by_name[key] = sheet_row
+    by_phone: dict[str, int] = {}
+    ambiguous_phones: set[str] = set()
+    named: list[tuple[int, str]] = []
 
     for item in cadastros or []:
         try:
@@ -46,26 +85,46 @@ def match_cadastro_sheet_rows(empresas: list[dict], cadastros: list[dict]) -> li
             sheet_row = 0
         if sheet_row <= 0:
             continue
-        cnpj = cnpj_digits(item.get("cnpj"))
-        if cnpj and cnpj not in by_cnpj:
-            by_cnpj[cnpj] = sheet_row
-        remember_name(item.get("empresa"), sheet_row)
-        remember_name(item.get("nome_fantasia"), sheet_row)
+        _remember_latest(by_cnpj, cnpj_digits(item.get("cnpj")), sheet_row)
+        for key in _name_keys(item):
+            _remember_latest(by_name, key, sheet_row)
+            named.append((sheet_row, key))
+        for key in _phone_keys(item):
+            _remember_unique(by_phone, ambiguous_phones, key, sheet_row)
 
     linked: list[dict] = []
     for item in empresas or []:
-        sheet_row = 0
-        cnpj = cnpj_digits(item.get("cnpj"))
-        if cnpj:
-            sheet_row = by_cnpj.get(cnpj, 0)
+        sheet_row = by_cnpj.get(cnpj_digits(item.get("cnpj")), 0)
         if not sheet_row:
-            key = normalize_search_text(item.get("empresa"))
-            if key and key not in ambiguous:
+            for key in _name_keys(item):
                 sheet_row = by_name.get(key, 0)
+                if sheet_row:
+                    break
+        if not sheet_row:
+            for key in _phone_keys(item):
+                sheet_row = by_phone.get(key, 0)
+                if sheet_row:
+                    break
+        if not sheet_row:
+            sheet_row = _match_name_tokens(item.get("empresa"), named)
         copied = dict(item)
         copied["sheet_row"] = sheet_row
         linked.append(copied)
     return linked
+
+
+def _match_name_tokens(empresa, named: list[tuple[int, str]]) -> int:
+    tokens = [token for token in normalize_search_text(empresa).split() if len(token) >= 3]
+    if len(tokens) < 2:
+        return 0
+    hits: dict[int, int] = {}
+    for sheet_row, name in named:
+        if all(token in name for token in tokens):
+            hits[sheet_row] = hits.get(sheet_row, 0) + 1
+    if not hits:
+        return 0
+    best = max(hits.values())
+    return max(sheet_row for sheet_row, score in hits.items() if score == best)
 
 
 def normalize_search_text(value) -> str:
