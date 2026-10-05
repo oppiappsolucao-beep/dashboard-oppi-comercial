@@ -8,7 +8,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from app.services.raissa_company_sync import apply_raissa_values, ensure_raissa_columns, payload_for_raissa
+from app.services.raissa_company_sync import (
+    apply_raissa_values,
+    ensure_raissa_columns,
+    match_cadastro_sheet_rows,
+    payload_for_raissa,
+)
 
 
 class RaissaCompanySyncTest(unittest.TestCase):
@@ -49,6 +54,23 @@ class RaissaCompanySyncTest(unittest.TestCase):
         self.assertIn("Plano", headers)
         self.assertIn("Valor", headers)
         self.assertIn("Nicho", headers)
+
+    def test_liga_empresa_da_raissa_ao_cadastro_pelo_cnpj_ou_nome(self):
+        empresas = [
+            {"empresa": "Brasil Auto Peças", "cnpj": "18.088.253/0001-24"},
+            {"empresa": "Clínica Sol", "cnpj": ""},
+            {"empresa": "Nome Repetido", "cnpj": ""},
+        ]
+        cadastros = [
+            {"sheet_row": 12, "empresa": "JOSE VALTON", "nome_fantasia": "BRASIL AUTO PECAS", "cnpj": "18088253000124"},
+            {"sheet_row": 40, "empresa": "Clinica Sol", "nome_fantasia": "", "cnpj": ""},
+            {"sheet_row": 7, "empresa": "Nome Repetido", "nome_fantasia": "", "cnpj": ""},
+            {"sheet_row": 8, "empresa": "Nome Repetido", "nome_fantasia": "", "cnpj": ""},
+        ]
+        linked = match_cadastro_sheet_rows(empresas, cadastros)
+        self.assertEqual(linked[0]["sheet_row"], 12)
+        self.assertEqual(linked[1]["sheet_row"], 40)
+        self.assertEqual(linked[2]["sheet_row"], 0)
 
 
 if __name__ == "__main__":

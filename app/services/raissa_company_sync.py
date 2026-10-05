@@ -17,6 +17,57 @@ def normalize_text(value) -> str:
     return re.sub(r"\s+", " ", text)
 
 
+def cnpj_digits(value) -> str:
+    digits = "".join(character for character in normalize_text(value) if character.isdigit())
+    return digits if len(digits) == 14 else ""
+
+
+def match_cadastro_sheet_rows(empresas: list[dict], cadastros: list[dict]) -> list[dict]:
+    """Liga a empresa da aba Raissa ao cadastro do CRM para o botão Ver."""
+    by_cnpj: dict[str, int] = {}
+    by_name: dict[str, int] = {}
+    ambiguous: set[str] = set()
+
+    def remember_name(name, sheet_row: int) -> None:
+        key = normalize_search_text(name)
+        if not key or key in ambiguous:
+            return
+        previous = by_name.get(key)
+        if previous and previous != sheet_row:
+            ambiguous.add(key)
+            by_name.pop(key, None)
+            return
+        by_name[key] = sheet_row
+
+    for item in cadastros or []:
+        try:
+            sheet_row = int(item.get("sheet_row") or 0)
+        except (TypeError, ValueError):
+            sheet_row = 0
+        if sheet_row <= 0:
+            continue
+        cnpj = cnpj_digits(item.get("cnpj"))
+        if cnpj and cnpj not in by_cnpj:
+            by_cnpj[cnpj] = sheet_row
+        remember_name(item.get("empresa"), sheet_row)
+        remember_name(item.get("nome_fantasia"), sheet_row)
+
+    linked: list[dict] = []
+    for item in empresas or []:
+        sheet_row = 0
+        cnpj = cnpj_digits(item.get("cnpj"))
+        if cnpj:
+            sheet_row = by_cnpj.get(cnpj, 0)
+        if not sheet_row:
+            key = normalize_search_text(item.get("empresa"))
+            if key and key not in ambiguous:
+                sheet_row = by_name.get(key, 0)
+        copied = dict(item)
+        copied["sheet_row"] = sheet_row
+        linked.append(copied)
+    return linked
+
+
 def normalize_search_text(value) -> str:
     text = unicodedata.normalize("NFKD", normalize_text(value).lower())
     text = "".join(character for character in text if not unicodedata.combining(character))

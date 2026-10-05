@@ -184,6 +184,12 @@ def read_raissa_companies() -> dict:
     parent_index = _header_index(headers, ("empresa matriz", "nome da matriz", "matriz vinculada", "matriz"))
     phone_index = _header_index(headers, ("whatsapp", "telefone", "celular", "fone", "telefone b2b"))
     email_index = _header_index(headers, ("email", "e-mail", "email empresa"))
+    cnpj_index = _header_index(headers, ("cnpj", "cnpj empresa"))
+    if cnpj_index is None:
+        for index, header in enumerate(headers):
+            if "cnpj" in _plain(header):
+                cnpj_index = index
+                break
     contact_index = _header_index(
         headers,
         ("contato", "nome contato", "nome do contato", "responsavel", "socio"),
@@ -208,6 +214,7 @@ def read_raissa_companies() -> dict:
                 "matriz": normalize_text(parent),
                 "telefone": normalize_text(values[phone_index]) if phone_index is not None and phone_index < len(values) else "",
                 "email": normalize_text(values[email_index]) if email_index is not None and email_index < len(values) else "",
+                "cnpj": normalize_text(values[cnpj_index]) if cnpj_index is not None and cnpj_index < len(values) else "",
                 "contato": normalize_text(values[contact_index]) if contact_index is not None and contact_index < len(values) else "",
             }
         )

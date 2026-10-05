@@ -169,7 +169,7 @@
 
 .leads-table-card {
   padding: 0;
-  overflow: hidden;
+  overflow: auto;
   border-radius: var(--radius);
 }
 
@@ -235,9 +235,14 @@
 
 .leads-table th:last-child,
 .leads-table td:last-child {
-  width: 148px;
+  width: 18%;
+  min-width: 148px;
   padding-right: 18px;
   text-align: right;
+  position: sticky;
+  right: 0;
+  background: #fff;
+  z-index: 1;
 }
 
 .leads-table th:first-child,
@@ -246,17 +251,17 @@
 }
 
 .leads-table th:nth-child(1),
-.leads-table td:nth-child(1) { width: 24%; }
+.leads-table td:nth-child(1) { width: 22%; }
 .leads-table th:nth-child(2),
-.leads-table td:nth-child(2) { width: 20%; }
+.leads-table td:nth-child(2) { width: 18%; }
 .leads-table th:nth-child(3),
 .leads-table td:nth-child(3) { width: 14%; }
 .leads-table th:nth-child(4),
-.leads-table td:nth-child(4) { width: 16%; }
+.leads-table td:nth-child(4) { width: 14%; }
 .leads-table th:nth-child(5),
-.leads-table td:nth-child(5) { width: 16%; }
+.leads-table td:nth-child(5) { width: 14%; }
 .leads-table th:nth-child(6),
-.leads-table td:nth-child(6) { width: 148px; }
+.leads-table td:nth-child(6) { width: 18%; }
 
 .leads-table td {
   overflow: hidden;
