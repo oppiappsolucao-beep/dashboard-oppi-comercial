@@ -1,4 +1,5 @@
 """Leads e Empresas — KPIs e tabela."""
+import unicodedata
 from datetime import date, datetime, timedelta
 
 import pandas as pd
@@ -20,6 +21,7 @@ from app.services.legacy_core import (
 
 ETAPA_STAGES = PIPELINE_STAGE_OPTIONS
 ETAPA_BADGE = PIPELINE_STAGE_BADGE
+COMPANY_ALPHABET = list("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
 
 ACTIVE_STATUSES = {
     "Novo Lead", "Chamado Whats", "Conversando", "Reunião", "Proposta",
@@ -303,6 +305,46 @@ def apply_leads_view(
     return result
 
 
+def company_index_letter(name: str) -> str:
+    """Primeira letra do nome, sem acento. Nomes que não começam com A–Z vão para #."""
+    text = normalize_text(name)
+    if not text or text == "—":
+        return "#"
+    folded = unicodedata.normalize("NFD", text)
+    folded = "".join(ch for ch in folded if unicodedata.category(ch) != "Mn").strip()
+    for char in folded:
+        letter = char.upper()
+        if "A" <= letter <= "Z":
+            return letter
+    return "#"
+
+
+def build_company_alphabet(view_df: pd.DataFrame) -> list[dict]:
+    counts = {letter: 0 for letter in COMPANY_ALPHABET}
+    other = 0
+    if not view_df.empty and "_empresa" in view_df.columns:
+        for name in view_df["_empresa"].tolist():
+            letter = company_index_letter(str(name or ""))
+            if letter in counts:
+                counts[letter] += 1
+            else:
+                other += 1
+    items = [{"letter": letter, "count": counts[letter]} for letter in COMPANY_ALPHABET]
+    if other:
+        items.append({"letter": "#", "count": other})
+    return items
+
+
+def filter_companies_by_letter(view_df: pd.DataFrame, letter: str) -> pd.DataFrame:
+    if view_df.empty or "_empresa" not in view_df.columns:
+        return view_df
+    selected = company_index_letter(letter) if letter != "#" else "#"
+    if selected not in COMPANY_ALPHABET and selected != "#":
+        selected = "A"
+    mask = view_df["_empresa"].map(lambda name: company_index_letter(str(name or "")) == selected)
+    return view_df.loc[mask]
+
+
 def _build_row(row, columns: dict, tab: str, tenant_id: str | None) -> dict:
     status_raw = row.get("_status_grupo") or row.get("_status_original") or ""
     stored = get_lead_action(tenant_id, int(row.get("_sheet_row", 0) or 0)) or {}
@@ -366,6 +408,116 @@ def _build_row(row, columns: dict, tab: str, tenant_id: str | None) -> dict:
     }
 
 
+def build_raissa_empresas_table(
+    empresas: list[dict],
+    *,
+    search: str = "",
+    letter: str = "A",
+    page: int = 1,
+    per_page: int = 50,
+    apply_letter: bool = True,
+) -> tuple[dict, list[dict]]:
+    """Lista da aba Raissa no mesmo formato da tabela de Empresas."""
+    query = normalize_text(search).lower()
+    rows_all = []
+    for item in empresas:
+        blob = " ".join(
+            (
+                item.get("empresa") or "",
+                item.get("telefone") or "",
+                item.get("email") or "",
+                item.get("contato") or "",
+                item.get("matriz") or "",
+                item.get("tipo") or "",
+            )
+        ).lower()
+        if query and query not in blob:
+            continue
+        rows_all.append(item)
+    rows_all.sort(key=lambda item: normalize_text(item.get("empresa")).lower())
+    view = pd.DataFrame({"_empresa": [item.get("empresa") or "" for item in rows_all]}) if rows_all else pd.DataFrame({"_empresa": []})
+    alphabet = build_company_alphabet(view)
+    selected = letter if letter in COMPANY_ALPHABET or letter == "#" else "A"
+    if apply_letter and rows_all:
+        rows_all = [
+            item for item in rows_all
+            if company_index_letter(item.get("empresa") or "") == selected
+        ]
+    total = len(rows_all)
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    page = max(1, min(page, total_pages))
+    start = (page - 1) * per_page
+    page_rows = rows_all[start : start + per_page]
+    table_rows = [_raissa_table_row(item) for item in page_rows]
+    return {
+        "rows": table_rows,
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+        "total_pages": total_pages,
+        "from_record": start + 1 if total else 0,
+        "to_record": min(start + per_page, total),
+        "page_numbers": list(range(max(1, page - 2), min(total_pages, page + 2) + 1)),
+        "alphabet": alphabet,
+        "letter": selected,
+    }, rows_all
+
+
+def raissa_kpi_cards(empresas: list[dict]) -> list[dict]:
+    total = len(empresas)
+    matrizes = sum(1 for item in empresas if item.get("tipo") == "Matriz")
+    filiais = sum(1 for item in empresas if item.get("tipo") == "Filial")
+    com_contato = sum(1 for item in empresas if normalize_text(item.get("telefone") or item.get("email")))
+    return [
+        {"label": "Total de Empresas", "value": total, "note": "Aba Raissa", "icon": "🏢", "tone": "purple"},
+        {"label": "Matrizes", "value": matrizes, "note": "Na aba Raissa", "icon": "📋", "tone": "blue"},
+        {"label": "Filiais", "value": filiais, "note": "Na aba Raissa", "icon": "🏬", "tone": "orange"},
+        {"label": "Com contato", "value": com_contato, "note": "Telefone ou e-mail", "icon": "📞", "tone": "pink"},
+    ]
+
+
+def _raissa_table_row(item: dict) -> dict:
+    empresa = normalize_text(item.get("empresa")) or "—"
+    kind = item.get("tipo") or "Matriz"
+    parent = normalize_text(item.get("matriz"))
+    if kind == "Filial" and parent and _plain_parent(parent):
+        meta = f"Filial · {parent}"
+    else:
+        meta = kind
+    telefone = normalize_text(item.get("telefone")) or "—"
+    email = normalize_text(item.get("email")) or "—"
+    contato = normalize_text(item.get("contato")) or "—"
+    return {
+        "nome": empresa,
+        "empresa": empresa,
+        "empresa_initials": _initials(empresa),
+        "contato": contato,
+        "tipo_label": kind,
+        "meta_label": meta,
+        "telefone": telefone,
+        "email": email,
+        "vendedor": "Raissa",
+        "vendedor_initials": "RA",
+        "etapa": kind,
+        "etapa_class": "ganho" if kind == "Matriz" else "novo-lead",
+        "status": kind,
+        "ultimo_contato": "—",
+        "ultimo_contato_relativo": "—",
+        "closed_services_title": "—",
+        "closed_services_meta": "",
+        "valor": "—",
+        "valor_num": 0,
+        "whatsapp_href": _whatsapp_href(telefone if telefone != "—" else ""),
+        "sheet_row": 0,
+        "href": "/leads-e-empresas",
+    }
+
+
+def _plain_parent(value: str) -> bool:
+    text = unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode("ascii").lower()
+    return text not in {"matriz", "filial", "sede", "principal", "sim", "nao", "s", "n"}
+
+
 def build_leads_table(
     filtered_df: pd.DataFrame,
     columns: dict,
@@ -375,6 +527,8 @@ def build_leads_table(
     page: int = 1,
     per_page: int = 10,
     tenant_id: str | None = None,
+    letter: str = "A",
+    apply_letter: bool = False,
 ) -> dict:
     view_df = apply_leads_view(
         filtered_df,
@@ -384,6 +538,10 @@ def build_leads_table(
         tenant_id=tenant_id,
         columns=columns,
     )
+    alphabet = build_company_alphabet(view_df)
+    selected_letter = letter if letter in COMPANY_ALPHABET or letter == "#" else "A"
+    if apply_letter:
+        view_df = filter_companies_by_letter(view_df, selected_letter)
     total = len(view_df)
     total_pages = max(1, (total + per_page - 1) // per_page)
     page = max(1, min(page, total_pages))
@@ -403,10 +561,21 @@ def build_leads_table(
         "from_record": start + 1 if total else 0,
         "to_record": min(start + per_page, total),
         "page_numbers": page_numbers,
+        "alphabet": alphabet,
+        "letter": selected_letter,
     }
 
 
-def build_leads_export_rows(filtered_df: pd.DataFrame, columns: dict, tab: str, stage: str, sort: str, tenant_id: str | None) -> list[dict]:
+def build_leads_export_rows(
+    filtered_df: pd.DataFrame,
+    columns: dict,
+    tab: str,
+    stage: str,
+    sort: str,
+    tenant_id: str | None,
+    letter: str = "A",
+    apply_letter: bool = False,
+) -> list[dict]:
     view_df = apply_leads_view(
         filtered_df,
         tab,
@@ -415,6 +584,8 @@ def build_leads_export_rows(filtered_df: pd.DataFrame, columns: dict, tab: str, 
         tenant_id=tenant_id,
         columns=columns,
     )
+    if apply_letter:
+        view_df = filter_companies_by_letter(view_df, letter)
     return [_build_row(row, columns, tab, tenant_id) for _, row in view_df.iterrows()]
 
 

@@ -1,0 +1,380 @@
+{% extends "base.html" %}
+{% block content %}
+<link rel="stylesheet" href="/static/css/org-registry.css?v=3">
+<div class="page-header">
+  <div>
+    <div class="page-title">Sistema</div>
+    <div class="page-subtitle">Funcionários, setores, representantes, treinadores e serviços. O setor define quem pode atender e quais acessos estão liberados.</div>
+  </div>
+</div>
+
+{% if success %}<div class="alert-success">{{ success }}</div>{% endif %}
+{% if error %}<div class="alert-error">{{ error }}</div>{% endif %}
+
+<nav class="org-tabs" aria-label="Tipos de cadastro">
+  <a href="/cadastros?tipo=funcionarios" class="org-tab {% if active_tab == 'funcionarios' %}is-active{% endif %}">Funcionários</a>
+  <a href="/cadastros?tipo=setores" class="org-tab {% if active_tab == 'setores' %}is-active{% endif %}">Setores</a>
+  <a href="/cadastros?tipo=representantes" class="org-tab {% if active_tab == 'representantes' %}is-active{% endif %}">Representantes</a>
+  <a href="/cadastros?tipo=treinadores" class="org-tab {% if active_tab == 'treinadores' %}is-active{% endif %}">Treinadores</a>
+  <a href="/cadastros?tipo=servicos" class="org-tab {% if active_tab == 'servicos' %}is-active{% endif %}">Serviços</a>
+</nav>
+
+{% if active_tab == 'setores' %}
+<section class="panel org-panel">
+  <h2>Setor e acessos</h2>
+  <p>Escolha o setor para liberar a lista de acessos que ele pode usar.</p>
+  <form method="post" action="/cadastros/setores" class="org-form">
+    <div class="form-grid">
+      <div class="form-group">
+        <label for="org-sector-select">Setor</label>
+        <select id="org-sector-select" name="sector_id" required>
+          <option value="">Selecione</option>
+          <option value="novo">Novo setor</option>
+          {% for sector in sectors %}
+          <option value="{{ sector.id }}" data-name="{{ sector.name }}" data-accesses="{{ sector.accesses_csv }}" {% if editing_sector_id == sector.id %}selected{% endif %}>{{ sector.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group" id="org-sector-name-wrap" hidden>
+        <label for="org-sector-name">Nome do setor</label>
+        <input id="org-sector-name" name="sector_name" maxlength="80" placeholder="Ex.: Implantação">
+      </div>
+    </div>
+    <fieldset class="org-access" id="org-access-box" hidden>
+      <legend>Acessos permitidos</legend>
+      <div class="org-access-list">
+        {% for key, label in access_options %}
+        <label class="org-access-item">
+          <input type="checkbox" name="access" value="{{ key }}" data-access-key>
+          <span>{{ label }}</span>
+        </label>
+        {% endfor %}
+      </div>
+    </fieldset>
+    <button type="submit" class="btn">Salvar setor</button>
+  </form>
+</section>
+
+<section class="org-list">
+  {% for sector in sectors %}
+  <article class="panel org-card">
+    <div class="org-card-head">
+      <div>
+        <strong>{{ sector.name }}</strong>
+        <span>{{ sector.people_count }} pessoa(s)</span>
+      </div>
+      <div class="org-card-actions">
+        <a class="btn btn-secondary btn-small" href="/cadastros?tipo=setores&editar={{ sector.id }}">Editar</a>
+        <form method="post" action="/cadastros/setores/{{ sector.id }}/remover">
+          <button type="submit" class="btn btn-secondary btn-small">Remover</button>
+        </form>
+      </div>
+    </div>
+    <div class="org-access-tags">
+      {% if sector.access_labels %}
+      {% for label in sector.access_labels %}<span>{{ label }}</span>{% endfor %}
+      {% else %}
+      <span class="is-empty">Nenhum acesso permitido</span>
+      {% endif %}
+    </div>
+  </article>
+  {% endfor %}
+</section>
+<script>
+(function () {
+  var select = document.getElementById("org-sector-select");
+  var box = document.getElementById("org-access-box");
+  var nameWrap = document.getElementById("org-sector-name-wrap");
+  var nameInput = document.getElementById("org-sector-name");
+  if (!select || !box) return;
+  function sync() {
+    var option = select.selectedOptions[0];
+    var value = select.value;
+    var isNew = value === "novo";
+    var chosen = Boolean(value);
+    box.hidden = !chosen;
+    nameWrap.hidden = !chosen;
+    nameInput.required = chosen;
+    nameInput.value = isNew ? "" : ((option && option.getAttribute("data-name")) || "");
+    var allowed = ((option && option.getAttribute("data-accesses")) || "").split(",").filter(Boolean);
+    document.querySelectorAll("[data-access-key]").forEach(function (input) {
+      input.checked = !isNew && allowed.indexOf(input.value) >= 0;
+    });
+  }
+  select.addEventListener("change", sync);
+  if (select.value) sync();
+})();
+</script>
+
+{% elif active_tab == 'servicos' %}
+<section class="panel org-panel" id="org-services">
+  <div class="org-services-head">
+    <div>
+      <h2>Serviços contratados</h2>
+      <p>Controle interno: nome, quantidade e valor. Estes serviços aparecem no cadastro da empresa. Não vai para o Asaas.</p>
+    </div>
+    <button type="button" class="btn" id="org-service-add">+ Adicionar serviço</button>
+  </div>
+  <form method="post" action="/cadastros/servicos" class="org-form">
+    <div id="org-service-list">
+      {% for item in services %}
+      <div class="org-service-row form-grid">
+        <div class="form-group">
+          <label>Serviço</label>
+          <input type="text" name="service_name" value="{{ item.name }}" maxlength="120" placeholder="Nome do serviço" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label>Quantidade</label>
+          <input type="number" name="service_quantidade" min="1" step="1" value="{{ item.quantidade or 1 }}">
+        </div>
+        <div class="form-group">
+          <label>Valor do serviço</label>
+          <input type="text" name="service_valor" value="{{ item.valor }}" placeholder="R$ 0,00" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label>Forma de pagamento</label>
+          <select name="service_forma">
+            {% for option in payment_method_options %}
+            <option value="{{ option }}" {% if item.forma_pagamento == option %}selected{% endif %}>{{ option }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="org-service-remove">
+          <button type="button" class="btn btn-secondary btn-small">Remover</button>
+        </div>
+      </div>
+      {% else %}
+      <div class="org-service-row form-grid">
+        <div class="form-group">
+          <label>Serviço</label>
+          <input type="text" name="service_name" value="" maxlength="120" placeholder="Nome do serviço" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label>Quantidade</label>
+          <input type="number" name="service_quantidade" min="1" step="1" value="1">
+        </div>
+        <div class="form-group">
+          <label>Valor do serviço</label>
+          <input type="text" name="service_valor" value="" placeholder="R$ 0,00" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label>Forma de pagamento</label>
+          <select name="service_forma">
+            {% for option in payment_method_options %}
+            <option value="{{ option }}" {% if option == 'Mensal' %}selected{% endif %}>{{ option }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="org-service-remove">
+          <button type="button" class="btn btn-secondary btn-small">Remover</button>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="org-form-actions">
+      <button type="submit" class="btn">Salvar serviços</button>
+    </div>
+  </form>
+  <template id="org-service-template">
+    <div class="org-service-row form-grid">
+      <div class="form-group">
+        <label>Serviço</label>
+        <input type="text" name="service_name" value="" maxlength="120" placeholder="Nome do serviço" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label>Quantidade</label>
+        <input type="number" name="service_quantidade" min="1" step="1" value="1">
+      </div>
+      <div class="form-group">
+        <label>Valor do serviço</label>
+        <input type="text" name="service_valor" value="" placeholder="R$ 0,00" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label>Forma de pagamento</label>
+        <select name="service_forma">
+          {% for option in payment_method_options %}
+          <option value="{{ option }}" {% if option == 'Mensal' %}selected{% endif %}>{{ option }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="org-service-remove">
+        <button type="button" class="btn btn-secondary btn-small">Remover</button>
+      </div>
+    </div>
+  </template>
+</section>
+<script>
+(function () {
+  var list = document.getElementById("org-service-list");
+  var add = document.getElementById("org-service-add");
+  var template = document.getElementById("org-service-template");
+  if (!list || !add || !template) return;
+  function bindRemove(row) {
+    var button = row.querySelector(".org-service-remove button");
+    if (!button || button.dataset.bound === "1") return;
+    button.dataset.bound = "1";
+    button.addEventListener("click", function () {
+      row.remove();
+      if (!list.querySelector(".org-service-row")) {
+        list.appendChild(template.content.cloneNode(true));
+        bindRemove(list.querySelector(".org-service-row"));
+      }
+    });
+  }
+  list.querySelectorAll(".org-service-row").forEach(bindRemove);
+  add.addEventListener("click", function () {
+    list.appendChild(template.content.cloneNode(true));
+    var rows = list.querySelectorAll(".org-service-row");
+    bindRemove(rows[rows.length - 1]);
+  });
+})();
+</script>
+
+{% elif active_tab == 'representantes' %}
+<section class="panel org-panel">
+  <h2>{% if editing %}Editar representante{% else %}Representante nacional{% endif %}</h2>
+  <p>Login de acesso e o local onde o representante reside.</p>
+  <form method="post" action="/cadastros/pessoas" class="org-form">
+    <input type="hidden" name="kind" value="representante">
+    {% if editing %}<input type="hidden" name="person_id" value="{{ editing.id }}">{% endif %}
+    <div class="form-grid">
+      <div class="form-group"><label>Nome</label><input name="name" required maxlength="120" placeholder="Nome do representante" value="{{ editing.name if editing else '' }}"></div>
+      <div class="form-group"><label>Login</label><input name="username" required maxlength="40" autocomplete="off" placeholder="usuario.acesso" value="{{ editing.username if editing else '' }}"></div>
+      <div class="form-group"><label>{% if editing %}Nova senha{% else %}Senha{% endif %}</label><input name="password" type="password" {% if not editing %}required{% endif %} minlength="6" autocomplete="new-password" placeholder="{% if editing %}Deixe em branco para manter{% else %}Mínimo 6 caracteres{% endif %}"></div>
+      <div class="form-group">
+        <label>UF</label>
+        <select name="region">
+          <option value="">Selecione</option>
+          {% for uf in ufs %}<option value="{{ uf }}" {% if editing and editing.region == uf %}selected{% endif %}>{{ uf }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="form-group"><label>Estado</label><input name="state_name" required maxlength="80" placeholder="Estado em que reside" value="{{ editing.state_name if editing else '' }}"></div>
+      <div class="form-group"><label>Cidade</label><input name="city" required maxlength="80" placeholder="Cidade em que reside" value="{{ editing.city if editing else '' }}"></div>
+      <div class="form-group"><label>Telefone</label><input name="phone" maxlength="40" value="{{ editing.phone if editing else '' }}"></div>
+      <div class="form-group"><label>E-mail</label><input name="email" type="email" maxlength="120" value="{{ editing.email if editing else '' }}"></div>
+    </div>
+    <div class="org-form-actions">
+      <button type="submit" class="btn">{% if editing %}Salvar alterações{% else %}Cadastrar representante{% endif %}</button>
+      {% if editing %}<a class="btn btn-secondary" href="/cadastros?tipo=representantes">Cancelar</a>{% endif %}
+    </div>
+  </form>
+</section>
+<section class="org-list">
+  {% for person in representantes %}
+  <article class="panel org-card">
+    <div class="org-card-head">
+      <div>
+        <strong>{{ person.name }}</strong>
+        <span>{{ person.city }} · {{ person.state_name }} · {{ person.region }} · {{ person.username }}</span>
+      </div>
+      <div class="org-card-actions">
+        <a class="btn btn-secondary btn-small" href="/cadastros?tipo=representantes&editar={{ person.id }}">Editar</a>
+        <form method="post" action="/cadastros/pessoas/{{ person.id }}/remover">
+          <input type="hidden" name="kind" value="representante">
+          <button type="submit" class="btn btn-secondary btn-small">Remover</button>
+        </form>
+      </div>
+    </div>
+  </article>
+  {% else %}
+  <div class="panel org-empty">Nenhum representante cadastrado ainda.</div>
+  {% endfor %}
+</section>
+
+{% elif active_tab == 'treinadores' %}
+<section class="panel org-panel">
+  <h2>{% if editing %}Editar treinador{% else %}Treinador{% endif %}</h2>
+  <p>Quem entra aqui aparece na lista do agendamento de treinamento.</p>
+  <form method="post" action="/cadastros/pessoas" class="org-form">
+    <input type="hidden" name="kind" value="treinador">
+    {% if editing %}<input type="hidden" name="person_id" value="{{ editing.id }}">{% endif %}
+    <div class="form-grid">
+      <div class="form-group"><label>Nome</label><input name="name" required maxlength="120" placeholder="Nome do treinador" value="{{ editing.name if editing else '' }}"></div>
+      <div class="form-group">
+        <label>Setor</label>
+        <select name="sector_id" required>
+          <option value="">Selecione</option>
+          {% for sector in sectors %}<option value="{{ sector.id }}" {% if editing and editing.sector_id == sector.id %}selected{% elif not editing and sector.name == 'Treinamento' %}selected{% endif %}>{{ sector.name }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="form-group"><label>Telefone</label><input name="phone" maxlength="40" value="{{ editing.phone if editing else '' }}"></div>
+      <div class="form-group"><label>E-mail</label><input name="email" type="email" maxlength="120" value="{{ editing.email if editing else '' }}"></div>
+    </div>
+    <div class="org-form-actions">
+      <button type="submit" class="btn">{% if editing %}Salvar alterações{% else %}Cadastrar treinador{% endif %}</button>
+      {% if editing %}<a class="btn btn-secondary" href="/cadastros?tipo=treinadores">Cancelar</a>{% endif %}
+    </div>
+  </form>
+</section>
+<section class="org-list">
+  {% for person in treinadores %}
+  <article class="panel org-card">
+    <div class="org-card-head">
+      <div>
+        <strong>{{ person.name }}</strong>
+        <span>{{ person.sector_name }}{% if person.phone != '—' %} · {{ person.phone }}{% endif %}</span>
+      </div>
+      <div class="org-card-actions">
+        <a class="btn btn-secondary btn-small" href="/cadastros?tipo=treinadores&editar={{ person.id }}">Editar</a>
+        <form method="post" action="/cadastros/pessoas/{{ person.id }}/remover">
+          <input type="hidden" name="kind" value="treinador">
+          <button type="submit" class="btn btn-secondary btn-small">Remover</button>
+        </form>
+      </div>
+    </div>
+  </article>
+  {% else %}
+  <div class="panel org-empty">Nenhum treinador cadastrado ainda.</div>
+  {% endfor %}
+</section>
+
+{% else %}
+<section class="panel org-panel">
+  <h2>{% if editing %}Editar funcionário{% else %}Funcionário{% endif %}</h2>
+  <p>Quem entra aqui pode ser escolhido como responsável na ordem de serviço do setor.</p>
+  <form method="post" action="/cadastros/pessoas" class="org-form">
+    <input type="hidden" name="kind" value="funcionario">
+    {% if editing %}<input type="hidden" name="person_id" value="{{ editing.id }}">{% endif %}
+    <div class="form-grid">
+      <div class="form-group"><label>Nome</label><input name="name" required maxlength="120" placeholder="Nome do funcionário" value="{{ editing.name if editing else '' }}"></div>
+      <div class="form-group">
+        <label>Setor</label>
+        <select name="sector_id" required>
+          <option value="">Selecione</option>
+          {% for sector in sectors %}<option value="{{ sector.id }}" {% if editing and editing.sector_id == sector.id %}selected{% endif %}>{{ sector.name }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="form-group"><label>Login</label><input name="username" required maxlength="40" autocomplete="off" placeholder="usuario.acesso" value="{{ editing.username if editing else '' }}"></div>
+      <div class="form-group"><label>{% if editing %}Nova senha{% else %}Senha{% endif %}</label><input name="password" type="password" {% if not editing %}required{% endif %} minlength="6" autocomplete="new-password" placeholder="{% if editing %}Deixe em branco para manter{% else %}Mínimo 6 caracteres{% endif %}"></div>
+      <div class="form-group"><label>Telefone</label><input name="phone" maxlength="40" value="{{ editing.phone if editing else '' }}"></div>
+      <div class="form-group"><label>E-mail</label><input name="email" type="email" maxlength="120" value="{{ editing.email if editing else '' }}"></div>
+    </div>
+    <div class="org-form-actions">
+      <button type="submit" class="btn">{% if editing %}Salvar alterações{% else %}Cadastrar funcionário{% endif %}</button>
+      {% if editing %}<a class="btn btn-secondary" href="/cadastros?tipo=funcionarios">Cancelar</a>{% endif %}
+    </div>
+  </form>
+</section>
+<section class="org-list">
+  {% for person in funcionarios %}
+  <article class="panel org-card">
+    <div class="org-card-head">
+      <div>
+        <strong>{{ person.name }}</strong>
+        <span>{{ person.sector_name }} · {{ person.username }}{% if person.phone != '—' %} · {{ person.phone }}{% endif %}</span>
+      </div>
+      <div class="org-card-actions">
+        <a class="btn btn-secondary btn-small" href="/cadastros?tipo=funcionarios&editar={{ person.id }}">Editar</a>
+        <form method="post" action="/cadastros/pessoas/{{ person.id }}/remover">
+          <input type="hidden" name="kind" value="funcionario">
+          <button type="submit" class="btn btn-secondary btn-small">Remover</button>
+        </form>
+      </div>
+    </div>
+  </article>
+  {% else %}
+  <div class="panel org-empty">Nenhum funcionário cadastrado ainda.</div>
+  {% endfor %}
+</section>
+{% endif %}
+{% endblock %}

@@ -1037,6 +1037,35 @@
   margin-bottom: 18px;
 }
 
+.service-order-create {
+  margin-bottom: 22px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.service-order-create h3 {
+  margin: 0 0 12px;
+  font-size: 0.95rem;
+}
+
+.service-order-protocol-hint {
+  margin: 4px 0 12px;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.service-order-protocol {
+  display: inline-block;
+  margin-bottom: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #F5F3FF;
+  color: #6D28D9;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
 .registration-activities-timeline {
   margin-top: 8px;
 }
@@ -1384,7 +1413,7 @@
 }
 
 .client-edit-tabs-new {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .client-edit-tabs-interactive .client-edit-tab {
@@ -1393,6 +1422,20 @@
   text-align: left;
   cursor: pointer;
   width: 100%;
+}
+
+.client-edit-tabs-new.client-edit-tabs-interactive .client-edit-tab {
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.client-edit-tabs-new .client-edit-tab-title,
+.client-edit-tabs-new .client-edit-tab-sub {
+  display: flex;
+  width: 100%;
+  justify-content: center;
+  text-align: center;
 }
 
 .client-edit-tab-panel.is-hidden {
@@ -1987,6 +2030,10 @@
     grid-template-columns: 1fr;
   }
 
+  .client-edit-tabs-new {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .client-edit-header-center {
     justify-content: flex-start;
   }
@@ -2011,6 +2058,10 @@
 
   .client-edit-tabs {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .client-edit-tabs-new {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 

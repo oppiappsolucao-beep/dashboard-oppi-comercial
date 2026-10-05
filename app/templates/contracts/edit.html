@@ -67,10 +67,10 @@
       <span class="client-edit-tab-title"><span class="client-edit-tab-icon" aria-hidden="true">🏢</span> Dados gerais</span>
       <span class="client-edit-tab-sub">Informações da empresa</span>
     </a>
-    <a href="/cadastro/todos/{{ sheet_row }}/editar?tab=atividades{% if from_page %}&from={{ from_page }}{% endif %}"
-      class="client-edit-tab {% if active_tab == 'atividades' %}is-active{% endif %}">
-      <span class="client-edit-tab-title"><span class="client-edit-tab-icon" aria-hidden="true">📋</span> Atividades{% if activities_count %} ({{ activities_count }}){% endif %}</span>
-      <span class="client-edit-tab-sub">Histórico de interações</span>
+    <a href="/cadastro/todos/{{ sheet_row }}/editar?tab=ordens{% if from_page %}&from={{ from_page }}{% endif %}"
+      class="client-edit-tab {% if active_tab == 'ordens' %}is-active{% endif %}">
+      <span class="client-edit-tab-title"><span class="client-edit-tab-icon" aria-hidden="true">📋</span> Ordens de serviço{% if service_orders_count %} ({{ service_orders_count }}){% endif %}</span>
+      <span class="client-edit-tab-sub">Protocolo do atendimento</span>
     </a>
     <a href="/cadastro/todos/{{ sheet_row }}/editar?tab=proposta{% if from_page %}&from={{ from_page }}{% endif %}"
       class="client-edit-tab {% if active_tab == 'proposta' %}is-active{% endif %}">
@@ -105,8 +105,8 @@
       </div>
       {% include "partials/registration_danger_actions.html" %}
     </footer>
-    {% elif active_tab == 'atividades' %}
-    {% include "partials/registration_activities_tab.html" %}
+    {% elif active_tab == 'ordens' %}
+    {% include "partials/registration_service_orders_tab.html" %}
     <footer class="client-edit-footer panel client-edit-footer-compact">
       {% include "partials/registration_danger_actions.html" %}
     </footer>
@@ -143,6 +143,12 @@
     {% endif %}
   </form>
 </div>
+
+{% if active_tab == 'ordens' and cadastro_ativo %}
+<form id="os-create-form" method="post" action="/cadastro/todos/{{ sheet_row }}/ordens-servico">
+  {% if from_page %}<input type="hidden" name="from" value="{{ from_page }}">{% endif %}
+</form>
+{% endif %}
 
 <form id="oppi-ponto-form" method="post" action="/cadastro/todos/{{ sheet_row }}/oppi-ponto" hidden>
   {% if from_page %}<input type="hidden" name="from" value="{{ from_page }}">{% endif %}

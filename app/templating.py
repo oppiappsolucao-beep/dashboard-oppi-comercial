@@ -59,6 +59,13 @@ def render(
         else:
             ctx.setdefault("display_username", settings.app_username)
             ctx.setdefault("display_role", "")
+    if "nav" not in ctx:
+        try:
+            from app.services.access_scope import nav_permissions
+
+            ctx["nav"] = nav_permissions(request)
+        except Exception:
+            ctx["nav"] = {}
     if "is_admin" not in ctx:
         try:
             from app.dependencies import is_admin

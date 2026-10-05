@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from app.services.app_settings import load_app_settings, save_app_settings
+from app.services.closed_services import PAYMENT_METHOD_OPTIONS
 from app.services.legacy_core import normalize_text, parse_money
 
 
@@ -28,7 +29,7 @@ def _normalize_catalog_item(raw) -> dict | None:
         name = _normalize_service_name(raw)
         if not name:
             return None
-        return {"name": name, "valor": "", "quantidade": 1, "valor_num": 0.0}
+        return {"name": name, "valor": "", "quantidade": 1, "forma_pagamento": "Mensal", "valor_num": 0.0}
     if not isinstance(raw, dict):
         return None
     name = _normalize_service_name(raw.get("name") or raw.get("servico") or raw.get("nome"))
@@ -36,10 +37,14 @@ def _normalize_catalog_item(raw) -> dict | None:
         return None
     valor = normalize_text(raw.get("valor"))
     quantidade = _normalize_quantidade(raw.get("quantidade"))
+    forma = normalize_text(raw.get("forma_pagamento")) or "Mensal"
+    if forma not in PAYMENT_METHOD_OPTIONS:
+        forma = "Mensal"
     return {
         "name": name,
         "valor": valor,
         "quantidade": quantidade,
+        "forma_pagamento": forma,
         "valor_num": parse_money(valor),
     }
 
@@ -76,6 +81,7 @@ def _persistable(items: list[dict]) -> list[dict]:
             "name": item["name"],
             "valor": item.get("valor") or "",
             "quantidade": int(item.get("quantidade") or 1),
+            "forma_pagamento": item.get("forma_pagamento") or "Mensal",
         }
         for item in items
     ]
@@ -145,6 +151,23 @@ def add_commercial_service(name: str, valor: str = "", quantidade: str = "1") ->
             "quantidade": _normalize_quantidade(quantidade),
         }
     )
+    save_app_settings({"commercial_services": _persistable(items)})
+
+
+def replace_commercial_services(rows: list[dict]) -> None:
+    items: list[dict] = []
+    seen: set[str] = set()
+    for raw in rows:
+        item = _normalize_catalog_item(raw)
+        if not item:
+            if isinstance(raw, dict) and normalize_text(raw.get("valor")):
+                raise ValueError("Informe o nome do serviço.")
+            continue
+        key = item["name"].lower()
+        if key in seen:
+            raise ValueError("Este serviço já está na lista.")
+        seen.add(key)
+        items.append(item)
     save_app_settings({"commercial_services": _persistable(items)})
 
 

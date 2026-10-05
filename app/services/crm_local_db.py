@@ -120,6 +120,98 @@ def init_crm_local_db() -> None:
                 CREATE UNIQUE INDEX IF NOT EXISTS idx_attendance_msg_evolution
                     ON attendance_messages(evolution_id)
                     WHERE evolution_id != '';
+
+                CREATE TABLE IF NOT EXISTS service_orders (
+                    id TEXT PRIMARY KEY,
+                    tenant_id TEXT NOT NULL DEFAULT 'default',
+                    sheet_row INTEGER NOT NULL,
+                    protocol TEXT NOT NULL UNIQUE,
+                    empresa TEXT NOT NULL DEFAULT '',
+                    subject TEXT NOT NULL DEFAULT '',
+                    description TEXT NOT NULL DEFAULT '',
+                    status TEXT NOT NULL DEFAULT 'aberta',
+                    priority TEXT NOT NULL DEFAULT '',
+                    sector TEXT NOT NULL DEFAULT '',
+                    scheduled_date TEXT NOT NULL DEFAULT '',
+                    queue_id TEXT NOT NULL DEFAULT 'analise',
+                    responsible TEXT NOT NULL DEFAULT '',
+                    created_by TEXT NOT NULL DEFAULT '',
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_service_orders_client
+                    ON service_orders(tenant_id, sheet_row, created_at);
+
+                CREATE TABLE IF NOT EXISTS service_order_counters (
+                    year INTEGER PRIMARY KEY,
+                    last_seq INTEGER NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS org_sectors (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL UNIQUE,
+                    accesses_json TEXT NOT NULL DEFAULT '[]',
+                    active INTEGER NOT NULL DEFAULT 1,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS org_people (
+                    id TEXT PRIMARY KEY,
+                    kind TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    email TEXT NOT NULL DEFAULT '',
+                    phone TEXT NOT NULL DEFAULT '',
+                    sector_id TEXT NOT NULL DEFAULT '',
+                    region TEXT NOT NULL DEFAULT '',
+                    username TEXT NOT NULL DEFAULT '',
+                    password_hash TEXT NOT NULL DEFAULT '',
+                    state_name TEXT NOT NULL DEFAULT '',
+                    city TEXT NOT NULL DEFAULT '',
+                    active INTEGER NOT NULL DEFAULT 1,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_org_people_sector
+                    ON org_people(kind, sector_id);
+
+                CREATE TABLE IF NOT EXISTS org_queues (
+                    id TEXT PRIMARY KEY,
+                    sector_id TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    position INTEGER NOT NULL DEFAULT 1,
+                    active INTEGER NOT NULL DEFAULT 1,
+                    created_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_org_queues_sector
+                    ON org_queues(sector_id, position);
+
+                CREATE TABLE IF NOT EXISTS service_order_events (
+                    id TEXT PRIMARY KEY,
+                    order_id TEXT NOT NULL,
+                    kind TEXT NOT NULL,
+                    summary TEXT NOT NULL DEFAULT '',
+                    author TEXT NOT NULL DEFAULT '',
+                    created_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_service_order_events
+                    ON service_order_events(order_id, created_at);
+
+                CREATE TABLE IF NOT EXISTS campaign_leads (
+                    id TEXT PRIMARY KEY,
+                    sheet_row INTEGER NOT NULL UNIQUE,
+                    order_id TEXT NOT NULL,
+                    empresa TEXT NOT NULL DEFAULT '',
+                    phone TEXT NOT NULL DEFAULT '',
+                    email TEXT NOT NULL DEFAULT '',
+                    contact_name TEXT NOT NULL DEFAULT '',
+                    creative TEXT NOT NULL DEFAULT '',
+                    campaign TEXT NOT NULL DEFAULT '',
+                    city TEXT NOT NULL DEFAULT '',
+                    uf TEXT NOT NULL DEFAULT '',
+                    lead_date TEXT NOT NULL DEFAULT '',
+                    created_at TEXT NOT NULL
+                );
                 """
             )
             # Migrações leves (idempotentes)
@@ -131,6 +223,34 @@ def init_crm_local_db() -> None:
                 conn.execute(
                     "ALTER TABLE attendance_conversations ADD COLUMN remote_jid TEXT NOT NULL DEFAULT ''"
                 )
+            order_cols = {
+                row[1]
+                for row in conn.execute("PRAGMA table_info(service_orders)").fetchall()
+            }
+            if order_cols and "sector" not in order_cols:
+                conn.execute(
+                    "ALTER TABLE service_orders ADD COLUMN sector TEXT NOT NULL DEFAULT ''"
+                )
+            if order_cols and "scheduled_date" not in order_cols:
+                conn.execute(
+                    "ALTER TABLE service_orders ADD COLUMN scheduled_date TEXT NOT NULL DEFAULT ''"
+                )
+            if order_cols and "queue_id" not in order_cols:
+                conn.execute(
+                    "ALTER TABLE service_orders ADD COLUMN queue_id TEXT NOT NULL DEFAULT 'analise'"
+                )
+            people_cols = {
+                row[1]
+                for row in conn.execute("PRAGMA table_info(org_people)").fetchall()
+            }
+            for column, definition in (
+                ("username", "TEXT NOT NULL DEFAULT ''"),
+                ("password_hash", "TEXT NOT NULL DEFAULT ''"),
+                ("state_name", "TEXT NOT NULL DEFAULT ''"),
+                ("city", "TEXT NOT NULL DEFAULT ''"),
+            ):
+                if people_cols and column not in people_cols:
+                    conn.execute(f"ALTER TABLE org_people ADD COLUMN {column} {definition}")
             conn.commit()
         _initialized = True
 

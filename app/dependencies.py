@@ -177,6 +177,11 @@ def get_prepared_data(refresh: bool = False):
 def require_auth(request: Request):
     if not request.session.get("authenticated"):
         return RedirectResponse(url="/login", status_code=303)
+    from app.services.access_scope import enforce_access
+
+    denied = enforce_access(request)
+    if denied:
+        return denied
     return None
 
 
@@ -199,6 +204,16 @@ def get_session_user(request: Request) -> dict | None:
     username = normalize_text(request.session.get("username", ""))
     if not username:
         return None
+
+    if request.session.get("org_person_id"):
+        return {
+            "id": request.session.get("org_person_id"),
+            "username": username,
+            "name": request.session.get("org_person_name") or username,
+            "role": "Funcionário",
+            "managed": True,
+            "department_name": request.session.get("org_sector_name") or "",
+        }
 
     if username.lower() == settings.app_username.lower():
         return {
@@ -225,6 +240,8 @@ def get_session_user(request: Request) -> dict | None:
 
 
 def is_admin(request: Request) -> bool:
+    if request.session.get("org_person_id"):
+        return False
     user = get_session_user(request)
     if user:
         return user.get("role") == "Administrador"

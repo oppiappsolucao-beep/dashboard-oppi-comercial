@@ -40,10 +40,13 @@
         if (!row) return;
         var valor = option.getAttribute("data-valor") || "";
         var quantidade = option.getAttribute("data-quantidade") || "";
+        var forma = option.getAttribute("data-forma") || "";
         var valorInput = row.querySelector('input[name="closed_valor"]');
         var qtyInput = row.querySelector('input[name="closed_quantidade"]');
+        var formaSelect = row.querySelector('select[name="closed_forma_pagamento"]');
         if (valorInput && valor) valorInput.value = valor;
         if (qtyInput && quantidade) qtyInput.value = quantidade;
+        if (formaSelect && forma) formaSelect.value = forma;
       });
     });
   }

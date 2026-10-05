@@ -20,6 +20,7 @@
           <option value="{{ service.name }}"
             data-valor="{{ service.valor }}"
             data-quantidade="{{ service.quantidade }}"
+            data-forma="{{ service.forma_pagamento }}"
             {% if item.servico == service.name %}selected{% endif %}>{{ service.name }}</option>
           {% endfor %}
           {% if item.servico and item.servico not in service_options %}
@@ -62,7 +63,7 @@
         <select name="closed_servico" data-service-select>
           <option value="">Selecione</option>
           {% for service in service_catalog %}
-          <option value="{{ service.name }}" data-valor="{{ service.valor }}" data-quantidade="{{ service.quantidade }}">{{ service.name }}</option>
+          <option value="{{ service.name }}" data-valor="{{ service.valor }}" data-quantidade="{{ service.quantidade }}" data-forma="{{ service.forma_pagamento }}">{{ service.name }}</option>
           {% endfor %}
         </select>
         {% else %}

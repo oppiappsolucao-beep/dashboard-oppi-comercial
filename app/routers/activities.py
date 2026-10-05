@@ -121,14 +121,229 @@ def _modal_context(
     )
 
 
+def _os_board_context(request: Request) -> dict:
+    from app.services.org_registry import add_sector_queue, list_sectors
+    from app.services.service_orders import build_sector_board
+
+    sectors = list_sectors()
+    employee = bool(request.session.get("org_person_id"))
+    if employee:
+        sector_id = normalize_text(request.session.get("org_sector_id"))
+        sector_name = normalize_text(request.session.get("org_sector_name"))
+    else:
+        sector_id = normalize_text(request.query_params.get("setor"))
+        chosen = next((item for item in sectors if item["id"] == sector_id), None)
+        if chosen is None and sectors:
+            chosen = sectors[0]
+            sector_id = chosen["id"]
+        sector_name = chosen["name"] if chosen else ""
+    from app.services.kanban_summary import build_kanban_summary
+
+    inicio = normalize_text(request.query_params.get("inicio"))
+    fim = normalize_text(request.query_params.get("fim"))
+    summary = build_kanban_summary(sector_name, inicio, fim)
+    columns = (
+        build_sector_board(sector_id, sector_name, summary["inicio"], summary["fim"])
+        if sector_id
+        else []
+    )
+    return {
+        "active_page": "activities",
+        "is_admin": not employee,
+        "sectors": sectors,
+        "sector_id": sector_id,
+        "sector_name": sector_name,
+        "columns": columns,
+        "can_manage_queues": bool(sector_id),
+        "inicio": summary["inicio"],
+        "fim": summary["fim"],
+        "summary": summary,
+        "is_commercial": "comercial" in sector_name.lower(),
+        "success": request.session.pop("os_board_success", ""),
+        "error": request.session.pop("os_board_error", ""),
+    }
+
+
 @router.get("/atividades", response_class=HTMLResponse)
 async def activities_page(request: Request):
     redirect = require_auth(request)
     if redirect:
         return redirect
-    filters = parse_dashboard_filters(request)
-    activities_params = _parse_activities_params(request)
-    return render(request, "activities/index.html", _activities_context(request, filters, activities_params))
+    return render(request, "activities/os_board.html", _os_board_context(request))
+
+
+@router.post("/atividades/filas")
+async def activities_add_queue(
+    request: Request,
+    sector_id: str = Form(""),
+    queue_name: str = Form(""),
+    inicio: str = Form(""),
+    fim: str = Form(""),
+):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+    from app.services.org_registry import add_sector_queue
+
+    employee_sector = normalize_text(request.session.get("org_sector_id"))
+    target = employee_sector or normalize_text(sector_id)
+    if employee_sector and normalize_text(sector_id) not in {"", employee_sector}:
+        request.session["os_board_error"] = "Você só cria filas do seu setor."
+        return _board_redirect(employee_sector, True, inicio, fim)
+    try:
+        add_sector_queue(target, queue_name)
+    except ValueError as error:
+        request.session["os_board_error"] = str(error)
+    else:
+        request.session["os_board_success"] = "Fila criada."
+    return _board_redirect(target, bool(employee_sector), inicio, fim)
+
+
+def _board_redirect(sector_id: str, employee: bool, inicio: str = "", fim: str = ""):
+    from urllib.parse import urlencode
+
+    params = {}
+    if not employee and sector_id:
+        params["setor"] = sector_id
+    if normalize_text(inicio):
+        params["inicio"] = normalize_text(inicio)
+    if normalize_text(fim):
+        params["fim"] = normalize_text(fim)
+    query = f"?{urlencode(params)}" if params else ""
+    return RedirectResponse(url=f"/atividades{query}", status_code=303)
+
+
+@router.post("/atividades/filas/{queue_id}/mover")
+async def activities_move_queue(
+    request: Request,
+    queue_id: str,
+    sector_id: str = Form(""),
+    direction: str = Form("direita"),
+    inicio: str = Form(""),
+    fim: str = Form(""),
+):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+    from app.services.org_registry import move_sector_queue
+
+    employee_sector = normalize_text(request.session.get("org_sector_id"))
+    target = employee_sector or normalize_text(sector_id)
+    if employee_sector and normalize_text(sector_id) not in {"", employee_sector}:
+        request.session["os_board_error"] = "Você só organiza as colunas do seu setor."
+        return _board_redirect(employee_sector, True, inicio, fim)
+    try:
+        move_sector_queue(target, queue_id, direction)
+    except ValueError as error:
+        request.session["os_board_error"] = str(error)
+    return _board_redirect(target, bool(employee_sector), inicio, fim)
+
+
+@router.post("/atividades/filas/{queue_id}/remover")
+async def activities_remove_queue(
+    request: Request,
+    queue_id: str,
+    sector_id: str = Form(""),
+    inicio: str = Form(""),
+    fim: str = Form(""),
+):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+    from app.services.org_registry import remove_sector_queue
+
+    employee_sector = normalize_text(request.session.get("org_sector_id"))
+    target = employee_sector or normalize_text(sector_id)
+    if employee_sector and normalize_text(sector_id) not in {"", employee_sector}:
+        request.session["os_board_error"] = "Você só exclui colunas do seu setor."
+        return _board_redirect(employee_sector, True, inicio, fim)
+    try:
+        name = remove_sector_queue(target, queue_id)
+    except ValueError as error:
+        request.session["os_board_error"] = str(error)
+    else:
+        request.session["os_board_success"] = f"Coluna {name} excluída. As ordens dela voltaram para Análise."
+    return _board_redirect(target, bool(employee_sector), inicio, fim)
+
+
+@router.post("/atividades/os/{order_id}/fila")
+async def activities_move_order(
+    request: Request,
+    order_id: str,
+    queue_id: str = Form(""),
+    sector_id: str = Form(""),
+    reopen: str = Form(""),
+):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+    from app.services.org_registry import list_sectors
+    from app.services.service_orders import move_service_order
+
+    employee_sector = normalize_text(request.session.get("org_sector_id"))
+    target = employee_sector or normalize_text(sector_id)
+    sectors = list_sectors()
+    sector = next((item for item in sectors if item["id"] == target), None)
+    if sector is None:
+        return HTMLResponse("Setor não encontrado.", status_code=404)
+    try:
+        move_service_order(
+            order_id,
+            queue_id,
+            sector["id"],
+            sector["name"],
+            author=_os_actor(request),
+            reopen=normalize_text(reopen) in {"1", "true", "sim", "yes"},
+        )
+    except ValueError as error:
+        return HTMLResponse(str(error), status_code=400)
+    return HTMLResponse("ok")
+
+
+def _os_actor(request: Request) -> str:
+    return (
+        normalize_text(request.session.get("org_person_name"))
+        or normalize_text(request.session.get("username"))
+        or "Usuário"
+    )
+
+
+def _order_visible(request: Request, detail: dict) -> bool:
+    if not request.session.get("org_person_id"):
+        return True
+    sector_name = normalize_text(request.session.get("org_sector_name"))
+    return sector_name.lower() == normalize_text(detail.get("sector")).lower()
+
+
+@router.get("/atividades/os/{order_id}", response_class=HTMLResponse)
+async def activities_order_detail(request: Request, order_id: str):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+    from app.services.service_orders import get_order_detail
+
+    detail = get_order_detail(order_id)
+    if not detail or not _order_visible(request, detail):
+        return HTMLResponse("Ordem de serviço não encontrada.", status_code=404)
+    return render(request, "partials/os_order_panel.html", {"order": detail})
+
+
+@router.post("/atividades/os/{order_id}/atualizacao", response_class=HTMLResponse)
+async def activities_order_update(request: Request, order_id: str, note: str = Form("")):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+    from app.services.service_orders import add_order_update, get_order_detail
+
+    detail = get_order_detail(order_id)
+    if not detail or not _order_visible(request, detail):
+        return HTMLResponse("Ordem de serviço não encontrada.", status_code=404)
+    try:
+        add_order_update(order_id, note, _os_actor(request))
+    except ValueError as error:
+        return HTMLResponse(str(error), status_code=400)
+    detail = get_order_detail(order_id)
+    return render(request, "partials/os_order_panel.html", {"order": detail})
 
 
 @router.get("/atividades/nova/modal", response_class=HTMLResponse)
