@@ -47,7 +47,7 @@ STAGE_SUMMARY_HINTS = {
 }
 
 REGISTRATION_FIELDS = [
-    "empresa", "data_abertura", "capital", "cnpj", "endereco", "endereco_numero", "endereco_complemento",
+    "empresa", "nome_fantasia", "data_abertura", "data_fechamento", "responsavel_legal", "capital", "cnpj", "endereco", "endereco_numero", "endereco_complemento",
     "cep", "bairro", "municipio", "uf", "email_empresa", "site",
     "telefone_b2b", "nome_contato", "telefone_fixo", "telefone_alternativo",
     "socio_1", "cpf_socio_1", "email_socio_1", "telefone_socio_1",
@@ -346,6 +346,28 @@ def assert_unique_registration_contacts(
         assert_cnpj_not_registered(cnpj, ignore_sheet_row=ignore_sheet_row)
 
 
+def _sheet_date(value: str) -> str:
+    raw = normalize_text(value)
+    if len(raw) >= 10 and raw[4] == "-" and raw[7] == "-":
+        try:
+            return datetime.strptime(raw[:10], "%Y-%m-%d").strftime("%d/%m/%Y")
+        except ValueError:
+            return raw
+    return raw
+
+
+def iso_date_for_input(value: str) -> str:
+    raw = normalize_text(value)
+    if len(raw) >= 10 and raw[2] == "/" and raw[5] == "/":
+        try:
+            return datetime.strptime(raw[:10], "%d/%m/%Y").date().isoformat()
+        except ValueError:
+            return ""
+    if len(raw) >= 10 and raw[4] == "-" and raw[7] == "-":
+        return raw[:10]
+    return ""
+
+
 def build_registration_payload(form: dict) -> dict:
     now_text = pd.Timestamp.now(tz="America/Sao_Paulo").strftime("%d/%m/%Y %H:%M")
     data_chamado = form.get("data_chamado") or date.today().strftime("%d/%m/%Y")
@@ -366,6 +388,8 @@ def build_registration_payload(form: dict) -> dict:
             data_chamado = raw
 
     payload = {field: normalize_text(form.get(field, "")) for field in REGISTRATION_FIELDS}
+    for date_field in ("data_abertura", "data_fechamento"):
+        payload[date_field] = _sheet_date(payload.get(date_field))
     # Celular WhatsApp: sempre grava com o 9º dígito quando for móvel BR
     if payload.get("telefone_b2b"):
         from app.services.legacy_core import format_br_whatsapp_display

@@ -133,9 +133,11 @@ def normalize_search_text(value) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 _FIELD_ALIASES: dict[str, tuple[str, ...]] = {
-    "empresa": ("empresa", "nome da empresa", "nome empresas", "nome empresa", "razao social", "nome fantasia", "cliente"),
+    "empresa": ("empresa", "nome da empresa", "nome empresas", "nome empresa", "razao social", "cliente"),
+    "nome_fantasia": ("nome fantasia", "fantasia"),
     "cnpj": ("cnpj",),
     "data_abertura": ("data de abertura", "data abertura"),
+    "data_fechamento": ("data de fechamento", "data fechamento"),
     "capital": ("capital social", "capital"),
     "endereco": ("endereco", "logradouro", "rua"),
     "endereco_numero": ("numero", "n", "no"),
@@ -149,7 +151,8 @@ _FIELD_ALIASES: dict[str, tuple[str, ...]] = {
     "telefone": ("whatsapp", "celular whatsapp", "telefone b2b", "telefone (b2b)", "telefone", "celular", "fone"),
     "nome_contato": ("nome do contato", "nome contato", "contato"),
     "telefone_fixo": ("telefone fixo", "fixo"),
-    "socio_1": ("socio 1", "socio1", "responsavel"),
+    "socio_1": ("socio 1", "socio1"),
+    "responsavel_legal": ("responsavel legal", "responsavel"),
     "cpf_socio_1": ("cpf",),
     "email_socio_1": ("e-mail socio 1", "email socio 1", "e-mail do socio 1"),
     "nicho": ("nicho",),
@@ -165,6 +168,9 @@ _FIELD_ALIASES: dict[str, tuple[str, ...]] = {
 }
 
 _ENSURE_COLUMNS = (
+    ("Nome Fantasia", "nome_fantasia"),
+    ("Data de fechamento", "data_fechamento"),
+    ("Responsável", "responsavel_legal"),
     ("Nicho", "nicho"),
     ("Plano", "plano"),
     ("Valor", "valor"),
@@ -259,8 +265,11 @@ def payload_for_raissa(form: dict, billing: dict | None = None) -> dict:
     filial = normalize_text(form.get("is_filial")).lower() in {"1", "on", "true", "yes", "sim"}
     return {
         "empresa": normalize_text(form.get("empresa")),
+        "nome_fantasia": normalize_text(form.get("nome_fantasia")),
         "cnpj": normalize_text(form.get("cnpj")),
         "data_abertura": normalize_text(form.get("data_abertura")),
+        "data_fechamento": normalize_text(form.get("data_fechamento")),
+        "responsavel_legal": normalize_text(form.get("responsavel_legal") or form.get("socio_1")),
         "capital": normalize_text(form.get("capital")),
         "endereco": normalize_text(form.get("endereco")),
         "endereco_numero": normalize_text(form.get("endereco_numero")),

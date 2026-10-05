@@ -29,7 +29,10 @@ _DF_TTL_SEC = 20.0
 
 REGISTRATION_FIELD_KEYS = (
     "empresa",
+    "nome_fantasia",
     "data_abertura",
+    "data_fechamento",
+    "responsavel_legal",
     "capital",
     "cnpj",
     "endereco",

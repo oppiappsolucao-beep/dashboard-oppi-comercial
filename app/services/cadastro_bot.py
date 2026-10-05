@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from datetime import date
 
 _UFS = {
     "AC", "AL", "AM", "AP", "BA", "CE", "DF", "ES", "GO", "MA", "MG", "MS", "MT",
@@ -28,7 +29,10 @@ _LABELS: tuple[tuple[str, str], ...] = (
     ("data_abertura", "data de abertura"),
     ("data_abertura", "data abertura"),
     ("nome_contato", "nome do contato"),
-    ("nome_contato", "nome do responsavel"),
+    ("responsavel_legal", "responsavel legal"),
+    ("responsavel_legal", "nome do responsavel"),
+    ("nome_fantasia", "nome fantasia"),
+    ("nome_fantasia", "nome de fantasia"),
     ("empresa_matriz", "empresa matriz"),
     ("empresa_matriz", "nome da matriz"),
     ("fantasia", "titulo do estabelecimento"),
@@ -40,7 +44,6 @@ _LABELS: tuple[tuple[str, str], ...] = (
     ("porte", "porte"),
     ("empresa", "razao social"),
     ("empresa", "nome da empresa"),
-    ("empresa", "nome fantasia"),
     ("telefone_alternativo", "telefone alternativo"),
     ("telefone_alternativo", "celular alternativo"),
     ("telefone_fixo", "telefone fixo"),
@@ -68,7 +71,7 @@ _LABELS: tuple[tuple[str, str], ...] = (
     ("telefone_b2b", "telefone"),
     ("telefone_b2b", "fone"),
     ("nome_contato", "contato"),
-    ("nome_contato", "responsavel"),
+    ("responsavel_legal", "responsavel"),
     ("bairro", "bairro distrito"),
     ("cep", "cep"),
     ("endereco", "logradouro"),
@@ -111,6 +114,9 @@ _FIELD_LABELS = {
     "site": "Site",
     "email": "E-mail",
     "telefone_b2b": "WhatsApp",
+    "nome_fantasia": "Nome fantasia",
+    "data_fechamento": "Data de fechamento",
+    "responsavel_legal": "Responsável legal",
     "nome_contato": "Nome do contato",
     "telefone_fixo": "Telefone fixo",
     "telefone_alternativo": "Telefone alternativo",
@@ -383,7 +389,16 @@ def _apply_field(
         extra["notes"].append(f"Porte: {value}")
         return
     if field == "atividade":
-        extra["notes"].append(f"Atividade: {_activity_text(value)}")
+        extra["atividade"] = _activity_text(value)
+        extra["notes"].append(f"Atividade: {extra['atividade']}")
+        return
+    if field == "responsavel_legal":
+        fields["responsavel_legal"] = value
+        _assign_partner(partners, "nome", value)
+        return
+    if field == "nome_fantasia":
+        fields["nome_fantasia"] = value
+        extra["fantasia"] = value
         return
     if field == "situacao":
         extra["notes"].append(f"Situação cadastral: {value}")
@@ -542,12 +557,14 @@ def read_dados_gerais(text: str, niche_options: list[str] | None = None) -> dict
 
     fantasia = extra["fantasia"]
     legal = extra["nome_empresarial"]
-    if fantasia and not _blank(fantasia):
-        fields["empresa"] = fantasia
-    elif legal and "empresa" not in fields:
+    if fantasia and not _blank(fantasia) and not fields.get("nome_fantasia"):
+        fields["nome_fantasia"] = fantasia
+    if legal and "empresa" not in fields:
         fields["empresa"] = legal
-    if legal and _plain(legal) != _plain(fields.get("empresa", "")):
-        fields["nome_contato"] = _prefer_name(fields.get("nome_contato", ""), legal)
+    elif not fields.get("empresa") and fantasia and not _blank(fantasia):
+        fields["empresa"] = fantasia
+    if legal and _plain(legal) != _plain(fields.get("empresa", "")) and not fields.get("nome_contato"):
+        fields["nome_contato"] = legal
 
     role_next = False
     for line in loose:
@@ -589,6 +606,19 @@ def read_dados_gerais(text: str, niche_options: list[str] | None = None) -> dict
     partner_count = max((len(items) for items in partners.values()), default=0)
     if partner_count:
         fields["quantidade_socios"] = str(min(partner_count, 3))
+    if fields.get("responsavel_legal") and not fields.get("socio_1"):
+        fields["socio_1"] = fields["responsavel_legal"]
+        fields["quantidade_socios"] = fields.get("quantidade_socios") or "1"
+    if fields.get("socio_1") and not fields.get("responsavel_legal"):
+        fields["responsavel_legal"] = fields["socio_1"]
+    if extra.get("atividade") and not fields.get("nicho"):
+        from app.services.cnpj_lookup import niche_from_cnae
+
+        niche = niche_from_cnae("", extra.get("atividade") or "")
+        if niche:
+            fields["nicho"] = niche
+    if not fields.get("data_fechamento"):
+        fields["data_fechamento"] = date.today().isoformat()
 
     filled = [label for key, label in _FIELD_LABELS.items() if fields.get(key)]
     if not filled:

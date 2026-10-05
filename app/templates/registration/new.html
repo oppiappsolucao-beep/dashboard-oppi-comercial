@@ -187,14 +187,26 @@
         var input = form ? form.querySelector('[name="' + name + '"]') : null;
         if (!input || input.readOnly) return;
         if (input.tagName === "SELECT") {
-          var exists = Array.prototype.some.call(input.options, function (option) {
-            return option.value === fields[name];
+          var wanted = String(fields[name] || "").trim().toLowerCase();
+          var match = Array.prototype.find.call(input.options, function (option) {
+            return String(option.value || "").trim().toLowerCase() === wanted;
           });
-          if (exists) input.value = fields[name];
+          if (match) input.value = match.value;
           return;
         }
         input.value = fields[name];
       });
+      var cnpjField = form ? form.querySelector('[name="cnpj"]') : null;
+      if (cnpjField && String(cnpjField.value || "").replace(/\D/g, "").length === 14) {
+        cnpjField.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+      var fechamento = form ? form.querySelector('[name="data_fechamento"]') : null;
+      if (fechamento && !String(fechamento.value || "").trim()) {
+        var hoje = new Date();
+        var mes = String(hoje.getMonth() + 1).padStart(2, "0");
+        var dia = String(hoje.getDate()).padStart(2, "0");
+        fechamento.value = hoje.getFullYear() + "-" + mes + "-" + dia;
+      }
       if (fields.is_filial) {
         var filial = form ? form.querySelector("[data-filial-toggle]") : null;
         if (filial && !filial.checked) {

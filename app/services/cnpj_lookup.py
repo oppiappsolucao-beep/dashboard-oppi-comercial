@@ -251,9 +251,9 @@ def registration_from_cnpj_payload(raw: dict, *, password: str | None = None) ->
         )
         if phone
     ]
-    empresa = _normalize_text(raw.get("nome_fantasia") or raw.get("fantasia")) or _normalize_text(
-        raw.get("razao_social") or raw.get("nome")
-    )
+    fantasia = _normalize_text(raw.get("nome_fantasia") or raw.get("fantasia"))
+    razao = _normalize_text(raw.get("razao_social") or raw.get("nome"))
+    empresa = fantasia or razao
     owner = _single_owner_name(raw, empresa, partner.get("nome", ""))
     generated = password if password is not None else generate_access_password()
 
@@ -271,6 +271,8 @@ def registration_from_cnpj_payload(raw: dict, *, password: str | None = None) ->
         "bairro": _normalize_text(raw.get("bairro")),
         "municipio": _normalize_text(raw.get("municipio") or raw.get("cidade")),
         "uf": _normalize_text(raw.get("uf") or raw.get("estado")).upper()[:2],
+        "nome_fantasia": fantasia,
+        "responsavel_legal": owner,
         "nicho": niche,
         "cnae": cnae_code,
         "cnae_descricao": cnae_description,

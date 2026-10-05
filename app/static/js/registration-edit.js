@@ -360,6 +360,7 @@
       }
       if (data) {
         setIfEmpty("socio_1", data.socio_1 || "");
+        setIfEmpty("responsavel_legal", data.responsavel_legal || data.socio_1 || "");
         setIfEmpty("cpf_socio_1", data.cpf_socio_1 || "");
       }
       return email;
@@ -368,6 +369,7 @@
     function applyPayload(data) {
       [
         "empresa",
+        "nome_fantasia",
         "data_abertura",
         "capital",
         "cep",

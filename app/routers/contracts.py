@@ -174,7 +174,7 @@ async def contract_edit_page(request: Request, sheet_row: int):
         parsed_date = date.today()
 
     values = {key: _contract_edit_value(row, columns, key) for key in [
-                "empresa", "data_abertura", "capital", "cnpj", "endereco", "endereco_numero", "endereco_complemento",
+                "empresa", "nome_fantasia", "data_abertura", "data_fechamento", "responsavel_legal", "capital", "cnpj", "endereco", "endereco_numero", "endereco_complemento",
                 "cep", "bairro", "municipio", "uf", "email", "site",
                 "telefone_b2b", "nome_contato", "telefone_fixo", "telefone_alternativo",
                 "socio_1", "cpf_socio_1", "email_socio_1", "telefone_socio_1",
@@ -215,8 +215,14 @@ async def contract_edit_page(request: Request, sheet_row: int):
                             registration_to_payload(matriz).get("empresa")
                         )
                 values["nome_contato"] = normalize_text(pg.get("nome_contato"))
+                for extra_key in ("nome_fantasia", "data_fechamento", "responsavel_legal"):
+                    if normalize_text(pg.get(extra_key)):
+                        values[extra_key] = normalize_text(pg.get(extra_key))
     except Exception:
         pass
+    from app.services.registration import iso_date_for_input
+
+    values["data_fechamento"] = iso_date_for_input(values.get("data_fechamento"))
     from app.services.lead_actions_storage import get_lead_action
     from app.services.sectors import list_sector_options
 

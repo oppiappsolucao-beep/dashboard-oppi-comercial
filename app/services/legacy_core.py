@@ -1417,6 +1417,9 @@ REGISTRATION_OPTIONAL_COLUMNS: list[tuple[str, list[str]]] = [
     ("Município", ["Município", "Municipio", "Cidade"]),
     ("UF", ["UF", "Estado"]),
     ("Endereço completo", ["Endereço completo", "Endereco completo", "Endereço Completo"]),
+    ("Nome Fantasia", ["Nome Fantasia", "Nome fantasia", "Fantasia"]),
+    ("Data de fechamento", ["Data de fechamento", "Data fechamento"]),
+    ("Responsável", ["Responsável", "Responsavel", "Responsável legal", "Responsavel legal"]),
 ]
 
 
@@ -1445,6 +1448,27 @@ def ensure_registration_sheet_columns(worksheet) -> list[str]:
         invalidate_sheet_cache()
 
     return headers
+
+
+def _apply_registration_profile_fields(row_values: list[str], headers: list[str], payload: dict) -> None:
+    _set_sheet_value_by_header(
+        row_values,
+        headers,
+        ["Nome Fantasia", "Nome fantasia", "Fantasia"],
+        payload.get("nome_fantasia"),
+    )
+    _set_sheet_value_by_header(
+        row_values,
+        headers,
+        ["Data de fechamento", "Data fechamento"],
+        payload.get("data_fechamento"),
+    )
+    _set_sheet_value_by_header(
+        row_values,
+        headers,
+        ["Responsável", "Responsavel", "Responsável legal", "Responsavel legal"],
+        payload.get("responsavel_legal"),
+    )
 
 
 def _apply_commercial_fields(row_values: list[str], headers: list[str], payload: dict) -> None:
@@ -1973,7 +1997,7 @@ def append_company_to_sheet(payload: dict) -> int:
                     "Sócio 1", "CPF", "E-mail Sócio 1", "Telefone",
                     "Sócio 2", "Telefone sócio 2", "CPF_2",
                     "Sócio 3", "Telefone sócio 3", "CPF_3",
-                    "Instagram", "Linkedin", "Vendedor",
+                    "Instagram", "Linkedin", "Vendedor", "Nome Fantasia", "Data de fechamento", "Responsável",
                     "Status WhatsApp", "Data do chamado", "Última atualização", "Observações",
                     "Serviços fechados", "Valor do serviço", "Colaboradores",
                 ]
@@ -1992,6 +2016,7 @@ def append_company_to_sheet(payload: dict) -> int:
     row_values = [""] * len(headers)
 
     _set_sheet_value_by_header(row_values, headers, ["Nome Empresas", "Nome da empresa", "Empresa", "Nome Empresa", "Nome empresas", "Nome Empresa(s)"], payload.get("empresa"))
+    _apply_registration_profile_fields(row_values, headers, payload)
     _set_sheet_value_by_header(row_values, headers, ["Data de abertura", "Data abertura"], payload.get("data_abertura"))
     _set_sheet_value_by_header(row_values, headers, ["Capital", "Capital social"], payload.get("capital"))
     _set_sheet_value_by_header(row_values, headers, ["CNPJ"], payload.get("cnpj"))
@@ -2019,7 +2044,7 @@ def append_company_to_sheet(payload: dict) -> int:
 
     _set_sheet_value_by_header(row_values, headers, ["Instagram"], payload.get("instagram"))
     _set_sheet_value_by_header(row_values, headers, ["Linkedin", "LinkedIn"], payload.get("linkedin"))
-    _set_sheet_value_by_header(row_values, headers, ["Vendedor", "Responsável", "Responsavel"], payload.get("vendedor"))
+    _set_sheet_value_by_header(row_values, headers, ["Vendedor"], payload.get("vendedor"))
     _set_sheet_value_by_header(row_values, headers, ["Status WhatsApp", "Status", "Etapa"], payload.get("status"))
     _set_sheet_value_by_header(row_values, headers, ["Data do chamado", "Data chamado"], payload.get("data_chamado"))
     _set_sheet_value_by_header(row_values, headers, ["Última atualização", "Ultima atualização", "Ultima atualizacao"], payload.get("ultima_atualizacao"))
@@ -2040,6 +2065,7 @@ def append_company_to_sheet(payload: dict) -> int:
                     remember_sheet_headers(headers)
                     row_values = [""] * len(headers)
                     _set_sheet_value_by_header(row_values, headers, ["Nome Empresas", "Nome da empresa", "Empresa", "Nome Empresa", "Nome empresas", "Nome Empresa(s)"], payload.get("empresa"))
+    _apply_registration_profile_fields(row_values, headers, payload)
                     _set_sheet_value_by_header(row_values, headers, ["Data de abertura", "Data abertura"], payload.get("data_abertura"))
                     _set_sheet_value_by_header(row_values, headers, ["Capital", "Capital social"], payload.get("capital"))
                     _set_sheet_value_by_header(row_values, headers, ["CNPJ"], payload.get("cnpj"))
@@ -2062,7 +2088,7 @@ def append_company_to_sheet(payload: dict) -> int:
                     _set_sheet_value_by_header(row_values, headers, ["CPF"], payload.get("cpf_socio_3"), occurrence=3)
                     _set_sheet_value_by_header(row_values, headers, ["Instagram"], payload.get("instagram"))
                     _set_sheet_value_by_header(row_values, headers, ["Linkedin", "LinkedIn"], payload.get("linkedin"))
-                    _set_sheet_value_by_header(row_values, headers, ["Vendedor", "Responsável", "Responsavel"], payload.get("vendedor"))
+                    _set_sheet_value_by_header(row_values, headers, ["Vendedor"], payload.get("vendedor"))
                     _set_sheet_value_by_header(row_values, headers, ["Status WhatsApp", "Status", "Etapa"], payload.get("status"))
                     _set_sheet_value_by_header(row_values, headers, ["Data do chamado", "Data chamado"], payload.get("data_chamado"))
                     _set_sheet_value_by_header(row_values, headers, ["Última atualização", "Ultima atualização", "Ultima atualizacao"], payload.get("ultima_atualizacao"))
@@ -2144,6 +2170,7 @@ def update_company_in_sheet(sheet_row: int, payload: dict) -> None:
     row_values = row_values[:len(headers)]
 
     _set_sheet_value_by_header(row_values, headers, ["Nome Empresas", "Nome da empresa", "Empresa", "Nome Empresa", "Nome empresas", "Nome Empresa(s)"], payload.get("empresa"))
+    _apply_registration_profile_fields(row_values, headers, payload)
     _set_sheet_value_by_header(row_values, headers, ["Data de abertura", "Data abertura"], payload.get("data_abertura"))
     _set_sheet_value_by_header(row_values, headers, ["Capital", "Capital social"], payload.get("capital"))
     _set_sheet_value_by_header(row_values, headers, ["CNPJ"], payload.get("cnpj"))
@@ -2171,7 +2198,7 @@ def update_company_in_sheet(sheet_row: int, payload: dict) -> None:
 
     _set_sheet_value_by_header(row_values, headers, ["Instagram"], payload.get("instagram"))
     _set_sheet_value_by_header(row_values, headers, ["Linkedin", "LinkedIn"], payload.get("linkedin"))
-    _set_sheet_value_by_header(row_values, headers, ["Vendedor", "Responsável", "Responsavel"], payload.get("vendedor"))
+    _set_sheet_value_by_header(row_values, headers, ["Vendedor"], payload.get("vendedor"))
     _set_sheet_value_by_header(row_values, headers, ["Status", "Etapa"], payload.get("status"))
     _set_sheet_value_by_header(row_values, headers, ["Data do chamado", "Data chamado"], payload.get("data_chamado"))
     _set_sheet_value_by_header(row_values, headers, ["Última atualização", "Ultima atualização", "Ultima atualizacao"], payload.get("ultima_atualizacao"))
@@ -2216,6 +2243,8 @@ def identify_columns(df: pd.DataFrame) -> dict:
     return {
         "empresa": first_existing_column(df, ["Nome Empresas", "Nome da empresa", "Empresa", "Nome Empresa", "Nome empresas", "Nome Empresa(s)", "Razão Social", "Razao Social"]),
         "nome_fantasia": first_existing_column(df, ["Nome Fantasia", "Nome fantasia", "Fantasia"]),
+        "data_fechamento": first_existing_column(df, ["Data de fechamento", "Data fechamento"]),
+        "responsavel_legal": first_existing_column(df, ["Responsável legal", "Responsavel legal", "Responsável", "Responsavel"]),
         "cargo_responsavel": first_existing_column(df, ["Cargo", "Cargo do responsável", "Cargo responsavel"]),
         "data_abertura": first_existing_column(df, ["Data de abertura", "Data abertura"]),
         "capital": first_existing_column(df, ["Capital", "Capital social"]),
@@ -2254,7 +2283,7 @@ def identify_columns(df: pd.DataFrame) -> dict:
         "cpf_socio_3": first_existing_column(df, ["CPF_3"]),
         "instagram": first_existing_column(df, ["Instagram"]),
         "linkedin": first_existing_column(df, ["Linkedin", "LinkedIn"]),
-        "vendedor": first_existing_column(df, ["Vendedor", "Responsável", "Responsavel"]),
+        "vendedor": first_existing_column(df, ["Vendedor"]),
         "status_whatsapp": first_existing_column(df, ["Status WhatsApp", "Status Whatsapp", "Status Whats", "Status Whats App"]),
         "status_ligacao": first_existing_column(df, ["Status Ligação", "Status Ligacao", "Status da Ligação", "Status da Ligacao"]),
         "status": first_existing_column(df, ["Status WhatsApp", "Status Whatsapp", "Status Whats", "Status Whats App", "Status", "Etapa"]),

@@ -288,6 +288,31 @@ async def api_cnpj_lookup(request: Request, cnpj: str):
     return JSONResponse({"ok": True, **payload})
 
 
+def _complete_pasted_registration(fields: dict) -> None:
+    """Completa nicho, abertura e responsável legal com a consulta do CNPJ."""
+    cnpj = normalize_text(fields.get("cnpj"))
+    if len("".join(ch for ch in cnpj if ch.isdigit())) != 14:
+        return
+    missing = not fields.get("nicho") or not fields.get("data_abertura") or not fields.get("responsavel_legal")
+    if not missing and fields.get("nome_fantasia"):
+        return
+    try:
+        from app.services.cnpj_lookup import CnpjLookupError, lookup_cnpj
+
+        looked = lookup_cnpj(cnpj)
+    except CnpjLookupError:
+        return
+    except Exception:
+        return
+    for key in ("nicho", "data_abertura", "nome_fantasia", "capital", "responsavel_legal", "socio_1", "cpf_socio_1"):
+        if not normalize_text(fields.get(key)) and normalize_text(looked.get(key)):
+            fields[key] = looked[key]
+    if fields.get("socio_1") and not fields.get("quantidade_socios"):
+        fields["quantidade_socios"] = "1"
+    if fields.get("socio_1") and not fields.get("responsavel_legal"):
+        fields["responsavel_legal"] = fields["socio_1"]
+
+
 @router.get("/cadastro/bot/dados-gerais")
 async def cadastro_bot_formulario(request: Request):
     redirect = require_auth(request)
@@ -310,7 +335,9 @@ async def cadastro_bot_dados_gerais(request: Request):
     text = payload.get("text") if isinstance(payload, dict) else ""
     from app.services.cadastro_bot import read_dados_gerais
 
-    return JSONResponse(read_dados_gerais(str(text or ""), niche_options=get_niche_options()))
+    result = read_dados_gerais(str(text or ""), niche_options=get_niche_options())
+    _complete_pasted_registration(result.get("fields") or {})
+    return JSONResponse(result)
 
 
 @router.get("/cadastro/api/empresas-matriz")

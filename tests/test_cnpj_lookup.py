@@ -54,6 +54,8 @@ class CnpjLookupTest(unittest.TestCase):
         self.assertEqual(payload["nicho"], "Automotivo")
         self.assertEqual(payload["data_abertura"], "10/05/2013")
         self.assertEqual(payload["quantidade_socios"], "1")
+        self.assertEqual(payload["nome_fantasia"], "BRASIL AUTO PECAS")
+        self.assertEqual(payload["responsavel_legal"], "JOAO LIMA")
         self.assertEqual(payload["socio_1"], "JOAO LIMA")
         self.assertEqual(payload["cpf_socio_1"], "12345678901")
         self.assertNotIn("socio_2", payload)
