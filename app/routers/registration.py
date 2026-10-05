@@ -128,6 +128,25 @@ def _registration_page_context(request: Request, df, *, error: str = "", values:
     }
 
 
+@router.get("/cadastro/api/cnpj/{cnpj}")
+async def api_cnpj_lookup(request: Request, cnpj: str):
+    redirect = require_auth(request)
+    if redirect:
+        return JSONResponse({"ok": False, "error": "Não autenticado."}, status_code=401)
+    from app.services.cnpj_lookup import CnpjLookupError, lookup_cnpj
+
+    try:
+        payload = lookup_cnpj(cnpj)
+    except CnpjLookupError as error:
+        return JSONResponse({"ok": False, "error": str(error)}, status_code=422)
+    except Exception:
+        return JSONResponse(
+            {"ok": False, "error": "Não consegui consultar o CNPJ agora. Tente de novo em instantes."},
+            status_code=502,
+        )
+    return JSONResponse({"ok": True, **payload})
+
+
 @router.get("/cadastro/api/empresas-matriz")
 async def api_empresas_matriz(request: Request, q: str = "", exclude: int | None = None):
     redirect = require_auth(request)
