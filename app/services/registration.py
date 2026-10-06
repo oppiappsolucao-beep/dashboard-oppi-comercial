@@ -403,6 +403,8 @@ def build_registration_payload(form: dict) -> dict:
     payload["is_filial"] = is_filial
     matriz = parse_empresa_matriz_sheet_row(form.get("empresa_matriz_sheet_row")) if is_filial else None
     payload["empresa_matriz_sheet_row"] = matriz
+    for field in ("email_login_gestor", "email_cobranca", "senha_acesso"):
+        payload[field] = normalize_text(form.get(field, ""))
     return payload
 
 

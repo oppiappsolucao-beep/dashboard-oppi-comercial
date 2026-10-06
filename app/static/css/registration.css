@@ -1885,6 +1885,32 @@
   color: var(--muted);
 }
 
+.invoice-copy {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 220px;
+}
+
+.invoice-copy-url {
+  flex: 1;
+  min-width: 0;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid #E5E7EB;
+  border-radius: 8px;
+  background: #F9FAFB;
+  color: #374151;
+  font-size: 12px;
+}
+
+.invoice-copy-btn {
+  flex: 0 0 auto;
+  height: 32px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
 .fin-badge {
   display: inline-flex;
   align-items: center;

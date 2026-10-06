@@ -353,6 +353,7 @@ def generate_asaas_invoice(
             "status": "Pendente",
             "forma_pagamento": normalized["forma_label"],
             "asaas_payment_id": payment_id,
+            "invoice_url": created.get("invoiceUrl") or created.get("bankSlipUrl") or created.get("paymentLink") or "",
         })
         save_payment_history(tenant_id, sheet_row, history)
 

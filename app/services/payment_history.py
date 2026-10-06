@@ -74,6 +74,8 @@ def parse_payment_history_from_form(form: Any) -> list[dict]:
     valores = form.getlist("pay_valor")
     statuses = form.getlist("pay_status")
     formas = form.getlist("pay_forma_pagamento")
+    invoice_urls = form.getlist("pay_invoice_url")
+    asaas_ids = form.getlist("pay_asaas_payment_id")
     total = max(len(datas), len(descricoes), len(valores), len(statuses), len(formas), 0)
     if total == 0:
         return []
@@ -88,6 +90,8 @@ def parse_payment_history_from_form(form: Any) -> list[dict]:
                     "valor": valores[index] if index < len(valores) else "",
                     "status": statuses[index] if index < len(statuses) else "Pendente",
                     "forma_pagamento": formas[index] if index < len(formas) else "PIX",
+                    "invoice_url": invoice_urls[index] if index < len(invoice_urls) else "",
+                    "asaas_payment_id": asaas_ids[index] if index < len(asaas_ids) else "",
                 }
             )
         )

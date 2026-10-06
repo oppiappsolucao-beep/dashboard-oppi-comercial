@@ -147,6 +147,13 @@ _FIELD_ALIASES: dict[str, tuple[str, ...]] = {
     "municipio": ("municipio", "cidade"),
     "uf": ("uf", "estado"),
     "email": ("email", "e-mail", "email empresa"),
+    "email_login_gestor": (
+        "e-mail de login do gestor",
+        "email de login do gestor",
+        "e-mail login do gestor",
+        "email login do gestor",
+    ),
+    "senha": ("senha", "senha de acesso"),
     "email_cobranca": (
         "email de cobranca",
         "e-mail de cobranca",
@@ -163,58 +170,49 @@ _FIELD_ALIASES: dict[str, tuple[str, ...]] = {
     ),
     "site": ("site", "site empresa", "website"),
     "telefone": (
+        "celular / whatsapp",
+        "celular/whatsapp",
         "cobranca / whatsapp",
         "cobranca/whatsapp",
         "whatsapp",
         "celular whatsapp",
         "telefone b2b",
         "telefone (b2b)",
-        "telefone",
-        "celular",
-        "fone",
     ),
     "nome_contato": ("nome do contato", "nome contato", "contato"),
     "telefone_fixo": ("telefone fixo", "fixo"),
+    "telefone_alternativo": ("telefone alternativo", "outro telefone", "telefone lemitt"),
     "socio_1": ("socio 1", "socio1"),
-    "responsavel_legal": ("responsavel legal", "responsavel"),
+    "responsavel_legal": ("nome do responsavel", "responsavel legal", "responsavel"),
     "cpf_socio_1": ("cpf",),
     "email_socio_1": ("e-mail socio 1", "email socio 1", "e-mail do socio 1"),
     "nicho": ("nicho",),
     "vendedor": ("vendedor", "responsavel comercial"),
     "observacoes": ("observacoes", "observacao"),
-    "filial": ("filial", "e filial", "is filial"),
+    "instagram": ("instagram",),
+    "linkedin": ("linkedin",),
+    "filial": ("e filial", "filial", "is filial"),
+    "status_cadastro": ("status", "status 1"),
     "matriz": ("empresa matriz", "nome da matriz", "matriz vinculada", "matriz"),
     "plano": ("plano", "plano / servico", "servico", "servicos fechados", "servico fechado"),
     "valor": ("valor", "valor do plano", "valor do servico", "valor da proposta"),
-    "vencimento": ("vencimento", "primeiro vencimento", "data de vencimento"),
+    "vencimento": ("data de vencimento", "primeiro vencimento", "vencimento"),
     "forma": ("forma de pagamento", "forma pagamento", "pagamento"),
     "ciclo": ("ciclo", "ciclo do plano"),
 }
-
-_ENSURE_COLUMNS = (
-    ("Nome Fantasia", "nome_fantasia"),
-    ("Data de fechamento", "data_fechamento"),
-    ("Responsável", "responsavel_legal"),
-    ("Nicho", "nicho"),
-    ("Plano", "plano"),
-    ("Valor", "valor"),
-    ("Vencimento", "vencimento"),
-    ("Forma de pagamento", "forma"),
-    ("Ciclo", "ciclo"),
-)
-
 
 def _digits(value: str) -> str:
     return re.sub(r"\D", "", normalize_text(value))
 
 
 def _header_map(headers: list[str]) -> dict[str, int]:
+    """O primeiro alias da lista ganha, para não cair numa coluna mais genérica."""
     found: dict[str, int] = {}
     normalized = [normalize_search_text(header) for header in headers]
     for field, aliases in _FIELD_ALIASES.items():
-        for index, header in enumerate(normalized):
-            if header in aliases:
-                found[field] = index
+        for alias in aliases:
+            if alias in normalized:
+                found[field] = normalized.index(alias)
                 break
     return found
 
@@ -271,16 +269,8 @@ def apply_raissa_values(row: list[str], headers: list[str], payload: dict, *, on
 
 
 def ensure_raissa_columns(headers: list[str]) -> list[str]:
-    """Acrescenta nicho e financeiro se a aba ainda não tiver essas colunas."""
-    current = list(headers)
-    known = {normalize_search_text(header) for header in current}
-    for title, field in _ENSURE_COLUMNS:
-        aliases = _FIELD_ALIASES[field]
-        if any(alias in known for alias in aliases):
-            continue
-        current.append(title)
-        known.add(normalize_search_text(title))
-    return current
+    """Não cria coluna. O comercial já tem os nomes na planilha."""
+    return list(headers)
 
 
 _CYCLE_LABELS = {"mensal": "Mensal", "anual": "Anual", "avulso": "Avulso"}
@@ -291,6 +281,14 @@ _FORMA_LABELS = {
     "pix_boleto": "Pix/Boleto (Avulso)",
     "pix": "PIX Avulso",
 }
+
+
+def _sheet_date(value) -> str:
+    raw = normalize_text(value)[:10]
+    if len(raw) == 10 and raw[4] == "-" and raw[7] == "-":
+        year, month, day = raw.split("-")
+        return f"{day}/{month}/{year}"
+    return raw
 
 
 def _billing_labels(billing: dict | None) -> dict[str, str]:
@@ -305,7 +303,7 @@ def _billing_labels(billing: dict | None) -> dict[str, str]:
     return {
         "plano": normalize_text(data.get("servico") or data.get("plano")),
         "valor": normalize_text(data.get("valor")),
-        "vencimento": normalize_text(data.get("vencimento"))[:10],
+        "vencimento": _sheet_date(data.get("vencimento")),
         "forma": forma_label(data.get("forma")) if normalize_text(data.get("forma")) else "",
         "ciclo": cycle_label(data.get("ciclo")) if normalize_text(data.get("ciclo")) else "",
     }
@@ -318,7 +316,7 @@ def payload_for_raissa(form: dict, billing: dict | None = None) -> dict:
     if not finance["valor"]:
         finance["valor"] = normalize_text(form.get("valor_proposta") or form.get("billing_valor"))
     if not finance["vencimento"]:
-        finance["vencimento"] = normalize_text(form.get("billing_vencimento"))[:10]
+        finance["vencimento"] = _sheet_date(form.get("billing_vencimento"))
     if not finance["forma"] and normalize_text(form.get("billing_forma")):
         finance["forma"] = _FORMA_LABELS.get(normalize_text(form.get("billing_forma")).lower(), normalize_text(form.get("billing_forma")))
     if not finance["ciclo"] and normalize_text(form.get("billing_ciclo")):
@@ -330,7 +328,7 @@ def payload_for_raissa(form: dict, billing: dict | None = None) -> dict:
         "cnpj": normalize_text(form.get("cnpj")),
         "data_abertura": normalize_text(form.get("data_abertura")),
         "data_fechamento": normalize_text(form.get("data_fechamento")),
-        "responsavel_legal": normalize_text(form.get("responsavel_legal") or form.get("socio_1")),
+        "responsavel_legal": normalize_text(form.get("responsavel_legal") or form.get("nome_responsavel") or form.get("socio_1")),
         "capital": normalize_text(form.get("capital")),
         "endereco": normalize_text(form.get("endereco")),
         "endereco_numero": normalize_text(form.get("endereco_numero")),
@@ -340,18 +338,23 @@ def payload_for_raissa(form: dict, billing: dict | None = None) -> dict:
         "municipio": normalize_text(form.get("municipio")),
         "uf": normalize_text(form.get("uf")).upper()[:2],
         "email": normalize_text(form.get("email_empresa") or form.get("email")),
+        "email_login_gestor": normalize_text(form.get("email_login_gestor")),
         "email_cobranca": normalize_text(form.get("email_cobranca")),
+        "senha": normalize_text(form.get("senha_acesso") or form.get("senha")),
         "site": normalize_text(form.get("site")),
         "telefone": normalize_text(form.get("telefone_b2b")),
         "nome_contato": normalize_text(form.get("nome_contato") or form.get("socio_1")),
         "telefone_fixo": normalize_text(form.get("telefone_fixo")),
+        "telefone_alternativo": normalize_text(form.get("telefone_alternativo")),
+        "instagram": normalize_text(form.get("instagram")),
+        "linkedin": normalize_text(form.get("linkedin")),
         "socio_1": normalize_text(form.get("socio_1")),
         "cpf_socio_1": normalize_text(form.get("cpf_socio_1")),
         "email_socio_1": normalize_text(form.get("email_socio_1") or form.get("email_login_gestor")),
         "nicho": normalize_text(form.get("nicho")),
         "vendedor": normalize_text(form.get("vendedor")),
         "observacoes": normalize_text(form.get("observacoes")),
-        "filial": "Sim" if filial else "",
+        "filial": "Filial" if filial else "Matriz",
         "matriz": normalize_text(form.get("empresa_matriz_search") or form.get("empresa_matriz_nome")),
         **finance,
     }
@@ -412,6 +415,8 @@ def save_registration_on_raissa(form: dict, billing: dict | None = None) -> dict
                 value_input_option="USER_ENTERED",
             )
         row_number = _find_row(values, header_at, headers, payload)
+        if not row_number:
+            payload["status_cadastro"] = "1 Boleto Aguardando"
         existing = []
         if row_number and row_number - 1 < len(values):
             existing = values[row_number - 1]

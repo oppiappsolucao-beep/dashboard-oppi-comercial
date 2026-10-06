@@ -87,11 +87,62 @@ class RaissaCompanySyncTest(unittest.TestCase):
         self.assertEqual(row[1], "18.088.253/0001-24")
         self.assertEqual(row[2], "Oppi Ponto Mensal")
 
-    def test_cria_colunas_de_financeiro_se_faltarem(self):
-        headers = ensure_raissa_columns(["Empresa", "CNPJ"])
-        self.assertIn("Plano", headers)
-        self.assertIn("Valor", headers)
-        self.assertIn("Nicho", headers)
+    def test_nao_cria_colunas_novas_na_planilha(self):
+        headers = ["Empresa", "CNPJ"]
+        self.assertEqual(ensure_raissa_columns(headers), ["Empresa", "CNPJ"])
+
+    def test_grava_nos_nomes_da_planilha_sem_criar_coluna(self):
+        headers = [
+            "Empresa",
+            "E-mail de login do gestor",
+            "E-mail para cobrança",
+            "Senha",
+            "Celular / WhatsApp",
+            "Telefone fixo",
+            "Telefone alternativo",
+            "Nome do responsável",
+            "Responsável",
+            "Instagram",
+            "LinkedIn",
+            "É filial",
+            "Data de vencimento",
+            "Status",
+        ]
+        payload = payload_for_raissa(
+            {
+                "empresa": "OFICINA SOL",
+                "email_login_gestor": "gestor@sol.com",
+                "email_cobranca": "financeiro@sol.com",
+                "senha_acesso": "Ab12cd34",
+                "telefone_b2b": "11988887777",
+                "telefone_fixo": "1133334444",
+                "telefone_alternativo": "1144445555",
+                "responsavel_legal": "Ana Souza",
+                "instagram": "@oficinasol",
+                "linkedin": "linkedin.com/oficinasol",
+                "billing_vencimento": "2026-10-06",
+            }
+        )
+        payload["status_cadastro"] = "1 Boleto Aguardando"
+        row = apply_raissa_values([""] * len(headers), headers, payload, only_filled=False)
+        self.assertEqual(row[1], "gestor@sol.com")
+        self.assertEqual(row[2], "financeiro@sol.com")
+        self.assertEqual(row[3], "Ab12cd34")
+        self.assertEqual(row[4], "11988887777")
+        self.assertEqual(row[5], "1133334444")
+        self.assertEqual(row[6], "1144445555")
+        self.assertEqual(row[7], "Ana Souza")
+        self.assertEqual(row[8], "")
+        self.assertEqual(row[9], "@oficinasol")
+        self.assertEqual(row[10], "linkedin.com/oficinasol")
+        self.assertEqual(row[11], "Matriz")
+        self.assertEqual(row[12], "06/10/2026")
+        self.assertEqual(row[13], "1 Boleto Aguardando")
+        self.assertEqual(len(row), len(headers))
+
+    def test_filial_marcada_grava_filial(self):
+        payload = payload_for_raissa({"empresa": "FILIAL CENTRO", "is_filial": "1"})
+        self.assertEqual(payload["filial"], "Filial")
 
     def test_liga_empresa_da_raissa_ao_cadastro_pelo_cnpj_ou_nome(self):
         empresas = [

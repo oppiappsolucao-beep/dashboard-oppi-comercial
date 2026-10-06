@@ -22,6 +22,8 @@ logger = logging.getLogger(__name__)
 DEFAULT_TENANT_ID = "default"
 _TZ = ZoneInfo("America/Sao_Paulo")
 _df_lock = threading.Lock()
+_mirror_locks_guard = threading.Lock()
+_mirror_locks: dict[int, threading.Lock] = {}
 _df_cache: pd.DataFrame | None = None
 _df_columns: dict | None = None
 _df_cached_at = 0.0
@@ -742,6 +744,50 @@ def build_prepared_dataframe() -> tuple[pd.DataFrame, dict]:
     return prepared.copy(), dict(columns or {})
 
 
+def _registration_mirror_lock(sheet_row: int) -> threading.Lock:
+    with _mirror_locks_guard:
+        lock = _mirror_locks.get(int(sheet_row))
+        if lock is None:
+            lock = threading.Lock()
+            _mirror_locks[int(sheet_row)] = lock
+        return lock
+
+
+def _sheet_row_outside_grid(error: Exception) -> bool:
+    text = str(error).lower()
+    if "429" in text or "quota" in text:
+        return False
+    return "exceeds grid" in text or "grid limits" in text
+
+
+def _remember_folha1_sheet_row(registration_id: int, folha1_row: int) -> None:
+    if not registration_id or int(folha1_row) <= 1:
+        return
+    db = SessionLocal()
+    try:
+        current = db.get(CrmRegistration, int(registration_id))
+        if current is None:
+            return
+        extras = _json_loads(current.extras_json, {})
+        if int(extras.get("folha1_sheet_row") or 0) == int(folha1_row):
+            return
+        extras["folha1_sheet_row"] = int(folha1_row)
+        current.extras_json = _json_dumps(extras)
+        db.commit()
+    finally:
+        db.close()
+
+
+def _access_fields_from_registration(row: CrmRegistration) -> dict[str, str]:
+    actions = _json_loads(row.actions_json, {})
+    payload: dict[str, str] = {}
+    for key in ("email_login_gestor", "email_cobranca", "senha_acesso"):
+        value = normalize_text(actions.get(key))
+        if value:
+            payload[key] = value
+    return payload
+
+
 def _schedule_mirror_registration(sheet_row: int, *, tenant_id: str | None = None) -> None:
     def _run() -> None:
         try:
@@ -768,35 +814,30 @@ def _mirror_registration_to_folha1(sheet_row: int, *, tenant_id: str | None = No
 
     if not settings.sheets_configured:
         return
-    row = get_registration_by_sheet_row(sheet_row, tenant_id=tenant_id)
-    if not row:
-        return
-    payload = registration_to_payload(row)
-    # Prefer update; if Folha1 missing this row, append and remount sheet_row.
-    try:
-        update_company_in_sheet(int(sheet_row), payload)
-    except Exception:
+    # Vários saves do mesmo cadastro (tipo, acesso, nicho) disparam este espelho.
+    # Sem o lock, cada um faz append e o cliente aparece 3 vezes na planilha.
+    with _registration_mirror_lock(int(sheet_row)):
+        row = get_registration_by_sheet_row(sheet_row, tenant_id=tenant_id)
+        if not row:
+            return
+        payload = registration_to_payload(row)
+        payload.update(_access_fields_from_registration(row))
+        extras = payload.get("extras") if isinstance(payload.get("extras"), dict) else {}
+        stored_row = int(extras.get("folha1_sheet_row") or 0)
+        target = stored_row if stored_row > 1 else int(sheet_row)
         try:
-            new_row = append_company_to_sheet(payload)
-            if int(new_row) != int(sheet_row):
-                db = SessionLocal()
-                try:
-                    current = (
-                        db.query(CrmRegistration)
-                        .filter(CrmRegistration.id == row.id)
-                        .first()
-                    )
-                    if current:
-                        # Keep local sheet_row stable for URLs; append may create a new Folha1 line.
-                        # Store actual Folha1 row in extras for reconciliation.
-                        extras = _json_loads(current.extras_json, {})
-                        extras["folha1_sheet_row"] = int(new_row)
-                        current.extras_json = _json_dumps(extras)
-                        db.commit()
-                finally:
-                    db.close()
-        except Exception:
-            logger.exception("Não foi possível espelhar cadastro sheet_row=%s", sheet_row)
+            update_company_in_sheet(target, payload)
+        except Exception as error:
+            if stored_row > 1 or not _sheet_row_outside_grid(error):
+                logger.exception("Não foi possível espelhar cadastro sheet_row=%s", sheet_row)
+                return
+            try:
+                target = int(append_company_to_sheet(payload))
+            except Exception:
+                logger.exception("Não foi possível incluir cadastro sheet_row=%s na planilha", sheet_row)
+                return
+        if stored_row != int(target):
+            _remember_folha1_sheet_row(int(row.id), int(target))
 
 
 def _mirror_all_lead_actions(*, tenant_id: str | None = None) -> None:

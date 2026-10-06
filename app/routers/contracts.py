@@ -301,6 +301,7 @@ async def contract_edit_page(request: Request, sheet_row: int):
     )
     payment_history = load_payment_history(DEFAULT_TENANT_ID, sheet_row)
     billing_plan = load_billing_plan(DEFAULT_TENANT_ID, sheet_row)
+    asaas_payments: list = []
     asaas_payments_unique: list = []
     summary_payments = payment_history
     if active_tab == "financeiro":
@@ -374,7 +375,7 @@ async def contract_edit_page(request: Request, sheet_row: int):
             "payment_status_options": PAYMENT_STATUS_OPTIONS,
             "closed_services": closed_services,
             "payment_history": payment_history,
-            "asaas_payments": asaas_payments_unique,
+            "asaas_payments": asaas_payments,
             "billing_plan": billing_plan,
             "plan_cycle_options": PLAN_CYCLE_OPTIONS,
             "billing_form_options": BILLING_FORM_OPTIONS,

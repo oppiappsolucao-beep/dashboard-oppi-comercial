@@ -1383,6 +1383,20 @@ def _set_sheet_value_by_header(
     return False
 
 
+def _set_first_alias(
+    row_values: list[str],
+    headers: list[str],
+    aliases: list[str],
+    value,
+    occurrence: int = 1,
+) -> bool:
+    """Preenche o primeiro cabeçalho que existir, na ordem dos nomes informados."""
+    for alias in aliases:
+        if _set_sheet_value_by_header(row_values, headers, [alias], value, occurrence=occurrence):
+            return True
+    return False
+
+
 SHEET_SERVICO_ALIASES = [
     "Serviços fechados",
     "Servicos fechados",
@@ -1416,10 +1430,8 @@ REGISTRATION_OPTIONAL_COLUMNS: list[tuple[str, list[str]]] = [
     ("Bairro", ["Bairro", "Bairro/Distrito", "Bairro Distrito", "Distrito"]),
     ("Município", ["Município", "Municipio", "Cidade"]),
     ("UF", ["UF", "Estado"]),
-    ("Endereço completo", ["Endereço completo", "Endereco completo", "Endereço Completo"]),
     ("Nome Fantasia", ["Nome Fantasia", "Nome fantasia", "Fantasia"]),
     ("Data de fechamento", ["Data de fechamento", "Data fechamento"]),
-    ("Responsável", ["Responsável", "Responsavel", "Responsável legal", "Responsavel legal"]),
 ]
 
 
@@ -1463,12 +1475,55 @@ def _apply_registration_profile_fields(row_values: list[str], headers: list[str]
         ["Data de fechamento", "Data fechamento"],
         payload.get("data_fechamento"),
     )
-    _set_sheet_value_by_header(
+    _set_first_alias(
         row_values,
         headers,
-        ["Responsável", "Responsavel", "Responsável legal", "Responsavel legal"],
+        [
+            "Nome do responsável",
+            "Nome do responsavel",
+            "Responsável legal",
+            "Responsavel legal",
+            "Responsável",
+            "Responsavel",
+        ],
         payload.get("responsavel_legal"),
     )
+
+
+def _apply_access_sheet_fields(row_values: list[str], headers: list[str], payload: dict) -> None:
+    """Grava acesso no cabeçalho que já existe. Campo vazio não apaga a célula."""
+    login = normalize_text(payload.get("email_login_gestor"))
+    if login:
+        _set_first_alias(
+            row_values,
+            headers,
+            [
+                "E-mail de login do gestor",
+                "Email de login do gestor",
+                "E-mail login do gestor",
+                "Email login do gestor",
+            ],
+            login,
+        )
+    billing_email = normalize_text(payload.get("email_cobranca"))
+    if billing_email:
+        _set_first_alias(
+            row_values,
+            headers,
+            [
+                "E-mail para cobrança",
+                "Email para cobrança",
+                "E-mail para cobranca",
+                "E-mail de cobrança",
+                "Email de cobrança",
+                "Cobrança / E-mail",
+                "Cobranca / E-mail",
+            ],
+            billing_email,
+        )
+    password = normalize_text(payload.get("senha_acesso"))
+    if password:
+        _set_first_alias(row_values, headers, ["Senha", "Senha de acesso"], password)
 
 
 def _apply_commercial_fields(row_values: list[str], headers: list[str], payload: dict) -> None:
@@ -2024,7 +2079,12 @@ def append_company_to_sheet(payload: dict) -> int:
     _set_sheet_value_by_header(row_values, headers, ["Email", "E-mail"], payload.get("email_empresa"))
     _set_sheet_value_by_header(row_values, headers, ["Site empresa", "Site", "Website"], payload.get("site"))
 
-    _set_sheet_value_by_header(row_values, headers, ["Celular WhatsApp", "Telefone (b2b)", "Telefone b2b"], payload.get("telefone_b2b"))
+    _set_first_alias(
+        row_values,
+        headers,
+        ["Celular / WhatsApp", "Celular/WhatsApp", "Celular WhatsApp", "Telefone (b2b)", "Telefone b2b"],
+        payload.get("telefone_b2b"),
+    )
     _set_sheet_value_by_header(row_values, headers, ["Nome do contato", "Nome contato", "Contato WhatsApp"], payload.get("nome_contato"))
     _set_sheet_value_by_header(row_values, headers, ["Telefone fixo", "Fixo"], payload.get("telefone_fixo"))
     _set_sheet_value_by_header(row_values, headers, ["Telefone lemitt", "Telefone alternativo", "Outro telefone"], payload.get("telefone_alternativo"))
@@ -2042,8 +2102,9 @@ def append_company_to_sheet(payload: dict) -> int:
     _set_sheet_value_by_header(row_values, headers, ["Telefone sócio 3", "Telefone socio 3", "Telefone do sócio 3", "Telefone do socio 3", "Telefone"], payload.get("telefone_socio_3"), occurrence=3)
     _set_sheet_value_by_header(row_values, headers, ["CPF"], payload.get("cpf_socio_3"), occurrence=3)
 
-    _set_sheet_value_by_header(row_values, headers, ["Instagram"], payload.get("instagram"))
-    _set_sheet_value_by_header(row_values, headers, ["Linkedin", "LinkedIn"], payload.get("linkedin"))
+    _set_first_alias(row_values, headers, ["Instagram"], payload.get("instagram"))
+    _set_first_alias(row_values, headers, ["LinkedIn", "Linkedin"], payload.get("linkedin"))
+    _apply_access_sheet_fields(row_values, headers, payload)
     _set_sheet_value_by_header(row_values, headers, ["Vendedor"], payload.get("vendedor"))
     _set_sheet_value_by_header(row_values, headers, ["Status WhatsApp", "Status", "Etapa"], payload.get("status"))
     _set_sheet_value_by_header(row_values, headers, ["Data do chamado", "Data chamado"], payload.get("data_chamado"))
@@ -2072,7 +2133,12 @@ def append_company_to_sheet(payload: dict) -> int:
                     _apply_address_fields(row_values, headers, payload)
                     _set_sheet_value_by_header(row_values, headers, ["Email", "E-mail"], payload.get("email_empresa"))
                     _set_sheet_value_by_header(row_values, headers, ["Site empresa", "Site", "Website"], payload.get("site"))
-                    _set_sheet_value_by_header(row_values, headers, ["Celular WhatsApp", "Telefone (b2b)", "Telefone b2b"], payload.get("telefone_b2b"))
+                    _set_first_alias(
+        row_values,
+        headers,
+        ["Celular / WhatsApp", "Celular/WhatsApp", "Celular WhatsApp", "Telefone (b2b)", "Telefone b2b"],
+        payload.get("telefone_b2b"),
+    )
                     _set_sheet_value_by_header(row_values, headers, ["Nome do contato", "Nome contato", "Contato WhatsApp"], payload.get("nome_contato"))
                     _set_sheet_value_by_header(row_values, headers, ["Telefone fixo", "Fixo"], payload.get("telefone_fixo"))
                     _set_sheet_value_by_header(row_values, headers, ["Telefone lemitt", "Telefone alternativo", "Outro telefone"], payload.get("telefone_alternativo"))
@@ -2086,8 +2152,9 @@ def append_company_to_sheet(payload: dict) -> int:
                     _set_sheet_value_by_header(row_values, headers, ["Sócio 3", "Socio 3", "Sócio3", "Socio3"], payload.get("socio_3"))
                     _set_sheet_value_by_header(row_values, headers, ["Telefone sócio 3", "Telefone socio 3", "Telefone do sócio 3", "Telefone do socio 3", "Telefone"], payload.get("telefone_socio_3"), occurrence=3)
                     _set_sheet_value_by_header(row_values, headers, ["CPF"], payload.get("cpf_socio_3"), occurrence=3)
-                    _set_sheet_value_by_header(row_values, headers, ["Instagram"], payload.get("instagram"))
-                    _set_sheet_value_by_header(row_values, headers, ["Linkedin", "LinkedIn"], payload.get("linkedin"))
+                    _set_first_alias(row_values, headers, ["Instagram"], payload.get("instagram"))
+                    _set_first_alias(row_values, headers, ["LinkedIn", "Linkedin"], payload.get("linkedin"))
+                    _apply_access_sheet_fields(row_values, headers, payload)
                     _set_sheet_value_by_header(row_values, headers, ["Vendedor"], payload.get("vendedor"))
                     _set_sheet_value_by_header(row_values, headers, ["Status WhatsApp", "Status", "Etapa"], payload.get("status"))
                     _set_sheet_value_by_header(row_values, headers, ["Data do chamado", "Data chamado"], payload.get("data_chamado"))
@@ -2165,7 +2232,11 @@ def update_company_in_sheet(sheet_row: int, payload: dict) -> None:
         allow_duplicate_contact=bool(payload.get("is_filial") and payload.get("empresa_matriz_sheet_row")),
     )
 
-    current_row = worksheet.row_values(int(sheet_row))
+    try:
+        current_row = worksheet.row_values(int(sheet_row))
+    except IndexError:
+        # Linha vazia dentro da grade: gspread antigo devolve IndexError.
+        current_row = []
     row_values = list(current_row) + [""] * max(0, len(headers) - len(current_row))
     row_values = row_values[:len(headers)]
 
@@ -2178,7 +2249,12 @@ def update_company_in_sheet(sheet_row: int, payload: dict) -> None:
     _set_sheet_value_by_header(row_values, headers, ["Email", "E-mail"], payload.get("email_empresa"))
     _set_sheet_value_by_header(row_values, headers, ["Site empresa", "Site", "Website"], payload.get("site"))
 
-    _set_sheet_value_by_header(row_values, headers, ["Celular WhatsApp", "Telefone (b2b)", "Telefone b2b"], payload.get("telefone_b2b"))
+    _set_first_alias(
+        row_values,
+        headers,
+        ["Celular / WhatsApp", "Celular/WhatsApp", "Celular WhatsApp", "Telefone (b2b)", "Telefone b2b"],
+        payload.get("telefone_b2b"),
+    )
     _set_sheet_value_by_header(row_values, headers, ["Nome do contato", "Nome contato", "Contato WhatsApp"], payload.get("nome_contato"))
     _set_sheet_value_by_header(row_values, headers, ["Telefone fixo", "Fixo"], payload.get("telefone_fixo"))
     _set_sheet_value_by_header(row_values, headers, ["Telefone lemitt", "Telefone alternativo", "Outro telefone"], payload.get("telefone_alternativo"))
@@ -2196,8 +2272,9 @@ def update_company_in_sheet(sheet_row: int, payload: dict) -> None:
     _set_sheet_value_by_header(row_values, headers, ["Telefone sócio 3", "Telefone socio 3", "Telefone do sócio 3", "Telefone do socio 3", "Telefone"], payload.get("telefone_socio_3"), occurrence=3)
     _set_sheet_value_by_header(row_values, headers, ["CPF"], payload.get("cpf_socio_3"), occurrence=3)
 
-    _set_sheet_value_by_header(row_values, headers, ["Instagram"], payload.get("instagram"))
-    _set_sheet_value_by_header(row_values, headers, ["Linkedin", "LinkedIn"], payload.get("linkedin"))
+    _set_first_alias(row_values, headers, ["Instagram"], payload.get("instagram"))
+    _set_first_alias(row_values, headers, ["LinkedIn", "Linkedin"], payload.get("linkedin"))
+    _apply_access_sheet_fields(row_values, headers, payload)
     _set_sheet_value_by_header(row_values, headers, ["Vendedor"], payload.get("vendedor"))
     _set_sheet_value_by_header(row_values, headers, ["Status", "Etapa"], payload.get("status"))
     _set_sheet_value_by_header(row_values, headers, ["Data do chamado", "Data chamado"], payload.get("data_chamado"))
@@ -2244,7 +2321,7 @@ def identify_columns(df: pd.DataFrame) -> dict:
         "empresa": first_existing_column(df, ["Nome Empresas", "Nome da empresa", "Empresa", "Nome Empresa", "Nome empresas", "Nome Empresa(s)", "Razão Social", "Razao Social"]),
         "nome_fantasia": first_existing_column(df, ["Nome Fantasia", "Nome fantasia", "Fantasia"]),
         "data_fechamento": first_existing_column(df, ["Data de fechamento", "Data fechamento"]),
-        "responsavel_legal": first_existing_column(df, ["Responsável legal", "Responsavel legal", "Responsável", "Responsavel"]),
+        "responsavel_legal": first_existing_column(df, ["Nome do responsável", "Nome do responsavel", "Responsável legal", "Responsavel legal", "Responsável", "Responsavel"]),
         "cargo_responsavel": first_existing_column(df, ["Cargo", "Cargo do responsável", "Cargo responsavel"]),
         "data_abertura": first_existing_column(df, ["Data de abertura", "Data abertura"]),
         "capital": first_existing_column(df, ["Capital", "Capital social"]),
@@ -2258,7 +2335,7 @@ def identify_columns(df: pd.DataFrame) -> dict:
         "uf": first_existing_column(df, ["UF", "Estado"]),
         "email": first_existing_column(df, ["Email", "E-mail", "Email empresa", "E-mail empresa", "email_empresa"]),
         "site": first_existing_column(df, ["Site empresa", "Site", "Website"]),
-        "telefone_b2b": first_existing_column(df, ["Celular WhatsApp", "Telefone WhatsApp", "Telefone (b2b)", "Telefone b2b", "Telefone"]),
+        "telefone_b2b": first_existing_column(df, ["Celular / WhatsApp", "Celular/WhatsApp", "Celular WhatsApp", "Telefone WhatsApp", "Telefone (b2b)", "Telefone b2b"]),
         "nome_contato": first_existing_column(df, ["Nome do contato", "Nome contato", "Contato WhatsApp"]),
         "telefone_fixo": first_existing_column(df, ["Telefone fixo", "Fixo"]),
         "telefone_alternativo": first_existing_column(df, ["Telefone lemitt", "Telefone alternativo", "Outro telefone"]),
