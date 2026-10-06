@@ -1,5 +1,5 @@
 """Cards do Kanban de Suporte nível 1 e 2."""
-from app.services.kanban_summary import support_level, support_summary_cards
+from app.services.kanban_summary import resolve_support_level, support_level, support_summary_cards
 
 
 def test_so_suporte_nivel_1_e_2_entram_na_personalizacao():
@@ -8,6 +8,9 @@ def test_so_suporte_nivel_1_e_2_entram_na_personalizacao():
     assert support_level("Suporte 1") == 1
     assert support_level("Suporte") is None
     assert support_level("Comercial") is None
+    assert resolve_support_level("Suporte", "Suporte Nível 1") == 1
+    assert resolve_support_level("Suporte", "Suporte nivel 2") == 2
+    assert resolve_support_level("Comercial", "Suporte Nível 1") is None
 
 
 def test_cinco_cards_da_fila_de_suporte():

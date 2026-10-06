@@ -122,10 +122,25 @@ def _modal_context(
 
 
 def _os_board_context(request: Request) -> dict:
+    from app.dependencies import get_session_user
+    from app.services.kanban_summary import build_kanban_summary, pick_support_sector, support_level
     from app.services.org_registry import add_sector_queue, list_sectors
     from app.services.service_orders import build_sector_board
 
     sectors = list_sectors()
+    user = get_session_user(request) or {}
+    viewer = " ".join(
+        normalize_text(part)
+        for part in (
+            user.get("department_name"),
+            user.get("name"),
+            user.get("username"),
+            request.session.get("org_sector_name"),
+            request.session.get("org_person_name"),
+        )
+        if normalize_text(part)
+    )
+    viewer_level = support_level(viewer)
     employee = bool(request.session.get("org_person_id"))
     if employee:
         sector_id = normalize_text(request.session.get("org_sector_id"))
@@ -137,11 +152,18 @@ def _os_board_context(request: Request) -> dict:
             chosen = sectors[0]
             sector_id = chosen["id"]
         sector_name = chosen["name"] if chosen else ""
-    from app.services.kanban_summary import build_kanban_summary
-
+    if viewer_level and not is_admin(request):
+        folded = sector_name.lower()
+        on_support_board = "suporte" in folded or "nível" in folded or "nivel" in folded
+        current_level = support_level(sector_name)
+        if not on_support_board or (current_level is not None and current_level != viewer_level):
+            preferred = pick_support_sector(sectors, viewer_level)
+            if preferred:
+                sector_id = preferred["id"]
+                sector_name = preferred["name"]
     inicio = normalize_text(request.query_params.get("inicio"))
     fim = normalize_text(request.query_params.get("fim"))
-    summary = build_kanban_summary(sector_name, inicio, fim)
+    summary = build_kanban_summary(sector_name, inicio, fim, viewer=viewer)
     columns = (
         build_sector_board(sector_id, sector_name, summary["inicio"], summary["fim"])
         if sector_id

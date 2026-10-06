@@ -40,16 +40,41 @@ def _stamp_day(value: str) -> str:
 
 
 def support_level(sector_name: str) -> int | None:
-    """1 ou 2 quando o setor é Suporte nível 1 ou 2. Os demais setores ficam de fora."""
-    text = unicodedata.normalize("NFKD", normalize_text(sector_name).lower())
-    text = "".join(character for character in text if not unicodedata.combining(character))
-    text = re.sub(r"\s+", " ", text).strip()
+    """1 ou 2 quando o texto é Suporte nível 1 ou 2. Os demais ficam de fora."""
+    text = _plain_key(sector_name)
     if "suporte" not in text:
         return None
     if re.search(r"nivel\s*1|\bn1\b|suporte\s*1\b", text):
         return 1
     if re.search(r"nivel\s*2|\bn2\b|suporte\s*2\b", text):
         return 2
+    return None
+
+
+def resolve_support_level(sector_name: str, viewer: str = "") -> int | None:
+    """Nível do setor aberto, ou do login quando o quadro ainda é o Suporte genérico."""
+    level = support_level(sector_name)
+    if level:
+        return level
+    viewer_level = support_level(viewer)
+    if not viewer_level:
+        return None
+    folded = _plain_key(sector_name)
+    if "comercial" in folded and "suporte" not in folded:
+        return None
+    if not folded or "suporte" in folded or "nivel" in folded:
+        return viewer_level
+    return None
+
+
+def pick_support_sector(sectors: list[dict], level: int) -> dict | None:
+    """Setor do nível. Se só existir Suporte, esse quadro recebe o login do nível."""
+    exact = [item for item in sectors if support_level(item.get("name") or "") == level]
+    if exact:
+        return exact[0]
+    for item in sectors:
+        if _plain_key(item.get("name") or "") == "suporte":
+            return item
     return None
 
 
@@ -143,9 +168,9 @@ def support_summary_cards(
     ]
 
 
-def build_kanban_summary(sector_name: str, inicio: str, fim: str) -> dict:
+def build_kanban_summary(sector_name: str, inicio: str, fim: str, *, viewer: str = "") -> dict:
     start, end = period_bounds(inicio, fim)
-    level = support_level(sector_name)
+    level = resolve_support_level(sector_name, viewer)
     if level:
         cards = support_summary_cards(
             list_orders_by_sector(sector_name),
