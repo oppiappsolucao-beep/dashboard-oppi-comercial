@@ -68,6 +68,7 @@ def _required_access(path: str) -> str | None:
         ("/metas-e-relatorios", "gestao"),
         ("/atendimentos", "atendimentos"),
         ("/atividades", "kanban"),
+        ("/proposta", "propostas"),
         ("/propostas", "propostas"),
         ("/financeiro", "financeiro"),
         ("/leads-e-empresas", "empresas"),

@@ -194,6 +194,39 @@ async def activities_page(request: Request):
     return render(request, "activities/os_board.html", _os_board_context(request))
 
 
+@router.get("/proposta", response_class=HTMLResponse)
+async def proposal_page(request: Request):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+    from app.services.org_registry import list_sectors
+    from app.services.service_orders import build_sector_board, is_commercial_sector
+
+    cards = []
+    sector_name = ""
+    for sector in list_sectors():
+        if not is_commercial_sector(sector.get("name") or ""):
+            continue
+        sector_name = sector["name"]
+        columns = build_sector_board(sector["id"], sector_name)
+        cards = [
+            card
+            for column in columns
+            if "proposta" in (column.get("name") or "").lower()
+            for card in column.get("cards") or []
+        ]
+        break
+    return render(
+        request,
+        "activities/proposal_list.html",
+        {
+            "active_page": "proposta",
+            "sector_name": sector_name,
+            "cards": cards,
+        },
+    )
+
+
 @router.post("/atividades/filas")
 async def activities_add_queue(
     request: Request,

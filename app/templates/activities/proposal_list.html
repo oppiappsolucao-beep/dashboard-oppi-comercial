@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+.proposal-list { display: grid; gap: 10px; max-width: 720px; }
+.proposal-list a.panel { display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 14px 16px; text-decoration: none; color: inherit; }
+.proposal-list strong { display: block; }
+.proposal-list span { color: var(--muted); font-size: 0.84rem; }
+</style>
+<div class="page-header">
+  <div>
+    <div class="page-title">Proposta</div>
+    <div class="page-subtitle">Ordens que o comercial colocou na coluna Proposta. Abra uma para preencher e gerar o PDF.</div>
+  </div>
+  <div class="page-actions">
+    <a class="btn btn-secondary" href="/atividades">Abrir Kanban</a>
+  </div>
+</div>
+{% if cards %}
+<div class="proposal-list">
+  {% for card in cards %}
+  <a class="panel" href="/atividades/os/{{ card.id }}/proposta">
+    <div>
+      <strong>{{ card.empresa }}</strong>
+      <span>{{ card.protocol }} · {{ card.subject }}</span>
+    </div>
+    <span>Abrir proposta</span>
+  </a>
+  {% endfor %}
+</div>
+{% else %}
+<div class="panel">
+  <p>Nenhuma ordem na coluna Proposta{% if sector_name %} de {{ sector_name }}{% endif %}.</p>
+  <p>No Kanban, arraste a OS para a coluna Proposta. A tela de preenchimento abre em seguida.</p>
+</div>
+{% endif %}
+{% endblock %}
