@@ -319,6 +319,18 @@ async def activities_move_order(
         )
     except ValueError as error:
         return HTMLResponse(str(error), status_code=400)
+    from app.services.org_registry import list_sector_queues
+
+    queue_name = next(
+        (
+            item["name"]
+            for item in list_sector_queues(sector["id"])
+            if item["id"] == normalize_text(queue_id)
+        ),
+        "",
+    )
+    if "proposta" in queue_name.lower():
+        return HTMLResponse(f"/atividades/os/{order_id}/proposta")
     if normalize_text(queue_id) == "concluida":
         from app.services.campaign_leads import cadastro_url, campaign_card_extra
 

@@ -100,6 +100,9 @@
       var sector = document.getElementById("os-board-sector");
       if (sector) data.set("sector_id", sector.value);
       var cadastroUrl = dragged.getAttribute("data-cadastro-url") || "";
+      var column = body.closest(".activities-kanban-column");
+      var titleEl = column && column.querySelector(".activities-kanban-column-title");
+      var isProposal = titleEl && titleEl.textContent.toLowerCase().indexOf("proposta") !== -1;
       fetch("/atividades/os/" + encodeURIComponent(orderId) + "/fila", {
         method: "POST",
         body: data,
@@ -109,14 +112,12 @@
           return "";
         }
         return response.text();
-      }).then(function (body) {
+      }).then(function (payload) {
         var target = "";
-        if (body && body.indexOf("/cadastro/") === 0) target = body.trim();
+        if (payload && payload.charAt(0) === "/") target = payload.trim();
         if (!target && queueId === "concluida") target = cadastroUrl;
-        if (queueId === "concluida" && target) {
-          window.location.href = target;
-          return;
-        }
+        if (!target && isProposal) target = "/atividades/os/" + encodeURIComponent(orderId) + "/proposta";
+        if (target) window.location.href = target;
       }).catch(function () {
         window.location.reload();
       });
