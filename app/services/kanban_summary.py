@@ -199,7 +199,7 @@ def build_kanban_summary(sector_name: str, inicio: str, fim: str, *, viewer: str
 
         leads, leads_note = count_raissa_leads(start, end)
     except Exception:
-        leads, leads_note = 0, "Não consegui ler a aba Leads Raissa."
+        leads, leads_note = 0, "Não consegui ler a aba de leads."
     andamento, concluidos = _orders(sector_name, start, end)
     return {
         "inicio": start,

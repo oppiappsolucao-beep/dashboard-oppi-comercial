@@ -699,8 +699,24 @@ class ServiceOrderCounter(Base):
     last_seq = Column(Integer, nullable=False, default=0)
 
 
+class TicketOrder(Base):
+    """Chamado da aba ticket ligado a uma OS que o comercial encaminha."""
+
+    __tablename__ = "ticket_orders"
+
+    id = Column(String(40), primary_key=True)
+    sheet_row = Column(Integer, unique=True, nullable=False)
+    order_id = Column(String(40), nullable=False, index=True)
+    empresa = Column(String(255), nullable=False, default="")
+    phone = Column(String(40), nullable=False, default="")
+    email = Column(String(255), nullable=False, default="")
+    contact_name = Column(String(255), nullable=False, default="")
+    subject = Column(String(255), nullable=False, default="")
+    created_at = Column(String(40), nullable=False, default="")
+
+
 class CampaignLead(Base):
-    """Lead da aba Leads Raissa ligado a um card da coluna Campanha."""
+    """Lead da aba de campanha ligado a um card da coluna Campanha."""
 
     __tablename__ = "campaign_leads"
 

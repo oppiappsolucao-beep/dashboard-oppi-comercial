@@ -37,7 +37,11 @@ def allowed_accesses(request: Request) -> set[str]:
     raw = request.session.get("org_accesses") or []
     if isinstance(raw, str):
         raw = [item for item in raw.split(",") if item]
-    return {str(item) for item in raw if item}
+    allowed = {str(item) for item in raw if item}
+    sector = str(request.session.get("org_sector_name") or "").lower()
+    if "comercial" in sector:
+        allowed.update({"novo_cadastro", "empresas", "propostas"})
+    return allowed
 
 
 def nav_permissions(request: Request) -> dict[str, bool]:

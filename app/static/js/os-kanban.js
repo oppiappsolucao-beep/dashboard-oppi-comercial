@@ -129,14 +129,19 @@
     });
     modal.addEventListener("submit", function (event) {
       var form = event.target;
-      if (!form || form.id !== "os-update-form") return;
+      if (!form || (form.id !== "os-update-form" && form.id !== "os-sector-form")) return;
       event.preventDefault();
+      var reloadBoard = form.id === "os-sector-form";
       fetch(form.action, { method: "POST", body: new FormData(form) })
         .then(function (response) {
           if (!response.ok) throw new Error("fail");
           return response.text();
         })
         .then(function (html) {
+          if (reloadBoard) {
+            window.location.reload();
+            return;
+          }
           modalBody.innerHTML = html;
         })
         .catch(function () {

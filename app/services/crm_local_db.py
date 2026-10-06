@@ -251,6 +251,21 @@ def init_crm_local_db() -> None:
             ):
                 if people_cols and column not in people_cols:
                     conn.execute(f"ALTER TABLE org_people ADD COLUMN {column} {definition}")
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS ticket_orders (
+                    id TEXT PRIMARY KEY,
+                    sheet_row INTEGER NOT NULL UNIQUE,
+                    order_id TEXT NOT NULL,
+                    empresa TEXT NOT NULL DEFAULT '',
+                    phone TEXT NOT NULL DEFAULT '',
+                    email TEXT NOT NULL DEFAULT '',
+                    contact_name TEXT NOT NULL DEFAULT '',
+                    subject TEXT NOT NULL DEFAULT '',
+                    created_at TEXT NOT NULL
+                )
+                """
+            )
             conn.commit()
         _initialized = True
 

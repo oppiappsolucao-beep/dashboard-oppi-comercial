@@ -10,7 +10,7 @@ from urllib.parse import urlencode
 from app.services.legacy_core import normalize_text
 from app.services.registry_store import _lock, connect, init_store
 
-TAB_NAMES = ("Leads Raissa", "Leads Raíssa", "LeadsRaissa")
+TAB_NAMES = ("Leads Raissa", "Leads Raíssa", "LeadsRaissa", "Leads")
 COMPANY_TAB_NAMES = ("Raissa", "Raíssa")
 
 _HEADER_ALIASES = {
@@ -230,16 +230,20 @@ def read_raissa_companies() -> dict:
 
 
 def _find_raissa_worksheet(spreadsheet):
-    wanted = {_plain(name) for name in TAB_NAMES} | {_plain(name).replace(" ", "") for name in TAB_NAMES}
-    fallback = None
+    by_title = {}
     for item in spreadsheet.worksheets():
         title = _plain(item.title)
         compact = title.replace(" ", "")
-        if title in wanted or compact in wanted:
+        by_title.setdefault(title, item)
+        by_title.setdefault(compact, item)
+    for name in TAB_NAMES:
+        found = by_title.get(_plain(name)) or by_title.get(_plain(name).replace(" ", ""))
+        if found is not None:
+            return found
+    for item in spreadsheet.worksheets():
+        if "raissa" in _plain(item.title).replace(" ", ""):
             return item
-        if "raissa" in compact and fallback is None:
-            fallback = item
-    return fallback
+    return None
 
 
 def read_raissa_sheet() -> dict:
@@ -321,7 +325,7 @@ def read_raissa_leads() -> tuple[list[dict], str]:
         spreadsheet = client.open_by_key(settings.sheet_id)
         worksheet = _find_raissa_worksheet(spreadsheet)
         if worksheet is None:
-            return [], "Aba Leads Raissa não encontrada na planilha."
+            return [], "Aba de leads não encontrada na planilha."
 
         values = get_cached_worksheet_values(worksheet.title, worksheet.get_all_values)
         if not values or len(values) < 2:
@@ -352,7 +356,7 @@ def read_raissa_leads() -> tuple[list[dict], str]:
             )
         return leads, ""
     except Exception:
-        return [], "Não consegui ler a aba Leads Raissa."
+        return [], "Não consegui ler a aba de leads."
 
 
 def count_raissa_leads(start: str, end: str) -> tuple[int, str]:
@@ -365,7 +369,7 @@ def count_raissa_leads(start: str, end: str) -> tuple[int, str]:
         if not day or not (start <= day <= end):
             continue
         total += 1
-    note = warning or "Leads da aba Leads Raissa neste período."
+    note = warning or "Leads novos neste período."
     return total, note
 
 

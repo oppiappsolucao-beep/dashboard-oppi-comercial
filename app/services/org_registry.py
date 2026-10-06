@@ -31,6 +31,7 @@ BRAZIL_UFS = [
     "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO",
 ]
 DEFAULT_SECTORS = ["Comercial", "Suporte", "Financeiro", "Representação"]
+COMMERCIAL_CADASTRO_ACCESS = ("novo_cadastro", "empresas", "propostas")
 
 
 def _now() -> str:
@@ -98,11 +99,31 @@ def _ensure_training_sector(conn) -> None:
     )
 
 
+def _ensure_commercial_cadastro(conn) -> None:
+    """Comercial cadastra cliente como o acesso administrativo."""
+    rows = conn.execute(
+        "SELECT id, name, accesses_json FROM org_sectors WHERE active = 1"
+    ).fetchall()
+    stamp = _now()
+    for row in rows:
+        if "comercial" not in (row["name"] or "").lower():
+            continue
+        current = _loads(row["accesses_json"])
+        merged = list(dict.fromkeys([*current, *COMMERCIAL_CADASTRO_ACCESS]))
+        if merged == current:
+            continue
+        conn.execute(
+            "UPDATE org_sectors SET accesses_json = ?, updated_at = ? WHERE id = ?",
+            (json.dumps(merged), stamp, row["id"]),
+        )
+
+
 def list_sectors() -> list[dict]:
     init_crm_local_db()
     with _lock, _connect() as conn:
         _ensure_seed(conn)
         _ensure_training_sector(conn)
+        _ensure_commercial_cadastro(conn)
         rows = conn.execute(
             "SELECT * FROM org_sectors WHERE active = 1 ORDER BY name COLLATE NOCASE"
         ).fetchall()

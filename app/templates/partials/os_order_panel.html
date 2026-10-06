@@ -20,7 +20,30 @@
     {% if order.sheet_row %}
     <a class="btn btn-small btn-secondary" href="/cadastro/todos/{{ order.sheet_row }}/editar?tab=ordens&from=activities">Abrir cadastro</a>
     {% endif %}
+    {% if 'proposta' in (order.queue_name or '')|lower %}
+    <div class="os-detail-actions">
+      <a class="btn btn-small" href="/atividades/os/{{ order.id }}/proposta">Abrir proposta</a>
+    </div>
+    {% endif %}
   </section>
+
+  {% if order.source == 'ticket' %}
+  <section class="os-detail-block">
+    <h3>Direcionar setor</h3>
+    <p>O comercial encaminha este chamado. O setor escolhido fica na OS e na coluna da aba ticket.</p>
+    {% if sector_notice %}<p>{{ sector_notice }}</p>{% endif %}
+    <form id="os-sector-form" method="post" action="/atividades/os/{{ order.id }}/setor">
+      <label for="os-sector-target">Setor responsável</label>
+      <select id="os-sector-target" name="sector_name" required>
+        <option value="">Escolha o setor</option>
+        {% for sector in redirect_sectors|default([]) %}
+        <option value="{{ sector.name }}">{{ sector.name }}</option>
+        {% endfor %}
+      </select>
+      <button type="submit" class="btn btn-small">Direcionar</button>
+    </form>
+  </section>
+  {% endif %}
 
   {% if order.source == 'campanha' %}
   <section class="os-detail-block">

@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+.proposal-form { display: grid; gap: 14px; max-width: 760px; }
+.proposal-form label { display: flex; flex-direction: column; gap: 6px; font-size: 0.84rem; font-weight: 600; color: var(--muted); }
+.proposal-form input, .proposal-form select { min-height: 42px; padding: 0 12px; border: 1px solid var(--border); border-radius: 12px; background: #fff; font: inherit; color: inherit; }
+.proposal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.proposal-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+@media (max-width: 700px) { .proposal-grid { grid-template-columns: 1fr; } }
+</style>
+<div class="page-header">
+  <div>
+    <div class="page-title">Proposta</div>
+    <div class="page-subtitle">{{ order.protocol }} · {{ order.empresa }}. Preencha e leia o PDF antes de baixar para enviar ao cliente.</div>
+  </div>
+  <div class="page-actions">
+    <a class="btn btn-secondary" href="/atividades">Voltar ao Kanban</a>
+  </div>
+</div>
+{% if error %}<div class="alert-error">{{ error }}</div>{% endif %}
+<form class="proposal-form panel" method="post" action="/atividades/os/{{ order.id }}/proposta/pdf">
+  <div class="proposal-grid">
+    <label>Contratante
+      <input name="razao_social" value="{{ values.razao_social }}" required maxlength="180">
+    </label>
+    <label>CNPJ
+      <input name="cnpj" value="{{ values.cnpj }}" maxlength="20">
+    </label>
+    <label>Endereço
+      <input name="endereco" value="{{ values.endereco }}" maxlength="180">
+    </label>
+    <label>E-mail
+      <input name="email" type="email" value="{{ values.email }}" maxlength="180">
+    </label>
+    <label>Responsável
+      <input name="responsavel" value="{{ values.responsavel }}" maxlength="120">
+    </label>
+    <label>Cargo
+      <input name="cargo" value="{{ values.cargo }}" maxlength="80">
+    </label>
+    <label>Telefone / WhatsApp
+      <input name="telefone" value="{{ values.telefone }}" maxlength="40">
+    </label>
+    <label>Nome fantasia
+      <input name="nome_fantasia" value="{{ values.nome_fantasia }}" maxlength="180">
+    </label>
+    <label>Colaboradores
+      <input name="colaboradores" inputmode="numeric" value="{{ values.colaboradores }}" maxlength="6">
+    </label>
+    <label>Plano
+      <select name="plan_key">
+        <option value="boleto" {% if values.plan_key == 'boleto' %}selected{% endif %}>Boleto mensal</option>
+        <option value="cartao" {% if values.plan_key == 'cartao' %}selected{% endif %}>Recorrente no cartão</option>
+        <option value="anual" {% if values.plan_key == 'anual' %}selected{% endif %}>Anual</option>
+      </select>
+    </label>
+  </div>
+  <div class="proposal-actions">
+    <button type="submit" class="btn btn-secondary" name="disposicao" value="inline" formtarget="_blank">Ler antes de baixar</button>
+    <button type="submit" class="btn" name="disposicao" value="anexo">Baixar PDF para enviar ao cliente</button>
+  </div>
+</form>
+{% endblock %}

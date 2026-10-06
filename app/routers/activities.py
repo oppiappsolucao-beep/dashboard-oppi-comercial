@@ -2,7 +2,7 @@ from datetime import date
 import json
 
 from fastapi import APIRouter, Form, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 
 from app.dependencies import get_prepared_data, is_admin, require_auth
 from app.services.activity_service import (
@@ -341,6 +341,14 @@ def _os_actor(request: Request) -> str:
     )
 
 
+def _order_panel_context(order: dict, sector_notice: str = "") -> dict:
+    from app.services.org_registry import list_sectors
+
+    current = normalize_text(order.get("sector")).lower()
+    sectors = [item for item in list_sectors() if normalize_text(item.get("name")).lower() != current]
+    return {"order": order, "redirect_sectors": sectors, "sector_notice": sector_notice}
+
+
 def _order_visible(request: Request, detail: dict) -> bool:
     if not request.session.get("org_person_id"):
         return True
@@ -358,7 +366,7 @@ async def activities_order_detail(request: Request, order_id: str):
     detail = get_order_detail(order_id)
     if not detail or not _order_visible(request, detail):
         return HTMLResponse("Ordem de serviço não encontrada.", status_code=404)
-    return render(request, "partials/os_order_panel.html", {"order": detail})
+    return render(request, "partials/os_order_panel.html", _order_panel_context(detail))
 
 
 @router.post("/atividades/os/{order_id}/atualizacao", response_class=HTMLResponse)
@@ -376,7 +384,196 @@ async def activities_order_update(request: Request, order_id: str, note: str = F
     except ValueError as error:
         return HTMLResponse(str(error), status_code=400)
     detail = get_order_detail(order_id)
-    return render(request, "partials/os_order_panel.html", {"order": detail})
+    return render(request, "partials/os_order_panel.html", _order_panel_context(detail))
+
+
+@router.post("/atividades/os/{order_id}/setor", response_class=HTMLResponse)
+async def activities_direct_sector(request: Request, order_id: str, sector_name: str = Form("")):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+    from app.services.service_orders import get_order_detail
+    from app.services.ticket_orders import direct_ticket_order
+
+    detail = get_order_detail(order_id)
+    if not detail or not _order_visible(request, detail):
+        return HTMLResponse("Ordem de serviço não encontrada.", status_code=404)
+    try:
+        notice = direct_ticket_order(order_id, sector_name, _os_actor(request))
+    except ValueError as error:
+        return render(
+            request,
+            "partials/os_order_panel.html",
+            _order_panel_context(detail, str(error)),
+        )
+    request.session["os_board_success"] = notice or f"OS encaminhada para {normalize_text(sector_name)}."
+    return HTMLResponse("ok")
+
+
+def _proposal_values(order: dict, form: dict | None = None) -> dict:
+    client = order.get("client") or {}
+    values = {
+        "razao_social": order.get("empresa") or "",
+        "cnpj": "",
+        "endereco": client.get("endereco") or "",
+        "email": client.get("email") or "",
+        "responsavel": client.get("contato") or "",
+        "cargo": "",
+        "telefone": client.get("whatsapp") or client.get("telefone") or "",
+        "nome_fantasia": "",
+        "colaboradores": "20",
+        "plan_key": "boleto",
+    }
+    try:
+        df, columns = get_prepared_data()
+        from app.services.proposal_commercial_pdf import collect_client_data
+
+        found = collect_client_data(values["razao_social"], df, columns)
+        for key in ("cnpj", "endereco", "email", "responsavel", "cargo", "nome_fantasia"):
+            if found.get(key) and not values.get(key):
+                values[key] = found[key]
+        if found.get("whatsapp") and not values["telefone"]:
+            values["telefone"] = found["whatsapp"]
+        if found.get("colaboradores"):
+            values["colaboradores"] = found["colaboradores"]
+    except Exception:
+        pass
+    if form:
+        for key in values:
+            posted = normalize_text(form.get(key))
+            if posted:
+                values[key] = posted
+    return values
+
+
+def _proposal_pdf_bytes(order: dict, values: dict) -> tuple[bytes, str]:
+    from app.services.proposal_commercial_pdf import generate_commercial_proposal_pdf, proposal_pdf_filename
+
+    try:
+        df, columns = get_prepared_data()
+    except Exception:
+        import pandas as pd
+
+        df, columns = pd.DataFrame(), {}
+    try:
+        colaboradores = int(normalize_text(values.get("colaboradores")) or "0")
+    except ValueError:
+        colaboradores = 0
+    pdf = generate_commercial_proposal_pdf(
+        values.get("razao_social") or order.get("empresa") or "Cliente",
+        df,
+        columns or {},
+        proposal_snapshot={"colaboradores": colaboradores, "plan_key": values.get("plan_key") or "boleto"},
+        client_override={
+            "razao_social": values.get("razao_social"),
+            "empresa": values.get("razao_social"),
+            "cnpj": values.get("cnpj"),
+            "documento": values.get("cnpj"),
+            "endereco": values.get("endereco"),
+            "email": values.get("email"),
+            "responsavel": values.get("responsavel"),
+            "cargo": values.get("cargo"),
+            "telefone": values.get("telefone"),
+            "whatsapp": values.get("telefone"),
+            "nome_fantasia": values.get("nome_fantasia"),
+        },
+    )
+    return pdf, proposal_pdf_filename(values.get("razao_social") or order.get("empresa") or "Cliente")
+
+
+@router.get("/atividades/os/{order_id}/proposta", response_class=HTMLResponse)
+async def activities_proposal_form(request: Request, order_id: str):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+    from app.services.service_orders import get_order_detail
+
+    detail = get_order_detail(order_id)
+    if not detail or not _order_visible(request, detail):
+        return HTMLResponse("Ordem de serviço não encontrada.", status_code=404)
+    return render(
+        request,
+        "activities/proposal_form.html",
+        {
+            "active_page": "activities",
+            "order": detail,
+            "values": _proposal_values(detail),
+            "error": "",
+        },
+    )
+
+
+@router.post("/atividades/os/{order_id}/proposta/pdf")
+async def activities_proposal_pdf(
+    request: Request,
+    order_id: str,
+    razao_social: str = Form(""),
+    cnpj: str = Form(""),
+    endereco: str = Form(""),
+    email: str = Form(""),
+    responsavel: str = Form(""),
+    cargo: str = Form(""),
+    telefone: str = Form(""),
+    nome_fantasia: str = Form(""),
+    colaboradores: str = Form(""),
+    plan_key: str = Form("boleto"),
+    disposicao: str = Form("anexo"),
+):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+    from app.services.service_orders import get_order_detail
+
+    detail = get_order_detail(order_id)
+    if not detail or not _order_visible(request, detail):
+        return HTMLResponse("Ordem de serviço não encontrada.", status_code=404)
+    values = _proposal_values(
+        detail,
+        {
+            "razao_social": razao_social,
+            "cnpj": cnpj,
+            "endereco": endereco,
+            "email": email,
+            "responsavel": responsavel,
+            "cargo": cargo,
+            "telefone": telefone,
+            "nome_fantasia": nome_fantasia,
+            "colaboradores": colaboradores,
+            "plan_key": plan_key,
+        },
+    )
+    if not normalize_text(values.get("razao_social")):
+        return render(
+            request,
+            "activities/proposal_form.html",
+            {
+                "active_page": "activities",
+                "order": detail,
+                "values": values,
+                "error": "Informe o nome do contratante.",
+            },
+            status_code=400,
+        )
+    try:
+        pdf, filename = _proposal_pdf_bytes(detail, values)
+    except Exception:
+        return render(
+            request,
+            "activities/proposal_form.html",
+            {
+                "active_page": "activities",
+                "order": detail,
+                "values": values,
+                "error": "Não consegui montar o PDF desta proposta.",
+            },
+            status_code=500,
+        )
+    mode = "inline" if normalize_text(disposicao) == "inline" else "attachment"
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'{mode}; filename="{filename}"'},
+    )
 
 
 @router.get("/atividades/nova/modal", response_class=HTMLResponse)

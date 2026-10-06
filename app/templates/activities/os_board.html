@@ -20,6 +20,9 @@
 .os-column-tools { display: flex; gap: 4px; margin-top: 6px; }
 .os-column-tools form { margin: 0; }
 .os-column-tools button { min-height: 28px; padding: 0 8px; border-radius: 8px; font-size: 0.75rem; }
+.os-proposta-link { margin-left: auto; font-size: 0.75rem; font-weight: 700; color: var(--purple, #7C3AED); text-decoration: none; }
+#os-sector-form { display: grid; gap: 8px; max-width: 280px; }
+#os-sector-form select { min-height: 40px; border: 1px solid var(--border); border-radius: 10px; padding: 0 10px; }
 @media (max-width: 1100px) { .os-summary.is-support { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 900px) { .os-summary, .os-summary.is-support { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 640px) { .os-summary { grid-template-columns: 1fr; } }
@@ -93,7 +96,7 @@
     <p>{{ summary.conversations_note }}</p>
   </article>
   <article class="panel">
-    <span>Leads Raissa</span>
+    <span>Leads</span>
     <strong>{{ summary.leads }}</strong>
     <p>{{ summary.leads_note }}</p>
   </article>
@@ -165,6 +168,9 @@
         <div class="activities-kanban-card-meta">
           <span>{{ card.protocol }}</span>
           <span>{{ card.responsible }}</span>
+          {% if 'proposta' in column.name|lower %}
+          <a class="os-proposta-link" href="/atividades/os/{{ card.id }}/proposta" title="Abrir proposta">Proposta</a>
+          {% endif %}
         </div>
         <div class="activities-kanban-card-when">
           <span aria-hidden="true">📅</span>
@@ -185,5 +191,5 @@
     <div id="os-order-modal-body">Carregando…</div>
   </div>
 </div>
-<script src="/static/js/os-kanban.js?v=4"></script>
+<script src="/static/js/os-kanban.js?v=5"></script>
 {% endblock %}

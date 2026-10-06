@@ -91,6 +91,7 @@ def _ensure_postgres_tables() -> None:
         OrgQueue,
         OrgSector,
         CampaignLead,
+        TicketOrder,
         ServiceOrderCounter,
         ServiceOrderEvent,
         ServiceOrderRecord,
@@ -104,6 +105,7 @@ def _ensure_postgres_tables() -> None:
         ServiceOrderCounter,
         ServiceOrderEvent,
         CampaignLead,
+        TicketOrder,
     ):
         model.__table__.create(bind=engine, checkfirst=True)
 

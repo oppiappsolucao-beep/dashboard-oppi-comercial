@@ -308,6 +308,7 @@ def generate_commercial_proposal_pdf(
     services_description: str = "",
     plans_text: str | None = None,
     proposal_snapshot: dict | None = None,
+    client_override: dict | None = None,
 ) -> bytes:
     from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_LEFT
     from reportlab.lib.pagesizes import A4
@@ -316,6 +317,12 @@ def generate_commercial_proposal_pdf(
     from reportlab.platypus import HRFlowable, Paragraph, SimpleDocTemplate, Spacer
 
     client = collect_client_data(company, df, columns)
+    for key, value in (client_override or {}).items():
+        clean = normalize_text(value)
+        if clean:
+            client[key] = clean
+    if client.get("cnpj") and not client.get("documento"):
+        client["documento"] = client["cnpj"]
     snapshot = dict(proposal_snapshot or {})
     try:
         colaboradores = int(snapshot.get("colaboradores") or 0)

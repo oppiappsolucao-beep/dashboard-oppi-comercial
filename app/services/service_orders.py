@@ -315,6 +315,59 @@ def create_campaign_card(
     return order_id
 
 
+def create_ticket_card(
+    *,
+    empresa: str,
+    subject: str,
+    description: str,
+    sector: str,
+    scheduled_date: str,
+    phone: str = "",
+) -> str:
+    """Card de cliente da base (aba ticket). O comercial só encaminha o setor."""
+    init_crm_local_db()
+    now = _now()
+    stamp = now.isoformat(timespec="seconds")
+    order_id = f"os_{uuid.uuid4().hex[:12]}"
+    day = scheduled_date if re.match(r"^\d{4}-\d{2}-\d{2}$", scheduled_date or "") else now.date().isoformat()
+    with _lock, _connect() as conn:
+        protocol = _allocate_protocol(conn, now.year)
+        conn.execute(
+            """
+            INSERT INTO service_orders (
+                id, tenant_id, sheet_row, protocol, empresa, subject, description,
+                status, priority, sector, scheduled_date, queue_id, responsible, created_by, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, 'aberta', ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                order_id,
+                DEFAULT_TENANT_ID,
+                0,
+                protocol,
+                normalize_text(empresa) or "Cliente da base",
+                normalize_text(subject) or "Chamado da base",
+                normalize_text(description),
+                "Média",
+                normalize_text(sector),
+                day,
+                ENTRY_QUEUE_ID,
+                "Comercial",
+                "Tickets",
+                stamp,
+                stamp,
+            ),
+        )
+        _add_event(
+            conn,
+            order_id,
+            "criada",
+            normalize_text(description) or normalize_text(subject) or "Chamado da aba ticket",
+            "Tickets",
+            stamp,
+        )
+    return order_id
+
+
 def is_commercial_sector(sector_name: str) -> bool:
     name = normalize_text(sector_name).lower()
     return "comercial" in name
@@ -330,7 +383,7 @@ def _campaign_visible(card: dict, start: str, end: str) -> bool:
 
 def build_sector_board(sector_id: str, sector_name: str, inicio: str = "", fim: str = "") -> list[dict]:
     from app.services.campaign_leads import attach_campaign_cards, sync_campaign_leads
-    from app.services.org_registry import list_sector_queues
+    from app.services.org_registry import add_sector_queue, list_sector_queues
 
     period_start = ""
     period_end = ""
@@ -344,6 +397,20 @@ def build_sector_board(sector_id: str, sector_name: str, inicio: str = "", fim: 
             sync_campaign_leads(sector_name)
         except Exception:
             pass
+        try:
+            from app.services.ticket_orders import sync_ticket_orders
+
+            sync_ticket_orders(sector_name)
+        except Exception:
+            pass
+        if sector_id and not any(
+            "proposta" in normalize_text(item.get("name")).lower()
+            for item in list_sector_queues(sector_id)
+        ):
+            try:
+                add_sector_queue(sector_id, "Proposta")
+            except Exception:
+                pass
     columns = [{"id": ENTRY_QUEUE_ID, "name": ENTRY_QUEUE_NAME, "fixed": True, "cards": []}]
     known = {ENTRY_QUEUE_ID}
     if is_commercial_sector(sector_name):
@@ -540,6 +607,13 @@ def get_order_detail(order_id: str) -> dict | None:
         extra = campaign_card_extra(row["id"])
     except Exception:
         extra = None
+    if not extra:
+        try:
+            from app.services.ticket_orders import ticket_card_extra
+
+            extra = ticket_card_extra(row["id"])
+        except Exception:
+            extra = None
     if extra:
         detail.update(extra)
         client = detail["client"]
