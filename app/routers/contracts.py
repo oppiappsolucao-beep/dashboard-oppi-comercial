@@ -66,6 +66,7 @@ from app.services.registration import (
     save_company_edit,
     save_nicho,
     save_setor,
+    seller_name_from_login,
     delete_company_registration,
 )
 
@@ -257,7 +258,7 @@ async def contract_edit_page(request: Request, sheet_row: int):
         "oppi": "acesso",
         "ponto": "acesso",
         "financeiro": "financeiro",
-        "suporte": "suporte",
+        "suporte": "ordens",
     }
     active_tab = tab_aliases.get(active_tab, "dados")
 
@@ -280,13 +281,17 @@ async def contract_edit_page(request: Request, sheet_row: int):
         lead_created_at=row.get("_data_chamado") or data_chamado_raw or parsed_date,
         from_page=from_page,
     )
+    vendedor = seller_name_from_login(row.get("_vendedor", ""))
+    seller_options = get_seller_options(df)
+    if vendedor and vendedor not in seller_options:
+        seller_options = [vendedor, *seller_options]
     page_ctx = build_cadastro_edit_page_context(
         tenant_id=DEFAULT_TENANT_ID,
         sheet_row=sheet_row,
         row=row,
         columns=columns,
         values=values,
-        vendedor=normalize_text(row.get("_vendedor", "")) or "Sem vendedor",
+        vendedor=vendedor,
         current_status=current_status,
         data_chamado=data_chamado_raw or parsed_date.isoformat(),
         cadastro_tipo=cadastro_tipo,
@@ -361,7 +366,7 @@ async def contract_edit_page(request: Request, sheet_row: int):
                 "overview": "Visão Geral",
             }.get(from_page, "Empresas"),
             "sheet_row": sheet_row,
-            "seller_options": get_seller_options(df),
+            "seller_options": seller_options,
             "niche_options": niche_options,
             "sector_options": sector_options,
             "status_options": STATUS_OPTIONS,
@@ -382,7 +387,7 @@ async def contract_edit_page(request: Request, sheet_row: int):
             "asaas_configured": asaas_is_configured(),
             "financial_summary": financial_summary(closed_services, summary_payments),
             "colaborador_options": get_colaborador_options(),
-            "vendedor": normalize_text(row.get("_vendedor", "")) or "Sem vendedor",
+            "vendedor": vendedor,
             "error": request.session.pop("edit_error", ""),
             "success": request.session.pop("edit_success", ""),
             "cadastro_tipo": cadastro_tipo,

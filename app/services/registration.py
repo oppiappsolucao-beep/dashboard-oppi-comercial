@@ -524,6 +524,65 @@ def delete_company_registration(tenant_id: str | None, sheet_row: int) -> None:
     delete_lead_action(tenant_id, sheet_row)
 
 
+DEFAULT_SELLER_NAME = "Raissa"
+_EMPTY_SELLER_NAMES = {"", "sem vendedor", "selecionar", "usuario", "usuário", "—", "-"}
+
+
+def _login_people() -> list[dict]:
+    people: list[dict] = []
+    try:
+        from app.services.account_users import load_account_users
+
+        for user in load_account_users():
+            if user.get("active", True) is False:
+                continue
+            people.append(user)
+    except Exception:
+        pass
+    try:
+        from app.services.org_registry import list_people
+
+        for person in list_people():
+            if person.get("active", True) is False:
+                continue
+            people.append(person)
+    except Exception:
+        pass
+    return people
+
+
+def match_login_name(stored: str, people: list[dict]) -> str:
+    """Nome de exibição quando o valor bate com um login. Vazio se não houver conta."""
+    needle = normalize_text(stored).lower()
+    if needle in _EMPTY_SELLER_NAMES:
+        return ""
+    for person in people:
+        name = normalize_text(person.get("name"))
+        username = normalize_text(person.get("username"))
+        if not name or username in {"", "—"}:
+            continue
+        if needle in {name.lower(), username.lower()}:
+            return name
+    return ""
+
+
+def seller_name_from_login(stored: str, people: list[dict] | None = None) -> str:
+    """Vendedor do login que vendeu. Sem login, Raissa."""
+    found = match_login_name(stored, people if people is not None else _login_people())
+    return found or DEFAULT_SELLER_NAME
+
+
+def seller_from_session_user(session_user: dict | None) -> str:
+    """Nome do login atual. Conta sem pessoa vinculada vira Raissa."""
+    user = session_user or {}
+    if not user.get("managed"):
+        return DEFAULT_SELLER_NAME
+    name = normalize_text(user.get("name"))
+    if name.lower() in _EMPTY_SELLER_NAMES:
+        return DEFAULT_SELLER_NAME
+    return name
+
+
 SELLER_ROLES = {"Vendedor"}
 _FAKE_SELLER_USERNAMES = frozenset({"usuario.fake", "usuario.fake.test"})
 _DEFAULT_ALLOWED_SELLERS = ("Raissa", "Raíssa", "Higo Silva")
@@ -923,7 +982,7 @@ def build_cadastro_edit_page_context(
             {
                 "icon": "👤",
                 "label": "Vendedor Responsável",
-                "value": vendedor or "Sem vendedor",
+                "value": seller_name_from_login(vendedor),
                 "hint": "Responsável comercial",
             },
             {

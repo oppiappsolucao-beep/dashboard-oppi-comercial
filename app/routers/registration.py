@@ -200,11 +200,12 @@ def _registration_page_context(request: Request, df, *, error: str = "", values:
         cadastro_tipo = "lead"
 
     seller_options = get_seller_options(df)
-    current_user = normalize_text(request.session.get("username", "")) or "Usuário"
     from app.dependencies import get_session_user
 
     session_user = get_session_user(request) or {}
-    vendedor = normalize_text(session_user.get("name")) or current_user
+    from app.services.registration import seller_from_session_user
+
+    vendedor = seller_from_session_user(session_user)
 
     from app.services.sectors import list_sector_options
 
@@ -406,6 +407,11 @@ async def new_registration_submit(request: Request):
     form = await request.form()
     form_dict = dict(form)
     form_dict["email_empresa"] = form_dict.pop("email", form_dict.get("email_empresa", ""))
+    if not normalize_text(form_dict.get("vendedor")):
+        from app.dependencies import get_session_user
+        from app.services.registration import seller_from_session_user
+
+        form_dict["vendedor"] = seller_from_session_user(get_session_user(request))
     user = normalize_text(request.session.get("username", "")) or "Usuário"
     from_page = _resolve_registration_from_page(form_dict.get("from"))
 
