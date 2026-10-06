@@ -11,15 +11,17 @@
 .os-period label { display: flex; flex-direction: column; gap: 6px; font-size: 0.84rem; font-weight: 600; color: var(--muted); }
 .os-period input { min-height: 42px; padding: 0 12px; border: 1px solid var(--border); border-radius: 12px; background: #fff; font: inherit; }
 .os-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
-.os-summary article { padding: 16px; }
-.os-summary span { display: block; font-size: 0.78rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--purple, #7C3AED); }
+.os-summary.is-support { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.os-summary article { padding: 16px; min-width: 0; }
+.os-summary span { display: block; font-size: 0.78rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--purple, #7C3AED); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .os-summary strong { display: block; margin-top: 8px; font-size: 1.8rem; letter-spacing: -0.03em; }
 .os-summary p { margin: 8px 0 0; color: var(--muted); line-height: 1.45; }
 .os-detail-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .os-column-tools { display: flex; gap: 4px; margin-top: 6px; }
 .os-column-tools form { margin: 0; }
 .os-column-tools button { min-height: 28px; padding: 0 8px; border-radius: 8px; font-size: 0.75rem; }
-@media (max-width: 900px) { .os-summary { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 1100px) { .os-summary.is-support { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 900px) { .os-summary, .os-summary.is-support { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 640px) { .os-summary { grid-template-columns: 1fr; } }
 .os-modal[hidden] { display: none; }
 .os-modal { position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; padding: 16px; }
@@ -75,7 +77,16 @@
   <button type="submit" class="btn">Ver período</button>
 </form>
 
-<section class="os-summary" aria-label="Resumo do período">
+<section class="os-summary{% if summary.layout == 'suporte' %} is-support{% endif %}" aria-label="Resumo do período">
+  {% if summary.layout == 'suporte' %}
+  {% for card in summary.cards %}
+  <article class="panel">
+    <span title="{{ card.label }}">{{ card.label }}</span>
+    <strong>{{ card.value }}</strong>
+    <p>{{ card.note }}</p>
+  </article>
+  {% endfor %}
+  {% else %}
   <article class="panel">
     <span>Resultado de conversas</span>
     <strong>{{ summary.conversations }}</strong>
@@ -96,6 +107,7 @@
     <strong>{{ summary.concluidos }}</strong>
     <p>{{ summary.concluidos_note }}</p>
   </article>
+  {% endif %}
 </section>
 
 {% if is_admin and sectors %}
