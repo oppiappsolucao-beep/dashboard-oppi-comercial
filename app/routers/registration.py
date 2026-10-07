@@ -423,16 +423,22 @@ async def new_registration_submit(request: Request):
             mirror = closed_services_sheet_values(closed_items)
             form_dict["servico"] = mirror.get("servico", "")
             form_dict["valor_proposta"] = mirror.get("valor_proposta", "")
-        sheet_row = save_new_company(form_dict)
-        save_cadastro_tipo(DEFAULT_TENANT_ID, sheet_row, form_dict.get("cadastro_tipo", "lead"))
+        sheet_row = save_new_company(form_dict, mirror_sheet=False)
+        save_cadastro_tipo(
+            DEFAULT_TENANT_ID,
+            sheet_row,
+            form_dict.get("cadastro_tipo", "lead"),
+            mirror_sheet=False,
+        )
         from app.services.registration import save_access_fields
         if int(sheet_row or 0) > 0:
-            save_access_fields(DEFAULT_TENANT_ID, sheet_row, form_dict)
+            save_access_fields(DEFAULT_TENANT_ID, sheet_row, form_dict, mirror_sheet=False)
             save_nicho(
                 DEFAULT_TENANT_ID,
                 sheet_row,
                 form_dict.get("nicho", ""),
                 form_dict.get("nicho_outro", ""),
+                mirror_sheet=False,
             )
             from app.services.sectors import get_sector
 
@@ -443,7 +449,11 @@ async def new_registration_submit(request: Request):
                 sheet_row,
                 setor_id,
                 (setor or {}).get("name", ""),
+                mirror_sheet=False,
             )
+            from app.services.crm_registrations_storage import _mirror_registration_to_folha1
+
+            _mirror_registration_to_folha1(int(sheet_row))
         if closed_services_has_data(closed_items):
             save_closed_services(DEFAULT_TENANT_ID, sheet_row, closed_items, sync_sheet=False)
         billing_plan = None

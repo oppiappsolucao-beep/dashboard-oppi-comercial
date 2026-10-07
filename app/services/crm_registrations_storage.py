@@ -808,14 +808,55 @@ def _schedule_mirror_lead_actions(*, tenant_id: str | None = None) -> None:
     threading.Thread(target=_run, daemon=True).start()
 
 
+def _company_match_key(value: str) -> str:
+    return "".join(character for character in normalize_text(value).lower() if character.isalnum())
+
+
+def _folha1_row_for_company(payload: dict) -> int:
+    """Linha da Folha1 que já tem este CNPJ ou este nome. Zero se ainda não existe."""
+    from app.config import settings
+    from app.services.legacy_core import _open_worksheet, get_gsheet_client
+
+    if not settings.sheets_configured:
+        return 0
+    cnpj = "".join(character for character in normalize_text(payload.get("cnpj")) if character.isdigit())
+    name = _company_match_key(payload.get("empresa") or "")
+    if len(cnpj) < 11 and len(name) < 3:
+        return 0
+    client = get_gsheet_client()
+    spreadsheet = client.open_by_key(settings.sheet_id)
+    worksheet = _open_worksheet(spreadsheet, settings.worksheet_name)
+    values = worksheet.get_all_values() or []
+    if len(values) < 2:
+        return 0
+    headers = [normalize_text(cell).lower() for cell in values[0]]
+
+    def column_of(*aliases: str) -> int | None:
+        for alias in aliases:
+            if alias in headers:
+                return headers.index(alias)
+        return None
+
+    cnpj_index = column_of("cnpj")
+    name_index = column_of("nome empresas", "nome da empresa", "empresa", "nome empresa")
+    for offset, raw in enumerate(values[1:], start=2):
+        if cnpj and cnpj_index is not None and cnpj_index < len(raw):
+            cell = "".join(character for character in raw[cnpj_index] if character.isdigit())
+            if cell and cell == cnpj:
+                return offset
+        if name and name_index is not None and name_index < len(raw):
+            if _company_match_key(raw[name_index]) == name:
+                return offset
+    return 0
+
+
 def _mirror_registration_to_folha1(sheet_row: int, *, tenant_id: str | None = None) -> None:
     from app.config import settings
     from app.services.legacy_core import append_company_to_sheet, update_company_in_sheet
 
     if not settings.sheets_configured:
         return
-    # Vários saves do mesmo cadastro (tipo, acesso, nicho) disparam este espelho.
-    # Sem o lock, cada um faz append e o cliente aparece 3 vezes na planilha.
+    # Vários saves do mesmo cadastro disparam este espelho. Uma empresa = uma linha.
     with _registration_mirror_lock(int(sheet_row)):
         row = get_registration_by_sheet_row(sheet_row, tenant_id=tenant_id)
         if not row:
@@ -824,13 +865,23 @@ def _mirror_registration_to_folha1(sheet_row: int, *, tenant_id: str | None = No
         payload.update(_access_fields_from_registration(row))
         extras = payload.get("extras") if isinstance(payload.get("extras"), dict) else {}
         stored_row = int(extras.get("folha1_sheet_row") or 0)
-        target = stored_row if stored_row > 1 else int(sheet_row)
-        try:
-            update_company_in_sheet(target, payload)
-        except Exception as error:
-            if stored_row > 1 or not _sheet_row_outside_grid(error):
+        if stored_row > 1:
+            target = stored_row
+        elif payload.get("is_filial"):
+            target = 0
+        else:
+            try:
+                target = _folha1_row_for_company(payload)
+            except Exception:
+                logger.exception("Não consegui localizar a empresa na Folha1")
+                target = 0
+        if target > 1:
+            try:
+                update_company_in_sheet(target, payload)
+            except Exception:
                 logger.exception("Não foi possível espelhar cadastro sheet_row=%s", sheet_row)
                 return
+        else:
             try:
                 target = int(append_company_to_sheet(payload))
             except Exception:

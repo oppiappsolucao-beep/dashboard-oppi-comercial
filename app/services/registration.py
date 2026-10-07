@@ -408,7 +408,7 @@ def build_registration_payload(form: dict) -> dict:
     return payload
 
 
-def save_new_company(form: dict) -> int:
+def save_new_company(form: dict, *, mirror_sheet: bool = True) -> int:
     error = validate_registration_form(form, require_whatsapp=True)
     if error:
         raise ValueError(error)
@@ -421,7 +421,7 @@ def save_new_company(form: dict) -> int:
         )
 
         if is_crm_postgres_ready():
-            return upsert_registration_from_payload(payload, mirror_sheet=True)
+            return upsert_registration_from_payload(payload, mirror_sheet=mirror_sheet)
     except DuplicateRegistrationError:
         raise
     except Exception:
@@ -474,7 +474,7 @@ def _existing_edit_field_values(sheet_row: int) -> dict[str, str]:
     }
 
 
-def save_company_edit(sheet_row: int, form: dict) -> None:
+def save_company_edit(sheet_row: int, form: dict, *, mirror_sheet: bool = True) -> None:
     error = validate_registration_form(form, require_whatsapp=False)
     if error:
         raise ValueError(error)
@@ -494,7 +494,7 @@ def save_company_edit(sheet_row: int, form: dict) -> None:
             upsert_registration_from_payload(
                 payload,
                 sheet_row=int(sheet_row),
-                mirror_sheet=True,
+                mirror_sheet=mirror_sheet,
             )
             return
     except DuplicateRegistrationError:
@@ -698,18 +698,18 @@ def load_access_fields(tenant_id: str | None, sheet_row: int) -> dict[str, str]:
     return {field: normalize_text(stored.get(field)) for field in ACCESS_FIELDS}
 
 
-def save_access_fields(tenant_id: str | None, sheet_row: int, form: dict) -> None:
+def save_access_fields(tenant_id: str | None, sheet_row: int, form: dict, *, mirror_sheet: bool = True) -> None:
     if not sheet_row:
         return
     payload = {field: normalize_text(form.get(field)) for field in ACCESS_FIELDS}
-    save_lead_action(tenant_id, sheet_row, payload)
+    save_lead_action(tenant_id, sheet_row, payload, mirror_sheet=mirror_sheet)
 
 
-def save_cadastro_tipo(tenant_id: str | None, sheet_row: int, tipo: str) -> None:
+def save_cadastro_tipo(tenant_id: str | None, sheet_row: int, tipo: str, *, mirror_sheet: bool = True) -> None:
     if not sheet_row:
         return
     normalized = "empresa" if normalize_text(tipo).lower() == "empresa" else "lead"
-    save_lead_action(tenant_id, sheet_row, {"cadastro_tipo": normalized})
+    save_lead_action(tenant_id, sheet_row, {"cadastro_tipo": normalized}, mirror_sheet=mirror_sheet)
 
 
 def is_cadastro_ativo(tenant_id: str | None, sheet_row: int) -> bool:
@@ -789,7 +789,7 @@ def resolve_nicho(
     return infer_niche_from_company_name(empresa)
 
 
-def save_nicho(tenant_id: str | None, sheet_row: int, nicho: str, nicho_outro: str = "") -> None:
+def save_nicho(tenant_id: str | None, sheet_row: int, nicho: str, nicho_outro: str = "", *, mirror_sheet: bool = True) -> None:
     if not sheet_row:
         return
     try:
@@ -800,10 +800,17 @@ def save_nicho(tenant_id: str | None, sheet_row: int, nicho: str, nicho_outro: s
         normalized = normalize_text(nicho_outro) or normalize_text(nicho)
     if not normalized:
         return
-    save_lead_action(tenant_id, sheet_row, {"nicho": normalized})
+    save_lead_action(tenant_id, sheet_row, {"nicho": normalized}, mirror_sheet=mirror_sheet)
 
 
-def save_setor(tenant_id: str | None, sheet_row: int, setor_id: str | int | None, setor_name: str = "") -> None:
+def save_setor(
+    tenant_id: str | None,
+    sheet_row: int,
+    setor_id: str | int | None,
+    setor_name: str = "",
+    *,
+    mirror_sheet: bool = True,
+) -> None:
     if not sheet_row:
         return
     payload: dict = {}
@@ -817,7 +824,7 @@ def save_setor(tenant_id: str | None, sheet_row: int, setor_id: str | int | None
     if name:
         payload["setor"] = name
     if payload:
-        save_lead_action(tenant_id, sheet_row, payload)
+        save_lead_action(tenant_id, sheet_row, payload, mirror_sheet=mirror_sheet)
 
 
 def _cadastro_initials(name: str) -> str:

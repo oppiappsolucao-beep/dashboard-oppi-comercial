@@ -512,14 +512,20 @@ async def contract_edit_submit(request: Request, sheet_row: int):
             form_dict["servico"] = primary_closed.get("servico", "")
             form_dict["valor_proposta"] = primary_closed.get("valor", "")
         previous_tipo = resolve_cadastro_tipo(DEFAULT_TENANT_ID, sheet_row, cnpj=form_dict.get("cnpj", ""))
-        save_company_edit(sheet_row, form_dict)
-        save_cadastro_tipo(DEFAULT_TENANT_ID, sheet_row, form_dict.get("cadastro_tipo", "lead"))
-        save_access_fields(DEFAULT_TENANT_ID, sheet_row, form_dict)
+        save_company_edit(sheet_row, form_dict, mirror_sheet=False)
+        save_cadastro_tipo(
+            DEFAULT_TENANT_ID,
+            sheet_row,
+            form_dict.get("cadastro_tipo", "lead"),
+            mirror_sheet=False,
+        )
+        save_access_fields(DEFAULT_TENANT_ID, sheet_row, form_dict, mirror_sheet=False)
         save_nicho(
             DEFAULT_TENANT_ID,
             sheet_row,
             form_dict.get("nicho", ""),
             form_dict.get("nicho_outro", ""),
+            mirror_sheet=False,
         )
         from app.services.sectors import get_sector
 
@@ -530,7 +536,11 @@ async def contract_edit_submit(request: Request, sheet_row: int):
             sheet_row,
             setor_id,
             (setor or {}).get("name", ""),
+            mirror_sheet=False,
         )
+        from app.services.crm_registrations_storage import _mirror_registration_to_folha1
+
+        _mirror_registration_to_folha1(int(sheet_row))
         invalidate_sheet_cache()
 
         onboard_note = ""

@@ -465,6 +465,19 @@
   }
 
   document.addEventListener("DOMContentLoaded", function () {
+    var editForm = document.getElementById("client-edit-form");
+    if (editForm) {
+      editForm.addEventListener("submit", function (event) {
+        if (editForm.dataset.saving === "1") {
+          event.preventDefault();
+          return;
+        }
+        editForm.dataset.saving = "1";
+        editForm.querySelectorAll('button[type="submit"]').forEach(function (button) {
+          button.disabled = true;
+        });
+      });
+    }
     document.querySelectorAll(".registration-tipo-switch").forEach(initTipoSwitch);
     initClosedServices();
     initDeleteModal();

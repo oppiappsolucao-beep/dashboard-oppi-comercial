@@ -1,11 +1,13 @@
 {% extends "base.html" %}
 {% block content %}
 <style>
-.proposal-form { display: grid; gap: 14px; max-width: 760px; }
-.proposal-form label { display: flex; flex-direction: column; gap: 6px; font-size: 0.84rem; font-weight: 600; color: var(--muted); }
-.proposal-form input, .proposal-form select { min-height: 42px; padding: 0 12px; border: 1px solid var(--border); border-radius: 12px; background: #fff; font: inherit; color: inherit; }
-.proposal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-.proposal-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.proposal-form { display: grid; gap: 18px; width: 100%; padding: 22px; }
+.proposal-form label { display: flex; flex-direction: column; gap: 8px; font-size: 0.92rem; font-weight: 600; color: var(--muted); }
+.proposal-form input, .proposal-form select { min-height: 48px; padding: 0 14px; border: 1px solid var(--border); border-radius: 12px; background: #fff; font: inherit; font-size: 1rem; color: inherit; }
+.proposal-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+.proposal-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.proposal-actions .btn { min-height: 46px; padding: 0 18px; }
+@media (max-width: 1100px) { .proposal-grid { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 700px) { .proposal-grid { grid-template-columns: 1fr; } }
 </style>
 <div class="page-header">

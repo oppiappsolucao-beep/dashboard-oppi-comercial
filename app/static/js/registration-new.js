@@ -73,6 +73,17 @@
       empresaInput.addEventListener("input", updateTitle);
       updateTitle();
     }
+
+    form.addEventListener("submit", function (event) {
+      if (form.dataset.saving === "1") {
+        event.preventDefault();
+        return;
+      }
+      form.dataset.saving = "1";
+      form.querySelectorAll('button[type="submit"]').forEach(function (button) {
+        button.disabled = true;
+      });
+    });
   }
 
   document.addEventListener("DOMContentLoaded", initRegistrationNewPage);
