@@ -12,6 +12,7 @@
 .os-period input { min-height: 42px; padding: 0 12px; border: 1px solid var(--border); border-radius: 12px; background: #fff; font: inherit; }
 .os-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
 .os-summary.is-support { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.os-summary.is-columns { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
 .os-summary article { padding: 16px; min-width: 0; }
 .os-summary span { display: block; font-size: 0.78rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--purple, #7C3AED); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .os-summary strong { display: block; margin-top: 8px; font-size: 1.8rem; letter-spacing: -0.03em; }
@@ -84,8 +85,16 @@
   <button type="submit" class="btn">Ver período</button>
 </form>
 
-<section class="os-summary{% if summary.layout == 'suporte' %} is-support{% endif %}" aria-label="Resumo do período">
-  {% if summary.layout == 'suporte' %}
+<section class="os-summary{% if 'treinamento' in sector_name|lower %} is-columns{% elif summary.layout == 'suporte' %} is-support{% endif %}" aria-label="Resumo do período">
+  {% if 'treinamento' in sector_name|lower %}
+  {% for column in columns %}
+  <article class="panel">
+    <span title="{{ column.name }}">{{ column.name }}</span>
+    <strong>{{ column.cards|length }}</strong>
+    <p>Ordens nesta coluna.</p>
+  </article>
+  {% endfor %}
+  {% elif summary.layout == 'suporte' %}
   {% for card in summary.cards %}
   <article class="panel">
     <span title="{{ card.label }}">{{ card.label }}</span>
