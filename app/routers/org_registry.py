@@ -10,6 +10,7 @@ from app.services.org_registry import (
     BRAZIL_UFS,
     get_person,
     list_people,
+    parse_trainer_schedule,
     list_sectors,
     remove_person,
     remove_sector,
@@ -143,6 +144,13 @@ async def org_save_person(request: Request):
         "treinador": "treinadores",
     }.get(kind, "funcionarios")
     try:
+        schedule_json = ""
+        if kind == "treinador":
+            schedule_json = parse_trainer_schedule(
+                form.getlist("schedule_day"),
+                form.get("schedule_start", ""),
+                form.get("schedule_end", ""),
+            )
         person = save_person(
             kind=kind,
             name=form.get("name", ""),
@@ -155,6 +163,7 @@ async def org_save_person(request: Request):
             state_name=form.get("state_name", ""),
             city=form.get("city", ""),
             person_id=form.get("person_id", ""),
+            schedule_json=schedule_json,
         )
     except ValueError as error:
         request.session["org_error"] = str(error)

@@ -67,6 +67,11 @@
       <span class="client-edit-tab-title"><span class="client-edit-tab-icon" aria-hidden="true">🏢</span> Dados gerais</span>
       <span class="client-edit-tab-sub">Informações da empresa</span>
     </a>
+    <a href="/cadastro/todos/{{ sheet_row }}/editar?tab=treinamento{% if from_page %}&from={{ from_page }}{% endif %}"
+      class="client-edit-tab {% if active_tab == 'treinamento' %}is-active{% endif %}">
+      <span class="client-edit-tab-title"><span class="client-edit-tab-icon" aria-hidden="true">🎓</span> Treinamento</span>
+      <span class="client-edit-tab-sub">Dia, horário e treinador</span>
+    </a>
     <a href="/cadastro/todos/{{ sheet_row }}/editar?tab=ordens{% if from_page %}&from={{ from_page }}{% endif %}"
       class="client-edit-tab {% if active_tab == 'ordens' %}is-active{% endif %}">
       <span class="client-edit-tab-title"><span class="client-edit-tab-icon" aria-hidden="true">📋</span> Ordens de serviço{% if service_orders_count %} ({{ service_orders_count }}){% endif %}</span>
@@ -97,6 +102,11 @@
         </button>
         <button type="submit" name="action" value="cancel" class="btn btn-secondary">Cancelar</button>
       </div>
+      {% include "partials/registration_danger_actions.html" %}
+    </footer>
+    {% elif active_tab == 'treinamento' %}
+    {% include "partials/registration_company_training_tab.html" %}
+    <footer class="client-edit-footer panel client-edit-footer-compact">
       {% include "partials/registration_danger_actions.html" %}
     </footer>
     {% elif active_tab == 'ordens' %}
@@ -133,6 +143,10 @@
   {% if from_page %}<input type="hidden" name="from" value="{{ from_page }}">{% endif %}
 </form>
 {% endif %}
+
+<form id="company-training-form" method="post" action="/cadastro/todos/{{ sheet_row }}/treinamento">
+  {% if from_page %}<input type="hidden" name="from" value="{{ from_page }}">{% endif %}
+</form>
 
 <form id="oppi-ponto-form" method="post" action="/cadastro/todos/{{ sheet_row }}/oppi-ponto" hidden>
   {% if from_page %}<input type="hidden" name="from" value="{{ from_page }}">{% endif %}

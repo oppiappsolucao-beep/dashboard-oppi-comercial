@@ -269,6 +269,7 @@ async def contract_edit_page(request: Request, sheet_row: int):
         "oppi": "acesso",
         "ponto": "acesso",
         "financeiro": "financeiro",
+        "treinamento": "treinamento",
         "suporte": "ordens",
     }
     active_tab = tab_aliases.get(active_tab, "dados")
@@ -407,6 +408,7 @@ async def contract_edit_page(request: Request, sheet_row: int):
             "service_orders_count": len(service_orders),
             "org_sectors": list_sectors(),
             "org_people": list_people(),
+            "trainers": list_people("treinador"),
             "today_iso": date.today().isoformat(),
             "priority_options": PRIORITY_OPTIONS,
             "cadastro_tipo_options": CADASTRO_TIPO_OPTIONS,
@@ -416,6 +418,34 @@ async def contract_edit_page(request: Request, sheet_row: int):
             **page_ctx,
         },
     )
+
+
+@router.post("/cadastro/todos/{sheet_row}/treinamento")
+async def schedule_company_training(request: Request, sheet_row: int):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+    form = await request.form()
+    from_page = _resolve_edit_from_page(form.get("from"))
+    back = _edit_page_url(sheet_row, tab="treinamento", from_page=from_page)
+    try:
+        from app.routers.registration import schedule_training
+        from app.services.org_registry import get_person
+
+        payload = {key: form.get(key, "") for key in form.keys()}
+        trainer = get_person(payload.get("training_trainer_id", ""))
+        hour = normalize_text(payload.get("training_time"))
+        day = normalize_text(payload.get("training_date"))
+        empresa = normalize_text(form.get("empresa")) or "Cliente"
+        user = normalize_text(request.session.get("username")) or "Usuário"
+        schedule_training(payload, int(sheet_row), empresa, user)
+        trainer_name = trainer.get("name") if trainer else "o treinador"
+        request.session["edit_success"] = f"Treinamento agendado com {trainer_name} em {day} às {hour}."
+    except ValueError as error:
+        request.session["edit_error"] = str(error)
+    except Exception as error:
+        request.session["edit_error"] = f"Não consegui agendar o treinamento: {error}"
+    return RedirectResponse(url=back, status_code=303)
 
 
 @router.post("/cadastro/todos/{sheet_row}/editar")

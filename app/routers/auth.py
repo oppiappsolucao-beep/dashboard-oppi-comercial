@@ -32,6 +32,7 @@ async def login_submit(
         request.session["username"] = username.strip()
         request.session["auth_error"] = ""
         request.session.pop("org_person_id", None)
+        request.session.pop("org_person_kind", None)
         request.session.pop("org_person_name", None)
         request.session.pop("org_sector_id", None)
         request.session.pop("org_sector_name", None)
@@ -61,8 +62,9 @@ async def login_submit(
         request.session["authenticated"] = True
         request.session["username"] = employee["username"]
         request.session["user_id"] = employee["id"]
-        request.session["user_role"] = "Funcionário"
+        request.session["user_role"] = "Treinador" if employee.get("kind") == "treinador" else "Funcionário"
         request.session["org_person_id"] = employee["id"]
+        request.session["org_person_kind"] = employee.get("kind") or "funcionario"
         request.session["org_person_name"] = employee["name"]
         request.session["org_sector_id"] = employee["sector_id"]
         request.session["org_sector_name"] = employee["sector_name"]

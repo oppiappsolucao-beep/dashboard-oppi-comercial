@@ -93,6 +93,46 @@ def _validate_training(form_dict: dict) -> None:
         raise ValueError("Informe o link da videoconferência.")
     if not re.match(r"^\d{4}-\d{2}-\d{2}$", normalize_text(form_dict.get("training_date"))):
         raise ValueError("Informe a data do treinamento.")
+    if not re.match(r"^\d{2}:\d{2}$", normalize_text(form_dict.get("training_time"))):
+        raise ValueError("Informe o horário do treinamento.")
+
+
+def schedule_training(form_dict: dict, sheet_row: int, empresa: str, created_by: str) -> None:
+    """Abre a ordem de treinamento na agenda do treinador escolhido."""
+    from app.services.org_registry import ensure_training_slot, get_person
+    from app.services.service_orders import create_service_order, trainer_is_busy
+
+    _validate_training(form_dict)
+    trainer = get_person(form_dict.get("training_trainer_id", ""))
+    if trainer is None or trainer.get("kind") != "treinador" or not trainer.get("sector_name"):
+        raise ValueError("Selecione um treinador cadastrado em Sistema.")
+    day = normalize_text(form_dict.get("training_date"))
+    hour = normalize_text(form_dict.get("training_time"))
+    ensure_training_slot(trainer, day, hour)
+    if trainer_is_busy(trainer.get("name", ""), day, hour):
+        raise ValueError(f"{trainer.get('name')} já tem um treinamento nesse horário.")
+    quantity = normalize_text(form_dict.get("training_employees"))
+    responsible = normalize_text(form_dict.get("training_responsible"))
+    link = normalize_text(form_dict.get("training_link"))
+    description = (
+        f"Responsável: {responsible}. "
+        f"Quantidade de funcionários: {quantity}. "
+        f"Treinador: {trainer['name']}. "
+        f"Videoconferência: {link}. "
+        f"Horário: {hour}."
+    )
+    create_service_order(
+        tenant_id=DEFAULT_TENANT_ID,
+        sheet_row=sheet_row,
+        empresa=empresa,
+        subject="Treinamento",
+        description=description,
+        sector=trainer["sector_name"],
+        scheduled_date=day,
+        responsible=trainer["name"],
+        priority="Média",
+        created_by=created_by,
+    )
 
 
 def _creator_assignment(request: Request, vendedor: str) -> tuple[str, str] | None:
@@ -175,8 +215,13 @@ def _open_registration_orders(request: Request, form_dict: dict, sheet_row: int,
     return f" Atenção: {'; '.join(notes)}." if notes else ""
 
 
-def _edit_page_url(sheet_row: int, *, from_page: str = "") -> str:
-    query = f"?from={from_page}" if from_page else ""
+def _edit_page_url(sheet_row: int, *, from_page: str = "", tab: str = "") -> str:
+    params = []
+    if tab:
+        params.append(f"tab={tab}")
+    if from_page:
+        params.append(f"from={from_page}")
+    query = f"?{'&'.join(params)}" if params else ""
     return f"/cadastro/todos/{sheet_row}/editar{query}"
 
 
@@ -579,7 +624,11 @@ async def new_registration_submit(request: Request):
                         )
         except Exception:
             pass
-        return RedirectResponse(url=_edit_page_url(sheet_row, from_page=from_page), status_code=303)
+        request.session["edit_success"] = request.session.get("company_registration_success", "")
+        return RedirectResponse(
+            url=_edit_page_url(sheet_row, from_page=from_page, tab="treinamento"),
+            status_code=303,
+        )
     except DuplicateRegistrationError as error:
         request.session["registration_error"] = str(error)
     except ValueError as error:

@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+  .agenda-list { display: grid; gap: 10px; }
+  .agenda-card { padding: 14px 16px; }
+  .agenda-card strong { display: block; }
+  .agenda-card span, .agenda-card p { display: block; margin: 4px 0 0; color: var(--muted); }
+  .agenda-section { margin-top: 18px; }
+  .agenda-section h2 { margin: 0 0 10px; font-size: 1rem; }
+</style>
+<div class="page-header">
+  <div>
+    <div class="page-title">Agenda</div>
+    <div class="page-subtitle">
+      {% if own_agenda %}
+      Treinamentos de {{ trainer_name }}.
+      {% else %}
+      Treinamentos marcados com os treinadores.
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<section class="agenda-section">
+  <h2>Próximos</h2>
+  <div class="agenda-list">
+    {% for item in upcoming %}
+    <article class="panel agenda-card">
+      <strong>{{ item.empresa }}</strong>
+      <span>{{ item.scheduled_date_label }}{% if item.hour %} às {{ item.hour }}{% endif %} · {{ item.responsible }}</span>
+      {% if item.trainee %}<span>Treinar: {{ item.trainee }}</span>{% endif %}
+      <p>{{ item.description }}</p>
+    </article>
+    {% else %}
+    <p class="panel agenda-card">Nenhum treinamento marcado.</p>
+    {% endfor %}
+  </div>
+</section>
+
+{% if past %}
+<section class="agenda-section">
+  <h2>Anteriores</h2>
+  <div class="agenda-list">
+    {% for item in past %}
+    <article class="panel agenda-card">
+      <strong>{{ item.empresa }}</strong>
+      <span>{{ item.scheduled_date_label }}{% if item.hour %} às {{ item.hour }}{% endif %} · {{ item.responsible }}</span>
+      {% if item.trainee %}<span>Treinar: {{ item.trainee }}</span>{% endif %}
+    </article>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+{% endblock %}

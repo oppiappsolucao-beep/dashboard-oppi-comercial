@@ -248,6 +248,7 @@ def init_crm_local_db() -> None:
                 ("password_hash", "TEXT NOT NULL DEFAULT ''"),
                 ("state_name", "TEXT NOT NULL DEFAULT ''"),
                 ("city", "TEXT NOT NULL DEFAULT ''"),
+                ("schedule_json", "TEXT NOT NULL DEFAULT '{}'"),
             ):
                 if people_cols and column not in people_cols:
                     conn.execute(f"ALTER TABLE org_people ADD COLUMN {column} {definition}")

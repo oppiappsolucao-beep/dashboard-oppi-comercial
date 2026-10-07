@@ -8,6 +8,7 @@ FULL_ACCESS = (
     "gestao",
     "atendimentos",
     "kanban",
+    "agenda",
     "empresas",
     "novo_cadastro",
     "financeiro",
@@ -51,6 +52,8 @@ def nav_permissions(request: Request) -> dict[str, bool]:
 
 def home_url(request: Request) -> str:
     allowed = allowed_accesses(request)
+    if request.session.get("org_person_kind") == "treinador" and "agenda" in allowed:
+        return "/agenda"
     for key, url in HOME_BY_ACCESS:
         if key in allowed:
             return url
@@ -68,6 +71,7 @@ def _required_access(path: str) -> str | None:
         ("/metas-e-relatorios", "gestao"),
         ("/atendimentos", "atendimentos"),
         ("/atividades", "kanban"),
+        ("/agenda", "agenda"),
         ("/proposta", "propostas"),
         ("/propostas", "propostas"),
         ("/financeiro", "financeiro"),

@@ -140,6 +140,51 @@ def _queue_label(conn, queue_id: str) -> str:
     return row["name"] or queue_id
 
 
+def _training_bits(description: str) -> dict:
+    text = normalize_text(description)
+    hour = ""
+    trainee = ""
+    hour_match = re.search(r"Horário:\s*(\d{2}:\d{2})", text)
+    trainee_match = re.search(r"Responsável:\s*([^.]*)", text)
+    if hour_match:
+        hour = hour_match.group(1)
+    if trainee_match:
+        trainee = normalize_text(trainee_match.group(1))
+    return {"hour": hour, "trainee": trainee}
+
+
+def list_training_appointments(responsible: str = "") -> list[dict]:
+    """Treinamentos agendados. Sem responsável, devolve todos."""
+    init_crm_local_db()
+    name = normalize_text(responsible).lower()
+    with _lock, _connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT * FROM service_orders
+            WHERE lower(subject) = 'treinamento'
+            ORDER BY scheduled_date, created_at
+            """
+        ).fetchall()
+    items = []
+    for row in rows:
+        view = _row_to_view(row)
+        if name and normalize_text(view.get("responsible")).lower() != name:
+            continue
+        view.update(_training_bits(view.get("description") or ""))
+        items.append(view)
+    items.sort(key=lambda item: (item.get("scheduled_date") or "", item.get("hour") or "", item.get("empresa") or ""))
+    return items
+
+
+def trainer_is_busy(responsible: str, day: str, hour: str) -> bool:
+    target_day = normalize_text(day)
+    target_hour = normalize_text(hour)
+    for item in list_training_appointments(responsible):
+        if item.get("scheduled_date") == target_day and item.get("hour") == target_hour:
+            return True
+    return False
+
+
 def list_service_orders(tenant_id: str | None, sheet_row: int) -> list[dict]:
     init_crm_local_db()
     tenant = normalize_text(tenant_id) or DEFAULT_TENANT_ID

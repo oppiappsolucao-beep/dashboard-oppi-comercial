@@ -101,21 +101,6 @@
     {% endfor %}
   </div>
 
-  <nav class="client-edit-tabs panel client-edit-tabs-interactive client-edit-tabs-new" aria-label="Abas do cadastro">
-    <button type="button" class="client-edit-tab is-active" data-registration-tab="dados">
-      <span class="client-edit-tab-title">Dados gerais</span>
-      <span class="client-edit-tab-sub">Informações da empresa</span>
-    </button>
-    <button type="button" class="client-edit-tab" data-registration-tab="financeiro">
-      <span class="client-edit-tab-title">Financeiro</span>
-      <span class="client-edit-tab-sub">Forma de pagamento</span>
-    </button>
-    <button type="button" class="client-edit-tab" data-registration-tab="treinamento">
-      <span class="client-edit-tab-title">Treinamento</span>
-      <span class="client-edit-tab-sub">Agendamento e treinador</span>
-    </button>
-  </nav>
-
   <form method="post" action="/cadastro/novo" class="client-edit-form" id="registration-new-form">
     <input type="hidden" name="cadastro_tipo" value="lead">
     <input type="hidden" name="create_training" id="create-first-activity" value="0">
@@ -144,7 +129,7 @@
     <div class="client-edit-tab-panel" data-registration-panel="dados">
       <section class="cadastro-bot panel" id="cadastro-bot" {% if not values.empresa %}hidden{% endif %}>
         <h2>Ler mensagem do cliente</h2>
-        <p>Cole o texto que o cliente enviou. O bot preenche só Dados gerais. Financeiro continua com o comercial.</p>
+        <p>Cole o texto que o cliente enviou. O bot preenche só Dados gerais. O treinamento é agendado depois, na empresa.</p>
         <textarea id="cadastro-bot-text" placeholder="Cole aqui a mensagem do cliente"></textarea>
         <div class="cadastro-bot-actions">
           <button type="button" class="btn" id="cadastro-bot-run">Enviar para cadastro</button>
@@ -152,14 +137,6 @@
         </div>
       </section>
       {% include "partials/registration_edit_dados_tab.html" %}
-    </div>
-
-    <div class="client-edit-tab-panel is-hidden" data-registration-panel="financeiro">
-      {% include "partials/registration_new_financeiro_tab.html" %}
-    </div>
-
-    <div class="client-edit-tab-panel is-hidden" data-registration-panel="treinamento">
-      {% include "partials/registration_new_activities_tab.html" %}
     </div>
 
     <footer class="client-edit-footer panel">

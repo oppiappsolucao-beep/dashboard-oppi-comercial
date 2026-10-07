@@ -1,0 +1,70 @@
+<section class="client-edit-section panel">
+  <div class="client-edit-section-head">
+    <span class="client-edit-section-icon">🎓</span>
+    <div>
+      <h2>Treinamento</h2>
+      <p>Quando o cliente contratar alguém, como uma pessoa de RH, agende aqui o dia em que o treinador vai mostrar o sistema.</p>
+    </div>
+  </div>
+
+  {% set scheduled = [] %}
+  {% for item in service_orders %}
+    {% if item.subject == 'Treinamento' %}
+      {% set _ = scheduled.append(item) %}
+    {% endif %}
+  {% endfor %}
+  {% if scheduled %}
+  <ul class="registration-training-list">
+    {% for item in scheduled %}
+    <li>
+      <strong>{{ item.scheduled_date_label }}</strong>
+      · {{ item.responsible }}
+      <span>{{ item.description }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+
+  {% if trainers %}
+  <input type="hidden" name="empresa" form="company-training-form" value="{{ values.empresa }}">
+  <div class="form-grid">
+    <div class="form-group">
+      <label>Quem será treinado</label>
+      <input type="text" name="training_responsible" form="company-training-form" maxlength="120" required placeholder="Nome do funcionário do cliente" value="{{ values.nome_contato }}">
+    </div>
+    <div class="form-group">
+      <label>Quantidade de pessoas</label>
+      <input type="number" name="training_employees" form="company-training-form" min="1" step="1" required value="1">
+    </div>
+    <div class="form-group">
+      <label>Treinador</label>
+      <select name="training_trainer_id" form="company-training-form" required>
+        <option value="">Selecione</option>
+        {% for trainer in trainers %}
+        <option value="{{ trainer.id }}">{{ trainer.name }} · {{ trainer.schedule_label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Data</label>
+      <input type="date" name="training_date" form="company-training-form" required value="{{ today_iso }}">
+    </div>
+    <div class="form-group">
+      <label>Hora</label>
+      <input type="time" name="training_time" form="company-training-form" required value="09:00">
+    </div>
+    <div class="form-group full">
+      <label>Link da videoconferência</label>
+      <input type="url" name="training_link" form="company-training-form" maxlength="300" required placeholder="https://...">
+    </div>
+  </div>
+  <button type="submit" class="btn" form="company-training-form">Agendar treinamento</button>
+  {% else %}
+  <p>Cadastre o treinador em Sistema, com os dias e o horário de trabalho, para agendar aqui.</p>
+  {% endif %}
+</section>
+<style>
+  .registration-training-list { list-style: none; margin: 0 0 16px; padding: 0; display: grid; gap: 8px; }
+  .registration-training-list li { padding: 10px 12px; border-radius: 12px; background: #F8FAFC; }
+  .registration-training-list span { display: block; margin-top: 4px; color: var(--muted); }
+</style>

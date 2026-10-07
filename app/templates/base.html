@@ -48,6 +48,11 @@
           <span class="sidebar-link-icon">📋</span> Kanban
         </a>
         {% endif %}
+        {% if nav.agenda %}
+        <a href="/agenda" class="sidebar-link {% if active_page == 'agenda' %}active{% endif %}">
+          <span class="sidebar-link-icon">📅</span> Agenda
+        </a>
+        {% endif %}
         {% if nav.propostas %}
         <a href="/proposta" class="sidebar-link {% if active_page == 'proposta' %}active{% endif %}">
           <span class="sidebar-link-icon">▤</span> Proposta
@@ -130,6 +135,12 @@
     <a href="/atividades" class="mobile-bottom-link {% if active_page == 'activities' %}active{% endif %}">
       <span class="mobile-bottom-icon" aria-hidden="true">📋</span>
       <span class="mobile-bottom-label">Kanban</span>
+    </a>
+    {% endif %}
+    {% if nav.agenda %}
+    <a href="/agenda" class="mobile-bottom-link {% if active_page == 'agenda' %}active{% endif %}">
+      <span class="mobile-bottom-icon" aria-hidden="true">📅</span>
+      <span class="mobile-bottom-label">Agenda</span>
     </a>
     {% endif %}
     {% if nav.propostas %}
