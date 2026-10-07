@@ -168,6 +168,7 @@ def init_crm_local_db() -> None:
                     password_hash TEXT NOT NULL DEFAULT '',
                     state_name TEXT NOT NULL DEFAULT '',
                     city TEXT NOT NULL DEFAULT '',
+                    schedule_json TEXT NOT NULL DEFAULT '{}',
                     active INTEGER NOT NULL DEFAULT 1,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL

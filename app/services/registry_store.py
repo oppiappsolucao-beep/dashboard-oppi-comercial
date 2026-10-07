@@ -108,6 +108,15 @@ def _ensure_postgres_tables() -> None:
         TicketOrder,
     ):
         model.__table__.create(bind=engine, checkfirst=True)
+    from sqlalchemy import text
+
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "ALTER TABLE org_people "
+                "ADD COLUMN IF NOT EXISTS schedule_json TEXT NOT NULL DEFAULT '{}'"
+            )
+        )
 
 
 def _cell(row: sqlite3.Row, key: str, default=""):
@@ -158,10 +167,10 @@ def _import_sqlite() -> None:
                     """
                     INSERT INTO org_people (
                         id, kind, name, email, phone, sector_id, region, username, password_hash,
-                        state_name, city, active, created_at, updated_at
+                        state_name, city, schedule_json, active, created_at, updated_at
                     ) VALUES (
                         :id, :kind, :name, :email, :phone, :sector_id, :region, :username, :password_hash,
-                        :state_name, :city, :active, :created_at, :updated_at
+                        :state_name, :city, :schedule_json, :active, :created_at, :updated_at
                     )
                     ON CONFLICT (id) DO NOTHING
                     """,
@@ -177,6 +186,7 @@ def _import_sqlite() -> None:
                         "password_hash": _cell(row, "password_hash"),
                         "state_name": _cell(row, "state_name"),
                         "city": _cell(row, "city"),
+                        "schedule_json": _cell(row, "schedule_json", "{}") or "{}",
                         "active": int(_cell(row, "active", 1) or 0),
                         "created_at": _cell(row, "created_at"),
                         "updated_at": _cell(row, "updated_at"),

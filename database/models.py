@@ -649,6 +649,7 @@ class OrgPerson(Base):
     password_hash = Column(String(255), nullable=False, default="")
     state_name = Column(String(80), nullable=False, default="")
     city = Column(String(120), nullable=False, default="")
+    schedule_json = Column(Text, nullable=False, default="{}")
     active = Column(Integer, nullable=False, default=1)
     created_at = Column(String(40), nullable=False, default="")
     updated_at = Column(String(40), nullable=False, default="")
