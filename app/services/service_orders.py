@@ -515,6 +515,47 @@ def build_sector_board(sector_id: str, sector_name: str, inicio: str = "", fim: 
     return columns
 
 
+def send_order_to_sector(order_id: str, sector_name: str, author: str) -> str:
+    """Leva a ordem para outro setor e a coloca na coluna Análise."""
+    from app.services.org_registry import list_sectors
+
+    target_name = normalize_text(sector_name)
+    if not target_name:
+        raise ValueError("Escolha o setor.")
+    match = next(
+        (
+            item
+            for item in list_sectors()
+            if normalize_text(item.get("name")).lower() == target_name.lower()
+        ),
+        None,
+    )
+    if match is None:
+        raise ValueError("Setor não encontrado.")
+    target = match["name"]
+    init_crm_local_db()
+    stamp = _now().isoformat(timespec="seconds")
+    with _lock, _connect() as conn:
+        current = conn.execute(
+            "SELECT id, sector FROM service_orders WHERE id = ?",
+            (normalize_text(order_id),),
+        ).fetchone()
+        if current is None:
+            raise ValueError("Ordem de serviço não encontrada.")
+        if normalize_text(current["sector"]).lower() == target.lower():
+            return "Esta ordem já está neste setor."
+        conn.execute(
+            """
+            UPDATE service_orders
+            SET sector = ?, queue_id = ?, updated_at = ?
+            WHERE id = ?
+            """,
+            (target, ENTRY_QUEUE_ID, stamp, current["id"]),
+        )
+        _add_event(conn, current["id"], "movida", f"Encaminhada para {target}.", author, stamp)
+    return f"OS encaminhada para {target}."
+
+
 def move_service_order(
     order_id: str,
     queue_id: str,

@@ -390,12 +390,10 @@ def _order_panel_context(order: dict, sector_notice: str = "") -> dict:
     from app.services.org_registry import list_sectors
     from app.services.service_orders import queue_choices
 
-    current = normalize_text(order.get("sector")).lower()
-    sectors = [item for item in list_sectors() if normalize_text(item.get("name")).lower() != current]
     sector_id, queues = queue_choices(order.get("sector") or "")
     return {
         "order": order,
-        "redirect_sectors": sectors,
+        "order_sectors": list_sectors(),
         "sector_notice": sector_notice,
         "order_sector_id": sector_id,
         "order_queues": queues,
@@ -445,21 +443,25 @@ async def activities_direct_sector(request: Request, order_id: str, sector_name:
     redirect = require_auth(request)
     if redirect:
         return redirect
-    from app.services.service_orders import get_order_detail
-    from app.services.ticket_orders import direct_ticket_order
+    from app.services.service_orders import get_order_detail, send_order_to_sector
+    from app.services.ticket_orders import ticket_card_extra, write_directed_sector
 
     detail = get_order_detail(order_id)
     if not detail or not _order_visible(request, detail):
         return HTMLResponse("Ordem de serviço não encontrada.", status_code=404)
     try:
-        notice = direct_ticket_order(order_id, sector_name, _os_actor(request))
+        notice = send_order_to_sector(order_id, sector_name, _os_actor(request))
     except ValueError as error:
         return render(
             request,
             "partials/os_order_panel.html",
             _order_panel_context(detail, str(error)),
         )
-    request.session["os_board_success"] = notice or f"OS encaminhada para {normalize_text(sector_name)}."
+    extra = ticket_card_extra(order_id) or {}
+    sheet_note = ""
+    if extra.get("sheet_row_ticket"):
+        sheet_note = write_directed_sector(int(extra["sheet_row_ticket"]), normalize_text(sector_name))
+    request.session["os_board_success"] = sheet_note or notice or f"OS encaminhada para {normalize_text(sector_name)}."
     return HTMLResponse("ok")
 
 

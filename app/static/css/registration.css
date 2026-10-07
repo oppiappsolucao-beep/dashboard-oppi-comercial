@@ -1405,7 +1405,7 @@
 
 .client-edit-tabs {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 0;
   padding: 0;
   overflow: hidden;
@@ -1470,11 +1470,13 @@
 }
 
 .client-edit-tab-title {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
   font-size: 0.92rem;
   font-weight: 800;
+  white-space: nowrap;
 }
 
 .client-edit-tab-icon {

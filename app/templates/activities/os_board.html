@@ -168,25 +168,13 @@
       <article class="activities-kanban-card" draggable="true" data-order-id="{{ card.id }}" data-current-queue="{{ column.id }}" {% if card.cadastro_url %}data-cadastro-url="{{ card.cadastro_url }}"{% endif %}>
         <span class="activities-kanban-card-grip" aria-hidden="true">⋮⋮</span>
         <div class="activities-kanban-card-title">{{ card.empresa }}</div>
-        <div class="activities-kanban-card-action">{{ card.subject }}</div>
         <div class="activities-kanban-card-meta">
           <span>{{ card.protocol }}</span>
-          <span>{{ card.responsible }}</span>
         </div>
-        {% if 'proposta' in column.name|lower %}
-        <a class="os-proposta-link" href="/atividades/os/{{ card.id }}/proposta">Abrir proposta</a>
-        {% endif %}
         <div class="activities-kanban-card-when">
           <span aria-hidden="true">📅</span>
           <span>{{ card.scheduled_date_label }}</span>
         </div>
-        <label class="os-card-status">Status
-          <select data-os-status aria-label="Alterar local de {{ card.empresa }}">
-            {% for option in columns %}
-            <option value="{{ option.id }}" {% if option.id == column.id %}selected{% endif %}>{{ option.name }}</option>
-            {% endfor %}
-          </select>
-        </label>
       </article>
       {% else %}
       <div class="activities-kanban-empty">Nenhuma ordem</div>
