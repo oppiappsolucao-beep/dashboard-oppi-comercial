@@ -427,6 +427,20 @@ def is_commercial_sector(sector_name: str) -> bool:
     return "comercial" in name
 
 
+def _entry_follows_period(sector_name: str) -> bool:
+    """Comercial e Oppi Tech filtram a coluna Análise pelo período escolhido."""
+    name = normalize_text(sector_name).lower()
+    compact = re.sub(r"\s+", "", name)
+    return "comercial" in name or "oppitech" in compact
+
+
+def _entry_visible(card: dict, start: str, end: str) -> bool:
+    day = normalize_text(card.get("lead_date") or card.get("scheduled_date") or card.get("created_at"))[:10]
+    if len(day) != 10 or day[4] != "-":
+        return False
+    return start <= day <= end
+
+
 def queue_choices(sector_name: str) -> tuple[str, list[dict]]:
     """Colunas do Kanban do setor, para o status que muda o local do cliente."""
     from app.services.org_registry import list_sector_queues, list_sectors
@@ -505,6 +519,13 @@ def build_sector_board(sector_id: str, sector_name: str, inicio: str = "", fim: 
         if queue_id not in known:
             queue_id = ENTRY_QUEUE_ID
         if queue_id == CAMPAIGN_QUEUE_ID and period_start and not _campaign_visible(card, period_start, period_end):
+            continue
+        if (
+            queue_id == ENTRY_QUEUE_ID
+            and period_start
+            and _entry_follows_period(sector_name)
+            and not _entry_visible(card, period_start, period_end)
+        ):
             continue
         column = buckets[queue_id]
         if period_start and normalize_text(column["name"]).lower() in {"andamento", "em andamento"}:
