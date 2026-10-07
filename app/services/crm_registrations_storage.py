@@ -800,10 +800,16 @@ def _remember_named_sheet_row(sheet_row: int, key: str, value: int) -> None:
         db.close()
 
 
+_worksheet_row_count = {"at": 0.0, "count": 0}
+
+
 def _worksheet_accepts_row(row_number: int) -> bool:
     """False quando a linha passa do tamanho da aba (ex.: id 851 numa aba de 119 linhas)."""
     if int(row_number) <= 1:
         return False
+    now = time.time()
+    if now - float(_worksheet_row_count["at"]) < 60 and int(_worksheet_row_count["count"]) > 0:
+        return int(row_number) <= int(_worksheet_row_count["count"])
     try:
         from app.config import settings
         from app.services.legacy_core import _open_worksheet, get_gsheet_client
@@ -813,9 +819,14 @@ def _worksheet_accepts_row(row_number: int) -> bool:
         client = get_gsheet_client()
         spreadsheet = client.open_by_key(settings.sheet_id)
         worksheet = _open_worksheet(spreadsheet, settings.worksheet_name)
-        return int(row_number) <= int(worksheet.row_count or 0)
+        count = int(worksheet.row_count or 0)
+        _worksheet_row_count["at"] = now
+        _worksheet_row_count["count"] = count
+        return int(row_number) <= count
     except Exception:
         logger.exception("Não consegui medir a aba da planilha")
+        if int(_worksheet_row_count["count"]) > 0:
+            return int(row_number) <= int(_worksheet_row_count["count"])
         return False
 
 

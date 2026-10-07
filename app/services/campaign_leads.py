@@ -246,67 +246,186 @@ def _find_raissa_worksheet(spreadsheet):
     return None
 
 
+_raissa_last_values: list[list[str]] | None = None
+_raissa_last_title = "Raissa"
+_raissa_quota_until = 0.0
+
+
+def _raissa_snapshot_path():
+    from app.services.storage_paths import get_storage_dir
+
+    return get_storage_dir() / "raissa_snapshot.json"
+
+
+def _remember_raissa_values(title: str, values: list[list[str]]) -> None:
+    import json
+
+    global _raissa_last_values, _raissa_last_title
+    _raissa_last_title = title or "Raissa"
+    _raissa_last_values = [list(row) for row in values]
+    try:
+        path = _raissa_snapshot_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            json.dumps({"aba": _raissa_last_title, "values": _raissa_last_values}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+    except Exception:
+        pass
+
+
+def _stored_raissa_values() -> tuple[str, list[list[str]]] | None:
+    import json
+
+    if _raissa_last_values:
+        return _raissa_last_title, [list(row) for row in _raissa_last_values]
+    path = _raissa_snapshot_path()
+    if path.exists():
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            values = data.get("values") if isinstance(data, dict) else None
+            if isinstance(values, list) and values:
+                return str(data.get("aba") or "Raissa"), values
+        except (OSError, json.JSONDecodeError):
+            pass
+    try:
+        from app.services.sheet_read_cache import peek_cached_worksheet_values
+
+        for title in ("Raissa", "Raíssa", "Raisa"):
+            cached = peek_cached_worksheet_values(title)
+            if cached:
+                return title, cached
+    except Exception:
+        pass
+    try:
+        from app.config import settings
+        from app.services.legacy_core import get_last_good_sheet_values, hydrate_sheet_cache_from_disk
+
+        tab = _plain(settings.worksheet_name).replace(" ", "")
+        if "raissa" in tab or "raisa" in tab:
+            values = get_last_good_sheet_values()
+            if not values and hydrate_sheet_cache_from_disk():
+                values = get_last_good_sheet_values()
+            if values:
+                return settings.worksheet_name, values
+    except Exception:
+        pass
+    return None
+
+
+def _quota_limited(error: Exception) -> bool:
+    text = str(error).lower()
+    return "429" in text or "quota" in text
+
+
+def _raissa_sheet_from_values(title: str, values: list[list[str]]) -> dict:
+    empty = {"aba": title, "total": 0, "colunas": [], "clientes": [], "aviso": ""}
+    if not values:
+        empty["aviso"] = "A aba Raissa está vazia."
+        return empty
+    header_at = 0
+    if len(values) > 1:
+        filled_first = sum(1 for cell in values[0] if normalize_text(cell))
+        filled_second = sum(1 for cell in values[1] if normalize_text(cell))
+        if filled_first <= 1 and filled_second >= 3:
+            header_at = 1
+    headers = []
+    used = set()
+    for index, cell in enumerate(values[header_at], start=1):
+        name = normalize_text(cell) or f"Coluna {index}"
+        key = name
+        suffix = 2
+        while key.lower() in used:
+            key = f"{name} {suffix}"
+            suffix += 1
+        used.add(key.lower())
+        headers.append(key)
+    clientes = []
+    for offset, raw in enumerate(values[header_at + 1 :], start=header_at + 2):
+        row = [normalize_text(cell) for cell in raw]
+        if not any(row):
+            continue
+        item = {"linha": offset}
+        for index, header in enumerate(headers):
+            item[header] = row[index] if index < len(row) else ""
+        clientes.append(item)
+    return {
+        "aba": title,
+        "total": len(clientes),
+        "colunas": headers,
+        "clientes": clientes,
+        "aviso": "",
+    }
+
+
+def _fetch_raissa_values() -> tuple[str, list[list[str]]]:
+    from app.config import settings
+    from app.services.legacy_core import get_gsheet_client
+    from app.services.sheet_read_cache import get_cached_worksheet_values
+
+    client = get_gsheet_client()
+    spreadsheet = client.open_by_key(settings.sheet_id)
+    worksheet = None
+    for title in ("Raissa", "Raíssa", "Raisa"):
+        try:
+            worksheet = spreadsheet.worksheet(title)
+            break
+        except Exception as exc:
+            if _quota_limited(exc):
+                raise
+            worksheet = None
+    if worksheet is None:
+        worksheet = _find_raissa_company_worksheet(spreadsheet)
+    if worksheet is None:
+        raise RuntimeError("Aba Raissa não encontrada na planilha.")
+    values = get_cached_worksheet_values(worksheet.title, worksheet.get_all_values)
+    if not values:
+        raise RuntimeError("Não consegui ler a aba Raissa.")
+    return worksheet.title, values
+
+
 def read_raissa_sheet() -> dict:
     """Lê a aba Raissa inteira, com as colunas como estão na planilha."""
+    import time
+
+    global _raissa_quota_until
     empty = {"aba": "", "total": 0, "colunas": [], "clientes": [], "aviso": ""}
     try:
         from app.config import settings
-        from app.services.legacy_core import get_gsheet_client
-        from app.services.sheet_read_cache import get_cached_worksheet_values
 
         if not settings.sheets_configured:
             empty["aviso"] = "Planilha não configurada."
             return empty
-        client = get_gsheet_client()
-        spreadsheet = client.open_by_key(settings.sheet_id)
-        worksheet = _find_raissa_company_worksheet(spreadsheet)
-        if worksheet is None:
-            titles = ", ".join(item.title for item in spreadsheet.worksheets())
-            empty["aviso"] = f"Aba Raissa não encontrada. Abas na planilha: {titles}."
+        if time.time() < _raissa_quota_until:
+            stored = _stored_raissa_values()
+            if stored:
+                return _raissa_sheet_from_values(stored[0], stored[1])
+            empty["aviso"] = (
+                "O Google limitou a leitura da aba Raissa por um minuto. "
+                "Os clientes continuam na planilha. Atualize de novo daqui a pouco."
+            )
             return empty
-        values = get_cached_worksheet_values(worksheet.title, worksheet.get_all_values)
-        if values is None:
-            empty["aba"] = worksheet.title
-            empty["aviso"] = "Não consegui ler a aba Raissa."
-            return empty
-        if not values:
-            empty["aba"] = worksheet.title
-            empty["aviso"] = "A aba Raissa está vazia."
-            return empty
-        header_at = 0
-        if len(values) > 1:
-            filled_first = sum(1 for cell in values[0] if normalize_text(cell))
-            filled_second = sum(1 for cell in values[1] if normalize_text(cell))
-            if filled_first <= 1 and filled_second >= 3:
-                header_at = 1
-        headers = []
-        used = set()
-        for index, cell in enumerate(values[header_at], start=1):
-            name = normalize_text(cell) or f"Coluna {index}"
-            key = name
-            suffix = 2
-            while key.lower() in used:
-                key = f"{name} {suffix}"
-                suffix += 1
-            used.add(key.lower())
-            headers.append(key)
-        clientes = []
-        for offset, raw in enumerate(values[header_at + 1 :], start=header_at + 2):
-            row = [normalize_text(cell) for cell in raw]
-            if not any(row):
-                continue
-            item = {"linha": offset}
-            for index, header in enumerate(headers):
-                item[header] = row[index] if index < len(row) else ""
-            clientes.append(item)
-        return {
-            "aba": worksheet.title,
-            "total": len(clientes),
-            "colunas": headers,
-            "clientes": clientes,
-            "aviso": "",
-        }
+        from app.services.sheet_read_cache import peek_fresh_worksheet_values
+
+        for title in ("Raissa", "Raíssa", "Raisa"):
+            fresh = peek_fresh_worksheet_values(title)
+            if fresh:
+                return _raissa_sheet_from_values(title, fresh)
+        title, values = _fetch_raissa_values()
+        _remember_raissa_values(title, values)
+        return _raissa_sheet_from_values(title, values)
     except Exception as exc:
+        if _quota_limited(exc):
+            _raissa_quota_until = time.time() + 70
+        stored = _stored_raissa_values()
+        if stored:
+            return _raissa_sheet_from_values(stored[0], stored[1])
+        if _quota_limited(exc):
+            empty["aviso"] = (
+                "O Google limitou a leitura da aba Raissa por um minuto. "
+                "Os clientes continuam na planilha. Atualize de novo daqui a pouco."
+            )
+            return empty
         detail = normalize_text(str(exc))[:140]
         empty["aviso"] = f"Não consegui ler a aba Raissa. {detail}".strip()
         return empty

@@ -10,6 +10,7 @@ from app.config import settings
 
 _lock = threading.Lock()
 _cache: TTLCache = TTLCache(maxsize=64, ttl=max(30, settings.cache_ttl_seconds))
+_last_good: dict[str, list[list[str]]] = {}
 _tabs_ensured_at: float = 0.0
 TABS_ENSURE_INTERVAL_SECONDS = 300
 
@@ -33,12 +34,42 @@ def get_cached_worksheet_values(tab_name: str, loader, *, force_refresh: bool = 
 
     try:
         values = loader()
-    except Exception:
+    except Exception as exc:
+        text = str(exc).lower()
+        if "429" in text or "quota" in text:
+            raise
+        with _lock:
+            previous = _last_good.get(key)
+        if previous is not None:
+            return [row[:] for row in previous]
         return None
 
     with _lock:
         _cache[key] = values
+        _last_good[key] = values
     return [row[:] for row in values]
+
+
+def peek_fresh_worksheet_values(tab_name: str) -> list[list[str]] | None:
+    """Cache curto ainda válido. Não chama o Google."""
+    key = worksheet_cache_key(tab_name)
+    with _lock:
+        cached = _cache.get(key)
+    if cached is None:
+        return None
+    return [row[:] for row in cached]
+
+
+def peek_cached_worksheet_values(tab_name: str) -> list[list[str]] | None:
+    """Última leitura boa, mesmo depois que o cache curto foi limpo."""
+    key = worksheet_cache_key(tab_name)
+    with _lock:
+        cached = _cache.get(key)
+        if cached is None:
+            cached = _last_good.get(key)
+    if cached is None:
+        return None
+    return [row[:] for row in cached]
 
 
 def invalidate_worksheet_cache(tab_name: str | None = None) -> None:
