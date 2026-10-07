@@ -41,7 +41,7 @@
       <select name="training_trainer_id" form="company-training-form" required>
         <option value="">Selecione</option>
         {% for trainer in trainers %}
-        <option value="{{ trainer.id }}">{{ trainer.name }} · {{ trainer.schedule_label }}</option>
+        <option value="{{ trainer.id }}">{{ trainer.name }}</option>
         {% endfor %}
       </select>
     </div>
