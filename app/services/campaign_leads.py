@@ -198,10 +198,9 @@ def read_raissa_companies() -> dict:
         ("contato", "nome contato", "nome do contato", "responsavel", "socio"),
         skip_words=("matriz",),
     )
-    from app.services.raissa_company_sync import company_hidden_on_raissa_list
+    from app.services.raissa_company_sync import company_hidden_on_raissa_list, names_are_same_company
 
     empresas = []
-    seen: dict[str, int] = {}
     for item in sheet.get("clientes") or []:
         values = [item.get(header, "") for header in headers]
         empresa = values[name_index] if name_index is not None and name_index < len(values) else ""
@@ -215,7 +214,6 @@ def read_raissa_companies() -> dict:
         cnpj = normalize_text(values[cnpj_index]) if cnpj_index is not None and cnpj_index < len(values) else ""
         if company_hidden_on_raissa_list(empresa, cnpj):
             continue
-        identity = f"{cnpj}|{empresa}".casefold()
         row_item = {
             "linha": item.get("linha") or 0,
             "empresa": empresa,
@@ -226,10 +224,17 @@ def read_raissa_companies() -> dict:
             "cnpj": cnpj,
             "contato": normalize_text(values[contact_index]) if contact_index is not None and contact_index < len(values) else "",
         }
-        if identity in seen:
-            empresas[seen[identity]] = row_item
+        duplicate_at = next(
+            (
+                index
+                for index, current in enumerate(empresas)
+                if names_are_same_company(current.get("empresa", ""), empresa)
+            ),
+            None,
+        )
+        if duplicate_at is not None:
+            empresas[duplicate_at] = row_item
             continue
-        seen[identity] = len(empresas)
         empresas.append(row_item)
     return {
         "aba": sheet.get("aba") or "",

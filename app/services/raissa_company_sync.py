@@ -472,17 +472,44 @@ def hide_company_on_raissa_list(empresa: str, cnpj: str) -> None:
 
 def unhide_company_on_raissa_list(empresa: str, cnpj: str) -> None:
     drop = set(_company_hide_keys(empresa, cnpj))
+    keys = _load_hidden_keys()
+    for key in list(keys):
+        if key.startswith("nome:") and names_are_same_company(empresa, key[5:]):
+            drop.add(key)
     if not drop:
         return
-    keys = _load_hidden_keys() - drop
-    _save_hidden_keys(keys)
+    _save_hidden_keys(keys - drop)
+
+
+def names_are_same_company(left: str, right: str) -> bool:
+    """A mesma empresa, mesmo com LTDA ou um pedaço a mais no nome."""
+    def compact(value: str) -> str:
+        return "".join(character for character in normalize_search_text(value) if character.isalnum())
+
+    first = compact(left)
+    second = compact(right)
+    if not first or not second:
+        return False
+    if first == second and len(first) >= 8:
+        return True
+    if len(first) < 12 or len(second) < 12:
+        return False
+    short, long = (first, second) if len(first) <= len(second) else (second, first)
+    if len(short) >= 18 and long.startswith(short):
+        return True
+    return len(first) >= 18 and len(second) >= 18 and first[:20] == second[:20]
 
 
 def company_hidden_on_raissa_list(empresa: str, cnpj: str) -> bool:
     hidden = _load_hidden_keys()
     if not hidden:
         return False
-    return any(key in hidden for key in _company_hide_keys(empresa, cnpj))
+    if any(key in hidden for key in _company_hide_keys(empresa, cnpj)):
+        return True
+    for key in hidden:
+        if key.startswith("nome:") and names_are_same_company(empresa, key[5:]):
+            return True
+    return False
 
 
 def _raissa_rows_to_remove(values: list[list[str]], empresa: str, cnpj: str, raissa_row: int) -> list[int]:
@@ -498,15 +525,14 @@ def _raissa_rows_to_remove(values: list[list[str]], empresa: str, cnpj: str, rai
     found = _find_row(values, header_at, headers, payload)
     if found and found not in rows:
         rows.append(found)
-    target_name = normalize_search_text(empresa)
+    target_name = normalize_text(empresa)
     target_cnpj = _digits(cnpj)
-    mapping = _header_map(headers)
-    name_index = mapping.get("empresa")
-    cnpj_index = mapping.get("cnpj")
+    if len(target_cnpj) != 14:
+        target_cnpj = ""
     for offset, raw in enumerate(values[header_at + 1 :], start=header_at + 2):
         row = list(raw)
-        same_cnpj = bool(target_cnpj and cnpj_index is not None and cnpj_index < len(row) and _digits(row[cnpj_index]) == target_cnpj)
-        same_name = bool(target_name and name_index is not None and name_index < len(row) and normalize_search_text(row[name_index]) == target_name)
+        same_cnpj = bool(target_cnpj and any(_digits(cell) == target_cnpj for cell in row))
+        same_name = bool(target_name and any(names_are_same_company(cell, target_name) for cell in row))
         if (same_cnpj or same_name) and offset not in rows:
             rows.append(offset)
     return rows
