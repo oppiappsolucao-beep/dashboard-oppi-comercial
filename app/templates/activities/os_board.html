@@ -21,6 +21,10 @@
 .os-column-tools form { margin: 0; }
 .os-column-tools button { min-height: 28px; padding: 0 8px; border-radius: 8px; font-size: 0.75rem; }
 .os-proposta-link { display: inline-flex; margin-top: 8px; padding: 4px 8px; border-radius: 8px; background: #F3E8FF; font-size: 0.75rem; font-weight: 700; color: var(--purple, #7C3AED); text-decoration: none; }
+.os-card-status { display: grid; gap: 4px; margin-top: 8px; font-size: 0.72rem; font-weight: 700; color: var(--muted); }
+.os-card-status select { width: 100%; min-height: 32px; border: 1px solid var(--border); border-radius: 8px; padding: 0 8px; font: inherit; background: #fff; cursor: pointer; }
+#os-queue-form { display: grid; gap: 8px; max-width: 280px; }
+#os-queue-form select { min-height: 40px; border: 1px solid var(--border); border-radius: 10px; padding: 0 10px; }
 #os-sector-form { display: grid; gap: 8px; max-width: 280px; }
 #os-sector-form select { min-height: 40px; border: 1px solid var(--border); border-radius: 10px; padding: 0 10px; }
 @media (max-width: 1100px) { .os-summary.is-support { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
@@ -176,6 +180,13 @@
           <span aria-hidden="true">📅</span>
           <span>{{ card.scheduled_date_label }}</span>
         </div>
+        <label class="os-card-status">Status
+          <select data-os-status aria-label="Alterar local de {{ card.empresa }}">
+            {% for option in columns %}
+            <option value="{{ option.id }}" {% if option.id == column.id %}selected{% endif %}>{{ option.name }}</option>
+            {% endfor %}
+          </select>
+        </label>
       </article>
       {% else %}
       <div class="activities-kanban-empty">Nenhuma ordem</div>
@@ -191,5 +202,5 @@
     <div id="os-order-modal-body">Carregando…</div>
   </div>
 </div>
-<script src="/static/js/os-kanban.js?v=6"></script>
+<script src="/static/js/os-kanban.js?v=7"></script>
 {% endblock %}

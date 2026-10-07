@@ -47,7 +47,11 @@
   }
 
   board.querySelectorAll(".activities-kanban-card").forEach(function (card) {
-    card.addEventListener("dragstart", function () {
+    card.addEventListener("dragstart", function (event) {
+      if (event.target.closest("select, label")) {
+        event.preventDefault();
+        return;
+      }
       suppressClick = true;
       dragged = card;
       card.classList.add("is-dragging");
@@ -61,7 +65,7 @@
         suppressClick = false;
         return;
       }
-      if (event.target.closest("a, button, textarea, input")) return;
+      if (event.target.closest("a, button, textarea, input, select, label")) return;
       openOrder(card.getAttribute("data-order-id"));
     });
   });
@@ -94,33 +98,69 @@
       dragged.setAttribute("data-current-queue", queueId);
       if (previous) countColumn(previous.closest(".activities-kanban-column"));
       countColumn(body.closest(".activities-kanban-column"));
-      var data = new FormData();
-      data.set("queue_id", queueId);
-      if (reopen) data.set("reopen", "1");
-      var sector = document.getElementById("os-board-sector");
-      if (sector) data.set("sector_id", sector.value);
-      var cadastroUrl = dragged.getAttribute("data-cadastro-url") || "";
-      var column = body.closest(".activities-kanban-column");
-      var titleEl = column && column.querySelector(".activities-kanban-column-title");
-      var isProposal = titleEl && titleEl.textContent.toLowerCase().indexOf("proposta") !== -1;
-      fetch("/atividades/os/" + encodeURIComponent(orderId) + "/fila", {
-        method: "POST",
-        body: data,
-      }).then(function (response) {
-        if (!response.ok) {
-          window.location.reload();
-          return "";
-        }
-        return response.text();
-      }).then(function (payload) {
-        var target = "";
-        if (payload && payload.charAt(0) === "/") target = payload.trim();
-        if (!target && queueId === "concluida") target = cadastroUrl;
-        if (!target && isProposal) target = "/atividades/os/" + encodeURIComponent(orderId) + "/proposta";
-        if (target) window.location.href = target;
-      }).catch(function () {
+      postMove(dragged, queueId, reopen);
+    });
+  });
+
+  function postMove(card, queueId, reopen) {
+    var orderId = card.getAttribute("data-order-id");
+    var data = new FormData();
+    data.set("queue_id", queueId);
+    if (reopen) data.set("reopen", "1");
+    var sector = document.getElementById("os-board-sector");
+    if (sector) data.set("sector_id", sector.value);
+    var cadastroUrl = card.getAttribute("data-cadastro-url") || "";
+    var column = card.closest(".activities-kanban-column");
+    var titleEl = column && column.querySelector(".activities-kanban-column-title");
+    var isProposal = titleEl && titleEl.textContent.toLowerCase().indexOf("proposta") !== -1;
+    fetch("/atividades/os/" + encodeURIComponent(orderId) + "/fila", {
+      method: "POST",
+      body: data,
+    }).then(function (response) {
+      if (!response.ok) {
         window.location.reload();
-      });
+        return "";
+      }
+      return response.text();
+    }).then(function (payload) {
+      var target = "";
+      if (payload && payload.charAt(0) === "/") target = payload.trim();
+      if (!target && queueId === "concluida") target = cadastroUrl;
+      if (!target && isProposal) target = "/atividades/os/" + encodeURIComponent(orderId) + "/proposta";
+      if (target) window.location.href = target;
+    }).catch(function () {
+      window.location.reload();
+    });
+  }
+
+  board.querySelectorAll("[data-os-status]").forEach(function (select) {
+    select.addEventListener("mousedown", function (event) { event.stopPropagation(); });
+    select.addEventListener("click", function (event) { event.stopPropagation(); });
+    select.addEventListener("change", function () {
+      var card = select.closest(".activities-kanban-card");
+      if (!card) return;
+      var queueId = select.value;
+      var fromQueue = card.getAttribute("data-current-queue");
+      if (!queueId || fromQueue === queueId) return;
+      var reopen = false;
+      if (fromQueue === "concluida") {
+        reopen = window.confirm("Esta ordem já foi concluída. Deseja realmente reabrir?");
+        if (!reopen) {
+          select.value = fromQueue;
+          return;
+        }
+      }
+      var body = select.closest(".activities-kanban-column-body");
+      var targetBody = board.querySelector('[data-drop-queue="' + queueId + '"]');
+      if (targetBody) {
+        var empty = targetBody.querySelector(".activities-kanban-empty");
+        if (empty) empty.remove();
+        targetBody.appendChild(card);
+        if (body) countColumn(body.closest(".activities-kanban-column"));
+        countColumn(targetBody.closest(".activities-kanban-column"));
+      }
+      card.setAttribute("data-current-queue", queueId);
+      postMove(card, queueId, reopen);
     });
   });
 
@@ -130,8 +170,33 @@
     });
     modal.addEventListener("submit", function (event) {
       var form = event.target;
-      if (!form || (form.id !== "os-update-form" && form.id !== "os-sector-form")) return;
+      if (!form || (form.id !== "os-update-form" && form.id !== "os-sector-form" && form.id !== "os-queue-form")) return;
       event.preventDefault();
+      if (form.id === "os-queue-form") {
+        var queueSelect = form.querySelector("[name=queue_id]");
+        var fromQueue = form.getAttribute("data-current-queue") || "";
+        var data = new FormData(form);
+        if (fromQueue === "concluida" && queueSelect && queueSelect.value !== "concluida") {
+          if (!window.confirm("Esta ordem já foi concluída. Deseja realmente reabrir?")) {
+            queueSelect.value = fromQueue;
+            return;
+          }
+          data.set("reopen", "1");
+        }
+        fetch(form.action, { method: "POST", body: data })
+          .then(function (response) {
+            if (!response.ok) throw new Error("fail");
+            return response.text();
+          })
+          .then(function (payload) {
+            var target = payload && payload.charAt(0) === "/" ? payload.trim() : "";
+            window.location.href = target || window.location.href;
+          })
+          .catch(function () {
+            window.location.reload();
+          });
+        return;
+      }
       var reloadBoard = form.id === "os-sector-form";
       fetch(form.action, { method: "POST", body: new FormData(form) })
         .then(function (response) {

@@ -56,10 +56,25 @@
       <a class="btn btn-small btn-secondary" href="/leads-e-empresas">Validar em empresa</a>
     </div>
     {% else %}
-    <p>Quando o cliente fechar, arraste para Concluída. O cadastro abre com estes dados.</p>
+    <p>Quando o cliente fechar, mude o status para Concluída. O cadastro abre com estes dados.</p>
     {% endif %}
   </section>
   {% endif %}
+
+  <section class="os-detail-block">
+    <h3>Status</h3>
+    <p>Escolha o local no Kanban. Concluída envia o cliente para o cadastro.</p>
+    <form id="os-queue-form" method="post" action="/atividades/os/{{ order.id }}/fila" data-current-queue="{{ order.queue_id }}">
+      <input type="hidden" name="sector_id" value="{{ order_sector_id }}">
+      <label for="os-queue-target">Local</label>
+      <select id="os-queue-target" name="queue_id">
+        {% for queue in order_queues %}
+        <option value="{{ queue.id }}" {% if order.queue_id == queue.id %}selected{% endif %}>{{ queue.name }}</option>
+        {% endfor %}
+      </select>
+      <button type="submit" class="btn btn-small">Alterar local</button>
+    </form>
+  </section>
 
   <section class="os-detail-block">
     <h3>Histórico</h3>

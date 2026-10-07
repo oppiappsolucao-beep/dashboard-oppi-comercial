@@ -373,6 +373,28 @@ def is_commercial_sector(sector_name: str) -> bool:
     return "comercial" in name
 
 
+def queue_choices(sector_name: str) -> tuple[str, list[dict]]:
+    """Colunas do Kanban do setor, para o status que muda o local do cliente."""
+    from app.services.org_registry import list_sector_queues, list_sectors
+
+    sector = next(
+        (
+            item
+            for item in list_sectors()
+            if normalize_text(item.get("name")).lower() == normalize_text(sector_name).lower()
+        ),
+        None,
+    )
+    sector_id = sector["id"] if sector else ""
+    choices = [{"id": ENTRY_QUEUE_ID, "name": ENTRY_QUEUE_NAME}]
+    if is_commercial_sector(sector_name):
+        choices.append({"id": CAMPAIGN_QUEUE_ID, "name": CAMPAIGN_QUEUE_NAME})
+    if sector_id:
+        choices.extend({"id": item["id"], "name": item["name"]} for item in list_sector_queues(sector_id))
+    choices.append({"id": DONE_QUEUE_ID, "name": DONE_QUEUE_NAME})
+    return sector_id, choices
+
+
 def _campaign_visible(card: dict, start: str, end: str) -> bool:
     """A coluna Campanha segue a data do lead, não o dia em que o card foi importado."""
     day = normalize_text(card.get("lead_date") or card.get("scheduled_date"))[:10]

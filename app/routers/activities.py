@@ -388,10 +388,18 @@ def _os_actor(request: Request) -> str:
 
 def _order_panel_context(order: dict, sector_notice: str = "") -> dict:
     from app.services.org_registry import list_sectors
+    from app.services.service_orders import queue_choices
 
     current = normalize_text(order.get("sector")).lower()
     sectors = [item for item in list_sectors() if normalize_text(item.get("name")).lower() != current]
-    return {"order": order, "redirect_sectors": sectors, "sector_notice": sector_notice}
+    sector_id, queues = queue_choices(order.get("sector") or "")
+    return {
+        "order": order,
+        "redirect_sectors": sectors,
+        "sector_notice": sector_notice,
+        "order_sector_id": sector_id,
+        "order_queues": queues,
+    }
 
 
 def _order_visible(request: Request, detail: dict) -> bool:
