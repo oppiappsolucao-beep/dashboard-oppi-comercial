@@ -44,6 +44,7 @@ SCHEDULE_DAYS = (
     ("dom", "Dom"),
 )
 SCHEDULE_DAY_KEYS = [key for key, _label in SCHEDULE_DAYS]
+TRAINING_SLOT_STARTS = tuple(f"{hour:02d}:00" for hour in range(8, 21))
 
 
 def _now() -> str:
@@ -162,7 +163,19 @@ def list_sectors() -> list[dict]:
 
 
 def empty_schedule() -> dict:
-    return {"days": [], "start": "", "end": ""}
+    return {"days": [], "slots": []}
+
+
+def slot_label(start: str) -> str:
+    text = normalize_text(start)
+    if not re.match(r"^\d{2}:\d{2}$", text):
+        return text
+    end_hour = int(text[:2]) + 1
+    return f"{text} – {end_hour:02d}:{text[3:]}"
+
+
+def training_slot_choices() -> list[dict]:
+    return [{"value": start, "label": slot_label(start)} for start in TRAINING_SLOT_STARTS]
 
 
 def _schedule_from_raw(raw: str) -> dict:
@@ -178,58 +191,95 @@ def _schedule_from_raw(raw: str) -> dict:
         if key in SCHEDULE_DAY_KEYS and key not in days:
             days.append(key)
     days.sort(key=SCHEDULE_DAY_KEYS.index)
-    start = normalize_text(data.get("start"))
-    end = normalize_text(data.get("end"))
-    if not re.match(r"^\d{2}:\d{2}$", start):
-        start = ""
-    if not re.match(r"^\d{2}:\d{2}$", end):
-        end = ""
-    return {"days": days, "start": start, "end": end}
+    slots = []
+    for item in data.get("slots") or []:
+        key = normalize_text(item)[:5]
+        if key in TRAINING_SLOT_STARTS and key not in slots:
+            slots.append(key)
+    if not slots:
+        start = normalize_text(data.get("start"))[:5]
+        end = normalize_text(data.get("end"))[:5]
+        if re.match(r"^\d{2}:\d{2}$", start) and re.match(r"^\d{2}:\d{2}$", end) and start < end:
+            slots = [key for key in TRAINING_SLOT_STARTS if start <= key < end]
+    slots.sort()
+    return {"days": days, "slots": slots}
 
 
 def schedule_label(schedule: dict) -> str:
     days = schedule.get("days") or []
-    start = schedule.get("start") or ""
-    end = schedule.get("end") or ""
-    if not days or not start or not end:
+    slots = schedule.get("slots") or []
+    if not days or not slots:
         return "Agenda não definida"
     names = [label for key, label in SCHEDULE_DAYS if key in days]
-    return f"{', '.join(names)} · {start}–{end}"
+    periods = ", ".join(slot_label(slot) for slot in slots)
+    return f"{', '.join(names)} · {periods}"
 
 
-def parse_trainer_schedule(days, start: str, end: str) -> str:
-    chosen = []
+def parse_trainer_schedule(days, slots) -> str:
+    chosen_days = []
     for day in days or []:
         key = normalize_text(day).lower()
-        if key in SCHEDULE_DAY_KEYS and key not in chosen:
-            chosen.append(key)
-    chosen.sort(key=SCHEDULE_DAY_KEYS.index)
-    start_text = normalize_text(start)
-    end_text = normalize_text(end)
-    if not chosen:
+        if key in SCHEDULE_DAY_KEYS and key not in chosen_days:
+            chosen_days.append(key)
+    chosen_days.sort(key=SCHEDULE_DAY_KEYS.index)
+    chosen_slots = []
+    for slot in slots or []:
+        key = normalize_text(slot)[:5]
+        if key in TRAINING_SLOT_STARTS and key not in chosen_slots:
+            chosen_slots.append(key)
+    chosen_slots.sort()
+    if not chosen_days:
         raise ValueError("Marque os dias em que o treinador atende.")
-    if not re.match(r"^\d{2}:\d{2}$", start_text) or not re.match(r"^\d{2}:\d{2}$", end_text):
-        raise ValueError("Informe o horário de entrada e de saída.")
-    if start_text >= end_text:
-        raise ValueError("O horário de saída precisa ser depois da entrada.")
-    return json.dumps({"days": chosen, "start": start_text, "end": end_text}, ensure_ascii=False)
+    if not chosen_slots:
+        raise ValueError("Marque os horários de 1 hora em que o treinador atende.")
+    return json.dumps({"days": chosen_days, "slots": chosen_slots}, ensure_ascii=False)
 
 
 def ensure_training_slot(trainer: dict, day: str, hour: str) -> None:
-    """O horário precisa caber na agenda do treinador."""
+    """O horário precisa ser um período de 1 hora da agenda do treinador."""
     schedule = trainer.get("schedule") or empty_schedule()
-    if not schedule.get("days") or not schedule.get("start") or not schedule.get("end"):
-        raise ValueError(f"Cadastre a agenda de {trainer.get('name') or 'treinador'} em Sistema.")
+    name = trainer.get("name") or "O treinador"
+    slots = schedule.get("slots") or []
+    days = schedule.get("days") or []
+    if not days or not slots:
+        raise ValueError(f"Cadastre os horários de {name} em Sistema.")
+    hour_text = normalize_text(hour)[:5]
     try:
-        weekday = datetime.fromisoformat(day).weekday()
+        weekday = datetime.fromisoformat(normalize_text(day)).weekday()
     except ValueError as error:
         raise ValueError("Informe a data do treinamento.") from error
-    if SCHEDULE_DAY_KEYS[weekday] not in schedule["days"]:
-        raise ValueError(f"{trainer.get('name')} não atende nesse dia da semana.")
-    if not (schedule["start"] <= hour < schedule["end"]):
-        raise ValueError(
-            f"{trainer.get('name')} atende das {schedule['start']} às {schedule['end']}."
-        )
+    if SCHEDULE_DAY_KEYS[weekday] not in days:
+        raise ValueError(f"{name} não atende nesse dia da semana.")
+    if hour_text not in slots:
+        periods = ", ".join(slot_label(slot) for slot in slots)
+        raise ValueError(f"{name} atende nestes horários: {periods}.")
+
+
+def available_training_slots(trainer: dict, day: str) -> tuple[list[dict], str]:
+    """Horários de 1 hora livres para o treinador na data escolhida."""
+    schedule = trainer.get("schedule") or empty_schedule()
+    name = trainer.get("name") or "O treinador"
+    slots = schedule.get("slots") or []
+    days = schedule.get("days") or []
+    if not days or not slots:
+        return [], "Este treinador ainda não tem horários cadastrados."
+    try:
+        weekday = datetime.fromisoformat(normalize_text(day)).weekday()
+    except ValueError:
+        return [], "Informe a data do treinamento."
+    if SCHEDULE_DAY_KEYS[weekday] not in days:
+        return [], f"{name} não atende nesse dia da semana."
+    from app.services.service_orders import trainer_busy_hours
+
+    busy = trainer_busy_hours(name, day)
+    open_slots = [
+        {"value": start, "label": slot_label(start)}
+        for start in slots
+        if start not in busy
+    ]
+    if not open_slots:
+        return [], "Nenhum horário livre neste dia."
+    return open_slots, ""
 
 
 def list_people(kind: str | None = None) -> list[dict]:

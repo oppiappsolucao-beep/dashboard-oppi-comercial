@@ -439,8 +439,11 @@ async def schedule_company_training(request: Request, sheet_row: int):
         empresa = normalize_text(form.get("empresa")) or "Cliente"
         user = normalize_text(request.session.get("username")) or "Usuário"
         schedule_training(payload, int(sheet_row), empresa, user)
+        from app.services.org_registry import slot_label
+
         trainer_name = trainer.get("name") if trainer else "o treinador"
-        request.session["edit_success"] = f"Treinamento agendado com {trainer_name} em {day} às {hour}."
+        period = slot_label(hour) if hour else hour
+        request.session["edit_success"] = f"Treinamento agendado com {trainer_name} em {day}, {period}."
     except ValueError as error:
         request.session["edit_error"] = str(error)
     except Exception as error:

@@ -284,7 +284,7 @@
 {% elif active_tab == 'treinadores' %}
 <section class="panel org-panel">
   <h2>{% if editing %}Editar treinador{% else %}Treinador{% endif %}</h2>
-  <p>Defina os dias e o horário de trabalho. Uma pessoa pode entrar às 8h e sair às 13h; outra, entrar às 13h e sair às 19h. O login libera Kanban, Empresas e a Agenda.</p>
+  <p>Marque os dias e os horários de 1 hora em que este treinador atende. Exemplo: 09:00 – 10:00, 10:00 – 11:00 e 11:00 – 12:00. Na empresa, ao escolher o dia e o treinador, aparecem só os horários livres.</p>
   <form method="post" action="/cadastros/pessoas" class="org-form">
     <input type="hidden" name="kind" value="treinador">
     {% if editing %}<input type="hidden" name="person_id" value="{{ editing.id }}">{% endif %}
@@ -312,8 +312,17 @@
           {% endfor %}
         </div>
       </div>
-      <div class="form-group"><label>Entrada</label><input name="schedule_start" type="time" required value="{{ editing.schedule.start if editing else '' }}"></div>
-      <div class="form-group"><label>Saída</label><input name="schedule_end" type="time" required value="{{ editing.schedule.end if editing else '' }}"></div>
+      <div class="form-group full">
+        <label>Horários de atendimento</label>
+        <div class="org-day-list">
+          {% for slot in training_slots %}
+          <label class="org-day">
+            <input type="checkbox" name="schedule_slot" value="{{ slot.value }}" {% if editing and slot.value in editing.schedule.slots %}checked{% endif %}>
+            <span>{{ slot.label }}</span>
+          </label>
+          {% endfor %}
+        </div>
+      </div>
     </div>
     <div class="org-form-actions">
       <button type="submit" class="btn">{% if editing %}Salvar alterações{% else %}Cadastrar treinador{% endif %}</button>

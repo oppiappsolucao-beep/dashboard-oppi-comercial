@@ -470,6 +470,22 @@ async def registration_lead_status(request: Request):
     return RedirectResponse(url="/cadastro/novo", status_code=303)
 
 
+@router.get("/cadastro/treinadores/{trainer_id}/horarios")
+async def trainer_open_hours(request: Request, trainer_id: str, data: str = ""):
+    if not request.session.get("authenticated"):
+        return JSONResponse({"slots": [], "message": "Faça login para ver os horários."}, status_code=401)
+    from app.services.access_scope import enforce_access
+    from app.services.org_registry import available_training_slots, get_person
+
+    if enforce_access(request):
+        return JSONResponse({"slots": [], "message": "Sem acesso aos horários."}, status_code=403)
+    trainer = get_person(trainer_id)
+    if trainer is None or trainer.get("kind") != "treinador":
+        return JSONResponse({"slots": [], "message": "Treinador não encontrado."}, status_code=404)
+    slots, message = available_training_slots(trainer, data)
+    return JSONResponse({"slots": slots, "message": message})
+
+
 @router.get("/cadastro/novo", response_class=HTMLResponse)
 async def new_registration_page(request: Request):
     redirect = require_auth(request)

@@ -3,7 +3,7 @@
     <span class="client-edit-section-icon">🎓</span>
     <div>
       <h2>Treinamento</h2>
-      <p>Quando o cliente contratar alguém, como uma pessoa de RH, agende aqui o dia em que o treinador vai mostrar o sistema.</p>
+      <p>Quando o cliente contratar alguém, como uma pessoa de RH, escolha o treinador e o dia. A lista mostra só os horários de 1 hora que ainda estão livres.</p>
     </div>
   </div>
 
@@ -50,8 +50,10 @@
       <input type="date" name="training_date" form="company-training-form" required value="{{ today_iso }}">
     </div>
     <div class="form-group">
-      <label>Hora</label>
-      <input type="time" name="training_time" form="company-training-form" required value="09:00">
+      <label>Horário</label>
+      <select name="training_time" id="training-time" form="company-training-form" required>
+        <option value="">Selecione o dia e o treinador</option>
+      </select>
     </div>
     <div class="form-group full">
       <label>Link da videoconferência</label>
@@ -60,7 +62,7 @@
   </div>
   <button type="submit" class="btn" form="company-training-form">Agendar treinamento</button>
   {% else %}
-  <p>Cadastre o treinador em Sistema, com os dias e o horário de trabalho, para agendar aqui.</p>
+  <p>Cadastre o treinador em Sistema, com os dias e os horários de 1 hora, para agendar aqui.</p>
   {% endif %}
 </section>
 <style>
@@ -68,3 +70,53 @@
   .registration-training-list li { padding: 10px 12px; border-radius: 12px; background: #F8FAFC; }
   .registration-training-list span { display: block; margin-top: 4px; color: var(--muted); }
 </style>
+<script>
+  (function () {
+    var trainer = document.querySelector("[name='training_trainer_id']");
+    var day = document.querySelector("[name='training_date']");
+    var hour = document.getElementById("training-time");
+    if (!trainer || !day || !hour) return;
+
+    function fillHours(message, slots) {
+      hour.innerHTML = "";
+      var placeholder = document.createElement("option");
+      placeholder.value = "";
+      placeholder.textContent = message || "Selecione";
+      hour.appendChild(placeholder);
+      (slots || []).forEach(function (slot) {
+        var option = document.createElement("option");
+        option.value = slot.value;
+        option.textContent = slot.label;
+        hour.appendChild(option);
+      });
+    }
+
+    function loadHours() {
+      var trainerId = trainer.value;
+      var date = day.value;
+      if (!trainerId || !date) {
+        fillHours("Selecione o dia e o treinador", []);
+        return;
+      }
+      fillHours("Carregando horários…", []);
+      fetch("/cadastro/treinadores/" + encodeURIComponent(trainerId) + "/horarios?data=" + encodeURIComponent(date), {
+        headers: { "Accept": "application/json" }
+      }).then(function (response) {
+        return response.json();
+      }).then(function (data) {
+        var slots = data && data.slots ? data.slots : [];
+        if (!slots.length) {
+          fillHours((data && data.message) || "Nenhum horário livre neste dia", []);
+          return;
+        }
+        fillHours("Selecione", slots);
+      }).catch(function () {
+        fillHours("Não consegui carregar os horários", []);
+      });
+    }
+
+    trainer.addEventListener("change", loadHours);
+    day.addEventListener("change", loadHours);
+    if (trainer.value && day.value) loadHours();
+  })();
+</script>

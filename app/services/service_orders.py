@@ -150,7 +150,10 @@ def _training_bits(description: str) -> dict:
         hour = hour_match.group(1)
     if trainee_match:
         trainee = normalize_text(trainee_match.group(1))
-    return {"hour": hour, "trainee": trainee}
+    hour_label = hour
+    if re.match(r"^\d{2}:\d{2}$", hour):
+        hour_label = f"{hour} – {int(hour[:2]) + 1:02d}:{hour[3:]}"
+    return {"hour": hour, "hour_label": hour_label, "trainee": trainee}
 
 
 def list_training_appointments(responsible: str = "") -> list[dict]:
@@ -176,13 +179,19 @@ def list_training_appointments(responsible: str = "") -> list[dict]:
     return items
 
 
-def trainer_is_busy(responsible: str, day: str, hour: str) -> bool:
+def trainer_busy_hours(responsible: str, day: str) -> set[str]:
     target_day = normalize_text(day)
-    target_hour = normalize_text(hour)
+    hours: set[str] = set()
     for item in list_training_appointments(responsible):
-        if item.get("scheduled_date") == target_day and item.get("hour") == target_hour:
-            return True
-    return False
+        if item.get("status") == "cancelada":
+            continue
+        if item.get("scheduled_date") == target_day and item.get("hour"):
+            hours.add(item["hour"])
+    return hours
+
+
+def trainer_is_busy(responsible: str, day: str, hour: str) -> bool:
+    return normalize_text(hour)[:5] in trainer_busy_hours(responsible, day)
 
 
 def list_service_orders(tenant_id: str | None, sheet_row: int) -> list[dict]:

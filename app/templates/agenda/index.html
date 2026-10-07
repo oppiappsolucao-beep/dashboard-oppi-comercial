@@ -27,7 +27,7 @@
     {% for item in upcoming %}
     <article class="panel agenda-card">
       <strong>{{ item.empresa }}</strong>
-      <span>{{ item.scheduled_date_label }}{% if item.hour %} às {{ item.hour }}{% endif %} · {{ item.responsible }}</span>
+      <span>{{ item.scheduled_date_label }}{% if item.hour_label %} · {{ item.hour_label }}{% elif item.hour %} às {{ item.hour }}{% endif %} · {{ item.responsible }}</span>
       {% if item.trainee %}<span>Treinar: {{ item.trainee }}</span>{% endif %}
       <p>{{ item.description }}</p>
     </article>
@@ -44,7 +44,7 @@
     {% for item in past %}
     <article class="panel agenda-card">
       <strong>{{ item.empresa }}</strong>
-      <span>{{ item.scheduled_date_label }}{% if item.hour %} às {{ item.hour }}{% endif %} · {{ item.responsible }}</span>
+      <span>{{ item.scheduled_date_label }}{% if item.hour_label %} · {{ item.hour_label }}{% elif item.hour %} às {{ item.hour }}{% endif %} · {{ item.responsible }}</span>
       {% if item.trainee %}<span>Treinar: {{ item.trainee }}</span>{% endif %}
     </article>
     {% endfor %}

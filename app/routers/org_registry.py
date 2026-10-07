@@ -12,6 +12,7 @@ from app.services.org_registry import (
     list_people,
     parse_trainer_schedule,
     list_sectors,
+    training_slot_choices,
     remove_person,
     remove_sector,
     save_person,
@@ -53,6 +54,7 @@ def _page(request: Request, tab: str):
             "funcionarios": list_people("funcionario"),
             "representantes": list_people("representante"),
             "treinadores": list_people("treinador"),
+            "training_slots": training_slot_choices(),
             "access_options": ACCESS_OPTIONS,
             "ufs": BRAZIL_UFS,
             "editing": editing,
@@ -148,8 +150,7 @@ async def org_save_person(request: Request):
         if kind == "treinador":
             schedule_json = parse_trainer_schedule(
                 form.getlist("schedule_day"),
-                form.get("schedule_start", ""),
-                form.get("schedule_end", ""),
+                form.getlist("schedule_slot"),
             )
         person = save_person(
             kind=kind,
