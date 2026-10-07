@@ -473,9 +473,15 @@
           return;
         }
         editForm.dataset.saving = "1";
-        editForm.querySelectorAll('button[type="submit"]').forEach(function (button) {
-          button.disabled = true;
-        });
+        var submitter = event.submitter;
+        if (submitter && submitter.name && !editForm.querySelector("input[data-kept-action]")) {
+          var kept = document.createElement("input");
+          kept.type = "hidden";
+          kept.name = submitter.name;
+          kept.value = submitter.value;
+          kept.setAttribute("data-kept-action", "1");
+          editForm.appendChild(kept);
+        }
       });
     }
     document.querySelectorAll(".registration-tipo-switch").forEach(initTipoSwitch);

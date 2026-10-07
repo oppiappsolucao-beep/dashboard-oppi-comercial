@@ -473,12 +473,13 @@ async def contract_edit_submit(request: Request, sheet_row: int):
 
         if action == "generate_invoice":
             payments = parse_payment_history_from_form(form)
-            save_payment_history(DEFAULT_TENANT_ID, sheet_row, payments)
+            save_payment_history(DEFAULT_TENANT_ID, sheet_row, payments, mirror_sheet=False)
             previous_plan = load_billing_plan(DEFAULT_TENANT_ID, sheet_row)
             plan = save_billing_plan(
                 DEFAULT_TENANT_ID,
                 sheet_row,
                 parse_billing_plan_from_form(form, previous=previous_plan),
+                mirror_sheet=False,
             )
             df, columns = get_prepared_data()
             row = _get_row_by_sheet(df, sheet_row)

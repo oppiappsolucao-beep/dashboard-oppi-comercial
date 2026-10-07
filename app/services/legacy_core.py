@@ -2225,6 +2225,11 @@ def update_company_in_sheet(sheet_row: int, payload: dict) -> None:
     if not headers:
         raise RuntimeError("A primeira linha da planilha precisa conter os cabeçalhos.")
 
+    if int(sheet_row) < 2 or int(sheet_row) > int(worksheet.row_count or 0):
+        raise ValueError(
+            f"A linha {int(sheet_row)} não existe na aba {worksheet.title}."
+        )
+
     validate_unique_company_registration(
         payload,
         worksheet,
@@ -3133,6 +3138,9 @@ def update_company_commercial_fields(sheet_row: int, payload: dict) -> None:
 
     if not headers:
         raise RuntimeError("A primeira linha da planilha precisa conter os cabeçalhos.")
+
+    if int(sheet_row) < 2 or int(sheet_row) > int(worksheet.row_count or 0):
+        return
 
     current_row = worksheet.row_values(int(sheet_row))
     row_values = list(current_row) + [""] * max(0, len(headers) - len(current_row))
