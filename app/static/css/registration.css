@@ -2085,7 +2085,30 @@
   }
 
   .client-edit-tabs {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    grid-template-columns: none;
+  }
+
+  .client-edit-tab {
+    flex: 0 0 auto;
+  }
+
+  .client-edit-tab-sub {
+    white-space: nowrap;
+  }
+
+  .client-edit-footer,
+  .client-edit-footer-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .client-edit-footer .btn {
+    width: 100%;
+    justify-content: center;
   }
 
   .client-edit-tabs-new {

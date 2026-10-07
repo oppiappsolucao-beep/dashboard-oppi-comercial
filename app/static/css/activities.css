@@ -1280,6 +1280,23 @@ body.activity-drawer-open {
 }
 
 @media (max-width: 900px) {
+  .activities-kanban-board {
+    display: flex;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .activities-kanban-column {
+    flex: 0 0 min(78vw, 260px);
+    width: min(78vw, 260px);
+    min-width: min(78vw, 260px);
+    max-width: 280px;
+  }
+
   .activities-filter-bar {
     grid-template-columns: 1fr;
   }

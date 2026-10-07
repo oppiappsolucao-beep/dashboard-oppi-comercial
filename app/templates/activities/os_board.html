@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
-<link rel="stylesheet" href="/static/css/activities.css?v={{ static_version }}-scroll2">
+<link rel="stylesheet" href="/static/css/activities.css?v={{ static_version }}-mobile">
 <style>
 .os-queue-form, .os-sector-switch { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
 .os-queue-form input, .os-sector-switch select { height: 40px; border: 1px solid var(--border); border-radius: 10px; padding: 0 10px; }
@@ -30,11 +30,17 @@
 #os-sector-form select { min-height: 40px; border: 1px solid var(--border); border-radius: 10px; padding: 0 10px; }
 @media (max-width: 1100px) { .os-summary.is-support { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 900px) { .os-summary, .os-summary.is-support { grid-template-columns: 1fr 1fr; } }
-@media (max-width: 640px) { .os-summary { grid-template-columns: 1fr; } }
+@media (max-width: 640px) {
+  .os-summary, .os-summary.is-support, .os-summary.is-columns { grid-template-columns: 1fr 1fr; }
+  .os-period, .os-sector-switch, .os-queue-form { flex-direction: column; align-items: stretch; }
+  .os-period input, .os-period button, .os-sector-switch select, .os-queue-form input, .os-queue-form button { width: 100%; }
+  .os-column-tools { flex-wrap: wrap; }
+  .activities-kanban-card-title, .activities-kanban-card-meta { overflow-wrap: anywhere; }
+}
 .os-modal[hidden] { display: none; }
-.os-modal { position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; padding: 16px; }
+.os-modal { position: fixed; inset: 0; z-index: 200; display: grid; place-items: center; padding: 16px; padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
 .os-modal-backdrop { position: absolute; inset: 0; background: rgba(15, 23, 42, 0.45); }
-.os-modal-card { position: relative; width: min(440px, 100%); max-height: min(80vh, 720px); overflow: auto; background: #fff; border-radius: 16px; padding: 18px 18px 16px; box-shadow: 0 18px 50px rgba(15, 23, 42, 0.2); }
+.os-modal-card { position: relative; width: min(440px, 100%); max-height: min(80dvh, 720px); overflow: auto; background: #fff; border-radius: 16px; padding: 18px 18px 16px; box-shadow: 0 18px 50px rgba(15, 23, 42, 0.2); }
 .os-modal-close { position: absolute; top: 10px; right: 10px; border: 0; background: transparent; font-size: 1.4rem; cursor: pointer; }
 .os-detail-protocol { margin: 0 28px 4px 0; color: var(--muted); font-size: 0.82rem; }
 .os-detail h2 { margin: 0 28px 12px 0; font-size: 1.15rem; }

@@ -176,6 +176,18 @@
 }
 
 @media (max-width: 700px) {
+  .org-form .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .org-day-list {
+    max-width: 100%;
+  }
+
+  .org-card-head {
+    flex-direction: column;
+  }
+
   .org-access-list,
   .org-service-row {
     grid-template-columns: 1fr;
