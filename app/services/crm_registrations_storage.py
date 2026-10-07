@@ -778,6 +778,47 @@ def _remember_folha1_sheet_row(registration_id: int, folha1_row: int) -> None:
         db.close()
 
 
+def _remember_named_sheet_row(sheet_row: int, key: str, value: int) -> None:
+    """Guarda no cadastro a linha real de uma aba. O id interno (sheet_row) não é essa linha."""
+    if not sheet_row or not key or int(value) <= 1:
+        return
+    row = get_registration_by_sheet_row(int(sheet_row))
+    if row is None:
+        return
+    db = SessionLocal()
+    try:
+        current = db.get(CrmRegistration, int(row.id))
+        if current is None:
+            return
+        extras = _json_loads(current.extras_json, {})
+        if int(extras.get(key) or 0) == int(value):
+            return
+        extras[key] = int(value)
+        current.extras_json = _json_dumps(extras)
+        db.commit()
+    finally:
+        db.close()
+
+
+def _worksheet_accepts_row(row_number: int) -> bool:
+    """False quando a linha passa do tamanho da aba (ex.: id 851 numa aba de 119 linhas)."""
+    if int(row_number) <= 1:
+        return False
+    try:
+        from app.config import settings
+        from app.services.legacy_core import _open_worksheet, get_gsheet_client
+
+        if not settings.sheets_configured:
+            return False
+        client = get_gsheet_client()
+        spreadsheet = client.open_by_key(settings.sheet_id)
+        worksheet = _open_worksheet(spreadsheet, settings.worksheet_name)
+        return int(row_number) <= int(worksheet.row_count or 0)
+    except Exception:
+        logger.exception("Não consegui medir a aba da planilha")
+        return False
+
+
 def _access_fields_from_registration(row: CrmRegistration) -> dict[str, str]:
     actions = _json_loads(row.actions_json, {})
     payload: dict[str, str] = {}
@@ -865,6 +906,8 @@ def _mirror_registration_to_folha1(sheet_row: int, *, tenant_id: str | None = No
         payload.update(_access_fields_from_registration(row))
         extras = payload.get("extras") if isinstance(payload.get("extras"), dict) else {}
         stored_row = int(extras.get("folha1_sheet_row") or 0)
+        if stored_row > 1 and not _worksheet_accepts_row(stored_row):
+            stored_row = 0
         if stored_row > 1:
             target = stored_row
         elif payload.get("is_filial"):

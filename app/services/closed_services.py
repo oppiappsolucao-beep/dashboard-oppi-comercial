@@ -171,6 +171,7 @@ def save_closed_services(
     items: list[dict],
     *,
     sync_sheet: bool = True,
+    mirror_sheet: bool = True,
 ) -> dict:
     normalized = [_normalize_item(item) for item in items if isinstance(item, dict)]
     if not normalized:
@@ -185,6 +186,7 @@ def save_closed_services(
             "forma_pagamento": primary.get("forma_pagamento", ""),
             "vencimento": primary.get("vencimento", ""),
         },
+        mirror_sheet=mirror_sheet,
     )
     if sync_sheet:
         sync_closed_services_to_sheet(sheet_row, tenant_id, normalized)

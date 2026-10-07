@@ -375,6 +375,8 @@ def _find_row(values: list[list[str]], header_at: int, headers: list[str], paylo
     name_index = mapping.get("empresa")
     target_cnpj = _digits(payload.get("cnpj", ""))
     target_name = normalize_search_text(payload.get("empresa"))
+    cnpj_fallback = None
+    name_fallback = None
     for offset, raw in enumerate(values[header_at + 1 :], start=header_at + 2):
         row = list(raw)
         if target_cnpj and cnpj_index is not None and cnpj_index < len(row):
@@ -383,11 +385,98 @@ def _find_row(values: list[list[str]], header_at: int, headers: list[str], paylo
         if target_name and name_index is not None and name_index < len(row):
             if normalize_search_text(row[name_index]) == target_name:
                 return offset
-    return None
+        if target_cnpj and cnpj_fallback is None and any(_digits(cell) == target_cnpj for cell in row):
+            cnpj_fallback = offset
+        if target_name and name_fallback is None and any(normalize_search_text(cell) == target_name for cell in row):
+            name_fallback = offset
+    return cnpj_fallback or name_fallback
 
 
-def save_registration_on_raissa(form: dict, billing: dict | None = None) -> dict:
+def _merge_saved_registration(form: dict, crm_sheet_row: int | None) -> tuple[dict, int]:
+    """Completa o formulário com o cadastro já salvo. A linha lembrada é da aba Raissa, não do id interno."""
+    merged = dict(form)
+    remembered = 0
+    if not crm_sheet_row:
+        return merged, remembered
+    try:
+        from app.services.crm_registrations_storage import (
+            get_registration_by_sheet_row,
+            registration_to_payload,
+        )
+
+        row = get_registration_by_sheet_row(int(crm_sheet_row))
+    except Exception:
+        log.warning("Não consegui ler o cadastro %s para a aba Raissa", crm_sheet_row)
+        return merged, remembered
+    if row is None:
+        return merged, remembered
+    saved = registration_to_payload(row)
+    for key, value in saved.items():
+        if key in {"extras", "payment_history", "closed_services", "sheet_row", "id"}:
+            continue
+        if not normalize_text(merged.get(key)) and normalize_text(value):
+            merged[key] = value
+    extras = saved.get("extras") if isinstance(saved.get("extras"), dict) else {}
+    try:
+        remembered = int(extras.get("raissa_sheet_row") or 0)
+    except (TypeError, ValueError):
+        remembered = 0
+    return merged, remembered
+
+
+def _remember_raissa_sheet_row(crm_sheet_row: int | None, raissa_row: int) -> None:
+    if not crm_sheet_row or int(raissa_row) <= 1:
+        return
+    try:
+        from app.services.crm_registrations_storage import _remember_named_sheet_row
+
+        _remember_named_sheet_row(int(crm_sheet_row), "raissa_sheet_row", int(raissa_row))
+    except Exception:
+        log.warning("Não consegui lembrar a linha Raissa do cadastro %s", crm_sheet_row)
+
+
+def _row_on_sheet(row_number: int, values: list[list[str]], header_at: int) -> int | None:
+    """Linha que já existe na aba. O id interno do cadastro (ex.: 851) não entra aqui."""
+    try:
+        number = int(row_number)
+    except (TypeError, ValueError):
+        return None
+    if number <= header_at + 1 or number > len(values):
+        return None
+    return number
+
+
+def _write_raissa_row(worksheet, row_number: int, row_values: list[str]) -> None:
+    width = len(row_values)
+    if width < 1 or int(row_number) < 2:
+        raise RuntimeError("Linha da aba Raissa sem conteúdo para gravar.")
+    limit = int(worksheet.row_count or 0)
+    if limit and int(row_number) > limit:
+        # Só abre a próxima linha livre. Nunca estica a aba até o id interno do cadastro.
+        if int(row_number) > limit + 3:
+            raise RuntimeError(
+                f"A aba {worksheet.title} tem {limit} linhas e o cliente não foi encontrado nelas."
+            )
+        worksheet.add_rows(int(row_number) - limit + 2)
+    from gspread.utils import rowcol_to_a1
+
+    end = rowcol_to_a1(int(row_number), width)
+    worksheet.update(
+        [row_values],
+        f"A{int(row_number)}:{end}",
+        value_input_option="USER_ENTERED",
+    )
+
+
+def save_registration_on_raissa(
+    form: dict,
+    billing: dict | None = None,
+    *,
+    crm_sheet_row: int | None = None,
+    update_only: bool = False,
+) -> dict:
     """Cria ou atualiza o cliente na aba Raissa. Não levanta: devolve ok/aviso."""
+    form, remembered_row = _merge_saved_registration(form, crm_sheet_row)
     payload = payload_for_raissa(form, billing)
     if not payload.get("empresa"):
         return {"ok": False, "aviso": "Sem nome de empresa para gravar na aba Raissa."}
@@ -410,11 +499,18 @@ def save_registration_on_raissa(form: dict, billing: dict | None = None) -> dict
         headers = ensure_raissa_columns(headers)
         if headers != [normalize_text(cell) for cell in (values[header_at] if values else [])]:
             worksheet.update(
-                f"A{header_at + 1}",
                 [headers],
+                f"A{header_at + 1}",
                 value_input_option="USER_ENTERED",
             )
-        row_number = _find_row(values, header_at, headers, payload)
+        row_number = _row_on_sheet(remembered_row, values, header_at)
+        if not row_number:
+            row_number = _find_row(values, header_at, headers, payload)
+        if not row_number and update_only:
+            return {
+                "ok": False,
+                "aviso": "Não encontrei este cliente na aba Raissa. O serviço ficou salvo no cadastro.",
+            }
         if not row_number:
             payload["status_cadastro"] = "1 Boleto Aguardando"
         existing = []
@@ -423,15 +519,10 @@ def save_registration_on_raissa(form: dict, billing: dict | None = None) -> dict
         row_values = apply_raissa_values(existing, headers, payload, only_filled=bool(row_number))
         if not row_number:
             row_number = max(len(values), header_at + 1) + 1
-            if not any(normalize_text(cell) for cell in (values[-1] if values else [])):
+            if values and not any(normalize_text(cell) for cell in values[-1]):
                 row_number = max(len(values), header_at + 1)
-        if row_number > int(worksheet.row_count or 0):
-            worksheet.add_rows(row_number - int(worksheet.row_count) + 5)
-        worksheet.update(
-            f"A{row_number}",
-            [row_values],
-            value_input_option="USER_ENTERED",
-        )
+        _write_raissa_row(worksheet, int(row_number), row_values)
+        _remember_raissa_sheet_row(crm_sheet_row, int(row_number))
         invalidate_worksheet_cache(worksheet.title)
         return {"ok": True, "aba": worksheet.title, "linha": row_number, "aviso": ""}
     except Exception as exc:

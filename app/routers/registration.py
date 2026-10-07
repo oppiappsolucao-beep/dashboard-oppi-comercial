@@ -33,11 +33,11 @@ from config.crm_options import CHANNEL_OPTIONS, PIPELINE_STAGE_OPTIONS, PRIORITY
 router = APIRouter()
 
 
-def _save_on_raissa_note(form_dict: dict, billing_plan: dict | None) -> str:
+def _save_on_raissa_note(form_dict: dict, billing_plan: dict | None, sheet_row: int | None = None) -> str:
     try:
         from app.services.raissa_company_sync import save_registration_on_raissa
 
-        result = save_registration_on_raissa(form_dict, billing_plan)
+        result = save_registration_on_raissa(form_dict, billing_plan, crm_sheet_row=sheet_row)
     except Exception:
         return " Não consegui gravar na aba Raissa agora."
     if result.get("ok"):
@@ -467,7 +467,7 @@ async def new_registration_submit(request: Request):
                 sheet_row,
                 parse_billing_plan_from_form(form),
             )
-        raissa_note = _save_on_raissa_note(form_dict, billing_plan)
+        raissa_note = _save_on_raissa_note(form_dict, billing_plan, sheet_row if int(sheet_row or 0) > 0 else None)
 
         empresa = normalize_text(form_dict.get("empresa"))
         status = normalize_text(form_dict.get("status"))

@@ -98,7 +98,13 @@ def parse_payment_history_from_form(form: Any) -> list[dict]:
     return [item for item in items if _has_payment_data(item)]
 
 
-def save_payment_history(tenant_id: str | None, sheet_row: int, items: list[dict]) -> list[dict]:
+def save_payment_history(
+    tenant_id: str | None,
+    sheet_row: int,
+    items: list[dict],
+    *,
+    mirror_sheet: bool = True,
+) -> list[dict]:
     if not sheet_row:
         return []
     normalized = [_normalize_payment(item) for item in items if isinstance(item, dict)]
@@ -116,7 +122,7 @@ def save_payment_history(tenant_id: str | None, sheet_row: int, items: list[dict
         }
         for item in normalized
     ]
-    save_lead_action(tenant_id, sheet_row, {"payment_history": payload_items})
+    save_lead_action(tenant_id, sheet_row, {"payment_history": payload_items}, mirror_sheet=mirror_sheet)
     return load_payment_history(tenant_id, sheet_row)
 
 

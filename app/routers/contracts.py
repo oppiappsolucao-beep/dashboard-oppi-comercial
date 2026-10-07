@@ -107,11 +107,22 @@ def _list_url_for_from_page(from_page: str = "") -> str:
     }.get(normalize_text(from_page).lower(), _CADASTRO_LIST_URL)
 
 
-def _raissa_save_note(form_dict: dict, billing_plan: dict | None) -> str:
+def _raissa_save_note(
+    form_dict: dict,
+    billing_plan: dict | None,
+    *,
+    sheet_row: int | None = None,
+    update_only: bool = False,
+) -> str:
     try:
         from app.services.raissa_company_sync import save_registration_on_raissa
 
-        result = save_registration_on_raissa(form_dict, billing_plan)
+        result = save_registration_on_raissa(
+            form_dict,
+            billing_plan,
+            crm_sheet_row=sheet_row,
+            update_only=update_only,
+        )
     except Exception:
         return " Não consegui gravar na aba Raissa agora."
     if result.get("ok"):
@@ -431,16 +442,30 @@ async def contract_edit_submit(request: Request, sheet_row: int):
     try:
         if action == "save_financeiro":
             payments = parse_payment_history_from_form(form)
-            save_payment_history(DEFAULT_TENANT_ID, sheet_row, payments)
+            save_payment_history(DEFAULT_TENANT_ID, sheet_row, payments, mirror_sheet=False)
             closed_items = parse_closed_services_from_form(form)
-            save_closed_services(DEFAULT_TENANT_ID, sheet_row, closed_items, sync_sheet=False)
+            primary_closed = save_closed_services(
+                DEFAULT_TENANT_ID,
+                sheet_row,
+                closed_items,
+                sync_sheet=False,
+                mirror_sheet=False,
+            )
+            if normalize_text(primary_closed.get("servico")):
+                form_dict["servico"] = primary_closed.get("servico", "")
+            if normalize_text(primary_closed.get("valor")):
+                form_dict["valor_proposta"] = primary_closed.get("valor", "")
             previous_plan = load_billing_plan(DEFAULT_TENANT_ID, sheet_row)
             saved_plan = save_billing_plan(
                 DEFAULT_TENANT_ID,
                 sheet_row,
                 parse_billing_plan_from_form(form, previous=previous_plan),
+                mirror_sheet=False,
             )
-            request.session["edit_success"] = "Financeiro atualizado com sucesso." + _raissa_save_note(form_dict, saved_plan)
+            request.session["edit_success"] = (
+                "Financeiro atualizado com sucesso."
+                + _raissa_save_note(form_dict, saved_plan, sheet_row=sheet_row, update_only=True)
+            )
             return RedirectResponse(
                 url=_edit_page_url(sheet_row, tab="financeiro", from_page=from_page),
                 status_code=303,
@@ -564,7 +589,7 @@ async def contract_edit_submit(request: Request, sheet_row: int):
             pass
 
         request.session["edit_success"] = (
-            f"Cadastro salvo com sucesso.{_raissa_save_note(form_dict, load_billing_plan(DEFAULT_TENANT_ID, sheet_row))}{onboard_note}"
+            f"Cadastro salvo com sucesso.{_raissa_save_note(form_dict, load_billing_plan(DEFAULT_TENANT_ID, sheet_row), sheet_row=sheet_row)}{onboard_note}"
         )
         return RedirectResponse(url=_edit_page_url(sheet_row, from_page=from_page), status_code=303)
     except DuplicateRegistrationError as error:

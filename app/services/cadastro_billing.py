@@ -132,7 +132,13 @@ def parse_billing_plan_from_form(form: Any, *, previous: dict | None = None) -> 
     })
 
 
-def save_billing_plan(tenant_id: str | None, sheet_row: int, plan: dict) -> dict[str, Any]:
+def save_billing_plan(
+    tenant_id: str | None,
+    sheet_row: int,
+    plan: dict,
+    *,
+    mirror_sheet: bool = True,
+) -> dict[str, Any]:
     normalized = _normalize_plan(plan)
     payload = {
         "ciclo": normalized["ciclo"],
@@ -143,7 +149,7 @@ def save_billing_plan(tenant_id: str | None, sheet_row: int, plan: dict) -> dict
         "asaas_customer_id": normalized["asaas_customer_id"],
         "asaas_subscription_id": normalized["asaas_subscription_id"],
     }
-    save_lead_action(tenant_id, sheet_row, {"billing_plan": payload})
+    save_lead_action(tenant_id, sheet_row, {"billing_plan": payload}, mirror_sheet=mirror_sheet)
     return load_billing_plan(tenant_id, sheet_row)
 
 
