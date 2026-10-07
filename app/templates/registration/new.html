@@ -28,6 +28,12 @@
   .cadastro-close-list { display: grid; gap: 10px; padding: 14px; margin-bottom: 14px; }
   .cadastro-close-list[hidden] { display: none; }
   .cadastro-close-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .cadastro-close-actions { display: flex; align-items: flex-end; gap: 8px; }
+  .cadastro-lead-status { display: grid; gap: 4px; min-width: 148px; margin: 0; }
+  .cadastro-lead-status span { font-size: 0.72rem; font-weight: 700; color: var(--muted); }
+  .cadastro-lead-status select, .cadastro-form-status select { min-height: 36px; border: 1px solid var(--border); border-radius: 10px; padding: 0 8px; font: inherit; background: #fff; }
+  .cadastro-form-status { display: grid; gap: 6px; margin-bottom: 12px; }
+  .cadastro-form-status p { margin: 0; color: var(--muted); }
   .cadastro-close-row:last-child { border-bottom: 0; padding-bottom: 0; }
   .cadastro-close-row strong, .cadastro-close-row span { display: block; }
   .cadastro-close-row span { color: var(--muted); font-size: 0.86rem; }
@@ -62,7 +68,20 @@
         <strong>{{ item.empresa }}</strong>
         <span>{{ item.phone }}{% if item.contact_name %} · {{ item.contact_name }}{% endif %}</span>
       </a>
-      <a class="btn btn-small" href="{{ item.transfer_url }}#cadastro-bot">Cadastrar</a>
+      <div class="cadastro-close-actions">
+        {% if item.order_id and item.queues %}
+        <form method="post" action="/cadastro/lead/status" class="cadastro-lead-status">
+          <span>Status</span>
+          <input type="hidden" name="order_id" value="{{ item.order_id }}">
+          <select name="queue_id" aria-label="Status de {{ item.empresa }}" onchange="if (this.value !== '{{ item.queue_id }}' && '{{ item.queue_id }}' === 'concluida' && !confirm('Alterar o local deste lead?')) { this.value = '{{ item.queue_id }}'; return; } this.form.requestSubmit();">
+            {% for queue in item.queues %}
+            <option value="{{ queue.id }}" {% if item.queue_id == queue.id %}selected{% endif %}>{{ queue.name }}</option>
+            {% endfor %}
+          </select>
+        </form>
+        {% endif %}
+        <a class="btn btn-small" href="{{ item.transfer_url }}#cadastro-bot">Cadastrar</a>
+      </div>
     </div>
     {% else %}
     <p>Nenhum cliente aguardando cadastro.</p>
@@ -101,6 +120,23 @@
     <input type="hidden" name="cadastro_tipo" value="lead">
     <input type="hidden" name="create_training" id="create-first-activity" value="0">
     <input type="hidden" name="status" value="Novo Lead">
+    <input type="hidden" name="os" value="{{ values.os }}">
+    {% if registration_closes.pending %}
+    {% set lead_queues = registration_closes.pending[0].queues %}
+    {% else %}
+    {% set lead_queues = [] %}
+    {% endif %}
+    {% if values.os and lead_queues %}
+    <section class="cadastro-form-status panel">
+      <label for="cadastro-kanban-queue"><strong>Status do lead</strong></label>
+      <p>Escolha o local. Concluída fecha o lead no cadastro e tira ele da coluna atual.</p>
+      <select id="cadastro-kanban-queue" name="kanban_queue">
+        {% for queue in lead_queues %}
+        <option value="{{ queue.id }}" {% if (values.kanban_queue or 'concluida') == queue.id %}selected{% endif %}>{{ queue.name }}</option>
+        {% endfor %}
+      </select>
+    </section>
+    {% endif %}
     <input type="hidden" name="vendedor" value="{{ vendedor }}">
     <input type="hidden" name="data_chamado" value="{{ today }}">
     {% if from_page %}<input type="hidden" name="from" value="{{ from_page }}">{% endif %}

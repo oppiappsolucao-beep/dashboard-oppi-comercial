@@ -380,6 +380,51 @@ async def api_empresas_matriz(request: Request, q: str = "", exclude: int | None
         return JSONResponse({"items": []})
 
 
+def _apply_lead_status(form_dict: dict, user: str) -> None:
+    """Na tela de cadastro, o status escolhido muda o local do lead no Kanban."""
+    queue_id = normalize_text(form_dict.get("kanban_queue"))
+    if queue_id == "concluida":
+        form_dict["status"] = "Fechado"
+    order_id = normalize_text(form_dict.get("os"))
+    if not order_id or not queue_id:
+        return
+    try:
+        from app.services.service_orders import get_order_detail, move_service_order, queue_choices
+
+        detail = get_order_detail(order_id)
+        if not detail:
+            return
+        sector_id, _queues = queue_choices(detail.get("sector") or "")
+        if not sector_id:
+            return
+        if normalize_text(detail.get("queue_id")) == queue_id:
+            return
+        move_service_order(
+            order_id,
+            queue_id,
+            sector_id,
+            detail.get("sector") or "",
+            author=user or "Usuário",
+            reopen=normalize_text(detail.get("queue_id")) == "concluida",
+        )
+    except Exception:
+        return
+
+
+@router.post("/cadastro/lead/status")
+async def registration_lead_status(request: Request):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+    form = await request.form()
+    user = normalize_text(request.session.get("org_person_name")) or normalize_text(request.session.get("username")) or "Usuário"
+    _apply_lead_status(
+        {"os": form.get("order_id"), "kanban_queue": form.get("queue_id"), "status": ""},
+        user,
+    )
+    return RedirectResponse(url="/cadastro/novo", status_code=303)
+
+
 @router.get("/cadastro/novo", response_class=HTMLResponse)
 async def new_registration_page(request: Request):
     redirect = require_auth(request)
@@ -423,7 +468,12 @@ async def new_registration_submit(request: Request):
             mirror = closed_services_sheet_values(closed_items)
             form_dict["servico"] = mirror.get("servico", "")
             form_dict["valor_proposta"] = mirror.get("valor_proposta", "")
+        _apply_lead_status(form_dict, user)
         sheet_row = save_new_company(form_dict, mirror_sheet=False)
+        if int(sheet_row or 0) > 0 and normalize_text(form_dict.get("os")):
+            from app.services.cadastro_closes import remember_lead_order
+
+            remember_lead_order(int(sheet_row), form_dict.get("os", ""))
         save_cadastro_tipo(
             DEFAULT_TENANT_ID,
             sheet_row,

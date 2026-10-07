@@ -647,6 +647,7 @@ def cadastro_url(link: dict) -> str:
         "municipio": link.get("city") or "",
         "uf": link.get("uf") or "",
         "observacoes": notes,
+        "os": link.get("order_id") or "",
     }
     clean = {key: value for key, value in params.items() if normalize_text(value)}
     if not clean:
