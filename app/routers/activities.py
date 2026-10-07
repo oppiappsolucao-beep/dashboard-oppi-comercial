@@ -169,6 +169,14 @@ def _os_board_context(request: Request) -> dict:
         if sector_id
         else []
     )
+    trainer_name = _logged_trainer_name(request)
+    if trainer_name:
+        for column in columns:
+            column["cards"] = [
+                card
+                for card in column["cards"]
+                if normalize_text(card.get("responsible")).lower() == trainer_name
+            ]
     return {
         "active_page": "activities",
         "is_admin": not employee,
@@ -333,8 +341,11 @@ async def activities_move_order(
     if redirect:
         return redirect
     from app.services.org_registry import list_sectors
-    from app.services.service_orders import move_service_order
+    from app.services.service_orders import get_order_detail, move_service_order
 
+    detail = get_order_detail(order_id)
+    if not detail or not _order_visible(request, detail):
+        return HTMLResponse("Ordem de serviço não encontrada.", status_code=404)
     employee_sector = normalize_text(request.session.get("org_sector_id"))
     target = employee_sector or normalize_text(sector_id)
     sectors = list_sectors()
@@ -400,11 +411,22 @@ def _order_panel_context(order: dict, sector_notice: str = "") -> dict:
     }
 
 
+def _logged_trainer_name(request: Request) -> str:
+    if normalize_text(request.session.get("org_person_kind")) != "treinador":
+        return ""
+    return normalize_text(request.session.get("org_person_name")).lower()
+
+
 def _order_visible(request: Request, detail: dict) -> bool:
     if not request.session.get("org_person_id"):
         return True
     sector_name = normalize_text(request.session.get("org_sector_name"))
-    return sector_name.lower() == normalize_text(detail.get("sector")).lower()
+    if sector_name.lower() != normalize_text(detail.get("sector")).lower():
+        return False
+    trainer_name = _logged_trainer_name(request)
+    if trainer_name and normalize_text(detail.get("responsible")).lower() != trainer_name:
+        return False
+    return True
 
 
 @router.get("/atividades/os/{order_id}", response_class=HTMLResponse)
