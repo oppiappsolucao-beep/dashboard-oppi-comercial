@@ -566,6 +566,9 @@ def delete_registration(
     mirror_sheet: bool = True,
 ) -> None:
     tenant = normalize_text(tenant_id) or DEFAULT_TENANT_ID
+    empresa = ""
+    cnpj = ""
+    raissa_row = 0
     db = SessionLocal()
     try:
         row = (
@@ -577,12 +580,25 @@ def delete_registration(
             .first()
         )
         if row:
+            empresa = normalize_text(row.empresa)
+            cnpj = normalize_text(row.cnpj)
+            extras = _json_loads(row.extras_json, {})
+            try:
+                raissa_row = int(extras.get("raissa_sheet_row") or 0)
+            except (TypeError, ValueError):
+                raissa_row = 0
             db.delete(row)
             db.commit()
     finally:
         db.close()
     invalidate_registrations_cache()
     if mirror_sheet:
+        try:
+            from app.services.raissa_company_sync import remove_company_from_raissa
+
+            remove_company_from_raissa(empresa, cnpj, raissa_row)
+        except Exception:
+            logger.exception("Falha ao tirar empresa da aba Raissa")
         try:
             from app.services.legacy_core import delete_company_from_sheet
 

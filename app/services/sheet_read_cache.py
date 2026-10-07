@@ -50,6 +50,15 @@ def get_cached_worksheet_values(tab_name: str, loader, *, force_refresh: bool = 
     return [row[:] for row in values]
 
 
+def store_worksheet_values(tab_name: str, values: list[list[str]]) -> None:
+    """Substitui a cópia local da aba, sem consultar o Google."""
+    key = worksheet_cache_key(tab_name)
+    copied = [list(row) for row in values]
+    with _lock:
+        _cache[key] = copied
+        _last_good[key] = copied
+
+
 def peek_fresh_worksheet_values(tab_name: str) -> list[list[str]] | None:
     """Cache curto ainda válido. Não chama o Google."""
     key = worksheet_cache_key(tab_name)

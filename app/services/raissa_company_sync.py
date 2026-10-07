@@ -105,8 +105,6 @@ def match_cadastro_sheet_rows(empresas: list[dict], cadastros: list[dict]) -> li
                 sheet_row = by_phone.get(key, 0)
                 if sheet_row:
                     break
-        if not sheet_row:
-            sheet_row = _match_name_tokens(item.get("empresa"), named)
         copied = dict(item)
         copied["sheet_row"] = sheet_row
         linked.append(copied)
@@ -424,6 +422,142 @@ def _merge_saved_registration(form: dict, crm_sheet_row: int | None) -> tuple[di
     return merged, remembered
 
 
+def _hidden_path():
+    from app.services.storage_paths import get_storage_dir
+
+    return get_storage_dir() / "raissa_hidden.json"
+
+
+def _company_hide_keys(empresa: str, cnpj: str) -> list[str]:
+    keys = []
+    digits = _digits(cnpj)
+    if len(digits) >= 11:
+        keys.append(f"cnpj:{digits}")
+    name = normalize_search_text(empresa)
+    if name:
+        keys.append(f"nome:{name}")
+    return keys
+
+
+def _load_hidden_keys() -> set[str]:
+    import json
+
+    path = _hidden_path()
+    if not path.exists():
+        return set()
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return set()
+    raw = data.get("keys") if isinstance(data, dict) else None
+    if not isinstance(raw, list):
+        return set()
+    return {str(item) for item in raw if item}
+
+
+def _save_hidden_keys(keys: set[str]) -> None:
+    import json
+
+    path = _hidden_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"keys": sorted(keys)}, ensure_ascii=False), encoding="utf-8")
+
+
+def hide_company_on_raissa_list(empresa: str, cnpj: str) -> None:
+    keys = _load_hidden_keys()
+    keys.update(_company_hide_keys(empresa, cnpj))
+    if keys:
+        _save_hidden_keys(keys)
+
+
+def unhide_company_on_raissa_list(empresa: str, cnpj: str) -> None:
+    drop = set(_company_hide_keys(empresa, cnpj))
+    if not drop:
+        return
+    keys = _load_hidden_keys() - drop
+    _save_hidden_keys(keys)
+
+
+def company_hidden_on_raissa_list(empresa: str, cnpj: str) -> bool:
+    hidden = _load_hidden_keys()
+    if not hidden:
+        return False
+    return any(key in hidden for key in _company_hide_keys(empresa, cnpj))
+
+
+def _raissa_rows_to_remove(values: list[list[str]], empresa: str, cnpj: str, raissa_row: int) -> list[int]:
+    if not values:
+        return []
+    header_at = _header_at(values)
+    headers = [normalize_text(cell) for cell in values[header_at]]
+    payload = {"empresa": empresa, "cnpj": cnpj}
+    rows = []
+    remembered = _row_on_sheet(raissa_row, values, header_at)
+    if remembered:
+        rows.append(remembered)
+    found = _find_row(values, header_at, headers, payload)
+    if found and found not in rows:
+        rows.append(found)
+    target_name = normalize_search_text(empresa)
+    target_cnpj = _digits(cnpj)
+    mapping = _header_map(headers)
+    name_index = mapping.get("empresa")
+    cnpj_index = mapping.get("cnpj")
+    for offset, raw in enumerate(values[header_at + 1 :], start=header_at + 2):
+        row = list(raw)
+        same_cnpj = bool(target_cnpj and cnpj_index is not None and cnpj_index < len(row) and _digits(row[cnpj_index]) == target_cnpj)
+        same_name = bool(target_name and name_index is not None and name_index < len(row) and normalize_search_text(row[name_index]) == target_name)
+        if (same_cnpj or same_name) and offset not in rows:
+            rows.append(offset)
+    return rows
+
+
+def remove_company_from_raissa(empresa: str, cnpj: str, raissa_row: int = 0) -> None:
+    """Tira a empresa excluída da aba Raissa e da lista em cache."""
+    if not normalize_text(empresa) and not _digits(cnpj):
+        return
+    hide_company_on_raissa_list(empresa, cnpj)
+    try:
+        from app.services.campaign_leads import drop_company_from_raissa_cache
+
+        drop_company_from_raissa_cache(empresa, cnpj, raissa_row)
+    except Exception:
+        log.warning("Não atualizei a lista local da Raissa após a exclusão")
+    try:
+        from app.config import settings
+        from app.services.campaign_leads import _find_raissa_company_worksheet
+        from app.services.legacy_core import get_gsheet_client
+
+        if not settings.sheets_configured:
+            return
+        client = get_gsheet_client()
+        spreadsheet = client.open_by_key(settings.sheet_id)
+        worksheet = None
+        for title in ("Raissa", "Raíssa", "Raisa"):
+            try:
+                worksheet = spreadsheet.worksheet(title)
+                break
+            except Exception as exc:
+                if "429" in str(exc) or "quota" in str(exc).lower():
+                    raise
+                worksheet = None
+        if worksheet is None:
+            worksheet = _find_raissa_company_worksheet(spreadsheet)
+        if worksheet is None:
+            return
+        values = worksheet.get_all_values() or []
+        rows = _raissa_rows_to_remove(values, empresa, cnpj, raissa_row)
+        for row_number in sorted(rows, reverse=True):
+            if row_number <= int(worksheet.row_count or 0):
+                worksheet.delete_rows(row_number)
+        if rows:
+            from app.services.sheet_read_cache import invalidate_worksheet_cache
+
+            invalidate_worksheet_cache(worksheet.title)
+    except Exception:
+        log.warning("Não consegui apagar a empresa na aba Raissa agora")
+
+
 def _remember_raissa_sheet_row(crm_sheet_row: int | None, raissa_row: int) -> None:
     if not crm_sheet_row or int(raissa_row) <= 1:
         return
@@ -523,6 +657,7 @@ def save_registration_on_raissa(
                 row_number = max(len(values), header_at + 1)
         _write_raissa_row(worksheet, int(row_number), row_values)
         _remember_raissa_sheet_row(crm_sheet_row, int(row_number))
+        unhide_company_on_raissa_list(payload.get("empresa", ""), payload.get("cnpj", ""))
         invalidate_worksheet_cache(worksheet.title)
         return {"ok": True, "aba": worksheet.title, "linha": row_number, "aviso": ""}
     except Exception as exc:

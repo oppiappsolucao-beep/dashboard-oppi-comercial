@@ -198,7 +198,10 @@ def read_raissa_companies() -> dict:
         ("contato", "nome contato", "nome do contato", "responsavel", "socio"),
         skip_words=("matriz",),
     )
+    from app.services.raissa_company_sync import company_hidden_on_raissa_list
+
     empresas = []
+    seen: dict[str, int] = {}
     for item in sheet.get("clientes") or []:
         values = [item.get(header, "") for header in headers]
         empresa = values[name_index] if name_index is not None and name_index < len(values) else ""
@@ -209,18 +212,25 @@ def read_raissa_companies() -> dict:
         tipo = values[tipo_index] if tipo_index is not None and tipo_index < len(values) else ""
         flag = values[flag_index] if flag_index is not None and flag_index < len(values) else ""
         kind = _company_kind(tipo, parent, flag)
-        empresas.append(
-            {
-                "linha": item.get("linha") or 0,
-                "empresa": empresa,
-                "tipo": kind,
-                "matriz": normalize_text(parent),
-                "telefone": normalize_text(values[phone_index]) if phone_index is not None and phone_index < len(values) else "",
-                "email": normalize_text(values[email_index]) if email_index is not None and email_index < len(values) else "",
-                "cnpj": normalize_text(values[cnpj_index]) if cnpj_index is not None and cnpj_index < len(values) else "",
-                "contato": normalize_text(values[contact_index]) if contact_index is not None and contact_index < len(values) else "",
-            }
-        )
+        cnpj = normalize_text(values[cnpj_index]) if cnpj_index is not None and cnpj_index < len(values) else ""
+        if company_hidden_on_raissa_list(empresa, cnpj):
+            continue
+        identity = f"{cnpj}|{empresa}".casefold()
+        row_item = {
+            "linha": item.get("linha") or 0,
+            "empresa": empresa,
+            "tipo": kind,
+            "matriz": normalize_text(parent),
+            "telefone": normalize_text(values[phone_index]) if phone_index is not None and phone_index < len(values) else "",
+            "email": normalize_text(values[email_index]) if email_index is not None and email_index < len(values) else "",
+            "cnpj": cnpj,
+            "contato": normalize_text(values[contact_index]) if contact_index is not None and contact_index < len(values) else "",
+        }
+        if identity in seen:
+            empresas[seen[identity]] = row_item
+            continue
+        seen[identity] = len(empresas)
+        empresas.append(row_item)
     return {
         "aba": sheet.get("aba") or "",
         "total": len(empresas),
@@ -255,6 +265,23 @@ def _raissa_snapshot_path():
     from app.services.storage_paths import get_storage_dir
 
     return get_storage_dir() / "raissa_snapshot.json"
+
+
+def drop_company_from_raissa_cache(empresa: str, cnpj: str, raissa_row: int = 0) -> None:
+    """Remove a empresa da cópia local da lista, sem esperar outra leitura do Google."""
+    from app.services.raissa_company_sync import _raissa_rows_to_remove
+    from app.services.sheet_read_cache import store_worksheet_values
+
+    stored = _stored_raissa_values()
+    if not stored:
+        return
+    title, values = stored
+    drop_rows = set(_raissa_rows_to_remove(values, empresa, cnpj, raissa_row))
+    if not drop_rows:
+        return
+    kept = [row for index, row in enumerate(values, start=1) if index not in drop_rows]
+    _remember_raissa_values(title, kept)
+    store_worksheet_values(title, kept)
 
 
 def _remember_raissa_values(title: str, values: list[list[str]]) -> None:

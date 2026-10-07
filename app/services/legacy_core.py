@@ -2311,8 +2311,8 @@ def delete_company_from_sheet(sheet_row: int) -> None:
     spreadsheet = client.open_by_key(settings.sheet_id)
     worksheet = _open_worksheet(spreadsheet, settings.worksheet_name)
 
-    if row_number > worksheet.row_count:
-        raise ValueError("Cadastro não encontrado na planilha.")
+    if row_number > int(worksheet.row_count or 0):
+        return
 
     worksheet.delete_rows(row_number)
     invalidate_sheet_cache()
