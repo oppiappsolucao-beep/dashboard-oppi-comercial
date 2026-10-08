@@ -1,9 +1,10 @@
 <div class="os-detail">
   <p class="os-detail-protocol">{{ order.protocol }} · {{ order.status_label }} · {{ order.queue_name }}</p>
   <h2 id="os-modal-title">{{ order.subject }}</h2>
-  {% if can_delete_order %}
+  {% set order_sector = (order.sector or '')|lower|trim %}
+  {% if can_delete_order or ('oppi' in order_sector) or (order_sector == 'suporte') %}
   <div class="os-detail-actions">
-    <button type="button" class="btn btn-small os-card-delete" data-delete-order="{{ order.id }}">Excluir OS</button>
+    <button type="button" class="btn btn-secondary btn-small os-card-delete" data-delete-order="{{ order.id }}">Excluir OS</button>
   </div>
   {% endif %}
 

@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
-<link rel="stylesheet" href="/static/css/activities.css?v={{ static_version }}-mobile4">
+<link rel="stylesheet" href="/static/css/activities.css?v={{ static_version }}-mobile5">
 <style>
 .os-queue-form, .os-sector-switch { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
 .os-queue-form input, .os-sector-switch select { height: 40px; border: 1px solid var(--border); border-radius: 10px; padding: 0 10px; }
@@ -23,7 +23,7 @@
 .os-column-tools { display: flex; gap: 4px; margin-top: 6px; }
 .os-column-tools form { margin: 0; }
 .os-column-tools button { min-height: 28px; padding: 0 8px; border-radius: 8px; font-size: 0.75rem; }
-.os-card-delete { display: flex; align-items: center; justify-content: center; width: 100%; margin-top: 8px; min-height: 32px; padding: 0 8px; border: 1px solid #FECACA; border-radius: 8px; background: #FEF2F2; color: #B91C1C; font: inherit; font-size: 0.78rem; font-weight: 700; cursor: pointer; }
+.os-card-delete { display: inline-flex; width: 100%; margin-top: 8px; background: #fff; color: #B91C1C; border: 1px solid #FECACA; }
 .os-proposta-link { display: inline-flex; margin-top: 8px; padding: 4px 8px; border-radius: 8px; background: #F3E8FF; font-size: 0.75rem; font-weight: 700; color: var(--purple, #7C3AED); text-decoration: none; }
 .os-card-status { display: grid; gap: 4px; margin-top: 8px; font-size: 0.72rem; font-weight: 700; color: var(--muted); }
 .os-card-status select { width: 100%; min-height: 32px; border: 1px solid var(--border); border-radius: 8px; padding: 0 8px; font: inherit; background: #fff; cursor: pointer; }
@@ -155,6 +155,8 @@
 </form>
 {% endif %}
 
+{% set sector_label = (sector_name or '')|lower|trim %}
+{% set delete_os = ('oppi' in sector_label) or (sector_label == 'suporte') or can_delete_orders %}
 <div class="activities-kanban-board" id="os-kanban-board" {% if is_commercial %}data-commercial="1"{% endif %}>
   {% for column in columns %}
   <section class="activities-kanban-column{% if column.id == 'concluida' %} is-done{% endif %}{% if column.id == 'campanha' %} is-campaign{% endif %}">
@@ -180,7 +182,7 @@
         <input type="hidden" name="direction" value="direita">
         <button type="submit" class="btn btn-secondary btn-small" aria-label="Mover {{ column.name }} para a direita">→</button>
       </form>
-      {% if not can_delete_orders %}
+      {% if not delete_os %}
       <form method="post" action="/atividades/filas/{{ column.id }}/remover" onsubmit="return confirm('Excluir esta coluna? As ordens dela voltam para Análise.');">
         <input type="hidden" name="sector_id" value="{{ sector_id }}">
         <input type="hidden" name="inicio" value="{{ inicio }}">
@@ -194,9 +196,6 @@
       {% for card in column.cards %}
       <article class="activities-kanban-card" draggable="true" data-order-id="{{ card.id }}" data-current-queue="{{ column.id }}" data-search="{{ (card.empresa or '') ~ ' ' ~ (card.protocol or '') ~ ' ' ~ (card.phone or '') ~ ' ' ~ ((card.description or '')|replace('\n', ' ')) }}" {% if card.cadastro_url %}data-cadastro-url="{{ card.cadastro_url }}"{% endif %}>
         <span class="activities-kanban-card-grip" aria-hidden="true">⋮⋮</span>
-        {% if can_delete_orders %}
-        <button type="button" class="os-card-delete" data-delete-order="{{ card.id }}">Excluir OS</button>
-        {% endif %}
         <div class="activities-kanban-card-title">{{ card.empresa }}</div>
         <div class="activities-kanban-card-meta">
           <span>{{ card.protocol }}</span>
@@ -205,6 +204,9 @@
           <span aria-hidden="true">📅</span>
           <span>{{ card.scheduled_date_label }}</span>
         </div>
+        {% if delete_os %}
+        <button type="button" class="btn btn-secondary btn-small os-card-delete" data-delete-order="{{ card.id }}">Excluir OS</button>
+        {% endif %}
       </article>
       {% else %}
       <div class="activities-kanban-empty">Nenhuma ordem</div>
@@ -220,5 +222,5 @@
     <div id="os-order-modal-body">Carregando…</div>
   </div>
 </div>
-<script src="/static/js/os-kanban.js?v=12"></script>
+<script src="/static/js/os-kanban.js?v=13"></script>
 {% endblock %}
