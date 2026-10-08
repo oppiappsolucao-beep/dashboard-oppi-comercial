@@ -389,8 +389,8 @@ def generate_commercial_proposal_pdf(
         fontName="Helvetica-Bold",
         fontSize=12,
         leading=15,
-        alignment=TA_LEFT,
-        spaceAfter=2,
+        alignment=TA_CENTER,
+        spaceAfter=16,
         textColor="#111111",
     )
     subtitle = ParagraphStyle(
@@ -648,10 +648,11 @@ def generate_commercial_proposal_pdf(
     add_heading("Investimento acessível para sua empresa")
     if negotiation["active"]:
         annual = negotiation["valor_anual"]
+        monthly = (annual / Decimal("12")) if annual is not None else None
         opening = (
-            f"Com o valor negociado de {format_money_br(annual)} no plano anual, "
-            if annual is not None
-            else "Com o valor negociado no plano anual, "
+            f"Com o valor negociado de {format_money_br(monthly)} fechando no plano anual, "
+            if monthly is not None
+            else "Com o valor negociado fechando no plano anual, "
         )
         add_text(
             opening
