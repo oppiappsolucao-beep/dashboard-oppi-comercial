@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
-<link rel="stylesheet" href="/static/css/activities.css?v={{ static_version }}-mobile5">
+<link rel="stylesheet" href="/static/css/activities.css?v={{ static_version }}-mobile6">
 <style>
 .os-queue-form, .os-sector-switch { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
 .os-queue-form input, .os-sector-switch select { height: 40px; border: 1px solid var(--border); border-radius: 10px; padding: 0 10px; }
@@ -155,8 +155,7 @@
 </form>
 {% endif %}
 
-{% set sector_label = (sector_name or '')|lower|trim %}
-{% set delete_os = ('oppi' in sector_label) or (sector_label == 'suporte') or can_delete_orders %}
+{% set delete_os = can_delete_orders %}
 <div class="activities-kanban-board" id="os-kanban-board" {% if is_commercial %}data-commercial="1"{% endif %}>
   {% for column in columns %}
   <section class="activities-kanban-column{% if column.id == 'concluida' %} is-done{% endif %}{% if column.id == 'campanha' %} is-campaign{% endif %}">
@@ -222,5 +221,5 @@
     <div id="os-order-modal-body">Carregando…</div>
   </div>
 </div>
-<script src="/static/js/os-kanban.js?v=13"></script>
+<script src="/static/js/os-kanban.js?v=14"></script>
 {% endblock %}

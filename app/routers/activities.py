@@ -422,7 +422,9 @@ def _os_actor(request: Request) -> str:
 
 
 def _oppi_tech_login(request: Request) -> bool:
-    """Login Oppi Tech, pelo usuário ou pelo setor. Comercial não entra aqui."""
+    """Login do funcionário Oppi Tech. O administrador não entra."""
+    if is_admin(request) or not request.session.get("org_person_id"):
+        return False
     from app.dependencies import get_session_user
     from app.services.service_orders import is_oppi_tech_sector
 
@@ -441,15 +443,12 @@ def _oppi_tech_login(request: Request) -> bool:
 
 
 def _oppi_tech_board(request: Request, sector_name: str) -> bool:
-    """Excluir OS só no quadro Oppi Tech, ou no kanban de quem entrou com esse login."""
+    """Excluir OS só no kanban de quem entrou como Oppi Tech, nunca no administrador nem no Suporte."""
     from app.services.service_orders import is_oppi_tech_sector
 
-    if is_oppi_tech_sector(sector_name):
-        return True
     if not _oppi_tech_login(request):
         return False
-    folded = normalize_text(sector_name).lower()
-    return not any(word in folded for word in ("comercial", "trein", "financeiro", "represent"))
+    return is_oppi_tech_sector(sector_name)
 
 
 def _order_panel_context(order: dict, sector_notice: str = "", can_delete_order: bool = False) -> dict:

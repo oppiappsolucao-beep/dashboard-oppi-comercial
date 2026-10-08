@@ -428,14 +428,12 @@ def is_commercial_sector(sector_name: str) -> bool:
 
 
 def is_oppi_tech_sector(sector_name: str) -> bool:
-    """Acesso Oppi Tech: setor com esse nome, ou o quadro Suporte (não o nível 1/2)."""
+    """Somente o setor Oppi Tech. Suporte não entra."""
     import unicodedata
 
     text = unicodedata.normalize("NFKD", normalize_text(sector_name).lower())
     text = "".join(ch for ch in text if not unicodedata.combining(ch))
     compact = re.sub(r"[^a-z0-9]", "", text)
-    if compact == "suporte":
-        return True
     if "oppitech" in compact or "opitech" in compact:
         return True
     return "oppi" in compact and "tech" in compact
