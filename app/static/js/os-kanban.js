@@ -214,29 +214,26 @@
     var column = card.closest(".activities-kanban-column");
     var titleEl = column && column.querySelector(".activities-kanban-column-title");
     var isProposal = titleEl && titleEl.textContent.toLowerCase().indexOf("proposta") !== -1;
-    var openCadastro = queueId === "concluida" && cadastroUrl;
     fetch("/atividades/os/" + encodeURIComponent(orderId) + "/fila", {
       method: "POST",
       body: data,
       keepalive: true,
     }).then(function (response) {
-      if (openCadastro) return "";
       if (!response.ok) {
         window.location.reload();
-        return "";
+        return null;
       }
       return response.text();
     }).then(function (payload) {
-      if (openCadastro) return;
-      var text = (payload || "").trim();
+      if (payload == null) return;
+      var text = String(payload).trim();
       var target = text.charAt(0) === "/" ? text : "";
       if (!target && queueId === "concluida") target = cadastroUrl;
       if (!target && isProposal) target = "/atividades/os/" + encodeURIComponent(orderId) + "/proposta";
       if (target) window.location.href = target;
     }).catch(function () {
-      if (!openCadastro) window.location.reload();
+      window.location.reload();
     });
-    if (openCadastro) window.location.href = cadastroUrl;
   }
 
   board.querySelectorAll("[data-os-status]").forEach(function (select) {

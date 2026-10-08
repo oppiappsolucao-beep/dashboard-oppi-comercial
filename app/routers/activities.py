@@ -377,18 +377,11 @@ async def activities_move_order(
     if "proposta" in queue_name.lower():
         return HTMLResponse(f"/atividades/os/{order_id}/proposta")
     if normalize_text(queue_id) == "concluida":
-        from app.services.campaign_leads import finish_cadastro_url
-        from app.services.service_orders import CAMPAIGN_QUEUE_ID, is_commercial_sector
+        from app.services.campaign_leads import open_lead_cadastro_url
+        from app.services.service_orders import is_commercial_sector, is_oppi_tech_sector
 
-        description = normalize_text(detail.get("description")).lower()
-        campaign_lead = (
-            detail.get("source") == "campanha"
-            or normalize_text(detail.get("queue_id")) == CAMPAIGN_QUEUE_ID
-            or "campanha:" in description
-            or normalize_text(detail.get("cadastro_url")).startswith("/cadastro/")
-        )
-        if is_commercial_sector(sector["name"]) and campaign_lead:
-            target = finish_cadastro_url(detail)
+        if is_commercial_sector(sector["name"]) or is_oppi_tech_sector(sector["name"]):
+            target = open_lead_cadastro_url(detail)
             if target.startswith("/cadastro/"):
                 return HTMLResponse(target)
     return HTMLResponse("ok")

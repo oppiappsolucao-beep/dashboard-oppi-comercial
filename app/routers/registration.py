@@ -310,6 +310,7 @@ def _registration_page_context(request: Request, df, *, error: str = "", values:
         "plan_cycle_options": PLAN_CYCLE_OPTIONS,
         "billing_form_options": BILLING_FORM_OPTIONS,
         "error": error or request.session.pop("registration_error", ""),
+        "success": request.session.pop("registration_success", ""),
         "registration_closes": _registration_closes(),
         **page_ctx,
     }
@@ -454,6 +455,37 @@ def _apply_lead_status(form_dict: dict, user: str) -> None:
         )
     except Exception:
         return
+
+
+@router.post("/cadastro/lead/fechar")
+async def registration_count_closed(request: Request):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+    form = await request.form()
+    order_id = normalize_text(form.get("os") or form.get("order_id"))
+    user = normalize_text(request.session.get("org_person_name")) or normalize_text(request.session.get("username")) or "Usuário"
+    target = "/cadastro/novo"
+    try:
+        from app.services.campaign_leads import open_lead_cadastro_url
+        from app.services.service_orders import get_order_detail, mark_lead_counted_closed
+
+        created = mark_lead_counted_closed(order_id, user)
+        detail = get_order_detail(order_id) or {}
+        opened = open_lead_cadastro_url(detail)
+        if opened.startswith("/cadastro/"):
+            target = opened
+        request.session["registration_success"] = (
+            "Lead computado para fechado."
+            if created
+            else "Este lead já está em Fechados no mês."
+        )
+    except ValueError as error:
+        request.session["registration_error"] = str(error)
+    else:
+        if "computado=" not in target:
+            target += ("&" if "?" in target else "?") + "computado=1"
+    return RedirectResponse(url=target, status_code=303)
 
 
 @router.post("/cadastro/lead/status")

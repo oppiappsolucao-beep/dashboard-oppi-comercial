@@ -630,6 +630,24 @@ def _refresh_lead_date(current, lead: dict) -> None:
         )
 
 
+def open_lead_cadastro_url(order: dict) -> str:
+    """Cadastro do lead ao concluir a OS no Comercial ou na Oppi Tech."""
+    client = order.get("client") if isinstance(order.get("client"), dict) else {}
+    enriched = dict(order)
+    enriched["contact_name"] = order.get("contact_name") or client.get("contato") or ""
+    enriched["phone"] = order.get("phone") or client.get("whatsapp") or client.get("telefone") or ""
+    enriched["email"] = order.get("email") or client.get("email") or ""
+    enriched["city"] = order.get("city") or client.get("cidade") or ""
+    enriched["uf"] = order.get("uf") or client.get("uf") or ""
+    enriched["order_id"] = order.get("order_id") or order.get("id") or ""
+    url = finish_cadastro_url(enriched)
+    if not url.startswith("/cadastro/"):
+        return ""
+    if "from=" not in url:
+        url += ("&" if "?" in url else "?") + "from=activities"
+    return url
+
+
 def finish_cadastro_url(order: dict) -> str:
     """Endereço do cadastro ao concluir um lead comercial."""
     current = normalize_text(order.get("cadastro_url"))

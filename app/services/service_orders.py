@@ -27,6 +27,7 @@ EVENT_KIND_LABELS = {
     "concluida": "Concluída",
     "reaberta": "Reaberta",
     "atualizacao": "Atualização",
+    "computado_fechado": "Computado para fechado",
 }
 
 
@@ -526,12 +527,13 @@ def build_sector_board(sector_id: str, sector_name: str, inicio: str = "", fim: 
     buckets = {column["id"]: column for column in columns}
     cards = list_orders_by_sector(sector_name)
     attach_campaign_cards(cards)
-    if is_commercial_sector(sector_name):
+    if is_commercial_sector(sector_name) or is_oppi_tech_sector(sector_name):
         for card in cards:
-            if normalize_text(card.get("cadastro_url")):
-                continue
-            if card.get("source") == "campanha" or card.get("queue_id") == CAMPAIGN_QUEUE_ID:
+            if not normalize_text(card.get("cadastro_url")):
                 card["cadastro_url"] = finish_cadastro_url(card)
+            url = normalize_text(card.get("cadastro_url"))
+            if url.startswith("/cadastro/") and "from=" not in url:
+                card["cadastro_url"] = url + ("&" if "?" in url else "?") + "from=activities"
     for card in cards:
         queue_id = card.get("queue_id") or ENTRY_QUEUE_ID
         if queue_id not in known:
@@ -593,6 +595,53 @@ def send_order_to_sector(order_id: str, sector_name: str, author: str) -> str:
         )
         _add_event(conn, current["id"], "movida", f"Encaminhada para {target}.", author, stamp)
     return f"OS encaminhada para {target}."
+
+
+def mark_lead_counted_closed(order_id: str, author: str) -> bool:
+    """Conta o lead no card Fechados no mês. Falso quando já estava computado."""
+    init_crm_local_db()
+    with _lock, _connect() as conn:
+        current = conn.execute(
+            "SELECT id, sector FROM service_orders WHERE id = ?",
+            (normalize_text(order_id),),
+        ).fetchone()
+        if current is None:
+            raise ValueError("Ordem de serviço não encontrada.")
+        sector = current["sector"] or ""
+        if not is_commercial_sector(sector) and not is_oppi_tech_sector(sector):
+            raise ValueError("Só Comercial e Oppi Tech computam o lead como fechado.")
+        existing = conn.execute(
+            """
+            SELECT id FROM service_order_events
+            WHERE order_id = ? AND kind = 'computado_fechado'
+            LIMIT 1
+            """,
+            (current["id"],),
+        ).fetchone()
+        if existing is not None:
+            return False
+        stamp = _now().isoformat(timespec="seconds")
+        _add_event(conn, current["id"], "computado_fechado", "Computado para fechado.", author, stamp)
+    return True
+
+
+def counted_closed_stamps(order_ids: list[str]) -> dict[str, str]:
+    ids = [normalize_text(item) for item in order_ids if normalize_text(item)]
+    if not ids:
+        return {}
+    init_crm_local_db()
+    marks = ",".join("?" for _ in ids)
+    with _lock, _connect() as conn:
+        rows = conn.execute(
+            f"""
+            SELECT order_id, MIN(created_at) AS created_at
+            FROM service_order_events
+            WHERE kind = 'computado_fechado' AND order_id IN ({marks})
+            GROUP BY order_id
+            """,
+            tuple(ids),
+        ).fetchall()
+    return {row["order_id"]: row["created_at"] or "" for row in rows}
 
 
 def delete_service_order(order_id: str) -> None:

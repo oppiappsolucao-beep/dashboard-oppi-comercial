@@ -48,17 +48,18 @@
   .cadastro-bot-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 </style>
   {% if error %}<div class="alert-error">{{ error }}</div>{% endif %}
+  {% if success %}<div class="alert-success">{{ success }}</div>{% endif %}
 
-  <section class="cadastro-closes" aria-label="Clientes concluídos pelo comercial">
+  <section class="cadastro-closes" aria-label="Leads concluídos">
     <button type="button" class="cadastro-close-card" data-close-list="pending" aria-expanded="false" aria-controls="cadastro-close-pending">
       <span>Concluídos no Kanban</span>
       <strong>{{ registration_closes.pending_total }}</strong>
-      <p>Clientes que o comercial colocou em Concluída e ainda vão para o cadastro.</p>
+      <p>Leads que Comercial ou Oppi Tech colocou em Concluída e ainda vão para o cadastro.</p>
     </button>
     <button type="button" class="cadastro-close-card" data-close-list="registered" aria-expanded="false" aria-controls="cadastro-close-registered">
       <span>Fechados no mês</span>
       <strong>{{ registration_closes.registered_total }}</strong>
-      <p>Leads que o comercial fechou em {{ registration_closes.month_label }} e já estão em Empresas.</p>
+      <p>Leads computados para fechado em {{ registration_closes.month_label }}.</p>
     </button>
   </section>
   <div id="cadastro-close-pending" class="cadastro-close-list panel" hidden>
@@ -81,6 +82,12 @@
         </form>
         {% endif %}
         <a class="btn btn-small" href="{{ item.transfer_url }}#cadastro-bot">Cadastrar</a>
+        {% if item.order_id %}
+        <form method="post" action="/cadastro/lead/fechar">
+          <input type="hidden" name="os" value="{{ item.order_id }}">
+          <button type="submit" class="btn btn-small btn-secondary">Computar para fechado</button>
+        </form>
+        {% endif %}
       </div>
     </div>
     {% else %}
@@ -94,7 +101,11 @@
         <strong>{{ item.empresa }}</strong>
         <span>{{ item.phone }}{% if item.contact_name %} · {{ item.contact_name }}{% endif %}</span>
       </div>
+      {% if item.company_url %}
       <a class="btn btn-small btn-secondary" href="{{ item.company_url }}">Ver em empresas</a>
+      {% elif item.transfer_url %}
+      <a class="btn btn-small btn-secondary" href="{{ item.transfer_url }}">Abrir cadastro</a>
+      {% endif %}
     </div>
     {% else %}
     <p>Nenhum lead fechado neste mês.</p>
@@ -106,20 +117,38 @@
     <input type="hidden" name="create_training" id="create-first-activity" value="0">
     <input type="hidden" name="status" value="Novo Lead">
     <input type="hidden" name="os" value="{{ values.os }}">
-    {% if registration_closes.pending %}
-    {% set lead_queues = registration_closes.pending[0].queues %}
-    {% else %}
-    {% set lead_queues = [] %}
+    {% set lead_ns = namespace(queues=[]) %}
+    {% for item in registration_closes.pending %}
+      {% if values.os and item.order_id == values.os %}
+        {% set lead_ns.queues = item.queues %}
+      {% endif %}
+    {% endfor %}
+    {% if not lead_ns.queues and registration_closes.pending %}
+      {% set lead_ns.queues = registration_closes.pending[0].queues %}
     {% endif %}
-    {% if values.os and lead_queues %}
+    {% set counted_ns = namespace(ok=false) %}
+    {% for item in registration_closes.registered %}
+      {% if values.os and item.order_id == values.os %}
+        {% set counted_ns.ok = true %}
+      {% endif %}
+    {% endfor %}
+    {% if values.os %}
     <section class="cadastro-form-status panel">
+      {% if lead_ns.queues %}
       <label for="cadastro-kanban-queue"><strong>Status do lead</strong></label>
       <p>Escolha o local. Concluída fecha o lead no cadastro e tira ele da coluna atual.</p>
       <select id="cadastro-kanban-queue" name="kanban_queue">
-        {% for queue in lead_queues %}
+        {% for queue in lead_ns.queues %}
         <option value="{{ queue.id }}" {% if (values.kanban_queue or 'concluida') == queue.id %}selected{% endif %}>{{ queue.name }}</option>
         {% endfor %}
       </select>
+      {% endif %}
+      {% if counted_ns.ok %}
+      <p>Este lead já está no card Fechados no mês, ao lado.</p>
+      {% else %}
+      <button type="submit" class="btn btn-secondary" formaction="/cadastro/lead/fechar" formmethod="post" formnovalidate>Computar para fechado</button>
+      <p>Conta este lead no card Fechados no mês, ao lado.</p>
+      {% endif %}
     </section>
     {% endif %}
     <input type="hidden" name="vendedor" value="{{ vendedor }}">
@@ -168,6 +197,13 @@
       }
     });
   });
+  if (new URLSearchParams(window.location.search).get("computado") === "1") {
+    var closedCard = document.querySelector('[data-close-list="registered"]');
+    if (closedCard) closedCard.click();
+  } else if (new URLSearchParams(window.location.search).get("os")) {
+    var pendingCard = document.querySelector('[data-close-list="pending"]');
+    if (pendingCard) pendingCard.click();
+  }
   document.getElementById("cadastro-bot-run")?.addEventListener("click", async function () {
     var note = document.getElementById("cadastro-bot-note");
     var source = document.getElementById("cadastro-bot-text");

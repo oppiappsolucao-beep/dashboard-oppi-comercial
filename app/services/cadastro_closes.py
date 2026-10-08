@@ -2,10 +2,11 @@
 from __future__ import annotations
 
 from datetime import date
+import re
 
 from app.services.campaign_leads import cadastro_url, links_by_order
 from app.services.legacy_core import normalize_text
-from app.services.service_orders import DONE_QUEUE_ID, is_commercial_sector, list_orders_by_sector
+from app.services.service_orders import DONE_QUEUE_ID, is_commercial_sector, is_oppi_tech_sector, list_orders_by_sector
 
 _MONTHS = (
     "",
@@ -55,6 +56,15 @@ def build_registration_closes() -> dict:
         linked = bool(item["order_id"] and item["order_id"] in registered_orders)
         if linked:
             match = next((row for row in index if row.get("order_id") == item["order_id"]), match)
+        counted_day = _stamp_day(card.get("counted_on") or "")
+        if card.get("counted_on"):
+            if counted_day and start <= counted_day <= end:
+                if match and match.get("sheet_row"):
+                    item["company_url"] = _company_url(match.get("sheet_row"))
+                else:
+                    item["transfer_url"] = cadastro_url(link)
+                registered.append(item)
+            continue
         if match is None or (not linked and not _saved_for_this_close(match, concluded_on)):
             item["transfer_url"] = cadastro_url(link)
             pending.append(item)
@@ -74,35 +84,48 @@ def build_registration_closes() -> dict:
 
 def _done_campaign_cards() -> list[dict]:
     from app.services.org_registry import list_sectors
+    from app.services.service_orders import counted_closed_stamps
 
     cards: list[dict] = []
     for sector in list_sectors():
         name = sector.get("name") or ""
-        if not is_commercial_sector(name):
+        if not is_commercial_sector(name) and not is_oppi_tech_sector(name):
             continue
         rows = list_orders_by_sector(name)
         links = links_by_order([row.get("id", "") for row in rows])
         for card in rows:
             if card.get("queue_id") != DONE_QUEUE_ID:
                 continue
-            link = links.get(card.get("id"))
-            if not link and normalize_text(card.get("created_by")) != "Leads Raissa":
-                continue
-            card["link"] = link or {
-                "empresa": card.get("empresa") or "",
-                "phone": "",
-                "email": "",
-                "contact_name": "",
-                "creative": "",
-                "campaign": "",
-                "city": "",
-                "uf": "",
-            }
-            if not card["link"].get("empresa"):
-                card["link"]["empresa"] = card.get("empresa") or ""
-            card["link"]["order_id"] = card["link"].get("order_id") or card.get("id") or ""
+            link = links.get(card.get("id")) or _link_from_order(card)
+            if not link.get("empresa"):
+                link["empresa"] = card.get("empresa") or ""
+            link["order_id"] = link.get("order_id") or card.get("id") or ""
+            card["link"] = link
             cards.append(card)
+    stamps = counted_closed_stamps([card.get("id", "") for card in cards])
+    for card in cards:
+        card["counted_on"] = stamps.get(card.get("id") or "", "")
     return cards
+
+
+def _desc_line(text: str, label: str) -> str:
+    match = re.search(rf"(?im)^{re.escape(label)}:\s*(.+)$", text or "")
+    return normalize_text(match.group(1)) if match else ""
+
+
+def _link_from_order(card: dict) -> dict:
+    description = card.get("description") or ""
+    return {
+        "empresa": card.get("empresa") or "",
+        "phone": _desc_line(description, "WhatsApp"),
+        "email": _desc_line(description, "E-mail"),
+        "contact_name": _desc_line(description, "Contato"),
+        "creative": "",
+        "campaign": "",
+        "city": "",
+        "uf": "",
+        "order_id": card.get("id") or "",
+    }
 
 
 def _sector_queues(sector_name: str) -> list[dict]:
