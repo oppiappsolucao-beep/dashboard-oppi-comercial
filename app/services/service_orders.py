@@ -560,9 +560,21 @@ def build_sector_board(sector_id: str, sector_name: str, inicio: str = "", fim: 
 _PLACEHOLDER_EMPRESA = {"", "-", "—", "lead de campanha", "cliente sem nome"}
 
 
-def _contact_line(description: str) -> str:
-    match = re.search(r"(?im)^contato:\s*(.+)$", description or "")
+def _description_line(description: str, label: str) -> str:
+    match = re.search(rf"(?im)^{re.escape(label)}:\s*(.+)$", description or "")
     return normalize_text(match.group(1)) if match else ""
+
+
+def _contact_line(description: str) -> str:
+    return _description_line(description, "Contato")
+
+
+def _card_phone(card: dict) -> str:
+    phone = normalize_text(card.get("phone"))
+    if phone:
+        return phone
+    description = card.get("description") or ""
+    return _description_line(description, "WhatsApp") or _description_line(description, "Telefone")
 
 
 def _upsert_labeled_line(description: str, label: str, value: str) -> str:
@@ -609,18 +621,40 @@ def _attach_card_contacts(cards: list[dict]) -> None:
         contact = normalize_text(found.get("nome_contato")) or normalize_text(card.get("contact_name")) or _contact_line(card.get("description") or "")
         card["contact_name"] = contact
     missing = [card.get("id") for card in cards if card.get("id") and not card.get("contact_name")]
-    if not missing:
+    if missing:
+        try:
+            from app.services.cadastro_closes import contacts_linked_to_orders
+
+            linked = contacts_linked_to_orders(missing)
+        except Exception:
+            linked = {}
+        for card in cards:
+            found_name = linked.get(card.get("id") or "")
+            if found_name and not card.get("contact_name"):
+                card["contact_name"] = found_name
+    needing_phone = [
+        card
+        for card in cards
+        if _card_phone(card)
+        and (
+            not card.get("contact_name")
+            or normalize_text(card.get("empresa")).lower() in _PLACEHOLDER_EMPRESA
+        )
+    ]
+    if not needing_phone:
         return
     try:
-        from app.services.cadastro_closes import contacts_linked_to_orders
+        from app.services.cadastro_closes import _phone_key, lookup_clients_by_phones
 
-        linked = contacts_linked_to_orders(missing)
+        found_by_phone = lookup_clients_by_phones([_card_phone(card) for card in needing_phone])
     except Exception:
         return
-    for card in cards:
-        found_name = linked.get(card.get("id") or "")
-        if found_name and not card.get("contact_name"):
-            card["contact_name"] = found_name
+    for card in needing_phone:
+        client = found_by_phone.get(_phone_key(_card_phone(card))) or {}
+        if client.get("contact_name") and not card.get("contact_name"):
+            card["contact_name"] = client["contact_name"]
+        if client.get("empresa") and normalize_text(card.get("empresa")).lower() in _PLACEHOLDER_EMPRESA:
+            card["empresa"] = client["empresa"]
 
 
 def link_registration_to_order(order_id: str, sheet_row: int, contact_name: str, empresa: str) -> None:
@@ -968,10 +1002,16 @@ def get_order_detail(order_id: str) -> dict | None:
             client["uf"] = extra.get("uf") or ""
     from app.services.cadastro_closes import company_family_links
 
+    client = detail["client"]
+    description = detail.get("description") or ""
+    if not client.get("whatsapp"):
+        client["whatsapp"] = _description_line(description, "WhatsApp")
+    if not client.get("telefone"):
+        client["telefone"] = _description_line(description, "Telefone")
     detail["company_links"] = company_family_links(
         sheet_row=int(detail.get("sheet_row") or 0),
         order_id=detail.get("id") or "",
-        phone=(detail.get("client") or {}).get("whatsapp") or detail.get("phone") or "",
+        phone=client.get("whatsapp") or client.get("telefone") or detail.get("phone") or "",
         origin="activities",
     )
     if not (detail.get("client") or {}).get("contato"):
@@ -990,6 +1030,14 @@ def get_order_detail(order_id: str) -> dict | None:
             named = _contact_line(detail.get("description") or "")
         if named:
             detail["client"]["contato"] = named
+    empresa_now = normalize_text(detail.get("empresa"))
+    if empresa_now.lower() in _PLACEHOLDER_EMPRESA:
+        named_company = next(
+            (item.get("empresa") for item in detail["company_links"] if item.get("empresa")),
+            "",
+        )
+        if named_company:
+            detail["empresa"] = named_company
     return detail
 
 

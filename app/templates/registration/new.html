@@ -81,6 +81,15 @@
           </select>
         </form>
         {% endif %}
+        {% if item.companies and item.companies|length > 1 %}
+        {% for company in item.companies %}
+        <a class="btn btn-small btn-secondary" href="{{ company.url }}">Ver {{ company.kind|lower }} · {{ company.empresa }}</a>
+        {% endfor %}
+        {% elif item.company_url %}
+        <a class="btn btn-small btn-secondary" href="{{ item.company_url }}">Ver empresas</a>
+        {% else %}
+        <a class="btn btn-small btn-secondary" href="/leads-e-empresas">Ver empresas</a>
+        {% endif %}
         <a class="btn btn-small" href="{{ item.transfer_url }}#cadastro-bot">Cadastrar</a>
         {% if item.order_id %}
         <form method="post" action="/cadastro/lead/fechar">
@@ -106,9 +115,9 @@
       <a class="btn btn-small btn-secondary" href="{{ company.url }}">Ver {{ company.kind|lower }} · {{ company.empresa }}</a>
       {% endfor %}
       {% elif item.company_url %}
-      <a class="btn btn-small btn-secondary" href="{{ item.company_url }}">Ver empresa</a>
-      {% elif item.transfer_url %}
-      <a class="btn btn-small btn-secondary" href="{{ item.transfer_url }}">Abrir cadastro</a>
+      <a class="btn btn-small btn-secondary" href="{{ item.company_url }}">Ver empresas</a>
+      {% else %}
+      <a class="btn btn-small btn-secondary" href="/leads-e-empresas">Ver empresas</a>
       {% endif %}
     </div>
     {% else %}

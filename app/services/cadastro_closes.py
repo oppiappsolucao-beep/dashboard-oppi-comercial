@@ -64,6 +64,7 @@ def build_registration_closes() -> dict:
             continue
         if match is None or (not linked and not _saved_for_this_close(match, concluded_on)):
             item["transfer_url"] = cadastro_url(link)
+            _set_company_links(item, match, link)
             pending.append(item)
             continue
         closed_on = _stamp_day(card.get("updated_at")) or _stamp_day(match.get("created_at")) or _stamp_day(match.get("data_chamado"))
@@ -89,6 +90,16 @@ def _set_company_links(item: dict, match: dict | None, link: dict) -> None:
     item["companies"] = companies
     if companies:
         item["company_url"] = companies[0]["url"]
+        if not item.get("contact_name"):
+            item["contact_name"] = next(
+                (company.get("contact_name") for company in companies if company.get("contact_name")),
+                "",
+            )
+        empresa = normalize_text(item.get("empresa"))
+        if empresa.lower() in {"", "-", "—", "lead de campanha", "cliente sem nome"}:
+            named = next((company.get("empresa") for company in companies if company.get("empresa")), "")
+            if named:
+                item["empresa"] = named
     elif match and match.get("sheet_row"):
         item["company_url"] = _company_url(match.get("sheet_row"))
     else:
@@ -275,9 +286,6 @@ def _find_registration(link: dict, index: list[dict]) -> dict | None:
     return by_phone or by_name
 
 
-    return out
-
-
 def contacts_linked_to_orders(order_ids: list[str]) -> dict[str, str]:
     """Nome do contato já salvo no cadastro ligado a cada OS."""
     wanted = {normalize_text(item) for item in order_ids if normalize_text(item)}
@@ -351,34 +359,13 @@ def company_family_links(
                 row for row in tied
                 if _order_id_from_extras(row.extras_json) == order_id
             )
-        if phone_key and not seeds:
-            from sqlalchemy import or_
-
-            tail = phone_key[-8:]
-            dashed = f"{tail[:4]}-{tail[4:]}" if len(tail) == 8 else tail
-            rough = (
-                db.query(CrmRegistration)
-                .filter(CrmRegistration.cadastro_ativo.is_(True))
-                .filter(
-                    or_(
-                        CrmRegistration.telefone_b2b.ilike(f"%{tail}%"),
-                        CrmRegistration.telefone_b2b.ilike(f"%{dashed}%"),
-                        CrmRegistration.telefone_fixo.ilike(f"%{dashed}%"),
-                        CrmRegistration.telefone_alternativo.ilike(f"%{dashed}%"),
-                    )
-                )
-                .limit(40)
-                .all()
-            )
-            for row in rough:
-                phones = (
-                    _phone_key(row.telefone_b2b),
-                    _phone_key(row.telefone_fixo),
-                    _phone_key(row.telefone_alternativo),
-                )
-                if phone_key in phones:
+        if phone_key:
+            known = {int(row.sheet_row or 0) for row in seeds}
+            for row in _rows_matching_phone(db, phone):
+                number = int(row.sheet_row or 0)
+                if number not in known:
                     seeds.append(row)
-                    break
+                    known.add(number)
         if not seeds:
             return []
         matriz_ids: set[int] = set()
@@ -454,12 +441,130 @@ def _company_url(sheet_row) -> str:
 
 
 def _phone_key(value: str) -> str:
+    """DDD + número, sem o 9 extra do celular. 85 9212-7042 e 85 99212-7042 viram a mesma chave."""
     digits = "".join(ch for ch in normalize_text(value) if ch.isdigit())
-    if len(digits) >= 11:
-        return digits[-11:]
+    if digits.startswith("0") and len(digits) in {11, 12, 13}:
+        digits = digits[1:]
+    if digits.startswith("55") and len(digits) > 11:
+        digits = digits[2:]
+    if len(digits) >= 11 and digits[2] == "9":
+        digits = digits[:2] + digits[3:]
+    if len(digits) >= 10:
+        return digits[-10:]
     if len(digits) >= 8:
-        return digits
+        return digits[-8:]
     return ""
+
+
+def _phone_patterns(phone: str) -> list[str]:
+    key = _phone_key(phone)
+    if len(key) < 8:
+        return []
+    tail = key[-8:]
+    patterns = [
+        tail,
+        f"{tail[:4]}-{tail[4:]}",
+        f"{tail[:4]} {tail[4:]}",
+        f"9{tail}",
+        f"9{tail[:4]}-{tail[4:]}",
+        f"9 {tail[:4]}-{tail[4:]}",
+    ]
+    if len(key) >= 10:
+        ddd = key[:2]
+        patterns.extend((f"{ddd}{tail}", f"{ddd}9{tail}", f"({ddd}) {tail[:4]}-{tail[4:]}", f"({ddd}) 9{tail[:4]}-{tail[4:]}"))
+    return list(dict.fromkeys(pattern for pattern in patterns if len(pattern) >= 8))
+
+
+def _row_phone_keys(row) -> set[str]:
+    return {
+        key
+        for key in (
+            _phone_key(getattr(row, "telefone_b2b", "")),
+            _phone_key(getattr(row, "telefone_fixo", "")),
+            _phone_key(getattr(row, "telefone_alternativo", "")),
+        )
+        if key
+    }
+
+
+def _rows_matching_phone(db, phone: str):
+    from sqlalchemy import or_
+
+    from database.models import CrmRegistration
+
+    key = _phone_key(phone)
+    patterns = _phone_patterns(phone)
+    if not key or not patterns:
+        return []
+    clauses = []
+    for pattern in patterns:
+        like = f"%{pattern}%"
+        clauses.extend(
+            (
+                CrmRegistration.telefone_b2b.ilike(like),
+                CrmRegistration.telefone_fixo.ilike(like),
+                CrmRegistration.telefone_alternativo.ilike(like),
+            )
+        )
+    rough = (
+        db.query(CrmRegistration)
+        .filter(CrmRegistration.cadastro_ativo.is_(True))
+        .filter(or_(*clauses))
+        .limit(80)
+        .all()
+    )
+    matched = [row for row in rough if key in _row_phone_keys(row)]
+    if matched:
+        return matched
+    rows = db.query(CrmRegistration).filter(CrmRegistration.cadastro_ativo.is_(True)).all()
+    return [row for row in rows if key in _row_phone_keys(row)]
+
+
+def lookup_clients_by_phones(phones: list[str]) -> dict[str, dict]:
+    """Chave do telefone → nome do contato e empresa já cadastrados."""
+    wanted = {_phone_key(phone) for phone in phones if _phone_key(phone)}
+    if not wanted:
+        return {}
+    try:
+        from app.services.crm_registrations_storage import is_crm_postgres_ready
+        from database.connection import SessionLocal
+        from database.models import CrmRegistration
+    except Exception:
+        return {}
+    if not is_crm_postgres_ready():
+        return {}
+    db = SessionLocal()
+    try:
+        rows = (
+            db.query(
+                CrmRegistration.sheet_row,
+                CrmRegistration.empresa,
+                CrmRegistration.nome_contato,
+                CrmRegistration.telefone_b2b,
+                CrmRegistration.telefone_fixo,
+                CrmRegistration.telefone_alternativo,
+            )
+            .filter(CrmRegistration.cadastro_ativo.is_(True))
+            .all()
+        )
+    except Exception:
+        return {}
+    finally:
+        db.close()
+    found: dict[str, dict] = {}
+    for row in rows:
+        client = {
+            "empresa": normalize_text(row.empresa),
+            "contact_name": normalize_text(row.nome_contato),
+            "sheet_row": int(row.sheet_row or 0),
+        }
+        for key in _row_phone_keys(row):
+            if key not in wanted:
+                continue
+            current = found.get(key)
+            if current is None or (not current.get("contact_name") and client["contact_name"]):
+                found[key] = client
+    return found
 
 
 def _stamp_day(value: str) -> str:

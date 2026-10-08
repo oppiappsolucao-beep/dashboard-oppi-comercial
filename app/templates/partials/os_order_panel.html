@@ -35,7 +35,9 @@
       {% endfor %}
     </div>
     {% elif order.company_links %}
-    <a class="btn btn-small" href="{{ order.company_links[0].url }}">Ver empresa</a>
+    <a class="btn btn-small" href="{{ order.company_links[0].url }}">Ver empresas</a>
+    {% elif order.queue_id == 'concluida' %}
+    <a class="btn btn-small" href="/leads-e-empresas">Ver empresas</a>
     {% elif order.sheet_row %}
     <a class="btn btn-small btn-secondary" href="/cadastro/todos/{{ order.sheet_row }}/editar?tab=ordens&from=activities">Abrir cadastro</a>
     {% endif %}
