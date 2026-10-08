@@ -189,7 +189,7 @@ def _os_board_context(request: Request) -> dict:
         "fim": summary["fim"],
         "summary": summary,
         "is_commercial": "comercial" in sector_name.lower(),
-        "can_delete_orders": _oppi_tech_login(request),
+        "can_delete_orders": _oppi_tech_board(request, sector_name),
         "success": request.session.pop("os_board_success", ""),
         "error": request.session.pop("os_board_error", ""),
     }
@@ -401,11 +401,11 @@ async def activities_delete_order(request: Request, order_id: str):
         return redirect
     from app.services.service_orders import delete_service_order, get_order_detail
 
-    if not _oppi_tech_login(request):
-        return HTMLResponse("Somente o login Oppi Tech pode excluir o card.", status_code=403)
     detail = get_order_detail(order_id)
     if not detail or not _order_visible(request, detail):
         return HTMLResponse("Ordem de serviço não encontrada.", status_code=404)
+    if not _oppi_tech_board(request, detail.get("sector") or ""):
+        return HTMLResponse("Somente o acesso Oppi Tech pode excluir o card.", status_code=403)
     try:
         delete_service_order(order_id)
     except ValueError as error:
@@ -421,15 +421,16 @@ def _os_actor(request: Request) -> str:
     )
 
 
-def _oppi_tech_login(request: Request) -> bool:
-    """Só o funcionário logado no setor Oppi Tech. O administrador vendo o quadro não entra aqui."""
-    if not request.session.get("org_person_id"):
-        return False
+def _oppi_tech_board(request: Request, sector_name: str) -> bool:
+    """Quadro ou login do setor Oppi Tech. Comercial e treinamento ficam de fora."""
     from app.services.service_orders import is_oppi_tech_sector
 
-    return is_oppi_tech_sector(request.session.get("org_sector_name") or "") or is_oppi_tech_sector(
-        request.session.get("username") or ""
-    )
+    if is_oppi_tech_sector(sector_name):
+        return True
+    if is_oppi_tech_sector(request.session.get("org_sector_name") or ""):
+        return True
+    username = normalize_text(request.session.get("username"))
+    return is_oppi_tech_sector(username)
 
 
 def _order_panel_context(order: dict, sector_notice: str = "", can_delete_order: bool = False) -> dict:
@@ -478,7 +479,10 @@ async def activities_order_detail(request: Request, order_id: str):
     return render(
         request,
         "partials/os_order_panel.html",
-        _order_panel_context(detail, can_delete_order=_oppi_tech_login(request)),
+        _order_panel_context(
+            detail,
+            can_delete_order=_oppi_tech_board(request, detail.get("sector") or ""),
+        ),
     )
 
 
@@ -500,7 +504,10 @@ async def activities_order_update(request: Request, order_id: str, note: str = F
     return render(
         request,
         "partials/os_order_panel.html",
-        _order_panel_context(detail, can_delete_order=_oppi_tech_login(request)),
+        _order_panel_context(
+            detail,
+            can_delete_order=_oppi_tech_board(request, detail.get("sector") or ""),
+        ),
     )
 
 
@@ -521,7 +528,11 @@ async def activities_direct_sector(request: Request, order_id: str, sector_name:
         return render(
             request,
             "partials/os_order_panel.html",
-            _order_panel_context(detail, str(error), can_delete_order=_oppi_tech_login(request)),
+            _order_panel_context(
+                detail,
+                str(error),
+                can_delete_order=_oppi_tech_board(request, detail.get("sector") or ""),
+            ),
         )
     extra = ticket_card_extra(order_id) or {}
     sheet_note = ""

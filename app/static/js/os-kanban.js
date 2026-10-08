@@ -164,19 +164,26 @@
   board.addEventListener("pointercancel", endTouch);
 
   var search = document.getElementById("os-card-filter");
-  if (search) {
-    search.addEventListener("input", function () {
-      var query = search.value.trim().toLowerCase();
-      var queryDigits = query.replace(/\D/g, "");
-      board.querySelectorAll(".activities-kanban-card").forEach(function (card) {
-        var hay = (card.getAttribute("data-search") || "").toLowerCase();
-        var hayDigits = hay.replace(/\D/g, "");
-        var match = !query
-          || hay.indexOf(query) !== -1
-          || (queryDigits.length >= 2 && hayDigits.indexOf(queryDigits) !== -1);
-        card.hidden = !match;
-      });
-      board.querySelectorAll(".activities-kanban-column").forEach(countColumn);
+  var searchForm = document.getElementById("os-card-search-form");
+  function applyCardFilter() {
+    if (!search) return;
+    var query = search.value.trim().toLowerCase();
+    var queryDigits = query.replace(/\D/g, "");
+    board.querySelectorAll(".activities-kanban-card").forEach(function (card) {
+      var hay = (card.getAttribute("data-search") || "").toLowerCase();
+      var hayDigits = hay.replace(/\D/g, "");
+      var match = !query
+        || hay.indexOf(query) !== -1
+        || (queryDigits.length >= 2 && hayDigits.indexOf(queryDigits) !== -1);
+      card.hidden = !match;
+    });
+    board.querySelectorAll(".activities-kanban-column").forEach(countColumn);
+  }
+  if (search) search.addEventListener("input", applyCardFilter);
+  if (searchForm) {
+    searchForm.addEventListener("submit", function (event) {
+      event.preventDefault();
+      applyCardFilter();
     });
   }
 

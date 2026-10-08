@@ -36,7 +36,7 @@
 @media (max-width: 640px) {
   .os-summary, .os-summary.is-support, .os-summary.is-columns { grid-template-columns: 1fr 1fr; }
   .os-period, .os-sector-switch, .os-queue-form { flex-direction: column; align-items: stretch; }
-  .os-period input, .os-period button, .os-sector-switch select, .os-queue-form input, .os-queue-form button, .os-card-search label, .os-card-search input { width: 100%; }
+  .os-period input, .os-period button, .os-sector-switch select, .os-queue-form input, .os-queue-form button, .os-card-search label, .os-card-search input, .os-card-search button { width: 100%; }
   .os-column-tools { flex-wrap: wrap; }
   .activities-kanban-card-title, .activities-kanban-card-meta { overflow-wrap: anywhere; }
 }
@@ -94,10 +94,11 @@
   <button type="submit" class="btn">Ver período</button>
 </form>
 
-<form class="os-card-search panel" onsubmit="return false;">
+<form class="os-card-search panel" id="os-card-search-form">
   <label>Nome ou número
     <input type="search" id="os-card-filter" placeholder="Empresa, telefone ou número da OS" autocomplete="off">
   </label>
+  <button type="submit" class="btn">Pesquisar</button>
 </form>
 
 <section class="os-summary{% if 'treinamento' in sector_name|lower %} is-columns{% elif summary.layout == 'suporte' %} is-support{% endif %}" aria-label="Resumo do período">
@@ -219,5 +220,5 @@
     <div id="os-order-modal-body">Carregando…</div>
   </div>
 </div>
-<script src="/static/js/os-kanban.js?v=10"></script>
+<script src="/static/js/os-kanban.js?v=11"></script>
 {% endblock %}
