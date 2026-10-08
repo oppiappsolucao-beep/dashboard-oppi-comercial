@@ -269,7 +269,37 @@ def _draw_page_chrome(canvas, doc) -> None:
     canvas.restoreState()
 
 
-def _selected_from_payload(payload: dict | None, colaboradores: int) -> SelectedProposalPricing:
+def _parse_brl(raw) -> Decimal | None:
+    text = normalize_text(raw).replace("R$", "").replace(" ", "")
+    if not text:
+        return None
+    if "," in text:
+        text = text.replace(".", "").replace(",", ".")
+    elif text.count(".") > 1 or (text.count(".") == 1 and len(text.rsplit(".", 1)[-1]) == 3):
+        text = text.replace(".", "")
+    try:
+        return Decimal(text).quantize(Decimal("0.01"))
+    except Exception:
+        return None
+
+
+def _negotiation_prices(snapshot: dict) -> dict:
+    prices = {
+        "valor_boleto": _parse_brl(snapshot.get("valor_boleto")),
+        "valor_cartao": _parse_brl(snapshot.get("valor_cartao")),
+        "valor_anual": _parse_brl(snapshot.get("valor_anual")),
+        "valor_mensal_equivalente": _parse_brl(snapshot.get("valor_mensal_equivalente")),
+        "valor_adicional": _parse_brl(snapshot.get("valor_adicional")),
+        "valor_final": _parse_brl(snapshot.get("valor_final")),
+    }
+    prices["active"] = bool(snapshot.get("manual")) and any(
+        prices[key] is not None
+        for key in ("valor_boleto", "valor_cartao", "valor_anual", "valor_mensal_equivalente", "valor_final")
+    )
+    prices["observacao"] = normalize_text(snapshot.get("observacao"))
+    plan_key = normalize_text(snapshot.get("plan_key") or "boleto").lower()
+    prices["plan_key"] = plan_key if plan_key in {"boleto", "cartao", "anual"} else "boleto"
+    return prices
     planos = calcular_planos_ponto(colaboradores)
     if not payload:
         return select_plan(planos, planos.plano_recomendado)
@@ -328,15 +358,18 @@ def generate_commercial_proposal_pdf(
         colaboradores = int(snapshot.get("colaboradores") or 0)
     except (TypeError, ValueError):
         colaboradores = 0
-    if colaboradores <= 0:
-        from app.services.proposal_pricing import parse_collaborators_count
+    negotiation = _negotiation_prices(snapshot)
+    selected = None
+    planos = None
+    if not negotiation["active"]:
+        if colaboradores <= 0:
+            from app.services.proposal_pricing import parse_collaborators_count
 
-        colaboradores = parse_collaborators_count(snapshot.get("colaboradores")) or parse_collaborators_count(
-            services_description
-        ) or 10
-
-    selected = _selected_from_payload(snapshot.get("selected") or snapshot, colaboradores)
-    planos = selected.planos
+            colaboradores = parse_collaborators_count(snapshot.get("colaboradores")) or parse_collaborators_count(
+                services_description
+            ) or 10
+        selected = _selected_from_payload(snapshot.get("selected") or snapshot, colaboradores)
+        planos = selected.planos
     today = date.today()
     date_label = f"São Paulo, {today.day} de {MONTHS_PT[today.month - 1]} de {today.year}."
 
@@ -475,69 +508,134 @@ def generate_commercial_proposal_pdf(
     )
 
     add_heading("Planos disponíveis")
-    # Formato do PDF modelo (nome → preço → inclui)
-    story.append(Paragraph("<b>Plano Mensal no Boleto</b>", body_left))
-    story.append(
-        Paragraph(
-            _escape(
-                f"{format_money_br(planos.total_mensal_boleto)} por mês até {planos.quantidade_total} colaboradores"
-            ),
-            body_left,
+    headcount = f" para até {colaboradores} colaboradores" if colaboradores > 0 else ""
+    if negotiation["active"]:
+        plan_lines = (
+            ("Plano Mensal no Boleto", negotiation["valor_boleto"], f"por mês{headcount}"),
+            ("Plano Mensal Recorrente no Cartão", negotiation["valor_cartao"], f"por mês{headcount}"),
         )
-    )
-    story.append(
-        Paragraph(
-            _escape(f"Inclui acesso à plataforma para até {planos.quantidade_total} colaboradores."),
-            body_left,
-        )
-    )
-    story.append(Spacer(1, 6))
-    story.append(Paragraph("<b>Plano Mensal Recorrente no Cartão</b>", body_left))
-    story.append(
-        Paragraph(
-            _escape(f"{format_money_br(planos.total_mensal_cartao)} por mês"),
-            body_left,
-        )
-    )
-    story.append(
-        Paragraph(
-            _escape(f"Inclui acesso à plataforma para até {planos.quantidade_total} colaboradores."),
-            body_left,
-        )
-    )
-    story.append(Spacer(1, 6))
-    story.append(Paragraph("<b>Plano Anual</b>", body_left))
-    story.append(Paragraph(_escape(f"{format_money_br(planos.total_anual)} à vista"), body_left))
-    story.append(
-        Paragraph(
-            _escape(
-                f"Equivalente a {format_money_br(planos.mensal_equivalente_anual)} por mês durante 12 meses."
-            ),
-            body_left,
-        )
-    )
-    story.append(
-        Paragraph(
-            _escape(f"Inclui acesso à plataforma para até {planos.quantidade_total} colaboradores."),
-            body_left,
-        )
-    )
-    story.append(Spacer(1, 4))
-    story.append(
-        Paragraph(
-            _escape(f"Colaboradores adicionais: {format_money_br(EXTRA_MENSAL)} por colaborador/mês."),
-            body_left,
-        )
-    )
-    if selected.plan_label:
-        story.append(Spacer(1, 4))
+        for title, amount, suffix in plan_lines:
+            if amount is None:
+                continue
+            story.append(Paragraph(f"<b>{_escape(title)}</b>", body_left))
+            story.append(Paragraph(_escape(f"{format_money_br(amount)} {suffix}"), body_left))
+            if colaboradores > 0:
+                story.append(
+                    Paragraph(
+                        _escape(f"Inclui acesso à plataforma para até {colaboradores} colaboradores."),
+                        body_left,
+                    )
+                )
+            story.append(Spacer(1, 6))
+        if negotiation["valor_anual"] is not None:
+            story.append(Paragraph("<b>Plano Anual</b>", body_left))
+            story.append(Paragraph(_escape(f"{format_money_br(negotiation['valor_anual'])} à vista"), body_left))
+            if negotiation["valor_mensal_equivalente"] is not None:
+                story.append(
+                    Paragraph(
+                        _escape(
+                            f"Equivalente a {format_money_br(negotiation['valor_mensal_equivalente'])} por mês durante 12 meses."
+                        ),
+                        body_left,
+                    )
+                )
+            if colaboradores > 0:
+                story.append(
+                    Paragraph(
+                        _escape(f"Inclui acesso à plataforma para até {colaboradores} colaboradores."),
+                        body_left,
+                    )
+                )
+            story.append(Spacer(1, 6))
+        if negotiation["valor_adicional"] is not None:
+            story.append(
+                Paragraph(
+                    _escape(
+                        f"Colaboradores adicionais: {format_money_br(negotiation['valor_adicional'])} por colaborador/mês."
+                    ),
+                    body_left,
+                )
+            )
+        chosen = {
+            "boleto": ("Plano Mensal no Boleto", negotiation["valor_boleto"]),
+            "cartao": ("Plano Mensal Recorrente no Cartão", negotiation["valor_cartao"]),
+            "anual": ("Plano Anual", negotiation["valor_anual"]),
+        }[negotiation["plan_key"]]
+        final_amount = negotiation["valor_final"] if negotiation["valor_final"] is not None else chosen[1]
+        if final_amount is not None:
+            story.append(Spacer(1, 4))
+            story.append(
+                Paragraph(
+                    f"<b>Plano selecionado nesta proposta:</b> {_escape(chosen[0])} "
+                    f"— valor final {format_money_br(final_amount)}.",
+                    body_left,
+                )
+            )
+        if negotiation["observacao"]:
+            story.append(Paragraph(_escape(f"Negociação: {negotiation['observacao']}"), body_left))
+    else:
+        story.append(Paragraph("<b>Plano Mensal no Boleto</b>", body_left))
         story.append(
             Paragraph(
-                f"<b>Plano selecionado nesta proposta:</b> {_escape(selected.plan_label)} "
-                f"— valor final {format_money_br(selected.valor_final)}.",
+                _escape(
+                    f"{format_money_br(planos.total_mensal_boleto)} por mês até {planos.quantidade_total} colaboradores"
+                ),
                 body_left,
             )
         )
+        story.append(
+            Paragraph(
+                _escape(f"Inclui acesso à plataforma para até {planos.quantidade_total} colaboradores."),
+                body_left,
+            )
+        )
+        story.append(Spacer(1, 6))
+        story.append(Paragraph("<b>Plano Mensal Recorrente no Cartão</b>", body_left))
+        story.append(
+            Paragraph(
+                _escape(f"{format_money_br(planos.total_mensal_cartao)} por mês"),
+                body_left,
+            )
+        )
+        story.append(
+            Paragraph(
+                _escape(f"Inclui acesso à plataforma para até {planos.quantidade_total} colaboradores."),
+                body_left,
+            )
+        )
+        story.append(Spacer(1, 6))
+        story.append(Paragraph("<b>Plano Anual</b>", body_left))
+        story.append(Paragraph(_escape(f"{format_money_br(planos.total_anual)} à vista"), body_left))
+        story.append(
+            Paragraph(
+                _escape(
+                    f"Equivalente a {format_money_br(planos.mensal_equivalente_anual)} por mês durante 12 meses."
+                ),
+                body_left,
+            )
+        )
+        story.append(
+            Paragraph(
+                _escape(f"Inclui acesso à plataforma para até {planos.quantidade_total} colaboradores."),
+                body_left,
+            )
+        )
+        story.append(Spacer(1, 4))
+        story.append(
+            Paragraph(
+                _escape(f"Colaboradores adicionais: {format_money_br(EXTRA_MENSAL)} por colaborador/mês."),
+                body_left,
+            )
+        )
+        if selected.plan_label:
+            story.append(Spacer(1, 4))
+            story.append(
+                Paragraph(
+                    f"<b>Plano selecionado nesta proposta:</b> {_escape(selected.plan_label)} "
+                    f"— valor final {format_money_br(selected.valor_final)}.",
+                    body_left,
+                )
+            )
 
     add_heading("Ativação da plataforma")
     add_text(
@@ -573,14 +671,35 @@ def generate_commercial_proposal_pdf(
     )
 
     add_heading("Investimento acessível para sua empresa")
-    add_text(
-        f"Com planos a partir de {format_money_br(planos.mensal_equivalente_anual)} por mês no plano anual, "
-        "sua empresa passa a contar com uma solução digital para controle de ponto, documentos e relatórios.\n\n"
-        "A Oppi foi criada para empresas que buscam praticidade, organização e mais "
-        "segurança na gestão dos colaboradores.\n\n"
-        "Agradecemos pela oportunidade de apresentar nossa proposta comercial.\n\n"
-        "OPPI - Gestão • Operação • Performance"
-    )
+    if negotiation["active"]:
+        from_price = (
+            negotiation["valor_mensal_equivalente"]
+            or negotiation["valor_boleto"]
+            or negotiation["valor_cartao"]
+            or negotiation["valor_final"]
+        )
+        opening = (
+            f"Com o valor negociado de {format_money_br(from_price)}, "
+            if from_price is not None
+            else "Com o valor negociado nesta proposta, "
+        )
+        add_text(
+            opening
+            + "sua empresa passa a contar com uma solução digital para controle de ponto, documentos e relatórios.\n\n"
+            "A Oppi foi criada para empresas que buscam praticidade, organização e mais "
+            "segurança na gestão dos colaboradores.\n\n"
+            "Agradecemos pela oportunidade de apresentar nossa proposta comercial.\n\n"
+            "OPPI - Gestão • Operação • Performance"
+        )
+    else:
+        add_text(
+            f"Com planos a partir de {format_money_br(planos.mensal_equivalente_anual)} por mês no plano anual, "
+            "sua empresa passa a contar com uma solução digital para controle de ponto, documentos e relatórios.\n\n"
+            "A Oppi foi criada para empresas que buscam praticidade, organização e mais "
+            "segurança na gestão dos colaboradores.\n\n"
+            "Agradecemos pela oportunidade de apresentar nossa proposta comercial.\n\n"
+            "OPPI - Gestão • Operação • Performance"
+        )
     story.append(Paragraph(_escape(date_label), small))
     story.append(Spacer(1, 20))
 

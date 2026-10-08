@@ -573,8 +573,15 @@ def _proposal_values(order: dict, form: dict | None = None) -> dict:
         "cargo": "",
         "telefone": client.get("whatsapp") or client.get("telefone") or "",
         "nome_fantasia": "",
-        "colaboradores": "20",
+        "colaboradores": "",
         "plan_key": "boleto",
+        "valor_boleto": "",
+        "valor_cartao": "",
+        "valor_anual": "",
+        "valor_mensal_equivalente": "",
+        "valor_adicional": "",
+        "valor_final": "",
+        "observacao": "",
     }
     try:
         df, columns = get_prepared_data()
@@ -590,10 +597,21 @@ def _proposal_values(order: dict, form: dict | None = None) -> dict:
             values["colaboradores"] = found["colaboradores"]
     except Exception:
         pass
+    typed_keys = {
+        "colaboradores",
+        "plan_key",
+        "valor_boleto",
+        "valor_cartao",
+        "valor_anual",
+        "valor_mensal_equivalente",
+        "valor_adicional",
+        "valor_final",
+        "observacao",
+    }
     if form:
         for key in values:
             posted = normalize_text(form.get(key))
-            if posted:
+            if posted or key in typed_keys:
                 values[key] = posted
     return values
 
@@ -615,7 +633,18 @@ def _proposal_pdf_bytes(order: dict, values: dict) -> tuple[bytes, str]:
         values.get("razao_social") or order.get("empresa") or "Cliente",
         df,
         columns or {},
-        proposal_snapshot={"colaboradores": colaboradores, "plan_key": values.get("plan_key") or "boleto"},
+        proposal_snapshot={
+            "colaboradores": colaboradores,
+            "plan_key": values.get("plan_key") or "boleto",
+            "manual": True,
+            "valor_boleto": values.get("valor_boleto") or "",
+            "valor_cartao": values.get("valor_cartao") or "",
+            "valor_anual": values.get("valor_anual") or "",
+            "valor_mensal_equivalente": values.get("valor_mensal_equivalente") or "",
+            "valor_adicional": values.get("valor_adicional") or "",
+            "valor_final": values.get("valor_final") or "",
+            "observacao": values.get("observacao") or "",
+        },
         client_override={
             "razao_social": values.get("razao_social"),
             "empresa": values.get("razao_social"),
@@ -669,6 +698,13 @@ async def activities_proposal_pdf(
     nome_fantasia: str = Form(""),
     colaboradores: str = Form(""),
     plan_key: str = Form("boleto"),
+    valor_boleto: str = Form(""),
+    valor_cartao: str = Form(""),
+    valor_anual: str = Form(""),
+    valor_mensal_equivalente: str = Form(""),
+    valor_adicional: str = Form(""),
+    valor_final: str = Form(""),
+    observacao: str = Form(""),
     disposicao: str = Form("anexo"),
 ):
     redirect = require_auth(request)
@@ -692,6 +728,13 @@ async def activities_proposal_pdf(
             "nome_fantasia": nome_fantasia,
             "colaboradores": colaboradores,
             "plan_key": plan_key,
+            "valor_boleto": valor_boleto,
+            "valor_cartao": valor_cartao,
+            "valor_anual": valor_anual,
+            "valor_mensal_equivalente": valor_mensal_equivalente,
+            "valor_adicional": valor_adicional,
+            "valor_final": valor_final,
+            "observacao": observacao,
         },
     )
     if not normalize_text(values.get("razao_social")):
@@ -703,6 +746,25 @@ async def activities_proposal_pdf(
                 "order": detail,
                 "values": values,
                 "error": "Informe o nome do contratante.",
+            },
+            status_code=400,
+        )
+    typed_prices = (
+        values.get("valor_boleto"),
+        values.get("valor_cartao"),
+        values.get("valor_anual"),
+        values.get("valor_mensal_equivalente"),
+        values.get("valor_final"),
+    )
+    if not any(any(ch.isdigit() for ch in normalize_text(item)) for item in typed_prices):
+        return render(
+            request,
+            "activities/proposal_form.html",
+            {
+                "active_page": "activities",
+                "order": detail,
+                "values": values,
+                "error": "Digite pelo menos um valor da negociação. O PDF não calcula preço sozinho.",
             },
             status_code=400,
         )

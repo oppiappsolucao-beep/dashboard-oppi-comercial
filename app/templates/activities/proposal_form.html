@@ -3,7 +3,10 @@
 <style>
 .proposal-form { display: grid; gap: 18px; width: 100%; padding: 22px; }
 .proposal-form label { display: flex; flex-direction: column; gap: 8px; font-size: 0.92rem; font-weight: 600; color: var(--muted); }
-.proposal-form input, .proposal-form select { min-height: 48px; padding: 0 14px; border: 1px solid var(--border); border-radius: 12px; background: #fff; font: inherit; font-size: 1rem; color: inherit; }
+.proposal-form input, .proposal-form select, .proposal-form textarea { min-height: 48px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px; background: #fff; font: inherit; font-size: 1rem; color: inherit; }
+.proposal-form textarea { min-height: 96px; resize: vertical; }
+.proposal-note { margin: 0; color: var(--muted); line-height: 1.45; }
+.proposal-span { grid-column: 1 / -1; }
 .proposal-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
 .proposal-actions { display: flex; flex-wrap: wrap; gap: 10px; }
 .proposal-actions .btn { min-height: 46px; padding: 0 18px; }
@@ -13,7 +16,7 @@
 <div class="page-header">
   <div>
     <div class="page-title">Proposta</div>
-    <div class="page-subtitle">{{ order.protocol }} · {{ order.empresa }}. Preencha e leia o PDF antes de baixar para enviar ao cliente.</div>
+    <div class="page-subtitle">{{ order.protocol }} · {{ order.empresa }}. Digite os valores da negociação. O PDF usa só o que estiver preenchido.</div>
   </div>
   <div class="page-actions">
     <a class="btn btn-secondary" href="/atividades">Voltar ao Kanban</a>
@@ -47,14 +50,38 @@
       <input name="nome_fantasia" value="{{ values.nome_fantasia }}" maxlength="180">
     </label>
     <label>Colaboradores
-      <input name="colaboradores" inputmode="numeric" value="{{ values.colaboradores }}" maxlength="6">
+      <input name="colaboradores" inputmode="numeric" value="{{ values.colaboradores }}" maxlength="6" placeholder="Quantidade">
     </label>
-    <label>Plano
+    <label>Plano desta proposta
       <select name="plan_key">
         <option value="boleto" {% if values.plan_key == 'boleto' %}selected{% endif %}>Boleto mensal</option>
         <option value="cartao" {% if values.plan_key == 'cartao' %}selected{% endif %}>Recorrente no cartão</option>
         <option value="anual" {% if values.plan_key == 'anual' %}selected{% endif %}>Anual</option>
       </select>
+    </label>
+  </div>
+  <p class="proposal-note">Valores da negociação. Nada aqui é calculado sozinho: o que ficar em branco não entra no PDF.</p>
+  <div class="proposal-grid">
+    <label>Mensal no boleto
+      <input name="valor_boleto" inputmode="decimal" value="{{ values.valor_boleto }}" maxlength="20" placeholder="Ex.: 149,90">
+    </label>
+    <label>Mensal no cartão
+      <input name="valor_cartao" inputmode="decimal" value="{{ values.valor_cartao }}" maxlength="20" placeholder="Ex.: 129,90">
+    </label>
+    <label>Anual à vista
+      <input name="valor_anual" inputmode="decimal" value="{{ values.valor_anual }}" maxlength="20" placeholder="Ex.: 1.200,00">
+    </label>
+    <label>Equivalente mensal do anual
+      <input name="valor_mensal_equivalente" inputmode="decimal" value="{{ values.valor_mensal_equivalente }}" maxlength="20" placeholder="Ex.: 100,00">
+    </label>
+    <label>Colaborador adicional / mês
+      <input name="valor_adicional" inputmode="decimal" value="{{ values.valor_adicional }}" maxlength="20" placeholder="Ex.: 9,90">
+    </label>
+    <label>Valor final negociado
+      <input name="valor_final" inputmode="decimal" value="{{ values.valor_final }}" maxlength="20" placeholder="Ex.: 149,90">
+    </label>
+    <label class="proposal-span">Observação da negociação
+      <textarea name="observacao" maxlength="400" placeholder="Condição combinada com o cliente">{{ values.observacao }}</textarea>
     </label>
   </div>
   <div class="proposal-actions">
