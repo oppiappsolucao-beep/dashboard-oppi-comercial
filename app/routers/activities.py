@@ -125,7 +125,7 @@ def _os_board_context(request: Request) -> dict:
     from app.dependencies import get_session_user
     from app.services.kanban_summary import build_kanban_summary, pick_support_sector, support_level
     from app.services.org_registry import add_sector_queue, list_sectors
-    from app.services.service_orders import build_sector_board
+    from app.services.service_orders import build_sector_board, is_oppi_tech_sector
 
     sectors = list_sectors()
     user = get_session_user(request) or {}
@@ -189,6 +189,7 @@ def _os_board_context(request: Request) -> dict:
         "fim": summary["fim"],
         "summary": summary,
         "is_commercial": "comercial" in sector_name.lower(),
+        "can_delete_orders": is_oppi_tech_sector(sector_name),
         "success": request.session.pop("os_board_success", ""),
         "error": request.session.pop("os_board_error", ""),
     }
@@ -376,16 +377,39 @@ async def activities_move_order(
     if "proposta" in queue_name.lower():
         return HTMLResponse(f"/atividades/os/{order_id}/proposta")
     if normalize_text(queue_id) == "concluida":
-        from app.services.campaign_leads import cadastro_url, campaign_card_extra
+        from app.services.campaign_leads import finish_cadastro_url
+        from app.services.service_orders import CAMPAIGN_QUEUE_ID, is_commercial_sector
 
-        extra = campaign_card_extra(order_id) or {}
-        target = normalize_text(extra.get("cadastro_url"))
-        if target.startswith("/cadastro/"):
-            return HTMLResponse(target)
-        if extra:
-            target = cadastro_url(extra)
-            if target.startswith("/cadastro/novo"):
+        description = normalize_text(detail.get("description")).lower()
+        campaign_lead = (
+            detail.get("source") == "campanha"
+            or normalize_text(detail.get("queue_id")) == CAMPAIGN_QUEUE_ID
+            or "campanha:" in description
+            or normalize_text(detail.get("cadastro_url")).startswith("/cadastro/")
+        )
+        if is_commercial_sector(sector["name"]) and campaign_lead:
+            target = finish_cadastro_url(detail)
+            if target.startswith("/cadastro/"):
                 return HTMLResponse(target)
+    return HTMLResponse("ok")
+
+
+@router.post("/atividades/os/{order_id}/excluir")
+async def activities_delete_order(request: Request, order_id: str):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+    from app.services.service_orders import delete_service_order, get_order_detail, is_oppi_tech_sector
+
+    detail = get_order_detail(order_id)
+    if not detail or not _order_visible(request, detail):
+        return HTMLResponse("Ordem de serviço não encontrada.", status_code=404)
+    if not is_oppi_tech_sector(detail.get("sector") or ""):
+        return HTMLResponse("Somente o setor Oppi Tech pode excluir a ordem.", status_code=403)
+    try:
+        delete_service_order(order_id)
+    except ValueError as error:
+        return HTMLResponse(str(error), status_code=400)
     return HTMLResponse("ok")
 
 
@@ -399,7 +423,7 @@ def _os_actor(request: Request) -> str:
 
 def _order_panel_context(order: dict, sector_notice: str = "") -> dict:
     from app.services.org_registry import list_sectors
-    from app.services.service_orders import queue_choices
+    from app.services.service_orders import is_oppi_tech_sector, queue_choices
 
     sector_id, queues = queue_choices(order.get("sector") or "")
     return {
@@ -408,6 +432,7 @@ def _order_panel_context(order: dict, sector_notice: str = "") -> dict:
         "sector_notice": sector_notice,
         "order_sector_id": sector_id,
         "order_queues": queues,
+        "can_delete_order": is_oppi_tech_sector(order.get("sector") or ""),
     }
 
 

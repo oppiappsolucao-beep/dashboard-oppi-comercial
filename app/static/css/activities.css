@@ -248,6 +248,10 @@ body.activity-kanban-dragging .activities-kanban-board {
 
 .activities-kanban-card.is-dragging {
   opacity: 0.35;
+}
+
+.activities-kanban-card.is-touch-dragging {
+  opacity: 0.35;
   pointer-events: none;
 }
 
@@ -293,7 +297,13 @@ body.activity-kanban-dragging * {
   cursor: grab;
   font: inherit;
   user-select: none;
-  touch-action: none;
+}
+
+@media (pointer: coarse) {
+  .activities-kanban-card,
+  .activities-kanban-card-grip {
+    touch-action: none;
+  }
 }
 
 .activities-kanban-card-grip {
@@ -304,7 +314,6 @@ body.activity-kanban-dragging * {
   font-size: 0.72rem;
   letter-spacing: -0.12em;
   line-height: 1;
-  touch-action: none;
 }
 
 .activities-kanban-card:active {

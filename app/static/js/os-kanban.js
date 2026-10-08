@@ -62,6 +62,10 @@
       suppressClick = true;
       dragged = card;
       card.classList.add("is-dragging");
+      if (event.dataTransfer) {
+        event.dataTransfer.effectAllowed = "move";
+        event.dataTransfer.setData("text/plain", card.getAttribute("data-order-id") || "");
+      }
     });
     card.addEventListener("dragend", function () {
       card.classList.remove("is-dragging");
@@ -123,7 +127,7 @@
     if (!touchMoved) {
       touchMoved = true;
       suppressClick = true;
-      touchCard.classList.add("is-dragging");
+      touchCard.classList.add("is-touch-dragging");
       document.body.classList.add("activity-kanban-dragging");
       try { touchCard.setPointerCapture(event.pointerId); } catch (error) { /* ignore */ }
     }
@@ -145,7 +149,7 @@
     touchMoved = false;
     var under = moved ? document.elementFromPoint(event.clientX, event.clientY) : null;
     var body = under && under.closest(".activities-kanban-column-body");
-    card.classList.remove("is-dragging");
+    card.classList.remove("is-touch-dragging");
     document.body.classList.remove("activity-kanban-dragging");
     board.querySelectorAll(".is-drop-target").forEach(function (item) {
       item.classList.remove("is-drop-target");
@@ -203,24 +207,29 @@
     var column = card.closest(".activities-kanban-column");
     var titleEl = column && column.querySelector(".activities-kanban-column-title");
     var isProposal = titleEl && titleEl.textContent.toLowerCase().indexOf("proposta") !== -1;
+    var openCadastro = queueId === "concluida" && cadastroUrl;
     fetch("/atividades/os/" + encodeURIComponent(orderId) + "/fila", {
       method: "POST",
       body: data,
+      keepalive: true,
     }).then(function (response) {
+      if (openCadastro) return "";
       if (!response.ok) {
         window.location.reload();
         return "";
       }
       return response.text();
     }).then(function (payload) {
-      var target = "";
-      if (payload && payload.charAt(0) === "/") target = payload.trim();
+      if (openCadastro) return;
+      var text = (payload || "").trim();
+      var target = text.charAt(0) === "/" ? text : "";
       if (!target && queueId === "concluida") target = cadastroUrl;
       if (!target && isProposal) target = "/atividades/os/" + encodeURIComponent(orderId) + "/proposta";
       if (target) window.location.href = target;
     }).catch(function () {
-      window.location.reload();
+      if (!openCadastro) window.location.reload();
     });
+    if (openCadastro) window.location.href = cadastroUrl;
   }
 
   board.querySelectorAll("[data-os-status]").forEach(function (select) {
@@ -252,6 +261,31 @@
       card.setAttribute("data-current-queue", queueId);
       postMove(card, queueId, reopen);
     });
+  });
+
+  document.addEventListener("click", function (event) {
+    var button = event.target.closest("[data-delete-order]");
+    if (!button) return;
+    event.preventDefault();
+    event.stopPropagation();
+    var orderId = button.getAttribute("data-delete-order");
+    if (!orderId) return;
+    if (!window.confirm("Excluir esta ordem de serviço?")) return;
+    var card = document.querySelector('.activities-kanban-card[data-order-id="' + orderId + '"]');
+    fetch("/atividades/os/" + encodeURIComponent(orderId) + "/excluir", { method: "POST" })
+      .then(function (response) {
+        if (!response.ok) throw new Error("fail");
+        if (card) {
+          var column = card.closest(".activities-kanban-column");
+          card.remove();
+          if (column) countColumn(column);
+        }
+        closeModal();
+        if (!card) window.location.reload();
+      })
+      .catch(function () {
+        window.alert("Não consegui excluir esta ordem.");
+      });
   });
 
   if (modal) {

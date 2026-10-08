@@ -22,6 +22,11 @@
     <p>WhatsApp: {% if order.client.whatsapp %}<a href="tel:{{ order.client.whatsapp }}">{{ order.client.whatsapp }}</a> <button type="button" class="btn btn-small btn-secondary" data-copy-phone="{{ order.client.whatsapp }}">Copiar</button>{% else %}Não informado{% endif %}</p>
     <p>Telefone: {% if order.client.telefone %}<a href="tel:{{ order.client.telefone }}">{{ order.client.telefone }}</a>{% else %}Não informado{% endif %}</p>
     <p>E-mail: {% if order.client.email %}<a href="mailto:{{ order.client.email }}">{{ order.client.email }}</a>{% else %}Não informado{% endif %}</p>
+    {% if can_delete_order %}
+    <div class="os-detail-actions">
+      <button type="button" class="btn btn-small btn-secondary" data-delete-order="{{ order.id }}">Excluir OS</button>
+    </div>
+    {% endif %}
     {% if order.client.endereco %}<p>{{ order.client.endereco }}</p>{% endif %}
     {% if order.sheet_row %}
     <a class="btn btn-small btn-secondary" href="/cadastro/todos/{{ order.sheet_row }}/editar?tab=ordens&from=activities">Abrir cadastro</a>

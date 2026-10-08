@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
-<link rel="stylesheet" href="/static/css/activities.css?v={{ static_version }}-mobile2">
+<link rel="stylesheet" href="/static/css/activities.css?v={{ static_version }}-mobile3">
 <style>
 .os-queue-form, .os-sector-switch { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
 .os-queue-form input, .os-sector-switch select { height: 40px; border: 1px solid var(--border); border-radius: 10px; padding: 0 10px; }
@@ -23,6 +23,7 @@
 .os-column-tools { display: flex; gap: 4px; margin-top: 6px; }
 .os-column-tools form { margin: 0; }
 .os-column-tools button { min-height: 28px; padding: 0 8px; border-radius: 8px; font-size: 0.75rem; }
+.os-card-delete { margin-top: 8px; border: 0; background: transparent; color: #B91C1C; font: inherit; font-size: 0.75rem; font-weight: 700; padding: 0; cursor: pointer; }
 .os-proposta-link { display: inline-flex; margin-top: 8px; padding: 4px 8px; border-radius: 8px; background: #F3E8FF; font-size: 0.75rem; font-weight: 700; color: var(--purple, #7C3AED); text-decoration: none; }
 .os-card-status { display: grid; gap: 4px; margin-top: 8px; font-size: 0.72rem; font-weight: 700; color: var(--muted); }
 .os-card-status select { width: 100%; min-height: 32px; border: 1px solid var(--border); border-radius: 8px; padding: 0 8px; font: inherit; background: #fff; cursor: pointer; }
@@ -153,7 +154,7 @@
 </form>
 {% endif %}
 
-<div class="activities-kanban-board" id="os-kanban-board">
+<div class="activities-kanban-board" id="os-kanban-board" {% if is_commercial %}data-commercial="1"{% endif %}>
   {% for column in columns %}
   <section class="activities-kanban-column{% if column.id == 'concluida' %} is-done{% endif %}{% if column.id == 'campanha' %} is-campaign{% endif %}">
     <header class="activities-kanban-column-header">
@@ -198,6 +199,9 @@
           <span aria-hidden="true">📅</span>
           <span>{{ card.scheduled_date_label }}</span>
         </div>
+        {% if can_delete_orders %}
+        <button type="button" class="os-card-delete" data-delete-order="{{ card.id }}">Excluir</button>
+        {% endif %}
       </article>
       {% else %}
       <div class="activities-kanban-empty">Nenhuma ordem</div>
@@ -213,5 +217,5 @@
     <div id="os-order-modal-body">Carregando…</div>
   </div>
 </div>
-<script src="/static/js/os-kanban.js?v=8"></script>
+<script src="/static/js/os-kanban.js?v=9"></script>
 {% endblock %}

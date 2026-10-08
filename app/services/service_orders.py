@@ -427,6 +427,11 @@ def is_commercial_sector(sector_name: str) -> bool:
     return "comercial" in name
 
 
+def is_oppi_tech_sector(sector_name: str) -> bool:
+    compact = re.sub(r"\s+", "", normalize_text(sector_name).lower())
+    return "oppitech" in compact
+
+
 def _entry_follows_period(sector_name: str) -> bool:
     """Comercial e Oppi Tech filtram a coluna Análise pelo período escolhido."""
     name = normalize_text(sector_name).lower()
@@ -472,7 +477,7 @@ def _campaign_visible(card: dict, start: str, end: str) -> bool:
 
 
 def build_sector_board(sector_id: str, sector_name: str, inicio: str = "", fim: str = "") -> list[dict]:
-    from app.services.campaign_leads import attach_campaign_cards, sync_campaign_leads
+    from app.services.campaign_leads import attach_campaign_cards, finish_cadastro_url, sync_campaign_leads
     from app.services.org_registry import add_sector_queue, list_sector_queues
 
     period_start = ""
@@ -514,6 +519,12 @@ def build_sector_board(sector_id: str, sector_name: str, inicio: str = "", fim: 
     buckets = {column["id"]: column for column in columns}
     cards = list_orders_by_sector(sector_name)
     attach_campaign_cards(cards)
+    if is_commercial_sector(sector_name):
+        for card in cards:
+            if normalize_text(card.get("cadastro_url")):
+                continue
+            if card.get("source") == "campanha" or card.get("queue_id") == CAMPAIGN_QUEUE_ID:
+                card["cadastro_url"] = finish_cadastro_url(card)
     for card in cards:
         queue_id = card.get("queue_id") or ENTRY_QUEUE_ID
         if queue_id not in known:
@@ -575,6 +586,19 @@ def send_order_to_sector(order_id: str, sector_name: str, author: str) -> str:
         )
         _add_event(conn, current["id"], "movida", f"Encaminhada para {target}.", author, stamp)
     return f"OS encaminhada para {target}."
+
+
+def delete_service_order(order_id: str) -> None:
+    init_crm_local_db()
+    with _lock, _connect() as conn:
+        current = conn.execute(
+            "SELECT id FROM service_orders WHERE id = ?",
+            (normalize_text(order_id),),
+        ).fetchone()
+        if current is None:
+            raise ValueError("Ordem de serviço não encontrada.")
+        conn.execute("DELETE FROM service_order_events WHERE order_id = ?", (current["id"],))
+        conn.execute("DELETE FROM service_orders WHERE id = ?", (current["id"],))
 
 
 def move_service_order(

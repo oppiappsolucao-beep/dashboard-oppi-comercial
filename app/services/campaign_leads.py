@@ -630,6 +630,32 @@ def _refresh_lead_date(current, lead: dict) -> None:
         )
 
 
+def finish_cadastro_url(order: dict) -> str:
+    """Endereço do cadastro ao concluir um lead comercial."""
+    current = normalize_text(order.get("cadastro_url"))
+    if current.startswith("/cadastro/"):
+        return current
+    text = order.get("description") or ""
+
+    def line(label: str) -> str:
+        match = re.search(rf"(?im)^{re.escape(label)}:\s*(.+)$", text)
+        return normalize_text(match.group(1)) if match else ""
+
+    return cadastro_url(
+        {
+            "empresa": order.get("empresa") or "",
+            "contact_name": order.get("contact_name") or line("Contato"),
+            "phone": order.get("phone") or line("WhatsApp"),
+            "email": order.get("email") or line("E-mail"),
+            "campaign": order.get("campaign") or line("Campanha"),
+            "creative": order.get("creative") or line("Criativo") or order.get("subject") or "",
+            "city": order.get("city") or "",
+            "uf": order.get("uf") or "",
+            "order_id": order.get("order_id") or order.get("id") or "",
+        }
+    )
+
+
 def cadastro_url(link: dict) -> str:
     notes = " · ".join(
         part
