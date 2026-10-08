@@ -461,8 +461,7 @@ def generate_commercial_proposal_pdf(
         story.append(Paragraph(_escape(name), feature_title))
         story.append(Paragraph(_escape(desc), body_left))
 
-    story.append(Paragraph("PROPOSTA COMERCIAL", title))
-    story.append(Paragraph("IMPLANTAÇÃO OPERACIONAL E COMERCIAL — OPPI", subtitle))
+    story.append(Paragraph("Proposta comercial Oppi Ponto Rh", title))
 
     # Blocos no formato do modelo (sem títulos de seção "Contratante/Contratada")
     add_labeled_block(
@@ -556,21 +555,6 @@ def generate_commercial_proposal_pdf(
                     body_left,
                 )
             )
-        chosen = {
-            "boleto": ("Plano Mensal no Boleto", negotiation["valor_boleto"]),
-            "cartao": ("Plano Mensal Recorrente no Cartão", negotiation["valor_cartao"]),
-            "anual": ("Plano Anual", negotiation["valor_anual"]),
-        }[negotiation["plan_key"]]
-        final_amount = negotiation["valor_final"] if negotiation["valor_final"] is not None else chosen[1]
-        if final_amount is not None:
-            story.append(Spacer(1, 4))
-            story.append(
-                Paragraph(
-                    f"<b>Plano selecionado nesta proposta:</b> {_escape(chosen[0])} "
-                    f"— valor final {format_money_br(final_amount)}.",
-                    body_left,
-                )
-            )
         if negotiation["observacao"]:
             story.append(Paragraph(_escape(f"Negociação: {negotiation['observacao']}"), body_left))
     else:
@@ -627,15 +611,6 @@ def generate_commercial_proposal_pdf(
                 body_left,
             )
         )
-        if selected.plan_label:
-            story.append(Spacer(1, 4))
-            story.append(
-                Paragraph(
-                    f"<b>Plano selecionado nesta proposta:</b> {_escape(selected.plan_label)} "
-                    f"— valor final {format_money_br(selected.valor_final)}.",
-                    body_left,
-                )
-            )
 
     add_heading("Ativação da plataforma")
     add_text(
@@ -672,20 +647,15 @@ def generate_commercial_proposal_pdf(
 
     add_heading("Investimento acessível para sua empresa")
     if negotiation["active"]:
-        from_price = (
-            negotiation["valor_mensal_equivalente"]
-            or negotiation["valor_boleto"]
-            or negotiation["valor_cartao"]
-            or negotiation["valor_final"]
-        )
+        annual = negotiation["valor_anual"]
         opening = (
-            f"Com o valor negociado de {format_money_br(from_price)}, "
-            if from_price is not None
-            else "Com o valor negociado nesta proposta, "
+            f"Com o valor negociado de {format_money_br(annual)} no plano anual, "
+            if annual is not None
+            else "Com o valor negociado no plano anual, "
         )
         add_text(
             opening
-            + "sua empresa passa a contar com uma solução digital para controle de ponto, documentos e relatórios.\n\n"
+            + "a sua empresa passa a contar com uma solução digital para controle de ponto, documentos e relatórios.\n\n"
             "A Oppi foi criada para empresas que buscam praticidade, organização e mais "
             "segurança na gestão dos colaboradores.\n\n"
             "Agradecemos pela oportunidade de apresentar nossa proposta comercial.\n\n"

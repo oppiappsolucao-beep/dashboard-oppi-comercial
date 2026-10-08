@@ -15,7 +15,7 @@
 </style>
 <div class="page-header">
   <div>
-    <div class="page-title">Proposta</div>
+    <div class="page-title">Proposta comercial Oppi Ponto Rh</div>
     <div class="page-subtitle">{{ order.protocol }} · {{ order.empresa }}. Digite os valores da negociação. O PDF usa só o que estiver preenchido.</div>
   </div>
   <div class="page-actions">
@@ -51,13 +51,6 @@
     </label>
     <label>Colaboradores
       <input name="colaboradores" inputmode="numeric" value="{{ values.colaboradores }}" maxlength="6" placeholder="Quantidade">
-    </label>
-    <label>Plano desta proposta
-      <select name="plan_key">
-        <option value="boleto" {% if values.plan_key == 'boleto' %}selected{% endif %}>Boleto mensal</option>
-        <option value="cartao" {% if values.plan_key == 'cartao' %}selected{% endif %}>Recorrente no cartão</option>
-        <option value="anual" {% if values.plan_key == 'anual' %}selected{% endif %}>Anual</option>
-      </select>
     </label>
   </div>
   <p class="proposal-note">Valores da negociação. Nada aqui é calculado sozinho: o que ficar em branco não entra no PDF.</p>
