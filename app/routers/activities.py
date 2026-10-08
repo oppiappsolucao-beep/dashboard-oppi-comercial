@@ -421,19 +421,32 @@ def _os_actor(request: Request) -> str:
     )
 
 
-def _oppi_tech_login(request: Request) -> bool:
-    """Login do funcionário Oppi Tech. O administrador não entra."""
-    if is_admin(request) or not request.session.get("org_person_id"):
-        return False
-    from app.dependencies import get_session_user
+def _matches_oppi_tech_access(value: str) -> bool:
+    """Oppi Tech, e o login Oppi que abre todas as telas da solução."""
+    import re
+    import unicodedata
+
     from app.services.service_orders import is_oppi_tech_sector
+
+    if is_oppi_tech_sector(value or ""):
+        return True
+    text = unicodedata.normalize("NFKD", normalize_text(value).lower())
+    text = "".join(ch for ch in text if not unicodedata.combining(ch))
+    compact = re.sub(r"[^a-z0-9]", "", text)
+    return compact in {"oppi", "oppitech", "opitech"}
+
+
+def _oppi_tech_login(request: Request) -> bool:
+    """Acesso Oppi Tech: funcionário desse setor, ou o login Oppi/Oppi Tech com todas as telas."""
+    from app.dependencies import get_session_user
+
+    if request.session.get("org_person_id"):
+        return _matches_oppi_tech_access(request.session.get("org_sector_name") or "")
 
     user = get_session_user(request) or {}
     return any(
-        is_oppi_tech_sector(value)
+        _matches_oppi_tech_access(value or "")
         for value in (
-            request.session.get("org_sector_name"),
-            request.session.get("org_person_name"),
             request.session.get("username"),
             user.get("name"),
             user.get("username"),
@@ -442,13 +455,9 @@ def _oppi_tech_login(request: Request) -> bool:
     )
 
 
-def _oppi_tech_board(request: Request, sector_name: str) -> bool:
-    """Excluir OS só no kanban de quem entrou como Oppi Tech, nunca no administrador nem no Suporte."""
-    from app.services.service_orders import is_oppi_tech_sector
-
-    if not _oppi_tech_login(request):
-        return False
-    return is_oppi_tech_sector(sector_name)
+def _oppi_tech_board(request: Request, _sector_name: str = "") -> bool:
+    """Excluir o card do kanban só para quem entrou pelo acesso Oppi Tech."""
+    return _oppi_tech_login(request)
 
 
 def _order_panel_context(order: dict, sector_notice: str = "", can_delete_order: bool = False) -> dict:

@@ -181,7 +181,7 @@
         <input type="hidden" name="direction" value="direita">
         <button type="submit" class="btn btn-secondary btn-small" aria-label="Mover {{ column.name }} para a direita">→</button>
       </form>
-      {% if not delete_os %}
+      {% if is_admin or not delete_os %}
       <form method="post" action="/atividades/filas/{{ column.id }}/remover" onsubmit="return confirm('Excluir esta coluna? As ordens dela voltam para Análise.');">
         <input type="hidden" name="sector_id" value="{{ sector_id }}">
         <input type="hidden" name="inicio" value="{{ inicio }}">
@@ -204,7 +204,7 @@
           <span>{{ card.scheduled_date_label }}</span>
         </div>
         {% if delete_os %}
-        <button type="button" class="btn btn-secondary btn-small os-card-delete" data-delete-order="{{ card.id }}">Excluir OS</button>
+        <button type="button" class="btn btn-secondary btn-small os-card-delete" draggable="false" data-delete-order="{{ card.id }}">Excluir</button>
         {% endif %}
       </article>
       {% else %}
@@ -221,5 +221,5 @@
     <div id="os-order-modal-body">Carregando…</div>
   </div>
 </div>
-<script src="/static/js/os-kanban.js?v=14"></script>
+<script src="/static/js/os-kanban.js?v=15"></script>
 {% endblock %}

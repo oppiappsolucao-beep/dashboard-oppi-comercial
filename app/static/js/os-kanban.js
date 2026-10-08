@@ -55,7 +55,7 @@
 
   board.querySelectorAll(".activities-kanban-card").forEach(function (card) {
     card.addEventListener("dragstart", function (event) {
-      if (event.target.closest("select, label")) {
+      if (event.target.closest("select, label, button, a")) {
         event.preventDefault();
         return;
       }

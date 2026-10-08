@@ -3,7 +3,7 @@
   <h2 id="os-modal-title">{{ order.subject }}</h2>
   {% if can_delete_order %}
   <div class="os-detail-actions">
-    <button type="button" class="btn btn-secondary btn-small os-card-delete" data-delete-order="{{ order.id }}">Excluir OS</button>
+    <button type="button" class="btn btn-secondary btn-small os-card-delete" draggable="false" data-delete-order="{{ order.id }}">Excluir</button>
   </div>
   {% endif %}
 
