@@ -59,10 +59,7 @@ def build_registration_closes() -> dict:
         counted_day = _stamp_day(card.get("counted_on") or "")
         if card.get("counted_on"):
             if counted_day and start <= counted_day <= end:
-                if match and match.get("sheet_row"):
-                    item["company_url"] = _company_url(match.get("sheet_row"))
-                else:
-                    item["transfer_url"] = cadastro_url(link)
+                _set_company_links(item, match, link)
                 registered.append(item)
             continue
         if match is None or (not linked and not _saved_for_this_close(match, concluded_on)):
@@ -71,7 +68,7 @@ def build_registration_closes() -> dict:
             continue
         closed_on = _stamp_day(card.get("updated_at")) or _stamp_day(match.get("created_at")) or _stamp_day(match.get("data_chamado"))
         if closed_on and start <= closed_on <= end:
-            item["company_url"] = _company_url(match.get("sheet_row"))
+            _set_company_links(item, match, link)
             registered.append(item)
     return {
         "pending": pending,
@@ -80,6 +77,22 @@ def build_registration_closes() -> dict:
         "registered_total": len(registered),
         "month_label": f"{_MONTHS[today.month]} de {today.year}",
     }
+
+
+def _set_company_links(item: dict, match: dict | None, link: dict) -> None:
+    companies = company_family_links(
+        sheet_row=int((match or {}).get("sheet_row") or 0),
+        order_id=item.get("order_id") or "",
+        phone=link.get("phone") or "",
+        origin="leads",
+    )
+    item["companies"] = companies
+    if companies:
+        item["company_url"] = companies[0]["url"]
+    elif match and match.get("sheet_row"):
+        item["company_url"] = _company_url(match.get("sheet_row"))
+    else:
+        item["transfer_url"] = cadastro_url(link)
 
 
 def _done_campaign_cards() -> list[dict]:
@@ -262,13 +275,181 @@ def _find_registration(link: dict, index: list[dict]) -> dict | None:
     return by_phone or by_name
 
 
+    return out
+
+
+def contacts_linked_to_orders(order_ids: list[str]) -> dict[str, str]:
+    """Nome do contato já salvo no cadastro ligado a cada OS."""
+    wanted = {normalize_text(item) for item in order_ids if normalize_text(item)}
+    if not wanted:
+        return {}
+    try:
+        from app.services.crm_registrations_storage import is_crm_postgres_ready
+        from database.connection import SessionLocal
+        from database.models import CrmRegistration
+    except Exception:
+        return {}
+    if not is_crm_postgres_ready():
+        return {}
+    db = SessionLocal()
+    try:
+        rows = (
+            db.query(CrmRegistration.nome_contato, CrmRegistration.extras_json)
+            .filter(CrmRegistration.cadastro_ativo.is_(True))
+            .filter(CrmRegistration.extras_json.contains("campaign_order_id"))
+            .all()
+        )
+    except Exception:
+        return {}
+    finally:
+        db.close()
+    found: dict[str, str] = {}
+    for nome, extras in rows:
+        order_id = _order_id_from_extras(extras)
+        contact = normalize_text(nome)
+        if order_id in wanted and contact and order_id not in found:
+            found[order_id] = contact
+    return found
+
+
+def company_family_links(
+    *,
+    sheet_row: int = 0,
+    order_id: str = "",
+    phone: str = "",
+    origin: str = "activities",
+) -> list[dict]:
+    """Empresa ligada à OS, com a matriz e as filiais quando houver mais de uma."""
+    try:
+        from app.services.crm_registrations_storage import is_crm_postgres_ready
+        from database.connection import SessionLocal
+        from database.models import CrmRegistration
+    except Exception:
+        return []
+    if not is_crm_postgres_ready():
+        return _links_from_sheet_row(sheet_row, origin)
+    order_id = normalize_text(order_id)
+    phone_key = _phone_key(phone)
+    db = SessionLocal()
+    try:
+        seeds = []
+        if int(sheet_row or 0):
+            row = (
+                db.query(CrmRegistration)
+                .filter(CrmRegistration.sheet_row == int(sheet_row))
+                .first()
+            )
+            if row is not None:
+                seeds.append(row)
+        if order_id:
+            tied = (
+                db.query(CrmRegistration)
+                .filter(CrmRegistration.extras_json.contains(order_id))
+                .all()
+            )
+            seeds.extend(
+                row for row in tied
+                if _order_id_from_extras(row.extras_json) == order_id
+            )
+        if phone_key and not seeds:
+            from sqlalchemy import or_
+
+            tail = phone_key[-8:]
+            dashed = f"{tail[:4]}-{tail[4:]}" if len(tail) == 8 else tail
+            rough = (
+                db.query(CrmRegistration)
+                .filter(CrmRegistration.cadastro_ativo.is_(True))
+                .filter(
+                    or_(
+                        CrmRegistration.telefone_b2b.ilike(f"%{tail}%"),
+                        CrmRegistration.telefone_b2b.ilike(f"%{dashed}%"),
+                        CrmRegistration.telefone_fixo.ilike(f"%{dashed}%"),
+                        CrmRegistration.telefone_alternativo.ilike(f"%{dashed}%"),
+                    )
+                )
+                .limit(40)
+                .all()
+            )
+            for row in rough:
+                phones = (
+                    _phone_key(row.telefone_b2b),
+                    _phone_key(row.telefone_fixo),
+                    _phone_key(row.telefone_alternativo),
+                )
+                if phone_key in phones:
+                    seeds.append(row)
+                    break
+        if not seeds:
+            return []
+        matriz_ids: set[int] = set()
+        for row in seeds:
+            number = int(row.sheet_row or 0)
+            parent = int(row.empresa_matriz_sheet_row or 0)
+            if row.is_filial and parent:
+                matriz_ids.add(parent)
+            elif number:
+                matriz_ids.add(number)
+        family = list(seeds)
+        if matriz_ids:
+            family.extend(
+                db.query(CrmRegistration)
+                .filter(CrmRegistration.sheet_row.in_(list(matriz_ids)))
+                .all()
+            )
+            family.extend(
+                db.query(CrmRegistration)
+                .filter(CrmRegistration.empresa_matriz_sheet_row.in_(list(matriz_ids)))
+                .all()
+            )
+        unique: dict[int, object] = {}
+        for row in family:
+            number = int(row.sheet_row or 0)
+            if number and getattr(row, "cadastro_ativo", True):
+                unique[number] = row
+        links = [_company_link(row, origin) for row in unique.values()]
+        links.sort(key=lambda item: (item["kind"] != "Matriz", item["empresa"].lower()))
+        return links
+    except Exception:
+        return _links_from_sheet_row(sheet_row, origin)
+    finally:
+        db.close()
+
+
+def _links_from_sheet_row(sheet_row: int, origin: str) -> list[dict]:
+    try:
+        number = int(sheet_row or 0)
+    except (TypeError, ValueError):
+        number = 0
+    if number <= 0:
+        return []
+    return [{
+        "sheet_row": number,
+        "empresa": "",
+        "contact_name": "",
+        "kind": "Empresa",
+        "url": f"/cadastro/todos/{number}/editar?from={origin}",
+    }]
+
+
+def _company_link(row, origin: str) -> dict:
+    number = int(row.sheet_row or 0)
+    kind = "Filial" if row.is_filial else "Matriz"
+    return {
+        "sheet_row": number,
+        "empresa": normalize_text(row.empresa),
+        "contact_name": normalize_text(row.nome_contato),
+        "kind": kind,
+        "url": f"/cadastro/todos/{number}/editar?from={origin}",
+    }
+
+
 def _company_url(sheet_row) -> str:
     try:
         number = int(sheet_row or 0)
     except (TypeError, ValueError):
         number = 0
     if number <= 0:
-        return "/leads-e-empresas"
+        return ""
     return f"/cadastro/todos/{number}/editar?from=leads"
 
 

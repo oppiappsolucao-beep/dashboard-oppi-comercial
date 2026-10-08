@@ -553,7 +553,128 @@ def build_sector_board(sector_id: str, sector_name: str, inicio: str = "", fim: 
             if not (len(day) == 10 and period_start <= day <= period_end):
                 continue
         buckets[queue_id]["cards"].append(card)
+    _attach_card_contacts(cards)
     return columns
+
+
+_PLACEHOLDER_EMPRESA = {"", "-", "—", "lead de campanha", "cliente sem nome"}
+
+
+def _contact_line(description: str) -> str:
+    match = re.search(r"(?im)^contato:\s*(.+)$", description or "")
+    return normalize_text(match.group(1)) if match else ""
+
+
+def _upsert_labeled_line(description: str, label: str, value: str) -> str:
+    clean = normalize_text(value)
+    lines: list[str] = []
+    found = False
+    prefix = label.lower() + ":"
+    for line in (description or "").splitlines():
+        if line.strip().lower().startswith(prefix):
+            if clean:
+                lines.append(f"{label}: {clean}")
+            found = True
+        else:
+            lines.append(line)
+    if clean and not found:
+        lines.append(f"{label}: {clean}")
+    return "\n".join(lines).strip()
+
+
+def _attach_card_contacts(cards: list[dict]) -> None:
+    """Nome do contato salvo no cadastro aparece no card."""
+    rows = []
+    for card in cards:
+        try:
+            number = int(card.get("sheet_row") or 0)
+        except (TypeError, ValueError):
+            number = 0
+        if number:
+            rows.append(number)
+    names: dict[int, dict[str, str]] = {}
+    if rows:
+        try:
+            from app.services.crm_registrations_storage import get_registration_names_by_sheet_rows
+
+            names = get_registration_names_by_sheet_rows(rows)
+        except Exception:
+            names = {}
+    for card in cards:
+        try:
+            number = int(card.get("sheet_row") or 0)
+        except (TypeError, ValueError):
+            number = 0
+        found = names.get(number) or {}
+        contact = normalize_text(found.get("nome_contato")) or normalize_text(card.get("contact_name")) or _contact_line(card.get("description") or "")
+        card["contact_name"] = contact
+    missing = [card.get("id") for card in cards if card.get("id") and not card.get("contact_name")]
+    if not missing:
+        return
+    try:
+        from app.services.cadastro_closes import contacts_linked_to_orders
+
+        linked = contacts_linked_to_orders(missing)
+    except Exception:
+        return
+    for card in cards:
+        found_name = linked.get(card.get("id") or "")
+        if found_name and not card.get("contact_name"):
+            card["contact_name"] = found_name
+
+
+def link_registration_to_order(order_id: str, sheet_row: int, contact_name: str, empresa: str) -> None:
+    """Depois de salvar o cadastro, o card da OS fica com o contato e a empresa."""
+    order_id = normalize_text(order_id)
+    try:
+        number = int(sheet_row or 0)
+    except (TypeError, ValueError):
+        number = 0
+    contact = normalize_text(contact_name)
+    company = normalize_text(empresa)
+    if not order_id or number == 0:
+        return
+    init_crm_local_db()
+    stamp = _now().isoformat(timespec="seconds")
+    with _lock, _connect() as conn:
+        current = conn.execute(
+            "SELECT id, empresa, description FROM service_orders WHERE id = ?",
+            (order_id,),
+        ).fetchone()
+        if current is None:
+            return
+        description = _upsert_labeled_line(current["description"] or "", "Contato", contact)
+        stored_empresa = normalize_text(current["empresa"])
+        next_empresa = stored_empresa
+        if company and stored_empresa.lower() in _PLACEHOLDER_EMPRESA:
+            next_empresa = company
+        conn.execute(
+            """
+            UPDATE service_orders
+            SET sheet_row = ?, empresa = ?, description = ?, updated_at = ?
+            WHERE id = ?
+            """,
+            (number, next_empresa, description, stamp, current["id"]),
+        )
+        lead = conn.execute(
+            "SELECT id, sheet_row FROM campaign_leads WHERE order_id = ?",
+            (current["id"],),
+        ).fetchone()
+        if lead is not None:
+            conn.execute(
+                """
+                UPDATE campaign_leads
+                SET contact_name = ?, empresa = ?
+                WHERE id = ?
+                """,
+                (contact, next_empresa or stored_empresa, lead["id"]),
+            )
+            current_row = int(lead["sheet_row"] or 0)
+            if current_row in {0, number}:
+                conn.execute(
+                    "UPDATE campaign_leads SET sheet_row = ? WHERE id = ?",
+                    (number, lead["id"]),
+                )
 
 
 def send_order_to_sector(order_id: str, sector_name: str, author: str) -> str:
@@ -845,6 +966,30 @@ def get_order_detail(order_id: str) -> dict | None:
             client["cidade"] = extra.get("city") or ""
         if not client.get("uf"):
             client["uf"] = extra.get("uf") or ""
+    from app.services.cadastro_closes import company_family_links
+
+    detail["company_links"] = company_family_links(
+        sheet_row=int(detail.get("sheet_row") or 0),
+        order_id=detail.get("id") or "",
+        phone=(detail.get("client") or {}).get("whatsapp") or detail.get("phone") or "",
+        origin="activities",
+    )
+    if not (detail.get("client") or {}).get("contato"):
+        own = next(
+            (
+                item for item in detail["company_links"]
+                if item.get("sheet_row") == int(detail.get("sheet_row") or 0) and item.get("contact_name")
+            ),
+            None,
+        )
+        named = (own or {}).get("contact_name") or next(
+            (item.get("contact_name") for item in detail["company_links"] if item.get("contact_name")),
+            "",
+        )
+        if not named:
+            named = _contact_line(detail.get("description") or "")
+        if named:
+            detail["client"]["contato"] = named
     return detail
 
 

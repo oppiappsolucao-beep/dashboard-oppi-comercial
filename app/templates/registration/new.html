@@ -101,8 +101,12 @@
         <strong>{{ item.empresa }}</strong>
         <span>{{ item.phone }}{% if item.contact_name %} · {{ item.contact_name }}{% endif %}</span>
       </div>
-      {% if item.company_url %}
-      <a class="btn btn-small btn-secondary" href="{{ item.company_url }}">Ver em empresas</a>
+      {% if item.companies and item.companies|length > 1 %}
+      {% for company in item.companies %}
+      <a class="btn btn-small btn-secondary" href="{{ company.url }}">Ver {{ company.kind|lower }} · {{ company.empresa }}</a>
+      {% endfor %}
+      {% elif item.company_url %}
+      <a class="btn btn-small btn-secondary" href="{{ item.company_url }}">Ver empresa</a>
       {% elif item.transfer_url %}
       <a class="btn btn-small btn-secondary" href="{{ item.transfer_url }}">Abrir cadastro</a>
       {% endif %}

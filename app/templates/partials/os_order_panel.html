@@ -28,7 +28,15 @@
     <p>Telefone: {% if order.client.telefone %}<a href="tel:{{ order.client.telefone }}">{{ order.client.telefone }}</a>{% else %}Não informado{% endif %}</p>
     <p>E-mail: {% if order.client.email %}<a href="mailto:{{ order.client.email }}">{{ order.client.email }}</a>{% else %}Não informado{% endif %}</p>
     {% if order.client.endereco %}<p>{{ order.client.endereco }}</p>{% endif %}
-    {% if order.sheet_row %}
+    {% if order.company_links|length > 1 %}
+    <div class="os-detail-actions">
+      {% for company in order.company_links %}
+      <a class="btn btn-small" href="{{ company.url }}">Ver {{ company.kind|lower }} · {{ company.empresa }}</a>
+      {% endfor %}
+    </div>
+    {% elif order.company_links %}
+    <a class="btn btn-small" href="{{ order.company_links[0].url }}">Ver empresa</a>
+    {% elif order.sheet_row %}
     <a class="btn btn-small btn-secondary" href="/cadastro/todos/{{ order.sheet_row }}/editar?tab=ordens&from=activities">Abrir cadastro</a>
     {% endif %}
     {% if 'proposta' in (order.queue_name or '')|lower %}
@@ -61,7 +69,6 @@
     {% if order.queue_id == 'concluida' %}
     <div class="os-detail-actions">
       <a class="btn btn-small" href="{{ order.cadastro_url }}">Finalizar cadastro</a>
-      <a class="btn btn-small btn-secondary" href="/leads-e-empresas">Validar em empresa</a>
     </div>
     {% else %}
     <p>Quando o cliente fechar, arraste o card para Concluída. O cadastro abre com estes dados.</p>

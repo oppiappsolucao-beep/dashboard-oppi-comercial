@@ -193,9 +193,14 @@
     {% endif %}
     <div class="activities-kanban-column-body" data-drop-queue="{{ column.id }}">
       {% for card in column.cards %}
-      <article class="activities-kanban-card" draggable="true" data-order-id="{{ card.id }}" data-current-queue="{{ column.id }}" data-search="{{ (card.empresa or '') ~ ' ' ~ (card.protocol or '') ~ ' ' ~ (card.phone or '') ~ ' ' ~ ((card.description or '')|replace('\n', ' ')) }}" {% if card.cadastro_url %}data-cadastro-url="{{ card.cadastro_url }}"{% endif %}>
+      <article class="activities-kanban-card" draggable="true" data-order-id="{{ card.id }}" data-current-queue="{{ column.id }}" data-search="{{ (card.empresa or '') ~ ' ' ~ (card.contact_name or '') ~ ' ' ~ (card.protocol or '') ~ ' ' ~ (card.phone or '') ~ ' ' ~ ((card.description or '')|replace('\n', ' ')) }}" {% if card.cadastro_url %}data-cadastro-url="{{ card.cadastro_url }}"{% endif %}>
         <span class="activities-kanban-card-grip" aria-hidden="true">⋮⋮</span>
-        <div class="activities-kanban-card-title">{{ card.empresa }}</div>
+        <div class="activities-kanban-card-title">{% if card.contact_name and card.empresa in ['', '-', '—'] %}{{ card.contact_name }}{% else %}{{ card.empresa }}{% endif %}</div>
+        {% if card.contact_name and card.empresa not in ['', '-', '—'] %}
+        <div class="activities-kanban-card-meta">
+          <span>{{ card.contact_name }}</span>
+        </div>
+        {% endif %}
         <div class="activities-kanban-card-meta">
           <span>{{ card.protocol }}</span>
         </div>

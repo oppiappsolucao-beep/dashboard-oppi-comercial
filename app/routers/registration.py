@@ -563,10 +563,17 @@ async def new_registration_submit(request: Request):
             form_dict["valor_proposta"] = mirror.get("valor_proposta", "")
         _apply_lead_status(form_dict, user)
         sheet_row = save_new_company(form_dict, mirror_sheet=False)
-        if int(sheet_row or 0) > 0 and normalize_text(form_dict.get("os")):
+        if int(sheet_row or 0) != 0 and normalize_text(form_dict.get("os")):
             from app.services.cadastro_closes import remember_lead_order
+            from app.services.service_orders import link_registration_to_order
 
             remember_lead_order(int(sheet_row), form_dict.get("os", ""))
+            link_registration_to_order(
+                form_dict.get("os", ""),
+                int(sheet_row),
+                form_dict.get("nome_contato", ""),
+                form_dict.get("empresa", ""),
+            )
         save_cadastro_tipo(
             DEFAULT_TENANT_ID,
             sheet_row,
