@@ -421,16 +421,35 @@ def _os_actor(request: Request) -> str:
     )
 
 
+def _oppi_tech_login(request: Request) -> bool:
+    """Login Oppi Tech, pelo usuário ou pelo setor. Comercial não entra aqui."""
+    from app.dependencies import get_session_user
+    from app.services.service_orders import is_oppi_tech_sector
+
+    user = get_session_user(request) or {}
+    return any(
+        is_oppi_tech_sector(value)
+        for value in (
+            request.session.get("org_sector_name"),
+            request.session.get("org_person_name"),
+            request.session.get("username"),
+            user.get("name"),
+            user.get("username"),
+            user.get("department_name"),
+        )
+    )
+
+
 def _oppi_tech_board(request: Request, sector_name: str) -> bool:
-    """Só o setor Oppi Tech. Comercial, treinamento e os demais ficam de fora."""
+    """Excluir OS só no quadro Oppi Tech, ou no kanban de quem entrou com esse login."""
     from app.services.service_orders import is_oppi_tech_sector
 
     if is_oppi_tech_sector(sector_name):
         return True
-    logged_sector = normalize_text(request.session.get("org_sector_name"))
-    return bool(request.session.get("org_person_id")) and is_oppi_tech_sector(logged_sector) and (
-        normalize_text(sector_name).lower() == logged_sector.lower()
-    )
+    if not _oppi_tech_login(request):
+        return False
+    folded = normalize_text(sector_name).lower()
+    return not any(word in folded for word in ("comercial", "trein", "financeiro", "represent"))
 
 
 def _order_panel_context(order: dict, sector_notice: str = "", can_delete_order: bool = False) -> dict:

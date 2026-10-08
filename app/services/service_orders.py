@@ -428,8 +428,14 @@ def is_commercial_sector(sector_name: str) -> bool:
 
 
 def is_oppi_tech_sector(sector_name: str) -> bool:
-    compact = re.sub(r"[^a-z0-9]", "", normalize_text(sector_name).lower())
-    return "oppitech" in compact
+    import unicodedata
+
+    text = unicodedata.normalize("NFKD", normalize_text(sector_name).lower())
+    text = "".join(ch for ch in text if not unicodedata.combining(ch))
+    compact = re.sub(r"[^a-z0-9]", "", text)
+    if "oppitech" in compact or "opitech" in compact:
+        return True
+    return "oppi" in compact and "tech" in compact
 
 
 def _entry_follows_period(sector_name: str) -> bool:
