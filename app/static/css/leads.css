@@ -616,6 +616,32 @@ a.table-company-link:hover {
     align-items: stretch;
   }
 
+  .leads-toolbar-card .filters-row-main,
+  .leads-toolbar-card .filters-row-search {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .leads-toolbar-card .filter-field-sm,
+  .leads-toolbar-card .filter-field-sm:has(select[name="seller"]) {
+    flex: 0 0 auto;
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+  }
+
+  .leads-toolbar-card input,
+  .leads-toolbar-card select {
+    height: 44px;
+    min-height: 44px;
+    max-height: 44px;
+  }
+
+  .leads-refresh-inline,
+  .leads-search-wrap {
+    width: 100%;
+  }
+
   .leads-toolbar-right select {
     width: 100%;
   }

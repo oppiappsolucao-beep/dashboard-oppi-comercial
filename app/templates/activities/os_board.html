@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
-<link rel="stylesheet" href="/static/css/activities.css?v={{ static_version }}-mobile">
+<link rel="stylesheet" href="/static/css/activities.css?v={{ static_version }}-mobile2">
 <style>
 .os-queue-form, .os-sector-switch { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
 .os-queue-form input, .os-sector-switch select { height: 40px; border: 1px solid var(--border); border-radius: 10px; padding: 0 10px; }
@@ -8,8 +8,10 @@
 .activities-kanban-column.is-done .activities-kanban-column-title { color: #166534; }
 .activities-kanban-column.is-campaign .activities-kanban-column-title { color: #7C3AED; }
 .os-period { display: flex; flex-wrap: wrap; align-items: end; gap: 14px; padding: 14px 16px; margin-bottom: 16px; }
-.os-period label { display: flex; flex-direction: column; gap: 6px; font-size: 0.84rem; font-weight: 600; color: var(--muted); }
-.os-period input { min-height: 42px; padding: 0 12px; border: 1px solid var(--border); border-radius: 12px; background: #fff; font: inherit; }
+.os-period label, .os-card-search label { display: flex; flex-direction: column; gap: 6px; font-size: 0.84rem; font-weight: 600; color: var(--muted); }
+.os-period input, .os-card-search input { min-height: 42px; padding: 0 12px; border: 1px solid var(--border); border-radius: 12px; background: #fff; font: inherit; }
+.os-card-search { display: flex; align-items: end; gap: 14px; padding: 14px 16px; margin: -4px 0 16px; }
+.os-card-search label, .os-card-search input { width: min(100%, 420px); }
 .os-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
 .os-summary.is-support { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .os-summary.is-columns { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
@@ -33,7 +35,7 @@
 @media (max-width: 640px) {
   .os-summary, .os-summary.is-support, .os-summary.is-columns { grid-template-columns: 1fr 1fr; }
   .os-period, .os-sector-switch, .os-queue-form { flex-direction: column; align-items: stretch; }
-  .os-period input, .os-period button, .os-sector-switch select, .os-queue-form input, .os-queue-form button { width: 100%; }
+  .os-period input, .os-period button, .os-sector-switch select, .os-queue-form input, .os-queue-form button, .os-card-search label, .os-card-search input { width: 100%; }
   .os-column-tools { flex-wrap: wrap; }
   .activities-kanban-card-title, .activities-kanban-card-meta { overflow-wrap: anywhere; }
 }
@@ -89,6 +91,12 @@
   <label>De <input type="date" name="inicio" value="{{ inicio }}"></label>
   <label>Até <input type="date" name="fim" value="{{ fim }}"></label>
   <button type="submit" class="btn">Ver período</button>
+</form>
+
+<form class="os-card-search panel" onsubmit="return false;">
+  <label>Nome ou número
+    <input type="search" id="os-card-filter" placeholder="Empresa, telefone ou número da OS" autocomplete="off">
+  </label>
 </form>
 
 <section class="os-summary{% if 'treinamento' in sector_name|lower %} is-columns{% elif summary.layout == 'suporte' %} is-support{% endif %}" aria-label="Resumo do período">
@@ -180,7 +188,7 @@
     {% endif %}
     <div class="activities-kanban-column-body" data-drop-queue="{{ column.id }}">
       {% for card in column.cards %}
-      <article class="activities-kanban-card" draggable="true" data-order-id="{{ card.id }}" data-current-queue="{{ column.id }}" {% if card.cadastro_url %}data-cadastro-url="{{ card.cadastro_url }}"{% endif %}>
+      <article class="activities-kanban-card" draggable="true" data-order-id="{{ card.id }}" data-current-queue="{{ column.id }}" data-search="{{ (card.empresa or '') ~ ' ' ~ (card.protocol or '') ~ ' ' ~ (card.phone or '') ~ ' ' ~ ((card.description or '')|replace('\n', ' ')) }}" {% if card.cadastro_url %}data-cadastro-url="{{ card.cadastro_url }}"{% endif %}>
         <span class="activities-kanban-card-grip" aria-hidden="true">⋮⋮</span>
         <div class="activities-kanban-card-title">{{ card.empresa }}</div>
         <div class="activities-kanban-card-meta">
@@ -205,5 +213,5 @@
     <div id="os-order-modal-body">Carregando…</div>
   </div>
 </div>
-<script src="/static/js/os-kanban.js?v=7"></script>
+<script src="/static/js/os-kanban.js?v=8"></script>
 {% endblock %}

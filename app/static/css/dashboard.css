@@ -1418,9 +1418,13 @@ a { color: inherit; text-decoration: none; }
     align-items: stretch;
   }
 
-  .filter-field-sm {
+  .filter-field,
+  .filter-field-sm,
+  .filter-field-search {
     max-width: none;
-    flex: 1 1 100%;
+    flex: 0 0 auto;
+    width: 100%;
+    min-width: 0;
   }
 
   .toolbar-card {

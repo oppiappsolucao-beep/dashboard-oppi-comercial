@@ -10,7 +10,7 @@
     var body = column.querySelector(".activities-kanban-column-body");
     var countEl = column.querySelector("[data-kanban-count]");
     if (!body || !countEl) return;
-    var count = body.querySelectorAll(".activities-kanban-card").length;
+    var count = body.querySelectorAll(".activities-kanban-card:not([hidden])").length;
     countEl.textContent = String(count);
     var empty = body.querySelector(".activities-kanban-empty");
     if (count === 0 && !empty) {
@@ -20,6 +20,13 @@
       body.appendChild(note);
     } else if (count > 0 && empty) {
       empty.remove();
+    }
+    var summary = document.querySelector(".os-summary.is-columns");
+    if (summary) {
+      var totals = summary.querySelectorAll("strong");
+      board.querySelectorAll("[data-kanban-count]").forEach(function (el, index) {
+        if (totals[index]) totals[index].textContent = el.textContent;
+      });
     }
   }
 
@@ -70,6 +77,105 @@
     });
   });
 
+  function placeCard(card, body) {
+    if (!card || !body) return;
+    var queueId = body.getAttribute("data-drop-queue");
+    var orderId = card.getAttribute("data-order-id");
+    var fromQueue = card.getAttribute("data-current-queue");
+    if (!queueId || !orderId || fromQueue === queueId) return;
+    var reopen = false;
+    if (fromQueue === "concluida") {
+      reopen = window.confirm("Esta ordem já foi concluída. Deseja realmente reabrir?");
+      if (!reopen) return;
+    }
+    var previous = card.parentElement;
+    var empty = body.querySelector(".activities-kanban-empty");
+    if (empty) empty.remove();
+    body.appendChild(card);
+    card.setAttribute("data-current-queue", queueId);
+    if (previous) countColumn(previous.closest(".activities-kanban-column"));
+    countColumn(body.closest(".activities-kanban-column"));
+    postMove(card, queueId, reopen);
+  }
+
+  var touchCard = null;
+  var touchId = null;
+  var touchX = 0;
+  var touchY = 0;
+  var touchMoved = false;
+
+  board.addEventListener("pointerdown", function (event) {
+    if (event.pointerType === "mouse") return;
+    var card = event.target.closest(".activities-kanban-card");
+    if (!card || event.target.closest("a, button, textarea, input, select, label")) return;
+    touchCard = card;
+    touchId = event.pointerId;
+    touchX = event.clientX;
+    touchY = event.clientY;
+    touchMoved = false;
+  });
+
+  board.addEventListener("pointermove", function (event) {
+    if (!touchCard || event.pointerId !== touchId) return;
+    var dx = event.clientX - touchX;
+    var dy = event.clientY - touchY;
+    if (!touchMoved && Math.abs(dx) + Math.abs(dy) < 10) return;
+    if (!touchMoved) {
+      touchMoved = true;
+      suppressClick = true;
+      touchCard.classList.add("is-dragging");
+      document.body.classList.add("activity-kanban-dragging");
+      try { touchCard.setPointerCapture(event.pointerId); } catch (error) { /* ignore */ }
+    }
+    event.preventDefault();
+    board.querySelectorAll(".is-drop-target").forEach(function (item) {
+      item.classList.remove("is-drop-target");
+    });
+    var under = document.elementFromPoint(event.clientX, event.clientY);
+    var body = under && under.closest(".activities-kanban-column-body");
+    if (body) body.classList.add("is-drop-target");
+  }, { passive: false });
+
+  function endTouch(event) {
+    if (!touchCard || event.pointerId !== touchId) return;
+    var card = touchCard;
+    var moved = touchMoved;
+    touchCard = null;
+    touchId = null;
+    touchMoved = false;
+    var under = moved ? document.elementFromPoint(event.clientX, event.clientY) : null;
+    var body = under && under.closest(".activities-kanban-column-body");
+    card.classList.remove("is-dragging");
+    document.body.classList.remove("activity-kanban-dragging");
+    board.querySelectorAll(".is-drop-target").forEach(function (item) {
+      item.classList.remove("is-drop-target");
+    });
+    if (!moved) return;
+    suppressClick = true;
+    window.setTimeout(function () { suppressClick = false; }, 350);
+    if (body) placeCard(card, body);
+  }
+
+  board.addEventListener("pointerup", endTouch);
+  board.addEventListener("pointercancel", endTouch);
+
+  var search = document.getElementById("os-card-filter");
+  if (search) {
+    search.addEventListener("input", function () {
+      var query = search.value.trim().toLowerCase();
+      var queryDigits = query.replace(/\D/g, "");
+      board.querySelectorAll(".activities-kanban-card").forEach(function (card) {
+        var hay = (card.getAttribute("data-search") || "").toLowerCase();
+        var hayDigits = hay.replace(/\D/g, "");
+        var match = !query
+          || hay.indexOf(query) !== -1
+          || (queryDigits.length >= 2 && hayDigits.indexOf(queryDigits) !== -1);
+        card.hidden = !match;
+      });
+      board.querySelectorAll(".activities-kanban-column").forEach(countColumn);
+    });
+  }
+
   board.querySelectorAll(".activities-kanban-column-body").forEach(function (body) {
     body.addEventListener("dragover", function (event) {
       event.preventDefault();
@@ -82,23 +188,7 @@
       event.preventDefault();
       body.classList.remove("is-drop-target");
       if (!dragged) return;
-      var queueId = body.getAttribute("data-drop-queue");
-      var orderId = dragged.getAttribute("data-order-id");
-      var fromQueue = dragged.getAttribute("data-current-queue");
-      if (!queueId || !orderId || fromQueue === queueId) return;
-      var reopen = false;
-      if (fromQueue === "concluida") {
-        reopen = window.confirm("Esta ordem já foi concluída. Deseja realmente reabrir?");
-        if (!reopen) return;
-      }
-      var previous = dragged.parentElement;
-      var empty = body.querySelector(".activities-kanban-empty");
-      if (empty) empty.remove();
-      body.appendChild(dragged);
-      dragged.setAttribute("data-current-queue", queueId);
-      if (previous) countColumn(previous.closest(".activities-kanban-column"));
-      countColumn(body.closest(".activities-kanban-column"));
-      postMove(dragged, queueId, reopen);
+      placeCard(dragged, body);
     });
   });
 
@@ -166,6 +256,20 @@
 
   if (modal) {
     modal.addEventListener("click", function (event) {
+      var copy = event.target.closest("[data-copy-phone]");
+      if (copy) {
+        event.preventDefault();
+        var value = copy.getAttribute("data-copy-phone") || "";
+        var mark = function () { copy.textContent = "Copiado"; };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(value).then(mark).catch(function () {
+            window.prompt("Copie o número:", value);
+          });
+        } else {
+          window.prompt("Copie o número:", value);
+        }
+        return;
+      }
       if (event.target.closest("[data-os-close]")) closeModal();
     });
     modal.addEventListener("submit", function (event) {

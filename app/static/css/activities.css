@@ -248,6 +248,7 @@ body.activity-kanban-dragging .activities-kanban-board {
 
 .activities-kanban-card.is-dragging {
   opacity: 0.35;
+  pointer-events: none;
 }
 
 .activities-kanban-card-ghost {
@@ -303,7 +304,7 @@ body.activity-kanban-dragging * {
   font-size: 0.72rem;
   letter-spacing: -0.12em;
   line-height: 1;
-  pointer-events: none;
+  touch-action: none;
 }
 
 .activities-kanban-card:active {

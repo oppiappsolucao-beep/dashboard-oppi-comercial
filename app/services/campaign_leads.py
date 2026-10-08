@@ -716,5 +716,6 @@ def attach_campaign_cards(cards: list[dict]) -> None:
         card["source"] = "campanha"
         card["cadastro_url"] = link["cadastro_url"]
         card["creative"] = link["creative"]
+        card["phone"] = link.get("phone") or ""
         if link.get("lead_date"):
             card["lead_date"] = link["lead_date"]
