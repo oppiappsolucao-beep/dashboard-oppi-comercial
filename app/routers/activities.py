@@ -125,7 +125,7 @@ def _os_board_context(request: Request) -> dict:
     from app.dependencies import get_session_user
     from app.services.kanban_summary import build_kanban_summary, pick_support_sector, support_level
     from app.services.org_registry import add_sector_queue, list_sectors
-    from app.services.service_orders import build_sector_board, is_oppi_tech_sector
+    from app.services.service_orders import build_sector_board
 
     sectors = list_sectors()
     user = get_session_user(request) or {}
@@ -189,7 +189,7 @@ def _os_board_context(request: Request) -> dict:
         "fim": summary["fim"],
         "summary": summary,
         "is_commercial": "comercial" in sector_name.lower(),
-        "can_delete_orders": is_oppi_tech_sector(sector_name),
+        "can_delete_orders": _oppi_tech_login(request),
         "success": request.session.pop("os_board_success", ""),
         "error": request.session.pop("os_board_error", ""),
     }
@@ -399,13 +399,13 @@ async def activities_delete_order(request: Request, order_id: str):
     redirect = require_auth(request)
     if redirect:
         return redirect
-    from app.services.service_orders import delete_service_order, get_order_detail, is_oppi_tech_sector
+    from app.services.service_orders import delete_service_order, get_order_detail
 
+    if not _oppi_tech_login(request):
+        return HTMLResponse("Somente o login Oppi Tech pode excluir o card.", status_code=403)
     detail = get_order_detail(order_id)
     if not detail or not _order_visible(request, detail):
         return HTMLResponse("Ordem de serviço não encontrada.", status_code=404)
-    if not is_oppi_tech_sector(detail.get("sector") or ""):
-        return HTMLResponse("Somente o setor Oppi Tech pode excluir a ordem.", status_code=403)
     try:
         delete_service_order(order_id)
     except ValueError as error:
@@ -421,9 +421,20 @@ def _os_actor(request: Request) -> str:
     )
 
 
-def _order_panel_context(order: dict, sector_notice: str = "") -> dict:
+def _oppi_tech_login(request: Request) -> bool:
+    """Só o funcionário logado no setor Oppi Tech. O administrador vendo o quadro não entra aqui."""
+    if not request.session.get("org_person_id"):
+        return False
+    from app.services.service_orders import is_oppi_tech_sector
+
+    return is_oppi_tech_sector(request.session.get("org_sector_name") or "") or is_oppi_tech_sector(
+        request.session.get("username") or ""
+    )
+
+
+def _order_panel_context(order: dict, sector_notice: str = "", can_delete_order: bool = False) -> dict:
     from app.services.org_registry import list_sectors
-    from app.services.service_orders import is_oppi_tech_sector, queue_choices
+    from app.services.service_orders import queue_choices
 
     sector_id, queues = queue_choices(order.get("sector") or "")
     return {
@@ -432,7 +443,7 @@ def _order_panel_context(order: dict, sector_notice: str = "") -> dict:
         "sector_notice": sector_notice,
         "order_sector_id": sector_id,
         "order_queues": queues,
-        "can_delete_order": is_oppi_tech_sector(order.get("sector") or ""),
+        "can_delete_order": can_delete_order,
     }
 
 
@@ -464,7 +475,11 @@ async def activities_order_detail(request: Request, order_id: str):
     detail = get_order_detail(order_id)
     if not detail or not _order_visible(request, detail):
         return HTMLResponse("Ordem de serviço não encontrada.", status_code=404)
-    return render(request, "partials/os_order_panel.html", _order_panel_context(detail))
+    return render(
+        request,
+        "partials/os_order_panel.html",
+        _order_panel_context(detail, can_delete_order=_oppi_tech_login(request)),
+    )
 
 
 @router.post("/atividades/os/{order_id}/atualizacao", response_class=HTMLResponse)
@@ -482,7 +497,11 @@ async def activities_order_update(request: Request, order_id: str, note: str = F
     except ValueError as error:
         return HTMLResponse(str(error), status_code=400)
     detail = get_order_detail(order_id)
-    return render(request, "partials/os_order_panel.html", _order_panel_context(detail))
+    return render(
+        request,
+        "partials/os_order_panel.html",
+        _order_panel_context(detail, can_delete_order=_oppi_tech_login(request)),
+    )
 
 
 @router.post("/atividades/os/{order_id}/setor", response_class=HTMLResponse)
@@ -502,7 +521,7 @@ async def activities_direct_sector(request: Request, order_id: str, sector_name:
         return render(
             request,
             "partials/os_order_panel.html",
-            _order_panel_context(detail, str(error)),
+            _order_panel_context(detail, str(error), can_delete_order=_oppi_tech_login(request)),
         )
     extra = ticket_card_extra(order_id) or {}
     sheet_note = ""

@@ -23,7 +23,7 @@
 .os-column-tools { display: flex; gap: 4px; margin-top: 6px; }
 .os-column-tools form { margin: 0; }
 .os-column-tools button { min-height: 28px; padding: 0 8px; border-radius: 8px; font-size: 0.75rem; }
-.os-card-delete { margin-top: 8px; border: 0; background: transparent; color: #B91C1C; font: inherit; font-size: 0.75rem; font-weight: 700; padding: 0; cursor: pointer; }
+.os-card-delete { display: inline-flex; align-items: center; margin-top: 8px; min-height: 28px; padding: 0 8px; border: 1px solid #FECACA; border-radius: 8px; background: #FEF2F2; color: #B91C1C; font: inherit; font-size: 0.75rem; font-weight: 700; cursor: pointer; }
 .os-proposta-link { display: inline-flex; margin-top: 8px; padding: 4px 8px; border-radius: 8px; background: #F3E8FF; font-size: 0.75rem; font-weight: 700; color: var(--purple, #7C3AED); text-decoration: none; }
 .os-card-status { display: grid; gap: 4px; margin-top: 8px; font-size: 0.72rem; font-weight: 700; color: var(--muted); }
 .os-card-status select { width: 100%; min-height: 32px; border: 1px solid var(--border); border-radius: 8px; padding: 0 8px; font: inherit; background: #fff; cursor: pointer; }
@@ -179,12 +179,14 @@
         <input type="hidden" name="direction" value="direita">
         <button type="submit" class="btn btn-secondary btn-small" aria-label="Mover {{ column.name }} para a direita">→</button>
       </form>
+      {% if not can_delete_orders %}
       <form method="post" action="/atividades/filas/{{ column.id }}/remover" onsubmit="return confirm('Excluir esta coluna? As ordens dela voltam para Análise.');">
         <input type="hidden" name="sector_id" value="{{ sector_id }}">
         <input type="hidden" name="inicio" value="{{ inicio }}">
         <input type="hidden" name="fim" value="{{ fim }}">
         <button type="submit" class="btn btn-secondary btn-small">Excluir</button>
       </form>
+      {% endif %}
     </div>
     {% endif %}
     <div class="activities-kanban-column-body" data-drop-queue="{{ column.id }}">
@@ -200,7 +202,7 @@
           <span>{{ card.scheduled_date_label }}</span>
         </div>
         {% if can_delete_orders %}
-        <button type="button" class="os-card-delete" data-delete-order="{{ card.id }}">Excluir</button>
+        <button type="button" class="os-card-delete" data-delete-order="{{ card.id }}">Excluir OS</button>
         {% endif %}
       </article>
       {% else %}
@@ -217,5 +219,5 @@
     <div id="os-order-modal-body">Carregando…</div>
   </div>
 </div>
-<script src="/static/js/os-kanban.js?v=9"></script>
+<script src="/static/js/os-kanban.js?v=10"></script>
 {% endblock %}

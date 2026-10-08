@@ -270,7 +270,7 @@
     event.stopPropagation();
     var orderId = button.getAttribute("data-delete-order");
     if (!orderId) return;
-    if (!window.confirm("Excluir esta ordem de serviço?")) return;
+    if (!window.confirm("Excluir este card de OS?")) return;
     var card = document.querySelector('.activities-kanban-card[data-order-id="' + orderId + '"]');
     fetch("/atividades/os/" + encodeURIComponent(orderId) + "/excluir", { method: "POST" })
       .then(function (response) {
