@@ -421,11 +421,16 @@ def _os_actor(request: Request) -> str:
     )
 
 
-def _oppi_tech_board(_request: Request, sector_name: str) -> bool:
+def _oppi_tech_board(request: Request, sector_name: str) -> bool:
     """Só o setor Oppi Tech. Comercial, treinamento e os demais ficam de fora."""
     from app.services.service_orders import is_oppi_tech_sector
 
-    return is_oppi_tech_sector(sector_name)
+    if is_oppi_tech_sector(sector_name):
+        return True
+    logged_sector = normalize_text(request.session.get("org_sector_name"))
+    return bool(request.session.get("org_person_id")) and is_oppi_tech_sector(logged_sector) and (
+        normalize_text(sector_name).lower() == logged_sector.lower()
+    )
 
 
 def _order_panel_context(order: dict, sector_notice: str = "", can_delete_order: bool = False) -> dict:

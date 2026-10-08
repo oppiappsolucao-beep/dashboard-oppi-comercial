@@ -428,7 +428,7 @@ def is_commercial_sector(sector_name: str) -> bool:
 
 
 def is_oppi_tech_sector(sector_name: str) -> bool:
-    compact = re.sub(r"\s+", "", normalize_text(sector_name).lower())
+    compact = re.sub(r"[^a-z0-9]", "", normalize_text(sector_name).lower())
     return "oppitech" in compact
 
 

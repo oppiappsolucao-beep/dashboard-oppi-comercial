@@ -23,7 +23,7 @@
 .os-column-tools { display: flex; gap: 4px; margin-top: 6px; }
 .os-column-tools form { margin: 0; }
 .os-column-tools button { min-height: 28px; padding: 0 8px; border-radius: 8px; font-size: 0.75rem; }
-.os-card-delete { display: inline-flex; align-items: center; margin-top: 8px; min-height: 28px; padding: 0 8px; border: 1px solid #FECACA; border-radius: 8px; background: #FEF2F2; color: #B91C1C; font: inherit; font-size: 0.75rem; font-weight: 700; cursor: pointer; }
+.os-card-delete { display: flex; align-items: center; justify-content: center; width: 100%; margin-top: 8px; min-height: 32px; padding: 0 8px; border: 1px solid #FECACA; border-radius: 8px; background: #FEF2F2; color: #B91C1C; font: inherit; font-size: 0.78rem; font-weight: 700; cursor: pointer; }
 .os-proposta-link { display: inline-flex; margin-top: 8px; padding: 4px 8px; border-radius: 8px; background: #F3E8FF; font-size: 0.75rem; font-weight: 700; color: var(--purple, #7C3AED); text-decoration: none; }
 .os-card-status { display: grid; gap: 4px; margin-top: 8px; font-size: 0.72rem; font-weight: 700; color: var(--muted); }
 .os-card-status select { width: 100%; min-height: 32px; border: 1px solid var(--border); border-radius: 8px; padding: 0 8px; font: inherit; background: #fff; cursor: pointer; }
@@ -194,6 +194,9 @@
       {% for card in column.cards %}
       <article class="activities-kanban-card" draggable="true" data-order-id="{{ card.id }}" data-current-queue="{{ column.id }}" data-search="{{ (card.empresa or '') ~ ' ' ~ (card.protocol or '') ~ ' ' ~ (card.phone or '') ~ ' ' ~ ((card.description or '')|replace('\n', ' ')) }}" {% if card.cadastro_url %}data-cadastro-url="{{ card.cadastro_url }}"{% endif %}>
         <span class="activities-kanban-card-grip" aria-hidden="true">⋮⋮</span>
+        {% if can_delete_orders %}
+        <button type="button" class="os-card-delete" data-delete-order="{{ card.id }}">Excluir OS</button>
+        {% endif %}
         <div class="activities-kanban-card-title">{{ card.empresa }}</div>
         <div class="activities-kanban-card-meta">
           <span>{{ card.protocol }}</span>
@@ -202,9 +205,6 @@
           <span aria-hidden="true">📅</span>
           <span>{{ card.scheduled_date_label }}</span>
         </div>
-        {% if can_delete_orders %}
-        <button type="button" class="os-card-delete" data-delete-order="{{ card.id }}">Excluir OS</button>
-        {% endif %}
       </article>
       {% else %}
       <div class="activities-kanban-empty">Nenhuma ordem</div>
