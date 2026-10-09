@@ -7,11 +7,11 @@
   {% if flash %}
   <div class="alert-success fin-flash">{{ flash }}</div>
   {% endif %}
-  {% if asaas_error %}
+  {% if asaas_error and tab not in ['entradas', 'pagar'] %}
   <div class="fin-banner">{{ asaas_error }}</div>
   {% endif %}
 
-  <div class="metric-grid metric-grid-fin">
+  <div class="metric-grid metric-grid-fin {% if tab in ['entradas', 'pagar'] %}metric-grid-fin-3{% endif %}">
     {% for card in kpi_cards %}
     <div class="metric-card">
       <div class="metric-top">
@@ -29,10 +29,13 @@
     <button type="button" class="fin-tab {% if tab == 'faturas' %}active{% endif %}" data-fin-tab="faturas">Faturas</button>
     <button type="button" class="fin-tab {% if tab == 'recorrencias' %}active{% endif %}" data-fin-tab="recorrencias">Recorrências</button>
     <button type="button" class="fin-tab {% if tab == 'atraso' %}active{% endif %}" data-fin-tab="atraso">Clientes em atraso</button>
+    <button type="button" class="fin-tab {% if tab == 'entradas' %}active{% endif %}" data-fin-tab="entradas">Entradas</button>
+    <button type="button" class="fin-tab {% if tab == 'pagar' %}active{% endif %}" data-fin-tab="pagar">Contas a pagar</button>
   </div>
 
   <div class="toolbar-card fin-toolbar">
     <div class="filters-row filters-row-main">
+      {% if tab not in ['entradas', 'pagar'] %}
       <div class="filter-field filter-field-sm">
         <label>Status</label>
         <select name="status" onchange="document.getElementById('financeiro-filters').requestSubmit()">
@@ -49,6 +52,10 @@
           {% endfor %}
         </select>
       </div>
+      {% else %}
+      <input type="hidden" name="status" value="{{ filters.status }}">
+      <input type="hidden" name="forma" value="{{ filters.forma }}">
+      {% endif %}
       <div class="filter-field filter-field-sm">
         <label>Período início</label>
         <input type="date" name="period_start" value="{{ filters.period_start }}">
@@ -64,7 +71,7 @@
       <div class="filter-field fin-search">
         <label>Buscar</label>
         <input type="search" name="search" value="{{ filters.search }}"
-          placeholder="Buscar cliente, fatura ou cobrança..."
+          placeholder="Buscar cliente, entrada ou conta..."
           onchange="document.getElementById('financeiro-filters').requestSubmit()">
       </div>
     </div>
@@ -219,6 +226,152 @@
       </tbody>
     </table>
   </div>
+</div>
+{% endif %}
+
+{% if tab == 'entradas' %}
+<div class="panel fin-table-card">
+  <div class="section-heading">Entradas na conta</div>
+  <div class="section-subtitle">Créditos do extrato Asaas no período. É o dinheiro que entrou na conta e aparece no banco. Tarifas e saídas ficam de fora.</div>
+  {% if entradas_error %}
+  <div class="fin-banner">{{ entradas_error }}</div>
+  {% endif %}
+  <div class="fin-entradas-total">Total de entradas: <strong>{{ entradas_total_label }}</strong></div>
+  <div class="table-wrap">
+    <table class="data-table fin-table">
+      <thead>
+        <tr>
+          <th>Data</th>
+          <th>Descrição</th>
+          <th>Tipo</th>
+          <th>Valor</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in entradas %}
+        <tr>
+          <td class="fin-cell-num">{{ row.date_label }}</td>
+          <td>{{ row.description }}</td>
+          <td><span class="fin-badge tone-green">{{ row.tipo }}</span></td>
+          <td class="fin-cell-num fin-money-in">{{ row.valor_label }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4" class="fin-empty">Nenhuma entrada neste período.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{% if tab == 'pagar' %}
+<div class="panel fin-payable-form-card">
+  <div class="section-heading">Nova conta — {{ payables.month_label }}</div>
+  <div class="section-subtitle">Lance o que a empresa tem que pagar. No dia do vencimento o valor entra em A pagar; ao quitar, passa para Pago.</div>
+  <form method="post" action="/financeiro/contas-a-pagar" class="fin-payable-form">
+    <input type="hidden" name="period_start" value="{{ filters.period_start }}">
+    <input type="hidden" name="period_end" value="{{ filters.period_end }}">
+    <div class="filter-field">
+      <label>Descrição</label>
+      <input type="text" name="description" required placeholder="Ex.: aluguel, energia, contador">
+    </div>
+    <div class="filter-field filter-field-sm">
+      <label>Valor</label>
+      <input type="text" name="amount" required inputmode="decimal" placeholder="0,00">
+    </div>
+    <div class="filter-field filter-field-sm">
+      <label>Vencimento</label>
+      <input type="date" name="due_date" required value="{{ filters.period_start }}">
+    </div>
+    <div class="filter-field filter-field-sm">
+      <label>&nbsp;</label>
+      <button type="submit" class="btn">Lançar</button>
+    </div>
+  </form>
+</div>
+
+<div class="panel fin-table-card">
+  <div class="section-heading">Controle do período</div>
+  <div class="fin-payable-totals">
+    <span>A pagar <strong class="fin-money-out">{{ payables.a_pagar_label }}</strong></span>
+    <span>Pago <strong class="fin-money-in">{{ payables.pago_label }}</strong></span>
+  </div>
+  {% if payables.show_grid %}
+  <div class="table-wrap">
+    <table class="data-table fin-table fin-day-grid">
+      <thead>
+        <tr>
+          <th>Dia</th>
+          <th>A pagar</th>
+          <th>Pago</th>
+          <th>Contas</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for day in payables.days %}
+        <tr class="{% if day.empty %}fin-day-empty{% endif %} {% if day.weekday >= 5 %}fin-day-weekend{% endif %}">
+          <td class="fin-cell-num">{{ day.day }}</td>
+          <td class="fin-cell-num fin-money-out">{{ day.a_pagar_label }}</td>
+          <td class="fin-cell-num fin-money-in">{{ day.pago_label }}</td>
+          <td>
+            {% for item in day['items'] %}
+            <div class="fin-payable-item">
+              <span>{{ item.description }} · {{ item.valor_label }}</span>
+              {% if item.paid %}
+              <span class="fin-badge tone-green">Pago</span>
+              <form method="post" action="/financeiro/contas-a-pagar/{{ item.id }}/reabrir" class="fin-inline-form">
+                <input type="hidden" name="period_start" value="{{ filters.period_start }}">
+                <input type="hidden" name="period_end" value="{{ filters.period_end }}">
+                <button type="submit" class="btn btn-secondary fin-btn-sm">Reabrir</button>
+              </form>
+              {% else %}
+              <span class="fin-badge tone-red">A pagar</span>
+              <form method="post" action="/financeiro/contas-a-pagar/{{ item.id }}/pagar" class="fin-inline-form">
+                <input type="hidden" name="period_start" value="{{ filters.period_start }}">
+                <input type="hidden" name="period_end" value="{{ filters.period_end }}">
+                <button type="submit" class="btn btn-secondary fin-btn-sm">Marcar pago</button>
+              </form>
+              {% endif %}
+              <form method="post" action="/financeiro/contas-a-pagar/{{ item.id }}/excluir" class="fin-inline-form" onsubmit="return confirm('Excluir esta conta?')">
+                <input type="hidden" name="period_start" value="{{ filters.period_start }}">
+                <input type="hidden" name="period_end" value="{{ filters.period_end }}">
+                <button type="submit" class="btn btn-secondary fin-btn-sm">Excluir</button>
+              </form>
+            </div>
+            {% endfor %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="fin-empty">Selecione um mês para ver o controle dia a dia. As contas do intervalo continuam na lista abaixo.</p>
+  <div class="table-wrap">
+    <table class="data-table fin-table">
+      <thead>
+        <tr>
+          <th>Vencimento</th>
+          <th>Descrição</th>
+          <th>Valor</th>
+          <th>Situação</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in payables.rows %}
+        <tr>
+          <td>{{ item.due_label }}</td>
+          <td>{{ item.description }}</td>
+          <td>{{ item.valor_label }}</td>
+          <td>{% if item.paid %}Pago{% else %}A pagar{% endif %}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4" class="fin-empty">Nenhuma conta neste período.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
 </div>
 {% endif %}
 

@@ -245,6 +245,75 @@
   text-align: center;
 }
 
+.metric-grid-fin-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.fin-entradas-total,
+.fin-payable-totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  margin: 0 0 12px;
+  font-size: 14px;
+}
+
+.fin-money-in {
+  color: #15803D;
+  font-weight: 700;
+}
+
+.fin-money-out {
+  color: #B91C1C;
+  font-weight: 700;
+}
+
+.fin-payable-form-card {
+  margin-bottom: 14px;
+}
+
+.fin-payable-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+}
+
+.fin-payable-form .filter-field {
+  min-width: 180px;
+}
+
+.fin-day-grid {
+  min-width: 720px;
+}
+
+.fin-day-empty td {
+  background: #F3F4F6;
+  color: #9CA3AF;
+}
+
+.fin-day-weekend td:first-child {
+  color: #6B7280;
+}
+
+.fin-payable-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.fin-payable-item:last-child {
+  border-bottom: 0;
+}
+
+.fin-inline-form {
+  display: inline-flex;
+  margin: 0;
+}
+
 @media (max-width: 1200px) {
   .metric-grid-fin {
     grid-template-columns: repeat(3, minmax(0, 1fr));

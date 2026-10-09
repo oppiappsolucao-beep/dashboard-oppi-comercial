@@ -102,6 +102,50 @@ class CadastroBillingMappingTest(unittest.TestCase):
         self.assertEqual(plan["valor"], "R$ 59,90")
 
 
+class EntradasEContasTest(unittest.TestCase):
+    def test_extrato_ignora_tarifa_e_saida(self):
+        from app.services.financeiro import map_entradas
+
+        rows = map_entradas(
+            [
+                {
+                    "id": "ft_1",
+                    "type": "PAYMENT_RECEIVED",
+                    "value": 59.9,
+                    "date": "2026-10-07",
+                    "paymentId": "pay_1",
+                },
+                {"id": "ft_2", "type": "PAYMENT_FEE", "value": -2.99, "date": "2026-10-07"},
+                {"id": "ft_3", "type": "TRANSFER", "value": -100, "date": "2026-10-08"},
+                {"id": "ft_4", "type": "PIX_TRANSACTION_CREDIT", "value": 120, "date": "2026-10-15"},
+            ],
+            {"pay_1": {"cliente": "Cliente A", "servico": "Oppi RH"}},
+        )
+        self.assertEqual([row["id"] for row in rows], ["ft_4", "ft_1"])
+        self.assertEqual(rows[1]["description"], "Cliente A — Oppi RH")
+        self.assertEqual(rows[1]["tipo"], "Cobrança recebida")
+        self.assertEqual(rows[0]["tipo"], "Pix recebido")
+        self.assertAlmostEqual(sum(row["valor"] for row in rows), 179.9)
+
+    def test_grade_separa_a_pagar_e_pago(self):
+        from app.services.company_payables import payable_calendar, parse_money
+
+        self.assertEqual(parse_money("1.870,20"), 1870.2)
+        self.assertIsNone(parse_money("0"))
+        rows = [
+            {"due": date(2026, 10, 7), "amount": 6.0, "paid": False, "description": "Taxa"},
+            {"due": date(2026, 10, 15), "amount": 1540.2, "paid": True, "description": "Folha"},
+        ]
+        calendar = payable_calendar(rows, date(2026, 10, 1), date(2026, 10, 31))
+        self.assertTrue(calendar["show_grid"])
+        self.assertEqual(len(calendar["days"]), 31)
+        self.assertAlmostEqual(calendar["a_pagar"], 6.0)
+        self.assertAlmostEqual(calendar["pago"], 1540.2)
+        self.assertEqual(calendar["days"][6]["day"], 7)
+        self.assertAlmostEqual(calendar["days"][6]["a_pagar"], 6.0)
+        self.assertTrue(calendar["days"][0]["empty"])
+
+
 class InternalFinanceTest(unittest.TestCase):
     def test_monthly_occurrences_in_august(self):
         from app.services.internal_finance import occurrences_in_period

@@ -268,6 +268,21 @@ def init_crm_local_db() -> None:
                 )
                 """
             )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS company_payables (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    description TEXT NOT NULL,
+                    amount REAL NOT NULL,
+                    due_date TEXT NOT NULL,
+                    paid_on TEXT NOT NULL DEFAULT '',
+                    created_at TEXT NOT NULL
+                )
+                """
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_company_payables_due ON company_payables(due_date)"
+            )
             conn.commit()
         _initialized = True
 

@@ -1,8 +1,19 @@
+import calendar
+from datetime import date
+from urllib.parse import urlencode
+
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from app.dependencies import require_admin
 from app.services.asaas_client import invalidate_cache
+from app.services.company_payables import (
+    create_payable,
+    delete_payable,
+    mark_payable_paid,
+    parse_money,
+    reopen_payable,
+)
 from app.services.financeiro import build_financeiro_context
 from app.services.legacy_core import normalize_text
 from app.templating import render
@@ -35,7 +46,9 @@ async def financeiro_page(request: Request):
     denied = require_admin(request)
     if denied:
         return denied
-    return _page(request, _params(request))
+    params = _params(request)
+    flash = normalize_text(request.query_params.get("flash"))
+    return _page(request, params, flash=flash)
 
 
 @router.post("/financeiro/filtros", response_class=HTMLResponse)
@@ -80,3 +93,91 @@ async def financeiro_sync(request: Request):
     invalidate_cache()
     params = _params(request)
     return _page(request, params, force_sync=True, flash="Dados sincronizados com o Asaas.")
+
+
+def _payable_back(period_start: str, period_end: str, flash: str) -> RedirectResponse:
+    query = urlencode(
+        {
+            "tab": "pagar",
+            "period_start": period_start,
+            "period_end": period_end,
+            "flash": flash,
+        }
+    )
+    return RedirectResponse(url=f"/financeiro?{query}", status_code=303)
+
+
+def _month_bounds(due: date) -> tuple[str, str]:
+    last = calendar.monthrange(due.year, due.month)[1]
+    start = date(due.year, due.month, 1)
+    end = date(due.year, due.month, last)
+    return start.isoformat(), end.isoformat()
+
+
+@router.post("/financeiro/contas-a-pagar")
+async def financeiro_payable_create(
+    request: Request,
+    description: str = Form(""),
+    amount: str = Form(""),
+    due_date: str = Form(""),
+    period_start: str = Form(""),
+    period_end: str = Form(""),
+):
+    denied = require_admin(request)
+    if denied:
+        return denied
+    name = normalize_text(description)
+    value = parse_money(amount)
+    try:
+        due = date.fromisoformat(normalize_text(due_date)[:10])
+    except ValueError:
+        due = None
+    back_start = normalize_text(period_start)
+    back_end = normalize_text(period_end)
+    if not name or value is None or due is None:
+        return _payable_back(back_start, back_end, "Informe descrição, valor e vencimento.")
+    create_payable(name, value, due)
+    start, end = _month_bounds(due)
+    return _payable_back(start, end, "Conta a pagar lançada.")
+
+
+@router.post("/financeiro/contas-a-pagar/{payable_id}/pagar")
+async def financeiro_payable_pay(
+    request: Request,
+    payable_id: int,
+    period_start: str = Form(""),
+    period_end: str = Form(""),
+):
+    denied = require_admin(request)
+    if denied:
+        return denied
+    mark_payable_paid(payable_id)
+    return _payable_back(period_start, period_end, "Conta marcada como paga.")
+
+
+@router.post("/financeiro/contas-a-pagar/{payable_id}/reabrir")
+async def financeiro_payable_reopen(
+    request: Request,
+    payable_id: int,
+    period_start: str = Form(""),
+    period_end: str = Form(""),
+):
+    denied = require_admin(request)
+    if denied:
+        return denied
+    reopen_payable(payable_id)
+    return _payable_back(period_start, period_end, "Conta voltou para a pagar.")
+
+
+@router.post("/financeiro/contas-a-pagar/{payable_id}/excluir")
+async def financeiro_payable_delete(
+    request: Request,
+    payable_id: int,
+    period_start: str = Form(""),
+    period_end: str = Form(""),
+):
+    denied = require_admin(request)
+    if denied:
+        return denied
+    delete_payable(payable_id)
+    return _payable_back(period_start, period_end, "Conta excluída.")
