@@ -12,6 +12,7 @@ from app.services.asaas_client import (
     fetch_account_balance,
     fetch_dashboard_payload,
     fetch_payments_due,
+    fetch_payments_received,
     fetch_statement,
     is_configured,
 )
@@ -331,7 +332,54 @@ def summarize_boletos(hoje_raw: list[dict] | None, mes_raw: list[dict] | None, t
         "mes_abertos_n": len(abertos),
         "mes_abertos_label": format_brl(abertos_total),
         "mes": mes,
+        "entraram": [],
+        "entraram_n": 0,
+        "entraram_valor_label": format_brl(0),
+        "entradas_n": 0,
+        "entradas_valor_label": format_brl(0),
+        "entradas_outras_n": 0,
+        "entradas_outras_label": format_brl(0),
+        "entraram_aviso": "",
     }
+
+
+def received_entries(payments: list[dict] | None, start: date, end: date, today: date) -> list[dict[str, Any]]:
+    """Tudo que foi pago no período, pela data em que entrou."""
+    rows = []
+    for payment in payments or []:
+        if not isinstance(payment, dict):
+            continue
+        classified = classify_payment(payment, today=today)
+        if classified["key"] != "pago":
+            continue
+        paid_on = _parse_date(
+            payment.get("paymentDate") or payment.get("clientPaymentDate") or payment.get("confirmedDate")
+        )
+        if not paid_on or paid_on < start or paid_on > end:
+            continue
+        try:
+            value = float(payment.get("value") or 0)
+        except (TypeError, ValueError):
+            value = 0.0
+        billing = normalize_text(payment.get("billingType")).upper()
+        due = _parse_date(payment.get("dueDate"))
+        rows.append(
+            {
+                "cliente": _service_name(payment),
+                "valor": value,
+                "valor_label": format_brl(value),
+                "pago_em": paid_on,
+                "pago_label": format_date_br(paid_on),
+                "vencimento_label": format_date_br(due),
+                "billing_type": billing,
+                "forma": billing_label(billing),
+                "status_label": classified["label"],
+                "status_tone": classified["tone"],
+                "invoice_url": payment.get("invoiceUrl") or payment.get("bankSlipUrl") or "",
+            }
+        )
+    rows.sort(key=lambda row: (row.get("pago_em") or date.min, row["cliente"]), reverse=True)
+    return rows
 
 
 def load_boleto_entrada(today: date, start: date, end: date, *, force: bool = False) -> dict[str, Any]:
@@ -352,6 +400,35 @@ def load_boleto_entrada(today: date, start: date, end: date, *, force: bool = Fa
         return blank
     result = summarize_boletos(hoje_raw, mes_raw, today)
     result["month_label"] = month_label(start, end)
+    return _attach_received(result, start, end, today, force=force)
+
+
+def _attach_received(result: dict[str, Any], start: date, end: date, today: date, *, force: bool) -> dict[str, Any]:
+    try:
+        raw, truncated = fetch_payments_received(start, end, force=force)
+    except AsaasError as exc:
+        result["entraram_aviso"] = str(exc)
+        return result
+    except Exception:
+        logger.exception("Falha ao validar entradas do Asaas")
+        result["entraram_aviso"] = "Não foi possível validar os boletos que entraram."
+        return result
+    rows = received_entries(raw, start, end, today)
+    boletos = [row for row in rows if row.get("billing_type") == "BOLETO"]
+    outras = [row for row in rows if row.get("billing_type") != "BOLETO"]
+
+    def _sum(items: list[dict]) -> float:
+        return sum(float(item.get("valor") or 0) for item in items)
+
+    result["entraram"] = boletos
+    result["entraram_n"] = len(boletos)
+    result["entraram_valor_label"] = format_brl(_sum(boletos))
+    result["entradas_n"] = len(rows)
+    result["entradas_valor_label"] = format_brl(_sum(rows))
+    result["entradas_outras_n"] = len(outras)
+    result["entradas_outras_label"] = format_brl(_sum(outras))
+    if truncated:
+        result["entraram_aviso"] = "A consulta passou do limite. O total pode estar incompleto."
     return result
 
 
@@ -818,18 +895,18 @@ def _with_tab_kpis(ctx: dict[str, Any], tab: str) -> dict[str, Any]:
                 "icon": "!",
             },
             {
-                "label": "Entram no período",
-                "value": str(boletos.get("mes_n") or 0),
-                "note": f"{boletos.get('month_label') or 'Período'} · {boletos.get('mes_valor_label') or format_brl(0)}",
-                "tone": "purple",
-                "icon": "↓",
-            },
-            {
-                "label": "Já recebidos",
-                "value": str(boletos.get("mes_pagos_n") or 0),
-                "note": boletos.get("mes_pagos_label") or format_brl(0),
+                "label": "Boletos que entraram",
+                "value": str(boletos.get("entraram_n") or 0),
+                "note": boletos.get("entraram_valor_label") or format_brl(0),
                 "tone": "green",
                 "icon": "✓",
+            },
+            {
+                "label": "Todas as entradas",
+                "value": str(boletos.get("entradas_n") or 0),
+                "note": boletos.get("entradas_valor_label") or format_brl(0),
+                "tone": "purple",
+                "icon": "↓",
             },
             {
                 "label": "Ainda entram",

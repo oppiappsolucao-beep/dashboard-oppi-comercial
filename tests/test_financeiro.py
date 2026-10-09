@@ -124,6 +124,26 @@ class BoletosEntradaTest(unittest.TestCase):
         self.assertEqual(out["mes_abertos_n"], 2)
         self.assertEqual(out["month_label"], "Outubro 2026")
 
+    def test_boletos_que_entraram_usam_data_de_pagamento(self):
+        from app.services.financeiro import received_entries
+
+        rows = received_entries(
+            [
+                {"id": "1", "billingType": "BOLETO", "status": "RECEIVED", "value": 59.9, "paymentDate": "2026-10-04", "dueDate": "2026-09-10", "description": "Oppi RH — Alfa"},
+                {"id": "2", "billingType": "PIX", "status": "RECEIVED", "value": 100, "paymentDate": "2026-10-05", "description": "Pix avulso"},
+                {"id": "3", "billingType": "BOLETO", "status": "RECEIVED", "value": 49.9, "paymentDate": "2026-09-28", "description": "Mês anterior"},
+                {"id": "4", "billingType": "BOLETO", "status": "PENDING", "value": 10, "dueDate": "2026-10-09", "description": "Ainda aberto"},
+            ],
+            date(2026, 10, 1),
+            date(2026, 10, 31),
+            date(2026, 10, 9),
+        )
+        boletos = [row for row in rows if row["billing_type"] == "BOLETO"]
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(len(boletos), 1)
+        self.assertEqual(boletos[0]["cliente"], "Oppi RH — Alfa")
+        self.assertEqual(boletos[0]["pago_label"], "04/10/2026")
+
 
 class EntradasEContasTest(unittest.TestCase):
     def test_extrato_ignora_tarifa_e_saida(self):

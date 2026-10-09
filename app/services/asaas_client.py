@@ -251,6 +251,44 @@ def fetch_payments_due(
     return items
 
 
+def fetch_payments_received(start: date, finish: date, *, force: bool = False) -> tuple[list[dict], bool]:
+    """Cobranças pagas no intervalo, pela data de pagamento. Devolve (itens, lista cortada)."""
+    key = f"recv|{start.isoformat()}|{finish.isoformat()}"
+    now = time.monotonic()
+    with _CACHE_LOCK:
+        cached = _DUE_CACHE.get(key)
+        if (
+            not force
+            and isinstance(cached, dict)
+            and (now - float(cached.get("at") or 0)) < _CACHE_TTL_SEC
+        ):
+            items = cached.get("items")
+            return (list(items) if isinstance(items, list) else []), bool(cached.get("truncated"))
+    found: dict[str, dict] = {}
+    truncated = False
+    pages = 40
+    for status in ("RECEIVED", "RECEIVED_IN_CASH", "CONFIRMED"):
+        batch = _list(
+            "payments",
+            {
+                "status": status,
+                "paymentDate[ge]": start.isoformat(),
+                "paymentDate[le]": finish.isoformat(),
+            },
+            max_pages=pages,
+        )
+        if len(batch) >= pages * 100:
+            truncated = True
+        for item in batch:
+            payment_id = str(item.get("id") or "")
+            if payment_id:
+                found[payment_id] = item
+    items = list(found.values())
+    with _CACHE_LOCK:
+        _DUE_CACHE[key] = {"at": time.monotonic(), "items": items, "truncated": truncated}
+    return items, truncated
+
+
 def list_payments_for_customer(customer_id: str) -> list[dict]:
     if not customer_id:
         return []
