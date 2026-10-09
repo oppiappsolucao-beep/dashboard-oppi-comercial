@@ -355,6 +355,36 @@ def load_boleto_entrada(today: date, start: date, end: date, *, force: bool = Fa
     return result
 
 
+def apply_boleto_status(boletos: dict[str, Any], status: str) -> dict[str, Any]:
+    """Filtra os boletos do período pelo status escolhido."""
+    key = normalize_text(status).lower()
+    aliases = {
+        "a_vencer": "receber",
+        "avencer": "receber",
+        "vencehoje": "vence_hoje",
+    }
+    key = aliases.get(key, key)
+    out = dict(boletos)
+    out["status"] = key
+    if not key:
+        return out
+    rows = [row for row in (boletos.get("mes") or []) if row.get("status_key") == key]
+    pagos = [row for row in rows if row.get("status_key") == "pago"]
+    abertos = [row for row in rows if row.get("status_key") != "pago"]
+
+    def _sum(items: list[dict]) -> float:
+        return sum(float(item.get("valor") or 0) for item in items)
+
+    out["mes"] = rows
+    out["mes_n"] = len(rows)
+    out["mes_valor_label"] = format_brl(_sum(rows))
+    out["mes_pagos_n"] = len(pagos)
+    out["mes_pagos_label"] = format_brl(_sum(pagos))
+    out["mes_abertos_n"] = len(abertos)
+    out["mes_abertos_label"] = format_brl(_sum(abertos))
+    return out
+
+
 def _payables_view(start: date, end: date, search: str) -> dict[str, Any]:
     rows = list_payables(start, end)
     needle = normalize_text(search).lower()
@@ -539,7 +569,10 @@ def build_financeiro_context(params: dict | None = None, *, force_sync: bool = F
     forecast = build_internal_forecast(period_start, period_end)
     payables = _payables_view(period_start, period_end, normalize_text(params.get("search")))
     boletos = (
-        load_boleto_entrada(today, period_start, period_end, force=force_sync)
+        apply_boleto_status(
+            load_boleto_entrada(today, period_start, period_end, force=force_sync),
+            normalize_text(params.get("status")),
+        )
         if tab == TAB_ENTRADAS
         else summarize_boletos([], [], today)
     )

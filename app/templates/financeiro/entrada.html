@@ -12,6 +12,7 @@
       <input type="hidden" name="destino" value="entrada">
       <input type="hidden" name="period_start" value="{{ filters.period_start }}">
       <input type="hidden" name="period_end" value="{{ filters.period_end }}">
+      <input type="hidden" name="status" value="{{ filters.status }}">
       <button type="submit" class="btn">Atualizar Asaas</button>
     </form>
   </div>
@@ -81,6 +82,16 @@
       </label>
       <label>Até
         <input type="date" name="period_end" value="{{ filters.period_end }}">
+      </label>
+      <label>Status
+        <select name="status">
+          <option value="" {% if not filters.status %}selected{% endif %}>Todos</option>
+          <option value="receber" {% if filters.status == 'receber' %}selected{% endif %}>A vencer</option>
+          <option value="vence_hoje" {% if filters.status == 'vence_hoje' %}selected{% endif %}>Vence hoje</option>
+          <option value="atrasado" {% if filters.status == 'atrasado' %}selected{% endif %}>Atrasado</option>
+          <option value="pago" {% if filters.status == 'pago' %}selected{% endif %}>Pago</option>
+          <option value="recorrente" {% if filters.status == 'recorrente' %}selected{% endif %}>Recorrente</option>
+        </select>
       </label>
       <button type="submit" class="btn">Ver período</button>
     </form>

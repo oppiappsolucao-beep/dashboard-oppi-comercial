@@ -283,7 +283,8 @@
   color: var(--muted);
 }
 
-.fin-period-form input[type="date"] {
+.fin-period-form input[type="date"],
+.fin-period-form select {
   height: 36px;
   min-width: 150px;
 }

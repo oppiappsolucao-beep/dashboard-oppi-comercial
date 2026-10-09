@@ -177,6 +177,19 @@ def _os_board_context(request: Request) -> dict:
                 for card in column["cards"]
                 if normalize_text(card.get("responsible")).lower() == trainer_name
             ]
+    if summary.get("layout") != "suporte":
+        aberto = 0
+        feito = 0
+        for column in columns:
+            total = len(column.get("cards") or [])
+            if column.get("id") == "concluida":
+                feito += total
+            elif column.get("id") != "campanha":
+                aberto += total
+        summary["andamento"] = aberto
+        summary["andamento_note"] = "Ordens nas colunas em aberto deste quadro."
+        summary["concluidos"] = feito
+        summary["concluidos_note"] = "Ordens na coluna Concluída."
     return {
         "active_page": "activities",
         "is_admin": not employee,

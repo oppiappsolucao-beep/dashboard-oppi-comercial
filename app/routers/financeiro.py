@@ -145,6 +145,7 @@ async def financeiro_sync(
     destino: str = Form(""),
     period_start: str = Form(""),
     period_end: str = Form(""),
+    status: str = Form(""),
     search: str = Form(""),
 ):
     denied = require_auth(request)
@@ -153,7 +154,7 @@ async def financeiro_sync(
     invalidate_cache()
     params = {
         "tab": "visao",
-        "status": "",
+        "status": status,
         "forma": "",
         "search": search,
         "period_start": period_start,
