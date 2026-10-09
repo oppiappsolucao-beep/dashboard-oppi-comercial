@@ -101,16 +101,8 @@
   <button type="submit" class="btn">Pesquisar</button>
 </form>
 
-<section class="os-summary{% if 'treinamento' in sector_name|lower %} is-columns{% elif summary.layout == 'suporte' %} is-support{% endif %}" aria-label="Resumo do período">
-  {% if 'treinamento' in sector_name|lower %}
-  {% for column in columns %}
-  <article class="panel">
-    <span title="{{ column.name }}">{{ column.name }}</span>
-    <strong>{{ column.cards|length }}</strong>
-    <p>Ordens nesta coluna.</p>
-  </article>
-  {% endfor %}
-  {% elif summary.layout == 'suporte' %}
+<section class="os-summary{% if summary.layout == 'suporte' %} is-support{% else %} is-columns{% endif %}" aria-label="Ordens por coluna">
+  {% if summary.layout == 'suporte' %}
   {% for card in summary.cards %}
   <article class="panel">
     <span title="{{ card.label }}">{{ card.label }}</span>
@@ -119,26 +111,13 @@
   </article>
   {% endfor %}
   {% else %}
+  {% for column in columns %}
   <article class="panel">
-    <span>Resultado de conversas</span>
-    <strong>{{ summary.conversations }}</strong>
-    <p>{{ summary.conversations_note }}</p>
+    <span title="{{ column.name }}">{{ column.name }}</span>
+    <strong>{{ column.cards|length }}</strong>
+    <p>Ordens nesta coluna.</p>
   </article>
-  <article class="panel">
-    <span>Leads</span>
-    <strong>{{ summary.leads }}</strong>
-    <p>{{ summary.leads_note }}</p>
-  </article>
-  <article class="panel">
-    <span>Em andamento</span>
-    <strong>{{ summary.andamento }}</strong>
-    <p>{{ summary.andamento_note }}</p>
-  </article>
-  <article class="panel">
-    <span>Concluídos</span>
-    <strong>{{ summary.concluidos }}</strong>
-    <p>{{ summary.concluidos_note }}</p>
-  </article>
+  {% endfor %}
   {% endif %}
 </section>
 

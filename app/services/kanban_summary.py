@@ -193,27 +193,19 @@ def build_kanban_summary(sector_name: str, inicio: str, fim: str, *, viewer: str
             "concluidos": cards[2]["value"],
             "concluidos_note": cards[2]["note"],
         }
-    conversations, conversations_note = _conversations(start, end)
-    try:
-        from app.services.campaign_leads import count_raissa_leads
-
-        leads, leads_note = count_raissa_leads(start, end)
-    except Exception:
-        leads, leads_note = 0, "Não consegui ler a aba de leads."
-    andamento, concluidos = _orders(sector_name, start, end)
     return {
         "inicio": start,
         "fim": end,
         "layout": "padrao",
         "cards": [],
-        "conversations": conversations,
-        "conversations_note": conversations_note,
-        "leads": leads,
-        "leads_note": leads_note,
-        "andamento": andamento,
-        "andamento_note": "Cards da coluna Andamento com data neste período.",
-        "concluidos": concluidos,
-        "concluidos_note": "Ordens deste setor concluídas no período.",
+        "conversations": "—",
+        "conversations_note": "",
+        "leads": 0,
+        "leads_note": "",
+        "andamento": 0,
+        "andamento_note": "",
+        "concluidos": 0,
+        "concluidos_note": "",
     }
 
 
