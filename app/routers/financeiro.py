@@ -275,9 +275,12 @@ async def financeiro_payable_delete(
     period_start: str = Form(""),
     period_end: str = Form(""),
     status: str = Form(""),
+    confirm_text: str = Form(""),
 ):
     denied = require_auth(request)
     if denied:
         return denied
+    if normalize_text(confirm_text).lower() != "excluir":
+        return _payable_back(period_start, period_end, "A conta continua salva. Digite excluir para apagar.", status)
     delete_payable(payable_id)
     return _payable_back(period_start, period_end, "Conta excluída.", status)

@@ -391,6 +391,78 @@ button.fin-action-danger {
   font-weight: 600;
 }
 
+button.fin-action:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  text-decoration: none;
+}
+
+.fin-fixed {
+  flex: 1 0 100%;
+  margin-top: 4px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: #F8F5FF;
+  border: 1px solid #DDD6FE;
+}
+
+.fin-fixed-title {
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.fin-fixed-note {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.fin-fixed dl {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr);
+  gap: 6px 12px;
+  margin: 0 0 12px;
+}
+
+.fin-fixed dt {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.fin-fixed dd {
+  margin: 0;
+  font-size: 14px;
+}
+
+.fin-fixed-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.fin-delete-box {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.fin-delete-box p {
+  flex: 1 0 100%;
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.fin-delete-word {
+  height: 32px;
+  width: 140px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0 8px;
+}
+
 .fin-day-weekend td:first-child {
   color: #6B7280;
 }
