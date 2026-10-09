@@ -405,6 +405,11 @@ def build_registration_payload(form: dict) -> dict:
     payload["empresa_matriz_sheet_row"] = matriz
     for field in ("email_login_gestor", "email_cobranca", "senha_acesso"):
         payload[field] = normalize_text(form.get(field, ""))
+    seller_name = normalize_text(form.get("nome_contato"))
+    if seller_name and not payload.get("responsavel_legal"):
+        payload["responsavel_legal"] = seller_name
+    if seller_name and not payload.get("socio_1"):
+        payload["socio_1"] = seller_name
     return payload
 
 

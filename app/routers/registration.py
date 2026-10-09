@@ -336,7 +336,7 @@ async def api_cnpj_lookup(request: Request, cnpj: str):
 
 
 def _complete_pasted_registration(fields: dict) -> None:
-    """Completa nicho, abertura e responsável legal com a consulta do CNPJ."""
+    """Completa dados da empresa com o CNPJ. Responsável e acesso ficam com o que o vendedor preencheu."""
     cnpj = normalize_text(fields.get("cnpj"))
     if len("".join(ch for ch in cnpj if ch.isdigit())) != 14:
         return
@@ -348,24 +348,14 @@ def _complete_pasted_registration(fields: dict) -> None:
         looked = {}
     except Exception:
         looked = {}
-    for key in (
-        "nicho",
-        "data_abertura",
-        "nome_fantasia",
-        "capital",
-        "responsavel_legal",
-        "socio_1",
-        "cpf_socio_1",
-        "email",
-        "email_socio_1",
-        "email_login_gestor",
-        "email_confirmacao_admin",
-        "email_cobranca",
-    ):
+    for key in ("nicho", "data_abertura", "nome_fantasia", "capital"):
         if not normalize_text(fields.get(key)) and normalize_text(looked.get(key)):
             fields[key] = looked[key]
-    if not normalize_text(fields.get("senha_acesso")) and normalize_text(looked.get("senha_acesso")):
-        fields["senha_acesso"] = looked["senha_acesso"]
+    seller_name = normalize_text(fields.get("nome_contato") or fields.get("responsavel_legal"))
+    if seller_name and not normalize_text(fields.get("responsavel_legal")):
+        fields["responsavel_legal"] = seller_name
+    if seller_name and not normalize_text(fields.get("socio_1")):
+        fields["socio_1"] = seller_name
     if fields.get("socio_1") and not fields.get("quantidade_socios"):
         fields["quantidade_socios"] = "1"
     if fields.get("socio_1") and not fields.get("responsavel_legal"):
