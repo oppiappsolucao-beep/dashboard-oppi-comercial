@@ -4,7 +4,7 @@
 <div class="page-header">
   <div>
     <div class="page-title">Entrada</div>
-    <div class="page-subtitle">Boletos do Asaas. Quantos vencem hoje e quantos entram em {{ boletos.month_label }}.</div>
+    <div class="page-subtitle">Boletos do Asaas. Quantos vencem hoje e quantos entram no período escolhido.</div>
   </div>
   <div class="page-actions">
     <a class="btn btn-secondary" href="/financeiro/contas-a-pagar">Contas a pagar</a>
@@ -73,7 +73,18 @@
 </div>
 
 <div class="panel fin-table-card">
-  <div class="section-heading">Boletos que entram em {{ boletos.month_label }}</div>
+  <div class="fin-period-head">
+    <div class="section-heading">Boletos que entram em {{ boletos.month_label }}</div>
+    <form method="get" action="/financeiro/entrada" class="fin-period-form">
+      <label>De
+        <input type="date" name="period_start" value="{{ filters.period_start }}">
+      </label>
+      <label>Até
+        <input type="date" name="period_end" value="{{ filters.period_end }}">
+      </label>
+      <button type="submit" class="btn">Ver período</button>
+    </form>
+  </div>
   <div class="fin-entradas-total">{{ boletos.mes_n }} boleto{{ 's' if boletos.mes_n != 1 else '' }} · <strong>{{ boletos.mes_valor_label }}</strong> · recebidos {{ boletos.mes_pagos_label }} · em aberto {{ boletos.mes_abertos_label }}</div>
   <div class="table-wrap">
     <table class="data-table fin-table">

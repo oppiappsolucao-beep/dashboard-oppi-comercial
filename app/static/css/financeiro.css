@@ -253,6 +253,41 @@
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+.fin-period-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.fin-period-head .section-heading {
+  margin: 0;
+}
+
+.fin-period-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+  margin: 0;
+}
+
+.fin-period-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.fin-period-form input[type="date"] {
+  height: 36px;
+  min-width: 150px;
+}
+
 .fin-entradas-total,
 .fin-payable-totals {
   display: flex;

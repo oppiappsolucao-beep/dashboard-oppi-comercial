@@ -1,7 +1,6 @@
 """Painel Financeiro — Asaas + vínculo com cadastros do CRM."""
 from __future__ import annotations
 
-import calendar
 import logging
 from datetime import date, datetime, timedelta
 from typing import Any
@@ -335,10 +334,9 @@ def summarize_boletos(hoje_raw: list[dict] | None, mes_raw: list[dict] | None, t
     }
 
 
-def load_boleto_entrada(today: date, *, force: bool = False) -> dict[str, Any]:
-    start = today.replace(day=1)
-    end = date(today.year, today.month, calendar.monthrange(today.year, today.month)[1])
+def load_boleto_entrada(today: date, start: date, end: date, *, force: bool = False) -> dict[str, Any]:
     blank = summarize_boletos([], [], today)
+    blank["month_label"] = month_label(start, end)
     if not is_configured():
         blank["error"] = "Configure ASAAS_API_KEY para ler os boletos."
         return blank
@@ -352,7 +350,9 @@ def load_boleto_entrada(today: date, *, force: bool = False) -> dict[str, Any]:
         logger.exception("Falha ao ler boletos do Asaas")
         blank["error"] = "Não foi possível ler os boletos do Asaas agora."
         return blank
-    return summarize_boletos(hoje_raw, mes_raw, today)
+    result = summarize_boletos(hoje_raw, mes_raw, today)
+    result["month_label"] = month_label(start, end)
+    return result
 
 
 def _payables_view(start: date, end: date, search: str) -> dict[str, Any]:
@@ -538,7 +538,11 @@ def build_financeiro_context(params: dict | None = None, *, force_sync: bool = F
 
     forecast = build_internal_forecast(period_start, period_end)
     payables = _payables_view(period_start, period_end, normalize_text(params.get("search")))
-    boletos = load_boleto_entrada(today, force=force_sync) if tab == TAB_ENTRADAS else summarize_boletos([], [], today)
+    boletos = (
+        load_boleto_entrada(today, period_start, period_end, force=force_sync)
+        if tab == TAB_ENTRADAS
+        else summarize_boletos([], [], today)
+    )
     empty = {
         "active_page": "financeiro",
         "asaas_configured": is_configured(),
@@ -781,21 +785,21 @@ def _with_tab_kpis(ctx: dict[str, Any], tab: str) -> dict[str, Any]:
                 "icon": "!",
             },
             {
-                "label": "Entram neste mês",
+                "label": "Entram no período",
                 "value": str(boletos.get("mes_n") or 0),
-                "note": f"{boletos.get('month_label') or 'Mês'} · {boletos.get('mes_valor_label') or format_brl(0)}",
+                "note": f"{boletos.get('month_label') or 'Período'} · {boletos.get('mes_valor_label') or format_brl(0)}",
                 "tone": "purple",
                 "icon": "↓",
             },
             {
-                "label": "Já recebidos no mês",
+                "label": "Já recebidos",
                 "value": str(boletos.get("mes_pagos_n") or 0),
                 "note": boletos.get("mes_pagos_label") or format_brl(0),
                 "tone": "green",
                 "icon": "✓",
             },
             {
-                "label": "Ainda entram no mês",
+                "label": "Ainda entram",
                 "value": str(boletos.get("mes_abertos_n") or 0),
                 "note": boletos.get("mes_abertos_label") or format_brl(0),
                 "tone": "blue",
