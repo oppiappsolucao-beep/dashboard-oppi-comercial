@@ -79,6 +79,14 @@ def add_months(due: date, months: int) -> date:
     return date(year, month, min(due.day, last))
 
 
+def total_launched() -> float:
+    """Soma de todas as contas já lançadas, em qualquer mês."""
+    init_crm_local_db()
+    with _lock, _connect() as conn:
+        row = conn.execute("SELECT COALESCE(SUM(amount), 0) FROM company_payables").fetchone()
+    return round(float(row[0] or 0), 2)
+
+
 def list_suppliers() -> list[str]:
     init_crm_local_db()
     with _lock, _connect() as conn:

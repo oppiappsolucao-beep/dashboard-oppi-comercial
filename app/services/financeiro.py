@@ -16,7 +16,7 @@ from app.services.asaas_client import (
     fetch_statement,
     is_configured,
 )
-from app.services.company_payables import list_payables, list_suppliers, payable_calendar
+from app.services.company_payables import list_payables, list_suppliers, payable_calendar, total_launched
 from app.services.internal_finance import build_internal_forecast, resolve_period
 from app.services.legacy_core import (
     normalize_cnpj_for_duplicate,
@@ -492,6 +492,7 @@ def _payables_view(start: date, end: date, search: str, status: str = "", today:
                 "status_tone": {"pago": "green", "atrasado": "red", "a_pagar": "blue"}.get(row.get("status"), "blue"),
             }
         )
+    dividas = total_launched()
     return {
         "rows": listed,
         "days": [
@@ -526,6 +527,10 @@ def _payables_view(start: date, end: date, search: str, status: str = "", today:
         "saida_label": format_brl(saida),
         "entrada": 0.0,
         "entrada_label": format_brl(0),
+        "a_receber": 0.0,
+        "a_receber_label": format_brl(0),
+        "dividas": dividas,
+        "dividas_label": format_brl(dividas),
         "saldo": 0.0,
         "saldo_label": format_brl(0),
         "compare_note": "",
@@ -538,6 +543,7 @@ def attach_cash_compare(payables: dict[str, Any], start: date, end: date, today:
     """Compara o que entrou no Asaas com a saída das contas do período."""
     saida = float(payables.get("saida") or 0)
     entrada = 0.0
+    a_receber = 0.0
     note = ""
     if not is_configured():
         note = "Asaas não configurado para ler a entrada."
@@ -550,9 +556,26 @@ def attach_cash_compare(payables: dict[str, Any], start: date, end: date, today:
         except Exception:
             logger.exception("Falha ao comparar entrada e saída")
             note = "Não foi possível ler as entradas do Asaas."
+        try:
+            due_raw = fetch_payments_due(start, end, billing_type="BOLETO", force=force)
+            abertos = [
+                row for row in (summarize_boletos([], due_raw, today).get("mes") or [])
+                if row.get("status_key") != "pago"
+            ]
+            a_receber = sum(float(row["valor"]) for row in abertos)
+        except AsaasError as exc:
+            note = note or str(exc)
+        except Exception:
+            logger.exception("Falha ao ler o valor a receber")
+            note = note or "Não foi possível ler o valor a receber."
     saldo = entrada - saida
+    dividas = total_launched()
     payables["entrada"] = entrada
     payables["entrada_label"] = format_brl(entrada)
+    payables["a_receber"] = a_receber
+    payables["a_receber_label"] = format_brl(a_receber)
+    payables["dividas"] = dividas
+    payables["dividas_label"] = format_brl(dividas)
     payables["saldo"] = saldo
     payables["saldo_label"] = format_brl(saldo)
     payables["compare_note"] = note
