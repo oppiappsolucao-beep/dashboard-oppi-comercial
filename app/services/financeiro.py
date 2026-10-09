@@ -1,6 +1,7 @@
 """Painel Financeiro — Asaas + vínculo com cadastros do CRM."""
 from __future__ import annotations
 
+import calendar
 import logging
 from datetime import date, datetime, timedelta
 from typing import Any
@@ -11,6 +12,7 @@ from app.services.asaas_client import (
     AsaasError,
     fetch_account_balance,
     fetch_dashboard_payload,
+    fetch_payments_due,
     fetch_statement,
     is_configured,
 )
@@ -277,6 +279,82 @@ def map_entradas(
     return rows
 
 
+def _boleto_row(payment: dict, today: date) -> dict[str, Any] | None:
+    if normalize_text(payment.get("billingType")).upper() != "BOLETO":
+        return None
+    classified = classify_payment(payment, today=today)
+    if classified["key"] == "cancelado":
+        return None
+    try:
+        value = float(payment.get("value") or 0)
+    except (TypeError, ValueError):
+        value = 0.0
+    due = _parse_date(payment.get("dueDate"))
+    return {
+        "cliente": _service_name(payment),
+        "valor": value,
+        "valor_label": format_brl(value),
+        "vencimento": due,
+        "vencimento_label": format_date_br(due),
+        "status_key": classified["key"],
+        "status_label": classified["label"],
+        "status_tone": classified["tone"],
+        "invoice_url": payment.get("invoiceUrl") or payment.get("bankSlipUrl") or "",
+    }
+
+
+def summarize_boletos(hoje_raw: list[dict] | None, mes_raw: list[dict] | None, today: date) -> dict[str, Any]:
+    """Conta boletos do Asaas que vencem hoje e os que vencem no mês."""
+    hoje = [row for row in (_boleto_row(item, today) for item in (hoje_raw or []) if isinstance(item, dict)) if row]
+    mes = [row for row in (_boleto_row(item, today) for item in (mes_raw or []) if isinstance(item, dict)) if row]
+    hoje.sort(key=lambda row: row["valor"], reverse=True)
+    mes.sort(key=lambda row: (row.get("vencimento") or date.min, row["cliente"]))
+    pagos = [row for row in mes if row["status_key"] == "pago"]
+    abertos = [row for row in mes if row["status_key"] != "pago"]
+
+    def _sum(rows: list[dict]) -> float:
+        return sum(float(row["valor"]) for row in rows)
+
+    hoje_total = _sum(hoje)
+    mes_total = _sum(mes)
+    pagos_total = _sum(pagos)
+    abertos_total = _sum(abertos)
+    return {
+        "error": "",
+        "month_label": f"{_MESES[today.month]} {today.year}",
+        "hoje_n": len(hoje),
+        "hoje_valor_label": format_brl(hoje_total),
+        "hoje": hoje,
+        "mes_n": len(mes),
+        "mes_valor_label": format_brl(mes_total),
+        "mes_pagos_n": len(pagos),
+        "mes_pagos_label": format_brl(pagos_total),
+        "mes_abertos_n": len(abertos),
+        "mes_abertos_label": format_brl(abertos_total),
+        "mes": mes,
+    }
+
+
+def load_boleto_entrada(today: date, *, force: bool = False) -> dict[str, Any]:
+    start = today.replace(day=1)
+    end = date(today.year, today.month, calendar.monthrange(today.year, today.month)[1])
+    blank = summarize_boletos([], [], today)
+    if not is_configured():
+        blank["error"] = "Configure ASAAS_API_KEY para ler os boletos."
+        return blank
+    try:
+        hoje_raw = fetch_payments_due(today, today, billing_type="BOLETO", force=force)
+        mes_raw = fetch_payments_due(start, end, billing_type="BOLETO", force=force)
+    except AsaasError as exc:
+        blank["error"] = str(exc)
+        return blank
+    except Exception:
+        logger.exception("Falha ao ler boletos do Asaas")
+        blank["error"] = "Não foi possível ler os boletos do Asaas agora."
+        return blank
+    return summarize_boletos(hoje_raw, mes_raw, today)
+
+
 def _payables_view(start: date, end: date, search: str) -> dict[str, Any]:
     rows = list_payables(start, end)
     needle = normalize_text(search).lower()
@@ -460,6 +538,7 @@ def build_financeiro_context(params: dict | None = None, *, force_sync: bool = F
 
     forecast = build_internal_forecast(period_start, period_end)
     payables = _payables_view(period_start, period_end, normalize_text(params.get("search")))
+    boletos = load_boleto_entrada(today, force=force_sync) if tab == TAB_ENTRADAS else summarize_boletos([], [], today)
     empty = {
         "active_page": "financeiro",
         "asaas_configured": is_configured(),
@@ -475,6 +554,7 @@ def build_financeiro_context(params: dict | None = None, *, force_sync: bool = F
         "entradas_error": "",
         "saldo_label": "",
         "payables": payables,
+        "boletos": boletos,
         "tab": tab,
         "filters": params,
         "status_options": [
@@ -691,29 +771,35 @@ def _load_entradas(
 
 def _with_tab_kpis(ctx: dict[str, Any], tab: str) -> dict[str, Any]:
     if tab == TAB_ENTRADAS:
-        total = float(ctx.get("entradas_total") or 0)
-        count = len(ctx.get("entradas") or [])
+        boletos = ctx.get("boletos") or {}
         ctx["kpi_cards"] = [
             {
-                "label": "Saldo na conta",
-                "value": ctx.get("saldo_label") or "—",
-                "note": "Saldo atual da conta Asaas",
-                "tone": "purple",
-                "icon": "🏦",
+                "label": "Boletos vencem hoje",
+                "value": str(boletos.get("hoje_n") or 0),
+                "note": boletos.get("hoje_valor_label") or format_brl(0),
+                "tone": "orange",
+                "icon": "!",
             },
             {
-                "label": "Entradas no período",
-                "value": format_brl(total),
-                "note": "O que entrou e aparece no extrato",
-                "tone": "green",
+                "label": "Entram neste mês",
+                "value": str(boletos.get("mes_n") or 0),
+                "note": f"{boletos.get('month_label') or 'Mês'} · {boletos.get('mes_valor_label') or format_brl(0)}",
+                "tone": "purple",
                 "icon": "↓",
             },
             {
-                "label": "Lançamentos",
-                "value": str(count),
-                "note": "Créditos no período, sem tarifas",
+                "label": "Já recebidos no mês",
+                "value": str(boletos.get("mes_pagos_n") or 0),
+                "note": boletos.get("mes_pagos_label") or format_brl(0),
+                "tone": "green",
+                "icon": "✓",
+            },
+            {
+                "label": "Ainda entram no mês",
+                "value": str(boletos.get("mes_abertos_n") or 0),
+                "note": boletos.get("mes_abertos_label") or format_brl(0),
                 "tone": "blue",
-                "icon": "#",
+                "icon": "📅",
             },
         ]
     elif tab == TAB_PAGAR:

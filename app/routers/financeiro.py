@@ -5,7 +5,7 @@ from urllib.parse import urlencode
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from app.dependencies import require_admin
+from app.dependencies import require_auth
 from app.services.asaas_client import invalidate_cache
 from app.services.company_payables import (
     create_payable,
@@ -63,7 +63,7 @@ def _page(request: Request, params: dict, *, force_sync: bool = False, flash: st
 
 @router.get("/financeiro", response_class=HTMLResponse)
 async def financeiro_page(request: Request):
-    denied = require_admin(request)
+    denied = require_auth(request)
     if denied:
         return denied
     params = _params(request)
@@ -73,7 +73,7 @@ async def financeiro_page(request: Request):
 
 @router.get("/financeiro/entrada", response_class=HTMLResponse)
 async def financeiro_entrada_page(request: Request):
-    denied = require_admin(request)
+    denied = require_auth(request)
     if denied:
         return denied
     params = _params(request)
@@ -90,7 +90,7 @@ async def financeiro_entrada_page(request: Request):
 
 @router.get("/financeiro/contas-a-pagar", response_class=HTMLResponse)
 async def financeiro_pagar_page(request: Request):
-    denied = require_admin(request)
+    denied = require_auth(request)
     if denied:
         return denied
     params = _params(request)
@@ -115,7 +115,7 @@ async def financeiro_filters(
     period_start: str = Form(""),
     period_end: str = Form(""),
 ):
-    denied = require_admin(request)
+    denied = require_auth(request)
     if denied:
         return denied
     params = {
@@ -133,7 +133,7 @@ async def financeiro_filters(
 
 @router.post("/financeiro/atualizar")
 async def financeiro_refresh(request: Request):
-    denied = require_admin(request)
+    denied = require_auth(request)
     if denied:
         return denied
     return RedirectResponse(url="/financeiro", status_code=303)
@@ -147,7 +147,7 @@ async def financeiro_sync(
     period_end: str = Form(""),
     search: str = Form(""),
 ):
-    denied = require_admin(request)
+    denied = require_auth(request)
     if denied:
         return denied
     invalidate_cache()
@@ -200,7 +200,7 @@ async def financeiro_payable_create(
     period_start: str = Form(""),
     period_end: str = Form(""),
 ):
-    denied = require_admin(request)
+    denied = require_auth(request)
     if denied:
         return denied
     name = normalize_text(description)
@@ -225,7 +225,7 @@ async def financeiro_payable_pay(
     period_start: str = Form(""),
     period_end: str = Form(""),
 ):
-    denied = require_admin(request)
+    denied = require_auth(request)
     if denied:
         return denied
     mark_payable_paid(payable_id)
@@ -239,7 +239,7 @@ async def financeiro_payable_reopen(
     period_start: str = Form(""),
     period_end: str = Form(""),
 ):
-    denied = require_admin(request)
+    denied = require_auth(request)
     if denied:
         return denied
     reopen_payable(payable_id)
@@ -253,7 +253,7 @@ async def financeiro_payable_delete(
     period_start: str = Form(""),
     period_end: str = Form(""),
 ):
-    denied = require_admin(request)
+    denied = require_auth(request)
     if denied:
         return denied
     delete_payable(payable_id)

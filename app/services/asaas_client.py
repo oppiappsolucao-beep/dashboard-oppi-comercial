@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 _CACHE_LOCK = threading.Lock()
 _CACHE: dict[str, Any] = {"at": 0.0, "payload": None}
 _STATEMENT_CACHE: dict[str, dict[str, Any]] = {}
+_DUE_CACHE: dict[str, dict[str, Any]] = {}
 _BALANCE_CACHE: dict[str, Any] = {"at": 0.0, "value": None}
 _CACHE_TTL_SEC = 90.0
 _MAX_PAGES = 8
@@ -35,6 +36,7 @@ def invalidate_cache() -> None:
         _CACHE["at"] = 0.0
         _CACHE["payload"] = None
         _STATEMENT_CACHE.clear()
+        _DUE_CACHE.clear()
         _BALANCE_CACHE["at"] = 0.0
         _BALANCE_CACHE["value"] = None
 
@@ -214,6 +216,38 @@ def fetch_statement(start: date, finish: date, *, force: bool = False) -> list[d
     )
     with _CACHE_LOCK:
         _STATEMENT_CACHE[key] = {"at": time.monotonic(), "items": items}
+    return items
+
+
+def fetch_payments_due(
+    start: date,
+    finish: date,
+    *,
+    billing_type: str = "",
+    force: bool = False,
+) -> list[dict]:
+    """Cobranças do Asaas com vencimento no intervalo."""
+    kind = (billing_type or "").strip().upper()
+    key = f"{start.isoformat()}|{finish.isoformat()}|{kind}"
+    now = time.monotonic()
+    with _CACHE_LOCK:
+        cached = _DUE_CACHE.get(key)
+        if (
+            not force
+            and isinstance(cached, dict)
+            and (now - float(cached.get("at") or 0)) < _CACHE_TTL_SEC
+        ):
+            items = cached.get("items")
+            return list(items) if isinstance(items, list) else []
+    params: dict[str, Any] = {
+        "dueDate[ge]": start.isoformat(),
+        "dueDate[le]": finish.isoformat(),
+    }
+    if kind:
+        params["billingType"] = kind
+    items = _list("payments", params, max_pages=_STATEMENT_MAX_PAGES)
+    with _CACHE_LOCK:
+        _DUE_CACHE[key] = {"at": time.monotonic(), "items": items}
     return items
 
 

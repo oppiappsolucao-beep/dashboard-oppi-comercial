@@ -249,6 +249,10 @@
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.metric-grid-fin-4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
 .fin-entradas-total,
 .fin-payable-totals {
   display: flex;
@@ -346,6 +350,9 @@
 @media (max-width: 720px) {
   .fin-screen-nav {
     grid-template-columns: 1fr;
+  }
+  .metric-grid-fin-4 {
+    grid-template-columns: 1fr 1fr;
   }
 }
 

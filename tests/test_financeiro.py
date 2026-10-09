@@ -102,6 +102,29 @@ class CadastroBillingMappingTest(unittest.TestCase):
         self.assertEqual(plan["valor"], "R$ 59,90")
 
 
+class BoletosEntradaTest(unittest.TestCase):
+    def test_conta_hoje_e_mes_sem_cancelado(self):
+        from app.services.financeiro import summarize_boletos
+
+        today = date(2026, 10, 9)
+        hoje = [
+            {"billingType": "BOLETO", "status": "PENDING", "value": 59.9, "dueDate": "2026-10-09", "description": "Oppi RH — Alfa"},
+            {"billingType": "BOLETO", "status": "DELETED", "value": 10, "dueDate": "2026-10-09", "description": "Cancelado"},
+            {"billingType": "PIX", "status": "PENDING", "value": 20, "dueDate": "2026-10-09", "description": "Pix"},
+        ]
+        mes = hoje + [
+            {"billingType": "BOLETO", "status": "RECEIVED", "value": 49.9, "dueDate": "2026-10-03", "description": "Oppi RH — Beta"},
+            {"billingType": "BOLETO", "status": "OVERDUE", "value": 119.8, "dueDate": "2026-10-01", "description": "Oppi RH — Gama"},
+        ]
+        out = summarize_boletos(hoje, mes, today)
+        self.assertEqual(out["hoje_n"], 1)
+        self.assertEqual(out["hoje_valor_label"], "R$ 59,90")
+        self.assertEqual(out["mes_n"], 3)
+        self.assertEqual(out["mes_pagos_n"], 1)
+        self.assertEqual(out["mes_abertos_n"], 2)
+        self.assertEqual(out["month_label"], "Outubro 2026")
+
+
 class EntradasEContasTest(unittest.TestCase):
     def test_extrato_ignora_tarifa_e_saida(self):
         from app.services.financeiro import map_entradas
