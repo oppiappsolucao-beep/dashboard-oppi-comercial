@@ -34,6 +34,11 @@
 #os-sector-form select { min-height: 40px; border: 1px solid var(--border); border-radius: 10px; padding: 0 10px; }
 @media (max-width: 1100px) { .os-summary.is-support { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 900px) { .os-summary, .os-summary.is-support { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 900px) {
+  .os-card-search { flex-direction: column; align-items: stretch; }
+  .os-card-search label, .os-card-search input, .os-card-search .btn, .os-card-search a.btn { width: 100%; }
+  .os-card-search input { font-size: 16px; }
+}
 @media (max-width: 640px) {
   .os-summary, .os-summary.is-support, .os-summary.is-columns { grid-template-columns: 1fr 1fr; }
   .os-period, .os-sector-switch, .os-queue-form { flex-direction: column; align-items: stretch; }

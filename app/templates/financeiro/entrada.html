@@ -45,7 +45,7 @@
   {% endif %}
   <div class="fin-entradas-total">{{ boletos.entraram_n }} boleto{{ 's' if boletos.entraram_n != 1 else '' }} pagos · <strong>{{ boletos.entraram_valor_label }}</strong>{% if boletos.entradas_outras_n %} · outras entradas {{ boletos.entradas_outras_n }} · {{ boletos.entradas_outras_label }}{% endif %}</div>
   <div class="table-wrap">
-    <table class="data-table fin-table">
+    <table class="data-table fin-table fin-stack fin-cols-pago">
       <thead>
         <tr>
           <th>Cliente</th>
@@ -80,7 +80,7 @@
   <div class="section-heading">Boletos que vencem hoje</div>
   <div class="fin-entradas-total">{{ boletos.hoje_n }} boleto{{ 's' if boletos.hoje_n != 1 else '' }} · <strong>{{ boletos.hoje_valor_label }}</strong></div>
   <div class="table-wrap">
-    <table class="data-table fin-table">
+    <table class="data-table fin-table fin-stack fin-cols-status">
       <thead>
         <tr>
           <th>Cliente</th>
@@ -136,7 +136,7 @@
   </div>
   <div class="fin-entradas-total">{{ boletos.mes_n }} boleto{{ 's' if boletos.mes_n != 1 else '' }} · <strong>{{ boletos.mes_valor_label }}</strong> · recebidos {{ boletos.mes_pagos_label }} · em aberto {{ boletos.mes_abertos_label }}</div>
   <div class="table-wrap">
-    <table class="data-table fin-table">
+    <table class="data-table fin-table fin-stack fin-cols-status">
       <thead>
         <tr>
           <th>Cliente</th>

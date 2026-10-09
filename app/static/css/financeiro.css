@@ -576,3 +576,218 @@ button.fin-delete-cancel {
     grid-template-columns: 1fr 1fr;
   }
 }
+
+@media (max-width: 900px) {
+  .metric-grid.metric-grid-fin.metric-grid-fin-4 {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .metric-grid-fin-4 .metric-label,
+  .metric-grid-fin-4 .metric-note,
+  .metric-grid-fin-4 .metric-value {
+    overflow-wrap: anywhere;
+  }
+
+  .metric-grid-fin-4 .metric-value {
+    font-size: 1.35rem;
+  }
+
+  .page-actions form {
+    width: 100%;
+  }
+
+  .page-actions form .btn {
+    width: 100%;
+  }
+
+  .fin-period-form,
+  .fin-payable-form,
+  .fin-toolbar .filters-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .fin-period-form label,
+  .fin-payable-form .filter-field,
+  .fin-toolbar .filter-field {
+    width: 100%;
+    min-width: 0;
+    flex: 1 1 100%;
+  }
+
+  .fin-period-form input,
+  .fin-period-form select,
+  .fin-period-form .btn,
+  .fin-payable-form input,
+  .fin-payable-form select,
+  .fin-payable-form .btn,
+  .fin-toolbar input,
+  .fin-toolbar select,
+  .fin-toolbar .btn {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  .fin-payable-totals,
+  .fin-entradas-total {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px 12px;
+  }
+
+  .fin-payable-totals span,
+  .fin-entradas-total {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .fin-table-card .table-wrap {
+    overflow: visible;
+  }
+
+  .fin-table-card .data-table.fin-table {
+    min-width: 0;
+    table-layout: auto;
+  }
+
+  .fin-day-empty {
+    display: none;
+  }
+
+  .fin-day-grid {
+    min-width: 0;
+  }
+
+  .fin-day-grid thead,
+  .fin-stack thead {
+    display: none;
+  }
+
+  .fin-day-grid,
+  .fin-day-grid tbody,
+  .fin-day-grid tr,
+  .fin-day-grid td,
+  .fin-stack,
+  .fin-stack tbody,
+  .fin-stack tr,
+  .fin-stack td {
+    display: block;
+    width: auto;
+  }
+
+  .fin-day-grid tr,
+  .fin-stack tr {
+    margin-bottom: 10px;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: #fff;
+  }
+
+  .fin-day-grid tr.fin-day-empty {
+    display: none;
+  }
+
+  .fin-day-grid td,
+  .fin-stack td {
+    border: 0;
+    padding: 3px 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .fin-day-grid td:first-child {
+    width: auto;
+    font-size: 1.15rem;
+    font-weight: 800;
+  }
+
+  .fin-day-grid td:nth-child(3)::before,
+  .fin-day-grid td:nth-child(4)::before,
+  .fin-stack td::before {
+    display: block;
+    margin-bottom: 2px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .fin-day-grid td:nth-child(3)::before { content: "A pagar"; }
+  .fin-day-grid td:nth-child(4)::before { content: "Pago"; }
+
+  .fin-cols-pago td:nth-child(1)::before { content: "Cliente"; }
+  .fin-cols-pago td:nth-child(2)::before { content: "Valor"; }
+  .fin-cols-pago td:nth-child(3)::before { content: "Pago em"; }
+  .fin-cols-pago td:nth-child(4)::before { content: "Vencimento"; }
+
+  .fin-cols-status td:nth-child(1)::before { content: "Cliente"; }
+  .fin-cols-status td:nth-child(2)::before { content: "Valor"; }
+  .fin-cols-status td:nth-child(3)::before { content: "Vencimento"; }
+  .fin-cols-status td:nth-child(4)::before { content: "Status"; }
+
+  .fin-cols-conta td:nth-child(1)::before { content: "Vencimento"; }
+  .fin-cols-conta td:nth-child(2)::before { content: "Conta"; }
+  .fin-cols-conta td:nth-child(3)::before { content: "Fornecedor"; }
+  .fin-cols-conta td:nth-child(4)::before { content: "Classificação"; }
+  .fin-cols-conta td:nth-child(5)::before { content: "Valor"; }
+  .fin-cols-conta td:nth-child(6)::before { content: "Status"; }
+
+  .fin-stack td:last-child::before,
+  .fin-day-grid td:nth-child(5)::before,
+  .fin-table td.fin-empty::before,
+  .fin-table td[colspan]::before {
+    content: none;
+    display: none;
+  }
+
+  .fin-payable-actions,
+  .fin-delete,
+  .fin-delete-box.is-open {
+    justify-content: flex-start;
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  button.fin-action {
+    min-height: 44px;
+    padding: 10px 6px;
+  }
+
+  .fin-delete-word {
+    flex: 1 1 140px;
+    width: auto;
+    min-width: 0;
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  button.fin-delete-go,
+  button.fin-delete-cancel {
+    min-height: 44px;
+  }
+
+  .fin-fixed dl {
+    grid-template-columns: 1fr;
+    gap: 2px 0;
+  }
+
+  .fin-fixed dd {
+    margin-bottom: 8px;
+    overflow-wrap: anywhere;
+  }
+
+  .fin-fixed-actions {
+    flex-direction: column;
+  }
+
+  .fin-fixed-actions .btn {
+    width: 100%;
+    min-height: 44px;
+  }
+}
