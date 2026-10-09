@@ -79,6 +79,29 @@ def add_months(due: date, months: int) -> date:
     return date(year, month, min(due.day, last))
 
 
+def list_suppliers() -> list[str]:
+    init_crm_local_db()
+    with _lock, _connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT DISTINCT supplier
+            FROM company_payables
+            WHERE TRIM(supplier) != ''
+            ORDER BY supplier COLLATE NOCASE
+            """
+        ).fetchall()
+    names = []
+    seen = set()
+    for row in rows:
+        name = normalize_text(row["supplier"])
+        key = name.lower()
+        if not name or key in seen:
+            continue
+        seen.add(key)
+        names.append(name)
+    return names
+
+
 def list_payables(start: date, end: date, today: date | None = None) -> list[dict[str, Any]]:
     init_crm_local_db()
     today = today or _today()

@@ -16,7 +16,7 @@ from app.services.asaas_client import (
     fetch_statement,
     is_configured,
 )
-from app.services.company_payables import list_payables, payable_calendar
+from app.services.company_payables import list_payables, list_suppliers, payable_calendar
 from app.services.internal_finance import build_internal_forecast, resolve_period
 from app.services.legacy_core import (
     normalize_cnpj_for_duplicate,
@@ -529,6 +529,7 @@ def _payables_view(start: date, end: date, search: str, status: str = "", today:
         "saldo": 0.0,
         "saldo_label": format_brl(0),
         "compare_note": "",
+        "suppliers": list_suppliers(),
         "month_label": month_label(start, end),
     }
 
