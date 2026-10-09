@@ -68,6 +68,14 @@
           <span class="sidebar-link-icon">🏢</span> Empresas
         </a>
         {% endif %}
+        {% if nav.financeiro %}
+        <a href="/financeiro/entrada" class="sidebar-link {% if active_page == 'entrada' %}active{% endif %}">
+          <span class="sidebar-link-icon">↓</span> Entrada
+        </a>
+        <a href="/financeiro/contas-a-pagar" class="sidebar-link {% if active_page == 'contas_pagar' %}active{% endif %}">
+          <span class="sidebar-link-icon">≡</span> Contas a pagar
+        </a>
+        {% endif %}
         {% if nav.cadastro %}
         <a href="/cadastros" class="sidebar-link {% if active_page == 'org_registry' %}active{% endif %}">
           <span class="sidebar-link-icon">✎</span> Sistema

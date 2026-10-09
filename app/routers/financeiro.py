@@ -35,10 +35,30 @@ def _params(request: Request, form: dict | None = None) -> dict:
     }
 
 
-def _page(request: Request, params: dict, *, force_sync: bool = False, flash: str = ""):
+def _screen(
+    request: Request,
+    params: dict,
+    template: str,
+    active_page: str,
+    *,
+    force_sync: bool = False,
+    flash: str = "",
+):
     ctx = build_financeiro_context(params, force_sync=force_sync)
     ctx["flash"] = flash
-    return render(request, "financeiro/index.html", ctx)
+    ctx["active_page"] = active_page
+    return render(request, template, ctx)
+
+
+def _page(request: Request, params: dict, *, force_sync: bool = False, flash: str = ""):
+    return _screen(
+        request,
+        params,
+        "financeiro/index.html",
+        "financeiro",
+        force_sync=force_sync,
+        flash=flash,
+    )
 
 
 @router.get("/financeiro", response_class=HTMLResponse)
@@ -49,6 +69,40 @@ async def financeiro_page(request: Request):
     params = _params(request)
     flash = normalize_text(request.query_params.get("flash"))
     return _page(request, params, flash=flash)
+
+
+@router.get("/financeiro/entrada", response_class=HTMLResponse)
+async def financeiro_entrada_page(request: Request):
+    denied = require_admin(request)
+    if denied:
+        return denied
+    params = _params(request)
+    params["tab"] = "entradas"
+    flash = normalize_text(request.query_params.get("flash"))
+    return _screen(
+        request,
+        params,
+        "financeiro/entrada.html",
+        "entrada",
+        flash=flash,
+    )
+
+
+@router.get("/financeiro/contas-a-pagar", response_class=HTMLResponse)
+async def financeiro_pagar_page(request: Request):
+    denied = require_admin(request)
+    if denied:
+        return denied
+    params = _params(request)
+    params["tab"] = "pagar"
+    flash = normalize_text(request.query_params.get("flash"))
+    return _screen(
+        request,
+        params,
+        "financeiro/contas_a_pagar.html",
+        "contas_pagar",
+        flash=flash,
+    )
 
 
 @router.post("/financeiro/filtros", response_class=HTMLResponse)
@@ -86,25 +140,48 @@ async def financeiro_refresh(request: Request):
 
 
 @router.post("/financeiro/sincronizar")
-async def financeiro_sync(request: Request):
+async def financeiro_sync(
+    request: Request,
+    destino: str = Form(""),
+    period_start: str = Form(""),
+    period_end: str = Form(""),
+    search: str = Form(""),
+):
     denied = require_admin(request)
     if denied:
         return denied
     invalidate_cache()
-    params = _params(request)
-    return _page(request, params, force_sync=True, flash="Dados sincronizados com o Asaas.")
+    params = {
+        "tab": "visao",
+        "status": "",
+        "forma": "",
+        "search": search,
+        "period_start": period_start,
+        "period_end": period_end,
+    }
+    flash = "Dados sincronizados com o Asaas."
+    if normalize_text(destino) == "entrada":
+        params["tab"] = "entradas"
+        return _screen(
+            request,
+            params,
+            "financeiro/entrada.html",
+            "entrada",
+            force_sync=True,
+            flash=flash,
+        )
+    return _page(request, params, force_sync=True, flash=flash)
 
 
 def _payable_back(period_start: str, period_end: str, flash: str) -> RedirectResponse:
     query = urlencode(
         {
-            "tab": "pagar",
             "period_start": period_start,
             "period_end": period_end,
             "flash": flash,
         }
     )
-    return RedirectResponse(url=f"/financeiro?{query}", status_code=303)
+    return RedirectResponse(url=f"/financeiro/contas-a-pagar?{query}", status_code=303)
 
 
 def _month_bounds(due: date) -> tuple[str, str]:

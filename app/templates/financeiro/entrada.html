@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block content %}
+<link rel="stylesheet" href="/static/css/financeiro.css?v={{ static_version }}">
+<div class="page-header">
+  <div>
+    <div class="page-title">Entrada</div>
+    <div class="page-subtitle">Números do Asaas para conferir com o banco. Aqui só entra o que creditou na conta.</div>
+  </div>
+  <div class="page-actions">
+    <a class="btn btn-secondary" href="/financeiro/contas-a-pagar">Contas a pagar</a>
+    <form method="post" action="/financeiro/sincronizar">
+      <input type="hidden" name="destino" value="entrada">
+      <input type="hidden" name="period_start" value="{{ filters.period_start }}">
+      <input type="hidden" name="period_end" value="{{ filters.period_end }}">
+      <input type="hidden" name="search" value="{{ filters.search }}">
+      <button type="submit" class="btn">Sincronizar Asaas</button>
+    </form>
+  </div>
+</div>
+
+{% if flash %}
+<div class="alert-success fin-flash">{{ flash }}</div>
+{% endif %}
+{% if entradas_error %}
+<div class="fin-banner">{{ entradas_error }}</div>
+{% endif %}
+
+<div class="metric-grid metric-grid-fin metric-grid-fin-3">
+  {% for card in kpi_cards %}
+  <div class="metric-card">
+    <div class="metric-top">
+      <div class="metric-icon tone-{{ card.tone }}">{{ card.icon }}</div>
+    </div>
+    <div class="metric-label">{{ card.label }}</div>
+    <div class="metric-value">{{ card.value }}</div>
+    <div class="metric-note">{{ card.note }}</div>
+  </div>
+  {% endfor %}
+</div>
+
+<form class="toolbar-card fin-toolbar" method="get" action="/financeiro/entrada">
+  <div class="filters-row filters-row-main">
+    <div class="filter-field filter-field-sm">
+      <label>Período início</label>
+      <input type="date" name="period_start" value="{{ filters.period_start }}">
+    </div>
+    <div class="filter-field filter-field-sm">
+      <label>Período fim</label>
+      <input type="date" name="period_end" value="{{ filters.period_end }}">
+    </div>
+    <div class="filter-field fin-search">
+      <label>Buscar</label>
+      <input type="search" name="search" value="{{ filters.search }}" placeholder="Cliente, Pix ou cobrança">
+    </div>
+    <div class="filter-field filter-field-sm">
+      <label>&nbsp;</label>
+      <button type="submit" class="btn">Filtrar</button>
+    </div>
+  </div>
+</form>
+
+<div class="panel fin-table-card">
+  <div class="section-heading">Entrada</div>
+  <div class="fin-entradas-total">Total no período: <strong>{{ entradas_total_label }}</strong></div>
+  <div class="table-wrap">
+    <table class="data-table fin-table">
+      <thead>
+        <tr>
+          <th>Data</th>
+          <th>Descrição</th>
+          <th>Tipo</th>
+          <th>Valor</th>
+          <th>Id Asaas</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in entradas %}
+        <tr>
+          <td class="fin-cell-num">{{ row.date_label }}</td>
+          <td>{{ row.description }}</td>
+          <td><span class="fin-badge tone-green">{{ row.tipo }}</span></td>
+          <td class="fin-cell-num fin-money-in">{{ row.valor_label }}</td>
+          <td class="fin-cell-clip" title="{{ row.id }}">{{ row.id or "—" }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="fin-empty">Nenhuma entrada neste período.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -1,10 +1,21 @@
 {% extends "base.html" %}
 {% block content %}
 <link rel="stylesheet" href="/static/css/financeiro.css?v={{ static_version }}">
+<div class="fin-screen-nav">
+  <a class="fin-screen-card" href="/financeiro/entrada">
+    <strong>Entrada</strong>
+    <span>Conferir os números do Asaas com o banco</span>
+  </a>
+  <a class="fin-screen-card" href="/financeiro/contas-a-pagar">
+    <strong>Contas a pagar</strong>
+    <span>O que a empresa tem que pagar no mês</span>
+  </a>
+</div>
+
 <div class="page-header">
   <div>
     <div class="page-title">Financeiro</div>
-    <div class="page-subtitle">Entradas da conta Asaas, contas a pagar e cobranças dos clientes.</div>
+    <div class="page-subtitle">Cobranças dos clientes. Para o extrato e as contas, use Entrada e Contas a pagar.</div>
   </div>
   <div class="page-actions">
     <form method="post" action="/financeiro/atualizar">

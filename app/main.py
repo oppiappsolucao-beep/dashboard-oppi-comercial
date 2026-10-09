@@ -87,9 +87,18 @@ app.add_api_route("/metas-e-relatorios", goals_page, methods=["GET"], tags=["goa
 app.add_api_route("/metas-e-relatorios/filtros", goals_filters, methods=["POST"], tags=["goals"])
 app.add_api_route("/metas-e-relatorios/atualizar", goals_refresh, methods=["POST"], tags=["goals"])
 
-from app.routers.financeiro import financeiro_filters, financeiro_page, financeiro_refresh, financeiro_sync  # noqa: E402
+from app.routers.financeiro import (  # noqa: E402
+    financeiro_entrada_page,
+    financeiro_filters,
+    financeiro_page,
+    financeiro_pagar_page,
+    financeiro_refresh,
+    financeiro_sync,
+)
 
 app.add_api_route("/financeiro", financeiro_page, methods=["GET"], tags=["financeiro"])
+app.add_api_route("/financeiro/entrada", financeiro_entrada_page, methods=["GET"], tags=["financeiro"])
+app.add_api_route("/financeiro/contas-a-pagar", financeiro_pagar_page, methods=["GET"], tags=["financeiro"])
 app.add_api_route("/financeiro/filtros", financeiro_filters, methods=["POST"], tags=["financeiro"])
 app.add_api_route("/financeiro/atualizar", financeiro_refresh, methods=["POST"], tags=["financeiro"])
 app.add_api_route("/financeiro/sincronizar", financeiro_sync, methods=["POST"], tags=["financeiro"])

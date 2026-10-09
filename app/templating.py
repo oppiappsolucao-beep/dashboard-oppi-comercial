@@ -26,6 +26,8 @@ PAGE_BACK_FALLBACKS = {
     "proposals": "/propostas",
     "goals": "/metas-e-relatorios",
     "financeiro": "/financeiro",
+    "entrada": "/financeiro/entrada",
+    "contas_pagar": "/financeiro/contas-a-pagar",
     "registration_new": "/leads-e-empresas",
     "contracts": "/leads-e-empresas",
     "settings": "/visao-geral",

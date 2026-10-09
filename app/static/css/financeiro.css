@@ -314,6 +314,41 @@
   margin: 0;
 }
 
+.fin-screen-nav {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.fin-screen-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px 18px;
+  border-radius: 14px;
+  background: #fff;
+  border: 1px solid var(--border);
+  text-decoration: none;
+  color: inherit;
+}
+
+.fin-screen-card strong {
+  font-size: 18px;
+  color: var(--violet);
+}
+
+.fin-screen-card span {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+@media (max-width: 720px) {
+  .fin-screen-nav {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 1200px) {
   .metric-grid-fin {
     grid-template-columns: repeat(3, minmax(0, 1fr));
