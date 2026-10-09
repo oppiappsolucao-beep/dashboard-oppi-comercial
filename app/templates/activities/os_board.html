@@ -11,6 +11,7 @@
 .os-period label, .os-card-search label { display: flex; flex-direction: column; gap: 6px; font-size: 0.84rem; font-weight: 600; color: var(--muted); }
 .os-period input, .os-card-search input { min-height: 42px; padding: 0 12px; border: 1px solid var(--border); border-radius: 12px; background: #fff; font: inherit; }
 .os-card-search { display: flex; align-items: end; gap: 14px; padding: 14px 16px; margin: -4px 0 16px; }
+.os-search-note { margin: -8px 0 16px; color: var(--muted); font-size: 0.9rem; }
 .os-card-search label, .os-card-search input { width: min(100%, 420px); }
 .os-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
 .os-summary.is-support { grid-template-columns: repeat(5, minmax(0, 1fr)); }
@@ -94,12 +95,21 @@
   <button type="submit" class="btn">Ver período</button>
 </form>
 
-<form class="os-card-search panel" id="os-card-search-form">
-  <label>Nome ou número
-    <input type="search" id="os-card-filter" placeholder="Empresa, telefone ou número da OS" autocomplete="off">
+<form class="os-card-search panel" id="os-card-search-form" method="get" action="/atividades">
+  {% if sector_id %}<input type="hidden" name="setor" value="{{ sector_id }}">{% endif %}
+  <input type="hidden" name="inicio" value="{{ inicio }}">
+  <input type="hidden" name="fim" value="{{ fim }}">
+  <label>Telefone, empresa ou OS
+    <input type="search" name="busca" id="os-card-filter" value="{{ busca or '' }}" placeholder="Telefone, empresa ou número da OS" autocomplete="off">
   </label>
   <button type="submit" class="btn">Pesquisar</button>
+  {% if busca %}
+  <a class="btn btn-secondary" href="/atividades?setor={{ sector_id }}&inicio={{ inicio }}&fim={{ fim }}">Limpar</a>
+  {% endif %}
 </form>
+{% if busca %}
+<p class="os-search-note">{% if search_count %}{{ search_count }} ordem{{ 'ns' if search_count != 1 else '' }} para “{{ busca }}”. A pesquisa por telefone traz a OS mesmo fora do período.{% else %}Nenhuma OS encontrada para “{{ busca }}”.{% endif %}</p>
+{% endif %}
 
 <section class="os-summary{% if summary.layout == 'suporte' %} is-support{% else %} is-columns{% endif %}" aria-label="Ordens por coluna">
   {% if summary.layout == 'suporte' %}
@@ -205,5 +215,5 @@
     <div id="os-order-modal-body">Carregando…</div>
   </div>
 </div>
-<script src="/static/js/os-kanban.js?v=16"></script>
+<script src="/static/js/os-kanban.js?v=17"></script>
 {% endblock %}

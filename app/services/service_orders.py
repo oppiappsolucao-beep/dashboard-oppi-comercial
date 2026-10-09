@@ -484,7 +484,39 @@ def _campaign_visible(card: dict, start: str, end: str) -> bool:
     return start <= day <= end
 
 
-def build_sector_board(sector_id: str, sector_name: str, inicio: str = "", fim: str = "") -> list[dict]:
+def _card_matches_query(card: dict, query: str) -> bool:
+    """Nome, protocolo ou telefone. O telefone ignora máscara, DDI e o nono dígito."""
+    needle = normalize_text(query).lower()
+    if not needle:
+        return True
+    phone = _card_phone(card)
+    blob = " ".join(
+        normalize_text(card.get(key))
+        for key in ("empresa", "contact_name", "protocol", "subject", "description")
+    )
+    blob = f"{blob} {phone}".lower()
+    if needle in blob:
+        return True
+    from app.services.legacy_core import normalize_digits, phone_match_keys
+
+    query_keys = phone_match_keys(query)
+    if not query_keys:
+        digits = normalize_digits(query)
+        return bool(digits) and digits in normalize_digits(blob)
+    candidates = [phone]
+    description = card.get("description") or ""
+    for label in ("WhatsApp", "Telefone", "Celular"):
+        line = _description_line(description, label)
+        if line:
+            candidates.append(line)
+    candidates.extend(re.findall(r"\d[\d\s().+-]{6,}\d", description))
+    for candidate in candidates:
+        if phone_match_keys(candidate) & query_keys:
+            return True
+    return False
+
+
+def build_sector_board(sector_id: str, sector_name: str, inicio: str = "", fim: str = "", busca: str = "") -> list[dict]:
     from app.services.campaign_leads import attach_campaign_cards, finish_cadastro_url, sync_campaign_leads
     from app.services.org_registry import add_sector_queue, list_sector_queues
 
@@ -527,6 +559,8 @@ def build_sector_board(sector_id: str, sector_name: str, inicio: str = "", fim: 
     buckets = {column["id"]: column for column in columns}
     cards = list_orders_by_sector(sector_name)
     attach_campaign_cards(cards)
+    _attach_card_contacts(cards)
+    busca = normalize_text(busca)
     if is_commercial_sector(sector_name) or is_oppi_tech_sector(sector_name):
         for card in cards:
             if not normalize_text(card.get("cadastro_url")):
@@ -535,25 +569,28 @@ def build_sector_board(sector_id: str, sector_name: str, inicio: str = "", fim: 
             if url.startswith("/cadastro/") and "from=" not in url:
                 card["cadastro_url"] = url + ("&" if "?" in url else "?") + "from=activities"
     for card in cards:
+        card["phone"] = _card_phone(card)
+        if busca and not _card_matches_query(card, busca):
+            continue
         queue_id = card.get("queue_id") or ENTRY_QUEUE_ID
         if queue_id not in known:
             queue_id = ENTRY_QUEUE_ID
-        if queue_id == CAMPAIGN_QUEUE_ID and period_start and not _campaign_visible(card, period_start, period_end):
-            continue
-        if (
-            queue_id == ENTRY_QUEUE_ID
-            and period_start
-            and _entry_follows_period(sector_name)
-            and not _entry_visible(card, period_start, period_end)
-        ):
-            continue
-        column = buckets[queue_id]
-        if period_start and normalize_text(column["name"]).lower() in {"andamento", "em andamento"}:
-            day = normalize_text(card.get("scheduled_date"))[:10]
-            if not (len(day) == 10 and period_start <= day <= period_end):
+        if not busca:
+            if queue_id == CAMPAIGN_QUEUE_ID and period_start and not _campaign_visible(card, period_start, period_end):
                 continue
+            if (
+                queue_id == ENTRY_QUEUE_ID
+                and period_start
+                and _entry_follows_period(sector_name)
+                and not _entry_visible(card, period_start, period_end)
+            ):
+                continue
+            column = buckets[queue_id]
+            if period_start and normalize_text(column["name"]).lower() in {"andamento", "em andamento"}:
+                day = normalize_text(card.get("scheduled_date"))[:10]
+                if not (len(day) == 10 and period_start <= day <= period_end):
+                    continue
         buckets[queue_id]["cards"].append(card)
-    _attach_card_contacts(cards)
     return columns
 
 

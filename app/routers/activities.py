@@ -163,9 +163,10 @@ def _os_board_context(request: Request) -> dict:
                 sector_name = preferred["name"]
     inicio = normalize_text(request.query_params.get("inicio"))
     fim = normalize_text(request.query_params.get("fim"))
+    busca = normalize_text(request.query_params.get("busca"))
     summary = build_kanban_summary(sector_name, inicio, fim, viewer=viewer)
     columns = (
-        build_sector_board(sector_id, sector_name, summary["inicio"], summary["fim"])
+        build_sector_board(sector_id, sector_name, summary["inicio"], summary["fim"], busca)
         if sector_id
         else []
     )
@@ -187,6 +188,8 @@ def _os_board_context(request: Request) -> dict:
         "can_manage_queues": bool(sector_id),
         "inicio": summary["inicio"],
         "fim": summary["fim"],
+        "busca": busca,
+        "search_count": sum(len(column["cards"]) for column in columns) if busca else 0,
         "summary": summary,
         "is_commercial": "comercial" in sector_name.lower(),
         "can_delete_orders": _oppi_tech_board(request, sector_name),

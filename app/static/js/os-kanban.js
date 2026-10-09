@@ -164,7 +164,6 @@
   board.addEventListener("pointercancel", endTouch);
 
   var search = document.getElementById("os-card-filter");
-  var searchForm = document.getElementById("os-card-search-form");
   function applyCardFilter() {
     if (!search) return;
     var query = search.value.trim().toLowerCase();
@@ -180,12 +179,6 @@
     board.querySelectorAll(".activities-kanban-column").forEach(countColumn);
   }
   if (search) search.addEventListener("input", applyCardFilter);
-  if (searchForm) {
-    searchForm.addEventListener("submit", function (event) {
-      event.preventDefault();
-      applyCardFilter();
-    });
-  }
 
   board.querySelectorAll(".activities-kanban-column-body").forEach(function (body) {
     body.addEventListener("dragover", function (event) {
