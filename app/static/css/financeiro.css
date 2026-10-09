@@ -366,8 +366,8 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 14px;
-  white-space: nowrap;
 }
 
 button.fin-action {
@@ -440,27 +440,63 @@ button.fin-action:disabled {
   gap: 8px;
 }
 
-.fin-delete-box {
-  display: flex;
-  flex-wrap: wrap;
+.fin-delete {
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  margin-top: 6px;
 }
 
-.fin-delete-box p {
-  flex: 1 0 100%;
+.fin-delete-ask[hidden],
+.fin-delete-box[hidden] {
+  display: none !important;
+}
+
+.fin-delete-box {
+  display: none;
+  align-items: center;
+  gap: 8px;
   margin: 0;
-  font-size: 12px;
-  color: var(--muted);
+}
+
+.fin-delete-box.is-open {
+  display: flex;
 }
 
 .fin-delete-word {
   height: 32px;
-  width: 140px;
+  width: 132px;
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 0 8px;
+  background: #fff;
+}
+
+button.fin-delete-go,
+button.fin-delete-cancel {
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  box-shadow: none;
+  text-decoration: none;
+}
+
+button.fin-delete-go {
+  background: #B91C1C;
+  color: #fff;
+  border: 0;
+}
+
+button.fin-delete-go:disabled {
+  background: #FECACA;
+  color: #fff;
+  cursor: not-allowed;
+}
+
+button.fin-delete-cancel {
+  background: #fff;
+  color: #374151;
+  border: 1px solid var(--border);
 }
 
 .fin-day-weekend td:first-child {

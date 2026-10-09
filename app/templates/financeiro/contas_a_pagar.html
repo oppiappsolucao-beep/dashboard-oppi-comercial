@@ -5,13 +5,12 @@
 <div class="fin-delete">
   <button type="button" class="fin-action fin-action-danger fin-delete-ask">Excluir</button>
   <form method="post" action="/financeiro/contas-a-pagar/{{ item.id }}/excluir" class="fin-delete-box" hidden>
-    <p>Excluir só esta conta: <strong>{{ item.description }}</strong>{% if item.supplier %} · {{ item.supplier }}{% endif %} · {{ item.valor_label }}.</p>
     <input type="hidden" name="period_start" value="{{ filters.period_start }}">
     <input type="hidden" name="period_end" value="{{ filters.period_end }}">
     <input type="hidden" name="status" value="{{ filters.status or '' }}">
     <input type="text" name="confirm_text" class="fin-delete-word" placeholder="Digite excluir" autocomplete="off">
-    <button type="submit" class="fin-action fin-action-danger" disabled>Excluir agora</button>
-    <button type="button" class="fin-action fin-delete-cancel">Cancelar</button>
+    <button type="submit" class="fin-delete-go" disabled>Apagar</button>
+    <button type="button" class="fin-delete-cancel">Cancelar</button>
   </form>
 </div>
 {% endmacro %}
@@ -397,28 +396,38 @@
     });
   }
 
+  function closeDelete(wrap) {
+    if (!wrap) return;
+    var opened = wrap.querySelector(".fin-delete-box");
+    var opener = wrap.querySelector(".fin-delete-ask");
+    if (opened) {
+      opened.hidden = true;
+      opened.classList.remove("is-open");
+    }
+    if (opener) opener.hidden = false;
+    var typed = wrap.querySelector(".fin-delete-word");
+    if (typed) typed.value = "";
+    var submit = wrap.querySelector("button[type=submit]");
+    if (submit) submit.disabled = true;
+  }
+
   document.addEventListener("click", function (event) {
     var ask = event.target.closest(".fin-delete-ask");
     if (ask) {
+      document.querySelectorAll(".fin-delete").forEach(closeDelete);
       var box = ask.parentElement.querySelector(".fin-delete-box");
       ask.hidden = true;
-      if (box) box.hidden = false;
+      if (box) {
+        box.hidden = false;
+        box.classList.add("is-open");
+      }
       var word = box && box.querySelector(".fin-delete-word");
       if (word) word.focus();
       return;
     }
     var cancel = event.target.closest(".fin-delete-cancel");
     if (!cancel) return;
-    var wrap = cancel.closest(".fin-delete");
-    if (!wrap) return;
-    var opened = wrap.querySelector(".fin-delete-box");
-    var opener = wrap.querySelector(".fin-delete-ask");
-    if (opened) opened.hidden = true;
-    if (opener) opener.hidden = false;
-    var typed = wrap.querySelector(".fin-delete-word");
-    if (typed) typed.value = "";
-    var submit = wrap.querySelector("button[type=submit]");
-    if (submit) submit.disabled = true;
+    closeDelete(cancel.closest(".fin-delete"));
   });
 
   document.addEventListener("input", function (event) {
