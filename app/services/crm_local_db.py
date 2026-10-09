@@ -283,6 +283,18 @@ def init_crm_local_db() -> None:
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_company_payables_due ON company_payables(due_date)"
             )
+            payable_cols = {
+                row[1]
+                for row in conn.execute("PRAGMA table_info(company_payables)").fetchall()
+            }
+            for column, definition in (
+                ("supplier", "TEXT NOT NULL DEFAULT ''"),
+                ("category", "TEXT NOT NULL DEFAULT 'outra'"),
+                ("repeat_count", "INTEGER NOT NULL DEFAULT 1"),
+                ("series_id", "TEXT NOT NULL DEFAULT ''"),
+            ):
+                if payable_cols and column not in payable_cols:
+                    conn.execute(f"ALTER TABLE company_payables ADD COLUMN {column} {definition}")
             conn.commit()
         _initialized = True
 

@@ -4,7 +4,7 @@
 <div class="page-header">
   <div>
     <div class="page-title">Contas a pagar</div>
-    <div class="page-subtitle">{{ payables.month_label }}. No dia do vencimento o valor fica em A pagar; ao quitar, passa para Pago.</div>
+    <div class="page-subtitle">{{ payables.month_label }}. Use De e Até para ver outros meses. Pagamento único lança uma vez; quantas vezes repete o mesmo valor, mês a mês.</div>
   </div>
   <div class="page-actions">
     <a class="btn btn-secondary" href="/financeiro/entrada">Entrada</a>
@@ -15,7 +15,7 @@
 <div class="alert-success fin-flash">{{ flash }}</div>
 {% endif %}
 
-<div class="metric-grid metric-grid-fin metric-grid-fin-3">
+<div class="metric-grid metric-grid-fin metric-grid-fin-4">
   {% for card in kpi_cards %}
   <div class="metric-card">
     <div class="metric-top">
@@ -31,16 +31,25 @@
 <form class="toolbar-card fin-toolbar" method="get" action="/financeiro/contas-a-pagar">
   <div class="filters-row filters-row-main">
     <div class="filter-field filter-field-sm">
-      <label>Período início</label>
+      <label>De</label>
       <input type="date" name="period_start" value="{{ filters.period_start }}">
     </div>
     <div class="filter-field filter-field-sm">
-      <label>Período fim</label>
+      <label>Até</label>
       <input type="date" name="period_end" value="{{ filters.period_end }}">
+    </div>
+    <div class="filter-field filter-field-sm">
+      <label>Status</label>
+      <select name="status">
+        <option value="" {% if not filters.status %}selected{% endif %}>Todos</option>
+        <option value="a_pagar" {% if filters.status == 'a_pagar' %}selected{% endif %}>A pagar</option>
+        <option value="atrasado" {% if filters.status == 'atrasado' %}selected{% endif %}>Atrasado</option>
+        <option value="pago" {% if filters.status == 'pago' %}selected{% endif %}>Pago</option>
+      </select>
     </div>
     <div class="filter-field fin-search">
       <label>Buscar</label>
-      <input type="search" name="search" value="{{ filters.search }}" placeholder="Nome da conta">
+      <input type="search" name="search" value="{{ filters.search }}" placeholder="Conta, fornecedor ou classificação">
     </div>
     <div class="filter-field filter-field-sm">
       <label>&nbsp;</label>
@@ -54,9 +63,25 @@
   <form method="post" action="/financeiro/contas-a-pagar" class="fin-payable-form">
     <input type="hidden" name="period_start" value="{{ filters.period_start }}">
     <input type="hidden" name="period_end" value="{{ filters.period_end }}">
+    <input type="hidden" name="status" value="{{ filters.status or '' }}">
     <div class="filter-field">
       <label>Descrição</label>
       <input type="text" name="description" required placeholder="Ex.: aluguel, energia, contador">
+    </div>
+    <div class="filter-field">
+      <label>Fornecedor</label>
+      <input type="text" name="supplier" placeholder="Quem recebe">
+    </div>
+    <div class="filter-field filter-field-sm">
+      <label>Classificação</label>
+      <select name="category">
+        <option value="fixa">Fixa</option>
+        <option value="emprestimo">Empréstimo</option>
+        <option value="variavel">Variável</option>
+        <option value="imposto">Imposto</option>
+        <option value="servico">Serviço</option>
+        <option value="outra" selected>Outra</option>
+      </select>
     </div>
     <div class="filter-field filter-field-sm">
       <label>Valor</label>
@@ -67,17 +92,34 @@
       <input type="date" name="due_date" required value="{{ filters.period_start }}">
     </div>
     <div class="filter-field filter-field-sm">
+      <label>Este pagamento é</label>
+      <select name="repeat_mode" id="payable-repeat-mode">
+        <option value="unico">Único</option>
+        <option value="vezes">Quantas vezes</option>
+      </select>
+    </div>
+    <div class="filter-field filter-field-sm" id="payable-times-field" hidden>
+      <label>Quantas vezes</label>
+      <input type="number" name="repeat_count" min="2" max="36" value="2">
+    </div>
+    <div class="filter-field filter-field-sm">
       <label>&nbsp;</label>
       <button type="submit" class="btn">Lançar</button>
     </div>
   </form>
 </div>
 
+{% if payables.compare_note %}
+<p class="fin-empty">{{ payables.compare_note }}</p>
+{% endif %}
+
 <div class="panel fin-table-card">
   <div class="section-heading">Contas a pagar</div>
   <div class="fin-payable-totals">
-    <span>A pagar <strong class="fin-money-out">{{ payables.a_pagar_label }}</strong></span>
-    <span>Pago <strong class="fin-money-in">{{ payables.pago_label }}</strong></span>
+    <span>A pagar <strong class="fin-money-out">{{ payables.lista_a_pagar_label }}</strong></span>
+    <span>Pago <strong class="fin-money-in">{{ payables.lista_pago_label }}</strong></span>
+    <span>Entrada <strong class="fin-money-in">{{ payables.entrada_label }}</strong></span>
+    <span>Saída <strong class="fin-money-out">{{ payables.saida_label }}</strong></span>
   </div>
   {% if payables.show_grid %}
   <div class="table-wrap">
@@ -99,25 +141,27 @@
           <td>
             {% for item in day["items"] %}
             <div class="fin-payable-item">
-              <span>{{ item.description }} · {{ item.valor_label }}</span>
+              <span>{{ item.description }}{% if item.supplier %} · {{ item.supplier }}{% endif %} · {{ item.category_label }} · {{ item.valor_label }}</span>
+              <span class="fin-badge tone-{{ item.status_tone }}">{{ item.status_label }}</span>
               {% if item.paid %}
-              <span class="fin-badge tone-green">Pago</span>
               <form method="post" action="/financeiro/contas-a-pagar/{{ item.id }}/reabrir" class="fin-inline-form">
                 <input type="hidden" name="period_start" value="{{ filters.period_start }}">
                 <input type="hidden" name="period_end" value="{{ filters.period_end }}">
+                <input type="hidden" name="status" value="{{ filters.status or '' }}">
                 <button type="submit" class="btn btn-secondary fin-btn-sm">Reabrir</button>
               </form>
               {% else %}
-              <span class="fin-badge tone-red">A pagar</span>
               <form method="post" action="/financeiro/contas-a-pagar/{{ item.id }}/pagar" class="fin-inline-form">
                 <input type="hidden" name="period_start" value="{{ filters.period_start }}">
                 <input type="hidden" name="period_end" value="{{ filters.period_end }}">
+                <input type="hidden" name="status" value="{{ filters.status or '' }}">
                 <button type="submit" class="btn btn-secondary fin-btn-sm">Marcar pago</button>
               </form>
               {% endif %}
               <form method="post" action="/financeiro/contas-a-pagar/{{ item.id }}/excluir" class="fin-inline-form" onsubmit="return confirm('Excluir esta conta?')">
                 <input type="hidden" name="period_start" value="{{ filters.period_start }}">
                 <input type="hidden" name="period_end" value="{{ filters.period_end }}">
+                <input type="hidden" name="status" value="{{ filters.status or '' }}">
                 <button type="submit" class="btn btn-secondary fin-btn-sm">Excluir</button>
               </form>
             </div>
@@ -129,7 +173,74 @@
     </table>
   </div>
   {% else %}
-  <p class="fin-empty">Selecione um mês para ver o controle dia a dia.</p>
+  {% if payables.rows %}
+  <div class="table-wrap">
+    <table class="data-table fin-table">
+      <thead>
+        <tr>
+          <th>Vencimento</th>
+          <th>Conta</th>
+          <th>Fornecedor</th>
+          <th>Classificação</th>
+          <th>Valor</th>
+          <th>Status</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in payables.rows %}
+        <tr>
+          <td>{{ item.due_label }}</td>
+          <td>{{ item.description }}</td>
+          <td>{{ item.supplier or "—" }}</td>
+          <td>{{ item.category_label }}</td>
+          <td class="fin-cell-num">{{ item.valor_label }}</td>
+          <td><span class="fin-badge tone-{{ item.status_tone }}">{{ item.status_label }}</span></td>
+          <td>
+            <div class="fin-payable-item">
+              {% if item.paid %}
+              <form method="post" action="/financeiro/contas-a-pagar/{{ item.id }}/reabrir" class="fin-inline-form">
+                <input type="hidden" name="period_start" value="{{ filters.period_start }}">
+                <input type="hidden" name="period_end" value="{{ filters.period_end }}">
+                <input type="hidden" name="status" value="{{ filters.status or '' }}">
+                <button type="submit" class="btn btn-secondary fin-btn-sm">Reabrir</button>
+              </form>
+              {% else %}
+              <form method="post" action="/financeiro/contas-a-pagar/{{ item.id }}/pagar" class="fin-inline-form">
+                <input type="hidden" name="period_start" value="{{ filters.period_start }}">
+                <input type="hidden" name="period_end" value="{{ filters.period_end }}">
+                <input type="hidden" name="status" value="{{ filters.status or '' }}">
+                <button type="submit" class="btn btn-secondary fin-btn-sm">Marcar pago</button>
+              </form>
+              {% endif %}
+              <form method="post" action="/financeiro/contas-a-pagar/{{ item.id }}/excluir" class="fin-inline-form" onsubmit="return confirm('Excluir esta conta?')">
+                <input type="hidden" name="period_start" value="{{ filters.period_start }}">
+                <input type="hidden" name="period_end" value="{{ filters.period_end }}">
+                <input type="hidden" name="status" value="{{ filters.status or '' }}">
+                <button type="submit" class="btn btn-secondary fin-btn-sm">Excluir</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="fin-empty">Nenhuma conta neste período.</p>
+  {% endif %}
   {% endif %}
 </div>
+<script>
+(function () {
+  var mode = document.getElementById("payable-repeat-mode");
+  var times = document.getElementById("payable-times-field");
+  if (!mode || !times) return;
+  function sync() {
+    times.hidden = mode.value !== "vezes";
+  }
+  mode.addEventListener("change", sync);
+  sync();
+})();
+</script>
 {% endblock %}

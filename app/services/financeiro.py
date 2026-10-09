@@ -462,11 +462,23 @@ def apply_boleto_status(boletos: dict[str, Any], status: str) -> dict[str, Any]:
     return out
 
 
-def _payables_view(start: date, end: date, search: str) -> dict[str, Any]:
-    rows = list_payables(start, end)
+def _payables_view(start: date, end: date, search: str, status: str = "", today: date | None = None) -> dict[str, Any]:
+    today = today or _today()
+    rows = list_payables(start, end, today)
+    atrasados = [row for row in rows if row.get("status") == "atrasado"]
+    atraso_total = sum(float(row["amount"]) for row in atrasados)
+    saida = sum(float(row["amount"]) for row in rows)
+    periodo_a_pagar = sum(float(row["amount"]) for row in rows if not row.get("paid"))
+    periodo_pago = sum(float(row["amount"]) for row in rows if row.get("paid"))
     needle = normalize_text(search).lower()
     if needle:
-        rows = [row for row in rows if needle in row["description"].lower()]
+        rows = [
+            row for row in rows
+            if needle in f"{row['description']} {row.get('supplier') or ''} {row.get('category_label') or ''}".lower()
+        ]
+    status_key = normalize_text(status).lower()
+    if status_key in {"pago", "atrasado", "a_pagar"}:
+        rows = [row for row in rows if row.get("status") == status_key]
     calendar = payable_calendar(rows, start, end)
     listed = []
     for row in rows:
@@ -476,6 +488,8 @@ def _payables_view(start: date, end: date, search: str) -> dict[str, Any]:
                 "valor_label": format_brl(row["amount"]),
                 "due_label": format_date_br(row["due"]),
                 "paid_label": format_date_br(row["paid_on"]) if row.get("paid_on") else "",
+                "status_label": {"pago": "Pago", "atrasado": "Atrasado", "a_pagar": "A pagar"}.get(row.get("status"), "A pagar"),
+                "status_tone": {"pago": "green", "atrasado": "red", "a_pagar": "blue"}.get(row.get("status"), "blue"),
             }
         )
     return {
@@ -489,6 +503,8 @@ def _payables_view(start: date, end: date, search: str) -> dict[str, Any]:
                     {
                         **item,
                         "valor_label": format_brl(item["amount"]),
+                        "status_label": {"pago": "Pago", "atrasado": "Atrasado", "a_pagar": "A pagar"}.get(item.get("status"), "A pagar"),
+                        "status_tone": {"pago": "green", "atrasado": "red", "a_pagar": "blue"}.get(item.get("status"), "blue"),
                     }
                     for item in day["items"]
                 ],
@@ -496,14 +512,50 @@ def _payables_view(start: date, end: date, search: str) -> dict[str, Any]:
             for day in calendar["days"]
         ],
         "show_grid": calendar["show_grid"],
-        "a_pagar": calendar["a_pagar"],
-        "pago": calendar["pago"],
-        "aberto": calendar["aberto"],
-        "a_pagar_label": format_brl(calendar["a_pagar"]),
-        "pago_label": format_brl(calendar["pago"]),
-        "aberto_label": format_brl(calendar["aberto"]),
+        "a_pagar": periodo_a_pagar,
+        "pago": periodo_pago,
+        "aberto": periodo_a_pagar,
+        "a_pagar_label": format_brl(periodo_a_pagar),
+        "pago_label": format_brl(periodo_pago),
+        "aberto_label": format_brl(periodo_a_pagar),
+        "lista_a_pagar_label": format_brl(sum(float(row["amount"]) for row in rows if not row.get("paid"))),
+        "lista_pago_label": format_brl(sum(float(row["amount"]) for row in rows if row.get("paid"))),
+        "atrasado_n": len(atrasados),
+        "atrasado_label": format_brl(atraso_total),
+        "saida": saida,
+        "saida_label": format_brl(saida),
+        "entrada": 0.0,
+        "entrada_label": format_brl(0),
+        "saldo": 0.0,
+        "saldo_label": format_brl(0),
+        "compare_note": "",
         "month_label": month_label(start, end),
     }
+
+
+def attach_cash_compare(payables: dict[str, Any], start: date, end: date, today: date, *, force: bool = False) -> dict[str, Any]:
+    """Compara o que entrou no Asaas com a saída das contas do período."""
+    saida = float(payables.get("saida") or 0)
+    entrada = 0.0
+    note = ""
+    if not is_configured():
+        note = "Asaas não configurado para ler a entrada."
+    else:
+        try:
+            raw, _truncated = fetch_payments_received(start, end, force=force)
+            entrada = sum(float(row["valor"]) for row in received_entries(raw, start, end, today))
+        except AsaasError as exc:
+            note = str(exc)
+        except Exception:
+            logger.exception("Falha ao comparar entrada e saída")
+            note = "Não foi possível ler as entradas do Asaas."
+    saldo = entrada - saida
+    payables["entrada"] = entrada
+    payables["entrada_label"] = format_brl(entrada)
+    payables["saldo"] = saldo
+    payables["saldo_label"] = format_brl(saldo)
+    payables["compare_note"] = note
+    return payables
 
 
 def _wa_link(phone: str, text: str) -> str:
@@ -644,7 +696,16 @@ def build_financeiro_context(params: dict | None = None, *, force_sync: bool = F
         tab = TAB_VISAO
 
     forecast = build_internal_forecast(period_start, period_end)
-    payables = _payables_view(period_start, period_end, normalize_text(params.get("search")))
+    payable_status = normalize_text(params.get("status")) if tab == TAB_PAGAR else ""
+    payables = _payables_view(
+        period_start,
+        period_end,
+        normalize_text(params.get("search")),
+        payable_status,
+        today,
+    )
+    if tab == TAB_PAGAR:
+        payables = attach_cash_compare(payables, period_start, period_end, today, force=force_sync)
     boletos = (
         apply_boleto_status(
             load_boleto_entrada(today, period_start, period_end, force=force_sync),
@@ -922,7 +983,7 @@ def _with_tab_kpis(ctx: dict[str, Any], tab: str) -> dict[str, Any]:
             {
                 "label": "A pagar",
                 "value": payables.get("a_pagar_label") or format_brl(0),
-                "note": "Contas ainda em aberto no período",
+                "note": "Em aberto no período, incluindo as atrasadas",
                 "tone": "orange",
                 "icon": "!",
             },
@@ -934,11 +995,18 @@ def _with_tab_kpis(ctx: dict[str, Any], tab: str) -> dict[str, Any]:
                 "icon": "✓",
             },
             {
-                "label": "Em aberto",
-                "value": payables.get("aberto_label") or format_brl(0),
-                "note": payables.get("month_label") or "Período selecionado",
+                "label": "Atrasado",
+                "value": payables.get("atrasado_label") or format_brl(0),
+                "note": f"{payables.get('atrasado_n') or 0} conta(s) vencida(s)",
+                "tone": "orange",
+                "icon": "!",
+            },
+            {
+                "label": "Entrada − saída",
+                "value": payables.get("saldo_label") or format_brl(0),
+                "note": f"Entrou {payables.get('entrada_label') or format_brl(0)} · saiu {payables.get('saida_label') or format_brl(0)}",
                 "tone": "purple",
-                "icon": "📅",
+                "icon": "↔",
             },
         ]
     return ctx

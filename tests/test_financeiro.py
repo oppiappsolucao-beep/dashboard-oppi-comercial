@@ -188,6 +188,16 @@ class EntradasEContasTest(unittest.TestCase):
         self.assertAlmostEqual(calendar["days"][6]["a_pagar"], 6.0)
         self.assertTrue(calendar["days"][0]["empty"])
 
+    def test_status_e_repeticao_mensal(self):
+        from app.services.company_payables import add_months, payable_status
+
+        hoje = date(2026, 10, 9)
+        self.assertEqual(payable_status(date(2026, 10, 1), False, hoje), "atrasado")
+        self.assertEqual(payable_status(date(2026, 10, 9), False, hoje), "a_pagar")
+        self.assertEqual(payable_status(date(2026, 10, 1), True, hoje), "pago")
+        self.assertEqual(add_months(date(2026, 1, 31), 1), date(2026, 2, 28))
+        self.assertEqual(add_months(date(2026, 10, 9), 3), date(2027, 1, 9))
+
 
 class InternalFinanceTest(unittest.TestCase):
     def test_monthly_occurrences_in_august(self):

@@ -1,6 +1,8 @@
 """Contas a pagar da empresa — controle mensal por dia, independente do Asaas."""
 from __future__ import annotations
 
+import calendar
+import uuid
 from datetime import date, datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -9,6 +11,16 @@ from app.services.crm_local_db import _connect, _lock, init_crm_local_db
 from app.services.legacy_core import normalize_text
 
 _TZ = ZoneInfo("America/Sao_Paulo")
+
+CATEGORIES = (
+    ("fixa", "Fixa"),
+    ("emprestimo", "Empréstimo"),
+    ("variavel", "Variável"),
+    ("imposto", "Imposto"),
+    ("servico", "Serviço"),
+    ("outra", "Outra"),
+)
+CATEGORY_LABELS = dict(CATEGORIES)
 
 
 def _today() -> date:
@@ -42,12 +54,39 @@ def _parse_due(value: str | None) -> date | None:
         return None
 
 
-def list_payables(start: date, end: date) -> list[dict[str, Any]]:
+def category_label(key: str) -> str:
+    return CATEGORY_LABELS.get(normalize_text(key).lower(), "Outra")
+
+
+def normalize_category(key: str) -> str:
+    clean = normalize_text(key).lower()
+    return clean if clean in CATEGORY_LABELS else "outra"
+
+
+def payable_status(due: date, paid: bool, today: date) -> str:
+    if paid:
+        return "pago"
+    if due < today:
+        return "atrasado"
+    return "a_pagar"
+
+
+def add_months(due: date, months: int) -> date:
+    month_index = due.month - 1 + months
+    year = due.year + month_index // 12
+    month = month_index % 12 + 1
+    last = calendar.monthrange(year, month)[1]
+    return date(year, month, min(due.day, last))
+
+
+def list_payables(start: date, end: date, today: date | None = None) -> list[dict[str, Any]]:
     init_crm_local_db()
+    today = today or _today()
     with _lock, _connect() as conn:
         rows = conn.execute(
             """
-            SELECT id, description, amount, due_date, paid_on, created_at
+            SELECT id, description, amount, due_date, paid_on, created_at,
+                   supplier, category, repeat_count, series_id
             FROM company_payables
             WHERE due_date >= ? AND due_date <= ?
             ORDER BY due_date ASC, id ASC
@@ -60,32 +99,59 @@ def list_payables(start: date, end: date) -> list[dict[str, Any]]:
         if not due:
             continue
         paid_on = _parse_due(row["paid_on"])
+        paid = bool(paid_on)
         out.append(
             {
                 "id": int(row["id"]),
                 "description": normalize_text(row["description"]) or "Conta",
+                "supplier": normalize_text(row["supplier"]),
+                "category": normalize_category(row["category"]),
+                "category_label": category_label(row["category"]),
+                "repeat_count": int(row["repeat_count"] or 1),
                 "amount": float(row["amount"] or 0),
                 "due": due,
-                "paid": bool(paid_on),
+                "paid": paid,
                 "paid_on": paid_on,
+                "status": payable_status(due, paid, today),
             }
         )
     return out
 
 
-def create_payable(description: str, amount: float, due: date) -> int:
+def create_payable(
+    description: str,
+    amount: float,
+    due: date,
+    *,
+    supplier: str = "",
+    category: str = "outra",
+    repeat_count: int = 1,
+) -> int:
     init_crm_local_db()
     now = datetime.now(_TZ).isoformat(timespec="seconds")
+    times = max(1, min(int(repeat_count or 1), 36))
+    series = uuid.uuid4().hex if times > 1 else ""
+    name = normalize_text(description) or "Conta"
+    vendor = normalize_text(supplier)
+    kind = normalize_category(category)
+    value = round(float(amount), 2)
+    first_id = 0
     with _lock, _connect() as conn:
-        cursor = conn.execute(
-            """
-            INSERT INTO company_payables (description, amount, due_date, paid_on, created_at)
-            VALUES (?, ?, ?, '', ?)
-            """,
-            (normalize_text(description) or "Conta", round(float(amount), 2), due.isoformat(), now),
-        )
+        for step in range(times):
+            cursor = conn.execute(
+                """
+                INSERT INTO company_payables (
+                    description, amount, due_date, paid_on, created_at,
+                    supplier, category, repeat_count, series_id
+                )
+                VALUES (?, ?, ?, '', ?, ?, ?, ?, ?)
+                """,
+                (name, value, add_months(due, step).isoformat(), now, vendor, kind, times, series),
+            )
+            if step == 0:
+                first_id = int(cursor.lastrowid or 0)
         conn.commit()
-        return int(cursor.lastrowid or 0)
+    return first_id
 
 
 def mark_payable_paid(payable_id: int, paid_on: date | None = None) -> bool:

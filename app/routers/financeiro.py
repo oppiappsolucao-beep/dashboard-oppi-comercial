@@ -174,11 +174,12 @@ async def financeiro_sync(
     return _page(request, params, force_sync=True, flash=flash)
 
 
-def _payable_back(period_start: str, period_end: str, flash: str) -> RedirectResponse:
+def _payable_back(period_start: str, period_end: str, flash: str, status: str = "") -> RedirectResponse:
     query = urlencode(
         {
             "period_start": period_start,
             "period_end": period_end,
+            "status": status,
             "flash": flash,
         }
     )
@@ -198,8 +199,13 @@ async def financeiro_payable_create(
     description: str = Form(""),
     amount: str = Form(""),
     due_date: str = Form(""),
+    supplier: str = Form(""),
+    category: str = Form("outra"),
+    repeat_mode: str = Form("unico"),
+    repeat_count: str = Form("1"),
     period_start: str = Form(""),
     period_end: str = Form(""),
+    status: str = Form(""),
 ):
     denied = require_auth(request)
     if denied:
@@ -212,11 +218,24 @@ async def financeiro_payable_create(
         due = None
     back_start = normalize_text(period_start)
     back_end = normalize_text(period_end)
+    back_status = normalize_text(status)
     if not name or value is None or due is None:
-        return _payable_back(back_start, back_end, "Informe descrição, valor e vencimento.")
-    create_payable(name, value, due)
+        return _payable_back(back_start, back_end, "Informe descrição, valor e vencimento.", back_status)
+    times = 1
+    if normalize_text(repeat_mode).lower() == "vezes":
+        try:
+            times = int(normalize_text(repeat_count) or "1")
+        except ValueError:
+            times = 1
+        if times < 2:
+            return _payable_back(back_start, back_end, "Informe quantas vezes, a partir de 2.", back_status)
+    create_payable(name, value, due, supplier=supplier, category=category, repeat_count=times)
     start, end = _month_bounds(due)
-    return _payable_back(start, end, "Conta a pagar lançada.")
+    if times > 1:
+        flash = f"Conta lançada {times} vezes, uma por mês. Use De e Até para ver os outros meses."
+    else:
+        flash = "Conta a pagar lançada."
+    return _payable_back(start, end, flash, back_status)
 
 
 @router.post("/financeiro/contas-a-pagar/{payable_id}/pagar")
@@ -225,12 +244,13 @@ async def financeiro_payable_pay(
     payable_id: int,
     period_start: str = Form(""),
     period_end: str = Form(""),
+    status: str = Form(""),
 ):
     denied = require_auth(request)
     if denied:
         return denied
     mark_payable_paid(payable_id)
-    return _payable_back(period_start, period_end, "Conta marcada como paga.")
+    return _payable_back(period_start, period_end, "Conta marcada como paga.", status)
 
 
 @router.post("/financeiro/contas-a-pagar/{payable_id}/reabrir")
@@ -239,12 +259,13 @@ async def financeiro_payable_reopen(
     payable_id: int,
     period_start: str = Form(""),
     period_end: str = Form(""),
+    status: str = Form(""),
 ):
     denied = require_auth(request)
     if denied:
         return denied
     reopen_payable(payable_id)
-    return _payable_back(period_start, period_end, "Conta voltou para a pagar.")
+    return _payable_back(period_start, period_end, "Conta voltou para a pagar.", status)
 
 
 @router.post("/financeiro/contas-a-pagar/{payable_id}/excluir")
@@ -253,9 +274,10 @@ async def financeiro_payable_delete(
     payable_id: int,
     period_start: str = Form(""),
     period_end: str = Form(""),
+    status: str = Form(""),
 ):
     denied = require_auth(request)
     if denied:
         return denied
     delete_payable(payable_id)
-    return _payable_back(period_start, period_end, "Conta excluída.")
+    return _payable_back(period_start, period_end, "Conta excluída.", status)
