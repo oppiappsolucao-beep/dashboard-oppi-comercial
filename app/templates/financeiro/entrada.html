@@ -4,7 +4,7 @@
 <div class="page-header">
   <div>
     <div class="page-title">Entrada</div>
-    <div class="page-subtitle">Entradas do Asaas no período. Boletos que entraram são os pagos pela data do pagamento, não só pelo vencimento.</div>
+    <div class="page-subtitle">Tudo que entrou na conta no período: boleto, PIX e cartão, pela data do pagamento.</div>
   </div>
   <div class="page-actions">
     <a class="btn btn-secondary" href="/financeiro/contas-a-pagar">Contas a pagar</a>
@@ -50,13 +50,13 @@
   </div>
 </div>
 
-{% if boletos.entradas_outras %}
+{% if boletos.entradas_conta %}
 <div class="panel fin-table-card">
   {% if boletos.entraram_aviso %}
   <div class="fin-banner">{{ boletos.entraram_aviso }}</div>
   {% endif %}
-  <div class="section-heading">PIX e cartão que entraram em {{ boletos.month_label }}</div>
-  <div class="fin-entradas-total">{{ boletos.entradas_outras_n }} pagamento{{ 's' if boletos.entradas_outras_n != 1 else '' }} · <strong>{{ boletos.entradas_outras_label }}</strong></div>
+  <div class="section-heading">Tudo que entrou em {{ boletos.month_label }}</div>
+  <div class="fin-entradas-total">{{ boletos.entradas_conta_n }} pagamento{{ 's' if boletos.entradas_conta_n != 1 else '' }} · <strong>{{ boletos.entradas_conta_label }}</strong></div>
   <div class="table-wrap">
     <table class="data-table fin-table fin-stack fin-cols-pago">
       <thead>
@@ -69,7 +69,7 @@
         </tr>
       </thead>
       <tbody>
-        {% for row in boletos.entradas_outras %}
+        {% for row in boletos.entradas_conta %}
         <tr>
           <td>{{ row.cliente }}</td>
           <td>{{ row.forma }}</td>

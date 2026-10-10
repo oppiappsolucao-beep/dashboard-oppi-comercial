@@ -344,6 +344,9 @@ def summarize_boletos(hoje_raw: list[dict] | None, mes_raw: list[dict] | None, t
         "entradas_outras_n": 0,
         "entradas_outras_label": format_brl(0),
         "entradas_outras": [],
+        "entradas_conta": [],
+        "entradas_conta_n": 0,
+        "entradas_conta_label": format_brl(0),
         "saldo_conta_label": "",
         "entraram_aviso": "",
     }
@@ -434,6 +437,9 @@ def _attach_received(result: dict[str, Any], start: date, end: date, today: date
     result["entradas_outras_n"] = len(outras)
     result["entradas_outras_label"] = format_brl(_sum(outras))
     result["entradas_outras"] = outras
+    result["entradas_conta"] = rows
+    result["entradas_conta_n"] = len(rows)
+    result["entradas_conta_label"] = format_brl(_sum(rows))
     result["saldo_conta_label"] = _account_balance_label(force=force)
     if truncated:
         result["entraram_aviso"] = "A consulta passou do limite. O total pode estar incompleto."
