@@ -156,6 +156,10 @@ class BoletosEntradaTest(unittest.TestCase):
         boletos = [row for row in rows if row["billing_type"] == "BOLETO"]
         self.assertEqual(len(rows), 2)
         self.assertEqual(len(boletos), 1)
+        outras = [row for row in rows if row["billing_type"] != "BOLETO"]
+        self.assertEqual(len(outras), 1)
+        self.assertEqual(outras[0]["cliente"], "Pix avulso")
+        self.assertEqual(outras[0]["forma"], "PIX")
         self.assertEqual(boletos[0]["cliente"], "Oppi RH — Alfa")
         self.assertEqual(boletos[0]["pago_label"], "04/10/2026")
 

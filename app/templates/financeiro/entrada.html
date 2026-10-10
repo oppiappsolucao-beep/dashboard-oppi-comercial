@@ -39,6 +39,18 @@
 </div>
 
 <div class="panel fin-table-card">
+  <div class="fin-saldo-bar">
+    <div>
+      <div class="section-heading">Saldo da conta</div>
+      <div class="section-subtitle">Saldo atual no Asaas.</div>
+    </div>
+    <div class="fin-saldo-total">
+      <strong>{{ boletos.saldo_conta_label or "Indisponível" }}</strong>
+    </div>
+  </div>
+</div>
+
+<div class="panel fin-table-card">
   <div class="section-heading">Boletos que entraram em {{ boletos.month_label }}</div>
   {% if boletos.entraram_aviso %}
   <div class="fin-banner">{{ boletos.entraram_aviso }}</div>
@@ -75,6 +87,41 @@
     </table>
   </div>
 </div>
+
+{% if boletos.entradas_outras %}
+<div class="panel fin-table-card">
+  <div class="section-heading">PIX e cartão que entraram em {{ boletos.month_label }}</div>
+  <div class="fin-entradas-total">{{ boletos.entradas_outras_n }} pagamento{{ 's' if boletos.entradas_outras_n != 1 else '' }} · <strong>{{ boletos.entradas_outras_label }}</strong></div>
+  <div class="table-wrap">
+    <table class="data-table fin-table fin-stack fin-cols-pago">
+      <thead>
+        <tr>
+          <th>Cliente</th>
+          <th>Forma</th>
+          <th>Valor</th>
+          <th>Pago em</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in boletos.entradas_outras %}
+        <tr>
+          <td>{{ row.cliente }}</td>
+          <td>{{ row.forma }}</td>
+          <td class="fin-cell-num fin-money-in">{{ row.valor_label }}</td>
+          <td class="fin-cell-num">{{ row.pago_label }}</td>
+          <td>
+            {% if row.invoice_url %}
+            <a class="btn btn-secondary fin-btn-sm" href="{{ row.invoice_url }}" target="_blank" rel="noopener">Ver</a>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
 
 <div class="panel fin-table-card">
   <div class="section-heading">Boletos que vencem hoje</div>
