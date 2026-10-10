@@ -126,18 +126,32 @@ class BoletosEntradaTest(unittest.TestCase):
             {"billingType": "BOLETO", "status": "PENDING", "value": 59.9, "dueDate": "2026-10-09", "description": "Oppi RH — Alfa"},
             {"billingType": "BOLETO", "status": "DELETED", "value": 10, "dueDate": "2026-10-09", "description": "Cancelado"},
             {"billingType": "PIX", "status": "PENDING", "value": 20, "dueDate": "2026-10-09", "description": "Pix"},
+            {"billingType": "UNDEFINED", "status": "PENDING", "value": 80, "dueDate": "2026-10-09", "description": "Oppi RH — Delta"},
         ]
         mes = hoje + [
             {"billingType": "BOLETO", "status": "RECEIVED", "value": 49.9, "dueDate": "2026-10-03", "description": "Oppi RH — Beta"},
             {"billingType": "BOLETO", "status": "OVERDUE", "value": 119.8, "dueDate": "2026-10-01", "description": "Oppi RH — Gama"},
         ]
         out = summarize_boletos(hoje, mes, today)
-        self.assertEqual(out["hoje_n"], 1)
-        self.assertEqual(out["hoje_valor_label"], "R$ 59,90")
-        self.assertEqual(out["mes_n"], 3)
+        self.assertEqual(out["hoje_n"], 2)
+        self.assertEqual(out["hoje_valor_label"], "R$ 139,90")
+        self.assertEqual(out["mes_n"], 4)
         self.assertEqual(out["mes_pagos_n"], 1)
-        self.assertEqual(out["mes_abertos_n"], 2)
+        self.assertEqual(out["mes_abertos_n"], 3)
         self.assertEqual(out["month_label"], "Outubro 2026")
+
+    def test_vencimento_no_dia_ignora_o_dia_seguinte(self):
+        from app.services.financeiro import _payments_due_on
+
+        rows = _payments_due_on(
+            [
+                {"id": "hoje", "dueDate": "2026-10-10"},
+                {"id": "amanha", "dueDate": "2026-10-11"},
+            ],
+            date(2026, 10, 10),
+            date(2026, 10, 10),
+        )
+        self.assertEqual([row["id"] for row in rows], ["hoje"])
 
     def test_boletos_que_entraram_usam_data_de_pagamento(self):
         from app.services.financeiro import received_entries

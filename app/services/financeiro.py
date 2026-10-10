@@ -283,8 +283,16 @@ def map_entradas(
     return rows
 
 
+def _is_boleto_payment(payment: dict) -> bool:
+    """Boleto puro, boleto/PIX (UNDEFINED) ou cobrança que já tem link de boleto."""
+    kind = normalize_text(payment.get("billingType")).upper()
+    if kind in {"BOLETO", "UNDEFINED"}:
+        return True
+    return bool(normalize_text(payment.get("bankSlipUrl")))
+
+
 def _boleto_row(payment: dict, today: date) -> dict[str, Any] | None:
-    if normalize_text(payment.get("billingType")).upper() != "BOLETO":
+    if not _is_boleto_payment(payment):
         return None
     classified = classify_payment(payment, today=today)
     if classified["key"] == "cancelado":
@@ -352,6 +360,18 @@ def summarize_boletos(hoje_raw: list[dict] | None, mes_raw: list[dict] | None, t
     }
 
 
+def _payments_due_on(payments: list[dict] | None, start: date, end: date) -> list[dict]:
+    """O Asaas às vezes devolve vazio quando o vencimento inicial e o final são o mesmo dia."""
+    rows = []
+    for payment in payments or []:
+        if not isinstance(payment, dict):
+            continue
+        due = _parse_date(payment.get("dueDate"))
+        if due and start <= due <= end:
+            rows.append(payment)
+    return rows
+
+
 def received_entries(payments: list[dict] | None, start: date, end: date, today: date) -> list[dict[str, Any]]:
     """Tudo que foi pago no período, pela data em que entrou."""
     rows = []
@@ -398,8 +418,15 @@ def load_boleto_entrada(today: date, start: date, end: date, *, force: bool = Fa
         blank["error"] = "Configure ASAAS_API_KEY para ler os boletos."
         return blank
     try:
-        hoje_raw = fetch_payments_due(today, today, billing_type="BOLETO", force=force)
-        mes_raw = fetch_payments_due(start, end, billing_type="BOLETO", force=force)
+        hoje_raw = _payments_due_on(
+            fetch_payments_due(today, today + timedelta(days=1), force=force),
+            today,
+            today,
+        )
+        mes_end = end if end > start else end + timedelta(days=1)
+        mes_raw = fetch_payments_due(start, mes_end, force=force)
+        if start == end:
+            mes_raw = _payments_due_on(mes_raw, start, end)
     except AsaasError as exc:
         blank["error"] = str(exc)
         return blank
