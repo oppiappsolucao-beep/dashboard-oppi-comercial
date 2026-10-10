@@ -67,15 +67,15 @@
       <span class="client-edit-tab-title"><span class="client-edit-tab-icon" aria-hidden="true">🏢</span> Dados gerais</span>
       <span class="client-edit-tab-sub">Informações da empresa</span>
     </a>
+    <a href="/cadastro/todos/{{ sheet_row }}/editar?tab=treinamento{% if from_page %}&from={{ from_page }}{% endif %}"
+      class="client-edit-tab {% if active_tab == 'treinamento' %}is-active{% endif %}">
+      <span class="client-edit-tab-title"><span class="client-edit-tab-icon" aria-hidden="true">🎓</span> Treinamento</span>
+      <span class="client-edit-tab-sub">Dia, horário e treinador</span>
+    </a>
     <a href="/cadastro/todos/{{ sheet_row }}/editar?tab=ordens{% if from_page %}&from={{ from_page }}{% endif %}"
       class="client-edit-tab {% if active_tab == 'ordens' %}is-active{% endif %}">
       <span class="client-edit-tab-title"><span class="client-edit-tab-icon" aria-hidden="true">📋</span> Ordens de serviço{% if service_orders_count %} ({{ service_orders_count }}){% endif %}</span>
       <span class="client-edit-tab-sub">Protocolo do atendimento</span>
-    </a>
-    <a href="/cadastro/todos/{{ sheet_row }}/editar?tab=proposta{% if from_page %}&from={{ from_page }}{% endif %}"
-      class="client-edit-tab {% if active_tab == 'proposta' %}is-active{% endif %}">
-      <span class="client-edit-tab-title"><span class="client-edit-tab-icon" aria-hidden="true">📄</span> Propostas</span>
-      <span class="client-edit-tab-sub">Propostas enviadas{% if proposals_count %}<span class="client-edit-tab-badge">{{ proposals_count }}</span>{% endif %}</span>
     </a>
     <a href="/cadastro/todos/{{ sheet_row }}/editar?tab=acesso{% if from_page %}&from={{ from_page }}{% endif %}"
       class="client-edit-tab {% if active_tab == 'acesso' %}is-active{% endif %}">
@@ -87,11 +87,6 @@
       <span class="client-edit-tab-title"><span class="client-edit-tab-icon" aria-hidden="true">💳</span> Financeiro</span>
       <span class="client-edit-tab-sub">Cobranças e pagamentos</span>
     </a>
-    <a href="/cadastro/todos/{{ sheet_row }}/editar?tab=suporte{% if from_page %}&from={{ from_page }}{% endif %}"
-      class="client-edit-tab {% if active_tab == 'suporte' %}is-active{% endif %}">
-      <span class="client-edit-tab-title"><span class="client-edit-tab-icon" aria-hidden="true">🎧</span> Suporte</span>
-      <span class="client-edit-tab-sub">Atendimento e tickets</span>
-    </a>
   </nav>
 
   <form method="post" action="/cadastro/todos/{{ sheet_row }}/editar" class="client-edit-form" id="client-edit-form">
@@ -101,17 +96,21 @@
     <footer class="client-edit-footer panel">
       <div class="client-edit-footer-actions">
         <button type="submit" name="action" value="save" class="btn">Salvar alterações</button>
+        <button type="submit" form="oppi-ponto-form" name="action" value="onboard" class="btn btn-secondary"
+          onclick="return confirm('Enviar este cliente ao Oppi Ponto e liberar o login?');">
+          Enviar ao Ponto
+        </button>
         <button type="submit" name="action" value="cancel" class="btn btn-secondary">Cancelar</button>
       </div>
       {% include "partials/registration_danger_actions.html" %}
     </footer>
-    {% elif active_tab == 'ordens' %}
-    {% include "partials/registration_service_orders_tab.html" %}
+    {% elif active_tab == 'treinamento' %}
+    {% include "partials/registration_company_training_tab.html" %}
     <footer class="client-edit-footer panel client-edit-footer-compact">
       {% include "partials/registration_danger_actions.html" %}
     </footer>
-    {% elif active_tab == 'proposta' %}
-    {% include "partials/registration_proposta_tab.html" %}
+    {% elif active_tab == 'ordens' %}
+    {% include "partials/registration_service_orders_tab.html" %}
     <footer class="client-edit-footer panel client-edit-footer-compact">
       {% include "partials/registration_danger_actions.html" %}
     </footer>
@@ -135,11 +134,6 @@
       </div>
       {% include "partials/registration_danger_actions.html" %}
     </footer>
-    {% else %}
-    {% include "partials/registration_suporte_tab.html" %}
-    <footer class="client-edit-footer panel client-edit-footer-compact">
-      {% include "partials/registration_danger_actions.html" %}
-    </footer>
     {% endif %}
   </form>
 </div>
@@ -149,6 +143,10 @@
   {% if from_page %}<input type="hidden" name="from" value="{{ from_page }}">{% endif %}
 </form>
 {% endif %}
+
+<form id="company-training-form" method="post" action="/cadastro/todos/{{ sheet_row }}/treinamento">
+  {% if from_page %}<input type="hidden" name="from" value="{{ from_page }}">{% endif %}
+</form>
 
 <form id="oppi-ponto-form" method="post" action="/cadastro/todos/{{ sheet_row }}/oppi-ponto" hidden>
   {% if from_page %}<input type="hidden" name="from" value="{{ from_page }}">{% endif %}
@@ -174,5 +172,5 @@ window.LOST_REASON_OPTIONS = {{ lost_reason_options|default([], true)|tojson }};
 {% endif %}
 
 <script src="/static/js/partners-form.js?v={{ static_version }}" defer></script>
-<script src="/static/js/registration-edit.js?v={{ static_version }}" defer></script>
+<script src="/static/js/registration-edit.js?v={{ static_version }}-seller1" defer></script>
 {% endblock %}

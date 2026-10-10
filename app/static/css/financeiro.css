@@ -283,6 +283,320 @@
   text-align: center;
 }
 
+.metric-grid-fin-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.metric-grid-fin-4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.fin-period-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.fin-period-head .section-heading {
+  margin: 0;
+}
+
+.fin-period-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+  margin: 0;
+}
+
+.fin-period-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.fin-period-form input[type="date"],
+.fin-period-form select {
+  height: 36px;
+  min-width: 150px;
+}
+
+.fin-entradas-total,
+.fin-payable-totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  margin: 0 0 12px;
+  font-size: 14px;
+}
+
+.fin-money-in {
+  color: #15803D;
+  font-weight: 700;
+}
+
+.fin-money-out {
+  color: #B91C1C;
+  font-weight: 700;
+}
+
+.fin-payable-form-card {
+  margin-bottom: 14px;
+}
+
+.fin-payable-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+}
+
+.fin-payable-form .filter-field {
+  min-width: 180px;
+}
+
+.fin-day-grid {
+  min-width: 640px;
+}
+
+.fin-day-grid th:first-child,
+.fin-day-grid td:first-child {
+  width: 52px;
+}
+
+.fin-day-empty td {
+  background: #F3F4F6;
+  color: #9CA3AF;
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
+.fin-times.is-off input {
+  opacity: 0.45;
+  background: #F3F4F6;
+  cursor: not-allowed;
+}
+
+.fin-payable-name {
+  text-align: left;
+}
+
+.fin-payable-name strong {
+  display: block;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.fin-payable-name span {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.fin-payable-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+button.fin-action {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  height: auto;
+  font-size: 13px;
+  font-weight: 700;
+  color: #15803D;
+  box-shadow: none;
+}
+
+button.fin-action:hover {
+  text-decoration: underline;
+}
+
+button.fin-action-danger {
+  color: #B91C1C;
+  font-weight: 600;
+}
+
+button.fin-action:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  text-decoration: none;
+}
+
+.fin-fixed {
+  flex: 1 0 100%;
+  margin-top: 4px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: #F8F5FF;
+  border: 1px solid #DDD6FE;
+}
+
+.fin-fixed-title {
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.fin-fixed-note {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.fin-fixed dl {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr);
+  gap: 6px 12px;
+  margin: 0 0 12px;
+}
+
+.fin-fixed dt {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.fin-fixed dd {
+  margin: 0;
+  font-size: 14px;
+}
+
+.fin-fixed-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.fin-delete {
+  display: inline-flex;
+  align-items: center;
+}
+
+.fin-delete-ask[hidden],
+.fin-delete-box[hidden] {
+  display: none !important;
+}
+
+.fin-delete-box {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+
+.fin-delete-box.is-open {
+  display: flex;
+}
+
+.fin-delete-word {
+  height: 32px;
+  width: 132px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0 8px;
+  background: #fff;
+}
+
+button.fin-delete-go,
+button.fin-delete-cancel {
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  box-shadow: none;
+  text-decoration: none;
+}
+
+button.fin-delete-go {
+  background: #B91C1C;
+  color: #fff;
+  border: 0;
+}
+
+button.fin-delete-go:disabled {
+  background: #FECACA;
+  color: #fff;
+  cursor: not-allowed;
+}
+
+button.fin-delete-cancel {
+  background: #fff;
+  color: #374151;
+  border: 1px solid var(--border);
+}
+
+.fin-day-weekend td:first-child {
+  color: #6B7280;
+}
+
+.fin-payable-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.fin-payable-item:last-child {
+  border-bottom: 0;
+}
+
+.fin-inline-form {
+  display: inline-flex;
+  margin: 0;
+}
+
+.fin-screen-nav {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.fin-screen-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px 18px;
+  border-radius: 14px;
+  background: #fff;
+  border: 1px solid var(--border);
+  text-decoration: none;
+  color: inherit;
+}
+
+.fin-screen-card strong {
+  font-size: 18px;
+  color: var(--violet);
+}
+
+.fin-screen-card span {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+@media (max-width: 720px) {
+  .fin-screen-nav {
+    grid-template-columns: 1fr;
+  }
+  .metric-grid-fin-4 {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
 @media (max-width: 1200px) {
   .metric-grid-fin {
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -298,5 +612,220 @@
 @media (max-width: 720px) {
   .metric-grid-fin {
     grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 900px) {
+  .metric-grid.metric-grid-fin.metric-grid-fin-4 {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .metric-grid-fin-4 .metric-label,
+  .metric-grid-fin-4 .metric-note,
+  .metric-grid-fin-4 .metric-value {
+    overflow-wrap: anywhere;
+  }
+
+  .metric-grid-fin-4 .metric-value {
+    font-size: 1.35rem;
+  }
+
+  .page-actions form {
+    width: 100%;
+  }
+
+  .page-actions form .btn {
+    width: 100%;
+  }
+
+  .fin-period-form,
+  .fin-payable-form,
+  .fin-toolbar .filters-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .fin-period-form label,
+  .fin-payable-form .filter-field,
+  .fin-toolbar .filter-field {
+    width: 100%;
+    min-width: 0;
+    flex: 1 1 100%;
+  }
+
+  .fin-period-form input,
+  .fin-period-form select,
+  .fin-period-form .btn,
+  .fin-payable-form input,
+  .fin-payable-form select,
+  .fin-payable-form .btn,
+  .fin-toolbar input,
+  .fin-toolbar select,
+  .fin-toolbar .btn {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  .fin-payable-totals,
+  .fin-entradas-total {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px 12px;
+  }
+
+  .fin-payable-totals span,
+  .fin-entradas-total {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .fin-table-card .table-wrap {
+    overflow: visible;
+  }
+
+  .fin-table-card .data-table.fin-table {
+    min-width: 0;
+    table-layout: auto;
+  }
+
+  .fin-day-empty {
+    display: none;
+  }
+
+  .fin-day-grid {
+    min-width: 0;
+  }
+
+  .fin-day-grid thead,
+  .fin-stack thead {
+    display: none;
+  }
+
+  .fin-day-grid,
+  .fin-day-grid tbody,
+  .fin-day-grid tr,
+  .fin-day-grid td,
+  .fin-stack,
+  .fin-stack tbody,
+  .fin-stack tr,
+  .fin-stack td {
+    display: block;
+    width: auto;
+  }
+
+  .fin-day-grid tr,
+  .fin-stack tr {
+    margin-bottom: 10px;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: #fff;
+  }
+
+  .fin-day-grid tr.fin-day-empty {
+    display: none;
+  }
+
+  .fin-day-grid td,
+  .fin-stack td {
+    border: 0;
+    padding: 3px 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .fin-day-grid td:first-child {
+    width: auto;
+    font-size: 1.15rem;
+    font-weight: 800;
+  }
+
+  .fin-day-grid td:nth-child(3)::before,
+  .fin-day-grid td:nth-child(4)::before,
+  .fin-stack td::before {
+    display: block;
+    margin-bottom: 2px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .fin-day-grid td:nth-child(3)::before { content: "A pagar"; }
+  .fin-day-grid td:nth-child(4)::before { content: "Pago"; }
+
+  .fin-cols-pago td:nth-child(1)::before { content: "Cliente"; }
+  .fin-cols-pago td:nth-child(2)::before { content: "Valor"; }
+  .fin-cols-pago td:nth-child(3)::before { content: "Pago em"; }
+  .fin-cols-pago td:nth-child(4)::before { content: "Vencimento"; }
+
+  .fin-cols-status td:nth-child(1)::before { content: "Cliente"; }
+  .fin-cols-status td:nth-child(2)::before { content: "Valor"; }
+  .fin-cols-status td:nth-child(3)::before { content: "Vencimento"; }
+  .fin-cols-status td:nth-child(4)::before { content: "Status"; }
+
+  .fin-cols-conta td:nth-child(1)::before { content: "Vencimento"; }
+  .fin-cols-conta td:nth-child(2)::before { content: "Conta"; }
+  .fin-cols-conta td:nth-child(3)::before { content: "Fornecedor"; }
+  .fin-cols-conta td:nth-child(4)::before { content: "Classificação"; }
+  .fin-cols-conta td:nth-child(5)::before { content: "Valor"; }
+  .fin-cols-conta td:nth-child(6)::before { content: "Status"; }
+
+  .fin-stack td:last-child::before,
+  .fin-day-grid td:nth-child(5)::before,
+  .fin-table td.fin-empty::before,
+  .fin-table td[colspan]::before {
+    content: none;
+    display: none;
+  }
+
+  .fin-payable-actions,
+  .fin-delete,
+  .fin-delete-box.is-open {
+    justify-content: flex-start;
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  button.fin-action {
+    min-height: 44px;
+    padding: 10px 6px;
+  }
+
+  .fin-delete-word {
+    flex: 1 1 140px;
+    width: auto;
+    min-width: 0;
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  button.fin-delete-go,
+  button.fin-delete-cancel {
+    min-height: 44px;
+  }
+
+  .fin-fixed dl {
+    grid-template-columns: 1fr;
+    gap: 2px 0;
+  }
+
+  .fin-fixed dd {
+    margin-bottom: 8px;
+    overflow-wrap: anywhere;
+  }
+
+  .fin-fixed-actions {
+    flex-direction: column;
+  }
+
+  .fin-fixed-actions .btn {
+    width: 100%;
+    min-height: 44px;
   }
 }

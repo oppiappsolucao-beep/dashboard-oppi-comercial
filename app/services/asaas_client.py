@@ -15,8 +15,12 @@ logger = logging.getLogger(__name__)
 
 _CACHE_LOCK = threading.Lock()
 _CACHE: dict[str, Any] = {"at": 0.0, "payload": None}
+_STATEMENT_CACHE: dict[str, dict[str, Any]] = {}
+_DUE_CACHE: dict[str, dict[str, Any]] = {}
+_BALANCE_CACHE: dict[str, Any] = {"at": 0.0, "value": None}
 _CACHE_TTL_SEC = 90.0
 _MAX_PAGES = 8
+_STATEMENT_MAX_PAGES = 20
 
 
 class AsaasError(RuntimeError):
@@ -31,6 +35,10 @@ def invalidate_cache() -> None:
     with _CACHE_LOCK:
         _CACHE["at"] = 0.0
         _CACHE["payload"] = None
+        _STATEMENT_CACHE.clear()
+        _DUE_CACHE.clear()
+        _BALANCE_CACHE["at"] = 0.0
+        _BALANCE_CACHE["value"] = None
 
 
 def _headers() -> dict[str, str]:
@@ -164,6 +172,121 @@ def create_subscription(payload: dict[str, Any]) -> dict[str, Any]:
     data = _post("subscriptions", payload)
     invalidate_cache()
     return data
+
+
+def fetch_account_balance(*, force: bool = False) -> float | None:
+    """Saldo atual da conta Asaas. None quando a consulta falha."""
+    now = time.monotonic()
+    with _CACHE_LOCK:
+        cached = _BALANCE_CACHE.get("value")
+        if not force and cached is not None and (now - float(_BALANCE_CACHE["at"] or 0)) < _CACHE_TTL_SEC:
+            return float(cached)
+    data = _get("finance/balance")
+    try:
+        balance = float(data.get("balance"))
+    except (TypeError, ValueError):
+        return None
+    with _CACHE_LOCK:
+        _BALANCE_CACHE["value"] = balance
+        _BALANCE_CACHE["at"] = time.monotonic()
+    return balance
+
+
+def fetch_statement(start: date, finish: date, *, force: bool = False) -> list[dict]:
+    """Extrato da conta Asaas no período (entradas e saídas que mexem no saldo)."""
+    key = f"{start.isoformat()}|{finish.isoformat()}"
+    now = time.monotonic()
+    with _CACHE_LOCK:
+        cached = _STATEMENT_CACHE.get(key)
+        if (
+            not force
+            and isinstance(cached, dict)
+            and (now - float(cached.get("at") or 0)) < _CACHE_TTL_SEC
+        ):
+            items = cached.get("items")
+            return list(items) if isinstance(items, list) else []
+    items = _list(
+        "financialTransactions",
+        {
+            "startDate": start.isoformat(),
+            "finishDate": finish.isoformat(),
+            "order": "asc",
+        },
+        max_pages=_STATEMENT_MAX_PAGES,
+    )
+    with _CACHE_LOCK:
+        _STATEMENT_CACHE[key] = {"at": time.monotonic(), "items": items}
+    return items
+
+
+def fetch_payments_due(
+    start: date,
+    finish: date,
+    *,
+    billing_type: str = "",
+    force: bool = False,
+) -> list[dict]:
+    """Cobranças do Asaas com vencimento no intervalo."""
+    kind = (billing_type or "").strip().upper()
+    key = f"{start.isoformat()}|{finish.isoformat()}|{kind}"
+    now = time.monotonic()
+    with _CACHE_LOCK:
+        cached = _DUE_CACHE.get(key)
+        if (
+            not force
+            and isinstance(cached, dict)
+            and (now - float(cached.get("at") or 0)) < _CACHE_TTL_SEC
+        ):
+            items = cached.get("items")
+            return list(items) if isinstance(items, list) else []
+    params: dict[str, Any] = {
+        "dueDate[ge]": start.isoformat(),
+        "dueDate[le]": finish.isoformat(),
+    }
+    if kind:
+        params["billingType"] = kind
+    items = _list("payments", params, max_pages=_STATEMENT_MAX_PAGES)
+    with _CACHE_LOCK:
+        _DUE_CACHE[key] = {"at": time.monotonic(), "items": items}
+    return items
+
+
+def fetch_payments_received(start: date, finish: date, *, force: bool = False) -> tuple[list[dict], bool]:
+    """Cobranças pagas no intervalo, pela data de pagamento. Devolve (itens, lista cortada)."""
+    key = f"recv|{start.isoformat()}|{finish.isoformat()}"
+    now = time.monotonic()
+    with _CACHE_LOCK:
+        cached = _DUE_CACHE.get(key)
+        if (
+            not force
+            and isinstance(cached, dict)
+            and (now - float(cached.get("at") or 0)) < _CACHE_TTL_SEC
+        ):
+            items = cached.get("items")
+            return (list(items) if isinstance(items, list) else []), bool(cached.get("truncated"))
+    found: dict[str, dict] = {}
+    truncated = False
+    pages = 40
+    for status in ("RECEIVED", "RECEIVED_IN_CASH", "CONFIRMED"):
+        batch = _list(
+            "payments",
+            {
+                "status": status,
+                "paymentDate[ge]": start.isoformat(),
+                "paymentDate[le]": finish.isoformat(),
+            },
+            max_pages=pages,
+        )
+        if len(batch) >= pages * 100:
+            truncated = True
+        for item in batch:
+            payment_id = str(item.get("id") or "")
+            if payment_id:
+                found[payment_id] = item
+    items = list(found.values())
+    with _CACHE_LOCK:
+        _DUE_CACHE[key] = {"at": time.monotonic(), "items": items, "truncated": truncated}
+    return items, truncated
 
 
 def list_payments_for_customer(customer_id: str) -> list[dict]:

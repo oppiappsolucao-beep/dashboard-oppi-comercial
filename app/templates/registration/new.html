@@ -28,6 +28,12 @@
   .cadastro-close-list { display: grid; gap: 10px; padding: 14px; margin-bottom: 14px; }
   .cadastro-close-list[hidden] { display: none; }
   .cadastro-close-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .cadastro-close-actions { display: flex; align-items: flex-end; gap: 8px; }
+  .cadastro-lead-status { display: grid; gap: 4px; min-width: 148px; margin: 0; }
+  .cadastro-lead-status span { font-size: 0.72rem; font-weight: 700; color: var(--muted); }
+  .cadastro-lead-status select, .cadastro-form-status select { min-height: 36px; border: 1px solid var(--border); border-radius: 10px; padding: 0 8px; font: inherit; background: #fff; }
+  .cadastro-form-status { display: grid; gap: 6px; margin-bottom: 12px; }
+  .cadastro-form-status p { margin: 0; color: var(--muted); }
   .cadastro-close-row:last-child { border-bottom: 0; padding-bottom: 0; }
   .cadastro-close-row strong, .cadastro-close-row span { display: block; }
   .cadastro-close-row span { color: var(--muted); font-size: 0.86rem; }
@@ -42,17 +48,18 @@
   .cadastro-bot-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 </style>
   {% if error %}<div class="alert-error">{{ error }}</div>{% endif %}
+  {% if success %}<div class="alert-success">{{ success }}</div>{% endif %}
 
-  <section class="cadastro-closes" aria-label="Clientes concluídos pelo comercial">
+  <section class="cadastro-closes" aria-label="Leads concluídos">
     <button type="button" class="cadastro-close-card" data-close-list="pending" aria-expanded="false" aria-controls="cadastro-close-pending">
       <span>Concluídos no Kanban</span>
       <strong>{{ registration_closes.pending_total }}</strong>
-      <p>Clientes que o comercial colocou em Concluída e ainda vão para o cadastro.</p>
+      <p>Leads que Comercial ou Oppi Tech colocou em Concluída e ainda vão para o cadastro.</p>
     </button>
     <button type="button" class="cadastro-close-card" data-close-list="registered" aria-expanded="false" aria-controls="cadastro-close-registered">
       <span>Fechados no mês</span>
       <strong>{{ registration_closes.registered_total }}</strong>
-      <p>Leads que o comercial fechou em {{ registration_closes.month_label }} e já estão em Empresas.</p>
+      <p>Leads computados para fechado em {{ registration_closes.month_label }}.</p>
     </button>
   </section>
   <div id="cadastro-close-pending" class="cadastro-close-list panel" hidden>
@@ -62,6 +69,35 @@
         <strong>{{ item.empresa }}</strong>
         <span>{{ item.phone }}{% if item.contact_name %} · {{ item.contact_name }}{% endif %}</span>
       </a>
+      <div class="cadastro-close-actions">
+        {% if item.order_id and item.queues %}
+        <form method="post" action="/cadastro/lead/status" class="cadastro-lead-status">
+          <span>Status</span>
+          <input type="hidden" name="order_id" value="{{ item.order_id }}">
+          <select name="queue_id" aria-label="Status de {{ item.empresa }}" onchange="if (this.value !== '{{ item.queue_id }}' && '{{ item.queue_id }}' === 'concluida' && !confirm('Alterar o local deste lead?')) { this.value = '{{ item.queue_id }}'; return; } this.form.requestSubmit();">
+            {% for queue in item.queues %}
+            <option value="{{ queue.id }}" {% if item.queue_id == queue.id %}selected{% endif %}>{{ queue.name }}</option>
+            {% endfor %}
+          </select>
+        </form>
+        {% endif %}
+        {% if item.companies and item.companies|length > 1 %}
+        {% for company in item.companies %}
+        <a class="btn btn-small btn-secondary" href="{{ company.url }}">Ver {{ company.kind|lower }} · {{ company.empresa }}</a>
+        {% endfor %}
+        {% elif item.company_url %}
+        <a class="btn btn-small btn-secondary" href="{{ item.company_url }}">Ver empresas</a>
+        {% else %}
+        <a class="btn btn-small btn-secondary" href="/leads-e-empresas">Ver empresas</a>
+        {% endif %}
+        <a class="btn btn-small" href="{{ item.transfer_url }}#cadastro-bot">Cadastrar</a>
+        {% if item.order_id %}
+        <form method="post" action="/cadastro/lead/fechar">
+          <input type="hidden" name="os" value="{{ item.order_id }}">
+          <button type="submit" class="btn btn-small btn-secondary">Computar para fechado</button>
+        </form>
+        {% endif %}
+      </div>
     </div>
     {% else %}
     <p>Nenhum cliente aguardando cadastro.</p>
@@ -74,39 +110,68 @@
         <strong>{{ item.empresa }}</strong>
         <span>{{ item.phone }}{% if item.contact_name %} · {{ item.contact_name }}{% endif %}</span>
       </div>
-      <a class="btn btn-small btn-secondary" href="{{ item.company_url }}">Ver em empresas</a>
+      {% if item.companies and item.companies|length > 1 %}
+      {% for company in item.companies %}
+      <a class="btn btn-small btn-secondary" href="{{ company.url }}">Ver {{ company.kind|lower }} · {{ company.empresa }}</a>
+      {% endfor %}
+      {% elif item.company_url %}
+      <a class="btn btn-small btn-secondary" href="{{ item.company_url }}">Ver empresas</a>
+      {% else %}
+      <a class="btn btn-small btn-secondary" href="/leads-e-empresas">Ver empresas</a>
+      {% endif %}
     </div>
     {% else %}
     <p>Nenhum lead fechado neste mês.</p>
     {% endfor %}
   </div>
 
-  <nav class="client-edit-tabs panel client-edit-tabs-interactive client-edit-tabs-new" aria-label="Abas do cadastro">
-    <button type="button" class="client-edit-tab is-active" data-registration-tab="dados">
-      <span class="client-edit-tab-title">Dados gerais</span>
-      <span class="client-edit-tab-sub">Informações da empresa</span>
-    </button>
-    <button type="button" class="client-edit-tab" data-registration-tab="financeiro">
-      <span class="client-edit-tab-title">Financeiro</span>
-      <span class="client-edit-tab-sub">Forma de pagamento</span>
-    </button>
-    <button type="button" class="client-edit-tab" data-registration-tab="treinamento">
-      <span class="client-edit-tab-title">Treinamento</span>
-      <span class="client-edit-tab-sub">Agendamento e treinador</span>
-    </button>
-  </nav>
-
   <form method="post" action="/cadastro/novo" class="client-edit-form" id="registration-new-form">
     <input type="hidden" name="cadastro_tipo" value="lead">
     <input type="hidden" name="create_training" id="create-first-activity" value="0">
     <input type="hidden" name="status" value="Novo Lead">
+    <input type="hidden" name="os" value="{{ values.os }}">
+    {% set lead_ns = namespace(queues=[]) %}
+    {% for item in registration_closes.pending %}
+      {% if values.os and item.order_id == values.os %}
+        {% set lead_ns.queues = item.queues %}
+      {% endif %}
+    {% endfor %}
+    {% if not lead_ns.queues and registration_closes.pending %}
+      {% set lead_ns.queues = registration_closes.pending[0].queues %}
+    {% endif %}
+    {% set counted_ns = namespace(ok=false) %}
+    {% for item in registration_closes.registered %}
+      {% if values.os and item.order_id == values.os %}
+        {% set counted_ns.ok = true %}
+      {% endif %}
+    {% endfor %}
+    {% if values.os %}
+    <section class="cadastro-form-status panel">
+      {% if lead_ns.queues %}
+      <label for="cadastro-kanban-queue"><strong>Status do lead</strong></label>
+      <p>Escolha o local. Concluída fecha o lead no cadastro e tira ele da coluna atual.</p>
+      <select id="cadastro-kanban-queue" name="kanban_queue">
+        {% for queue in lead_ns.queues %}
+        <option value="{{ queue.id }}" {% if (values.kanban_queue or 'concluida') == queue.id %}selected{% endif %}>{{ queue.name }}</option>
+        {% endfor %}
+      </select>
+      {% endif %}
+      {% if counted_ns.ok %}
+      <p>Este lead já está no card Fechados no mês, ao lado.</p>
+      {% else %}
+      <button type="submit" class="btn btn-secondary" formaction="/cadastro/lead/fechar" formmethod="post" formnovalidate>Computar para fechado</button>
+      <p>Conta este lead no card Fechados no mês, ao lado.</p>
+      {% endif %}
+    </section>
+    {% endif %}
+    <input type="hidden" name="vendedor" value="{{ vendedor }}">
     <input type="hidden" name="data_chamado" value="{{ today }}">
     {% if from_page %}<input type="hidden" name="from" value="{{ from_page }}">{% endif %}
 
     <div class="client-edit-tab-panel" data-registration-panel="dados">
       <section class="cadastro-bot panel" id="cadastro-bot" {% if not values.empresa %}hidden{% endif %}>
         <h2>Ler mensagem do cliente</h2>
-        <p>Cole o texto que o cliente enviou. O bot preenche só Dados gerais. Financeiro continua com o comercial.</p>
+        <p>Cole o texto que o cliente enviou. O bot preenche só Dados gerais. O treinamento é agendado depois, na empresa.</p>
         <textarea id="cadastro-bot-text" placeholder="Cole aqui a mensagem do cliente"></textarea>
         <div class="cadastro-bot-actions">
           <button type="button" class="btn" id="cadastro-bot-run">Enviar para cadastro</button>
@@ -116,21 +181,13 @@
       {% include "partials/registration_edit_dados_tab.html" %}
     </div>
 
-    <div class="client-edit-tab-panel is-hidden" data-registration-panel="financeiro">
-      {% include "partials/registration_new_financeiro_tab.html" %}
-    </div>
-
-    <div class="client-edit-tab-panel is-hidden" data-registration-panel="treinamento">
-      {% include "partials/registration_new_activities_tab.html" %}
-    </div>
-
     <footer class="client-edit-footer panel">
       <div class="client-edit-footer-actions">
         <button type="submit" class="btn">Salvar cadastro</button>
         <button type="button" class="btn btn-secondary" id="cadastro-enviar-ponto">Enviar ao Ponto</button>
         <a href="{{ back_href }}" class="btn btn-secondary">Cancelar</a>
       </div>
-      <p class="page-subtitle" id="cadastro-ponto-note" hidden>Salve o cadastro. Quando a venda estiver liberada, o envio manda esses dados ao Ponto Oppi RH.</p>
+      <p class="page-subtitle" id="cadastro-ponto-note" hidden>Primeiro salve o cadastro. Ele vai para a aba Raissa e entra em Empresas. Depois, no cadastro salvo, use Enviar ao Ponto para liberar o login.</p>
     </footer>
   </form>
 </div>
@@ -153,6 +210,13 @@
       }
     });
   });
+  if (new URLSearchParams(window.location.search).get("computado") === "1") {
+    var closedCard = document.querySelector('[data-close-list="registered"]');
+    if (closedCard) closedCard.click();
+  } else if (new URLSearchParams(window.location.search).get("os")) {
+    var pendingCard = document.querySelector('[data-close-list="pending"]');
+    if (pendingCard) pendingCard.click();
+  }
   document.getElementById("cadastro-bot-run")?.addEventListener("click", async function () {
     var note = document.getElementById("cadastro-bot-note");
     var source = document.getElementById("cadastro-bot-text");
@@ -186,14 +250,27 @@
         var input = form ? form.querySelector('[name="' + name + '"]') : null;
         if (!input || input.readOnly) return;
         if (input.tagName === "SELECT") {
-          var exists = Array.prototype.some.call(input.options, function (option) {
-            return option.value === fields[name];
+          var wanted = String(fields[name] || "").trim().toLowerCase();
+          var match = Array.prototype.find.call(input.options, function (option) {
+            return String(option.value || "").trim().toLowerCase() === wanted;
           });
-          if (exists) input.value = fields[name];
+          if (match) input.value = match.value;
           return;
         }
+        if (name === "senha_acesso") input.type = "text";
         input.value = fields[name];
       });
+      var cnpjField = form ? form.querySelector('[name="cnpj"]') : null;
+      if (cnpjField && String(cnpjField.value || "").replace(/\D/g, "").length === 14) {
+        cnpjField.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+      var fechamento = form ? form.querySelector('[name="data_fechamento"]') : null;
+      if (fechamento && !String(fechamento.value || "").trim()) {
+        var hoje = new Date();
+        var mes = String(hoje.getMonth() + 1).padStart(2, "0");
+        var dia = String(hoje.getDate()).padStart(2, "0");
+        fechamento.value = hoje.getFullYear() + "-" + mes + "-" + dia;
+      }
       if (fields.is_filial) {
         var filial = form ? form.querySelector("[data-filial-toggle]") : null;
         if (filial && !filial.checked) {
@@ -219,6 +296,6 @@
   });
 </script>
 <script src="/static/js/partners-form.js?v={{ static_version }}" defer></script>
-<script src="/static/js/registration-edit.js?v={{ static_version }}" defer></script>
-<script src="/static/js/registration-new.js?v={{ static_version }}" defer></script>
+<script src="/static/js/registration-edit.js?v={{ static_version }}-seller1" defer></script>
+<script src="/static/js/registration-new.js?v={{ static_version }}-save1" defer></script>
 {% endblock %}

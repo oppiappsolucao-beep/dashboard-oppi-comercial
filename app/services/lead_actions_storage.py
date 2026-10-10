@@ -317,6 +317,7 @@ def save_lead_action(
     payload: dict,
     *,
     sync_pipeline: bool = True,
+    mirror_sheet: bool = True,
 ) -> dict:
     global _cache
     if not sheet_row:
@@ -333,7 +334,7 @@ def save_lead_action(
                 int(sheet_row),
                 payload,
                 tenant_id=tenant_id,
-                mirror_sheet=True,
+                mirror_sheet=mirror_sheet,
             )
             stage_override = normalize_text(current.get("stage_override"))
             if sync_pipeline and stage_override:

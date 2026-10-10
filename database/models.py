@@ -488,8 +488,11 @@ class CrmRegistration(Base):
     cadastro_tipo = Column(String(20), nullable=False, default="lead", index=True)
     cadastro_ativo = Column(Boolean, nullable=False, default=True)
     empresa = Column(String(255), nullable=False, default="")
+    nome_fantasia = Column(String(255), nullable=False, default="")
     cnpj = Column(String(32), nullable=False, default="", index=True)
     data_abertura = Column(String(80), nullable=False, default="")
+    data_fechamento = Column(String(80), nullable=False, default="")
+    responsavel_legal = Column(String(255), nullable=False, default="")
     capital = Column(String(120), nullable=False, default="")
     endereco = Column(String(255), nullable=False, default="")
     endereco_numero = Column(String(80), nullable=False, default="")
@@ -646,6 +649,7 @@ class OrgPerson(Base):
     password_hash = Column(String(255), nullable=False, default="")
     state_name = Column(String(80), nullable=False, default="")
     city = Column(String(120), nullable=False, default="")
+    schedule_json = Column(Text, nullable=False, default="{}")
     active = Column(Integer, nullable=False, default=1)
     created_at = Column(String(40), nullable=False, default="")
     updated_at = Column(String(40), nullable=False, default="")
@@ -696,8 +700,24 @@ class ServiceOrderCounter(Base):
     last_seq = Column(Integer, nullable=False, default=0)
 
 
+class TicketOrder(Base):
+    """Chamado da aba ticket ligado a uma OS que o comercial encaminha."""
+
+    __tablename__ = "ticket_orders"
+
+    id = Column(String(40), primary_key=True)
+    sheet_row = Column(Integer, unique=True, nullable=False)
+    order_id = Column(String(40), nullable=False, index=True)
+    empresa = Column(String(255), nullable=False, default="")
+    phone = Column(String(40), nullable=False, default="")
+    email = Column(String(255), nullable=False, default="")
+    contact_name = Column(String(255), nullable=False, default="")
+    subject = Column(String(255), nullable=False, default="")
+    created_at = Column(String(40), nullable=False, default="")
+
+
 class CampaignLead(Base):
-    """Lead da aba Leads Raissa ligado a um card da coluna Campanha."""
+    """Lead da aba de campanha ligado a um card da coluna Campanha."""
 
     __tablename__ = "campaign_leads"
 

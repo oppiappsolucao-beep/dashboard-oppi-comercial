@@ -66,6 +66,7 @@ from app.services.registration import (
     save_company_edit,
     save_nicho,
     save_setor,
+    seller_name_from_login,
     delete_company_registration,
 )
 
@@ -104,6 +105,30 @@ def _list_url_for_from_page(from_page: str = "") -> str:
         "attendances": "/atendimentos",
         "overview": "/",
     }.get(normalize_text(from_page).lower(), _CADASTRO_LIST_URL)
+
+
+def _raissa_save_note(
+    form_dict: dict,
+    billing_plan: dict | None,
+    *,
+    sheet_row: int | None = None,
+    update_only: bool = False,
+) -> str:
+    try:
+        from app.services.raissa_company_sync import save_registration_on_raissa
+
+        result = save_registration_on_raissa(
+            form_dict,
+            billing_plan,
+            crm_sheet_row=sheet_row,
+            update_only=update_only,
+        )
+    except Exception:
+        return " Não consegui gravar na aba Raissa agora."
+    if result.get("ok"):
+        return " Dados gerais e financeiro atualizados na aba Raissa."
+    aviso = normalize_text(result.get("aviso"))
+    return f" {aviso}" if aviso else ""
 
 
 def _edit_page_url(sheet_row: int, *, tab: str = "", from_page: str = "") -> str:
@@ -161,7 +186,7 @@ async def contract_edit_page(request: Request, sheet_row: int):
         parsed_date = date.today()
 
     values = {key: _contract_edit_value(row, columns, key) for key in [
-                "empresa", "data_abertura", "capital", "cnpj", "endereco", "endereco_numero", "endereco_complemento",
+                "empresa", "nome_fantasia", "data_abertura", "data_fechamento", "responsavel_legal", "capital", "cnpj", "endereco", "endereco_numero", "endereco_complemento",
                 "cep", "bairro", "municipio", "uf", "email", "site",
                 "telefone_b2b", "nome_contato", "telefone_fixo", "telefone_alternativo",
                 "socio_1", "cpf_socio_1", "email_socio_1", "telefone_socio_1",
@@ -202,8 +227,14 @@ async def contract_edit_page(request: Request, sheet_row: int):
                             registration_to_payload(matriz).get("empresa")
                         )
                 values["nome_contato"] = normalize_text(pg.get("nome_contato"))
+                for extra_key in ("nome_fantasia", "data_fechamento", "responsavel_legal"):
+                    if normalize_text(pg.get(extra_key)):
+                        values[extra_key] = normalize_text(pg.get(extra_key))
     except Exception:
         pass
+    from app.services.registration import iso_date_for_input
+
+    values["data_fechamento"] = iso_date_for_input(values.get("data_fechamento"))
     from app.services.lead_actions_storage import get_lead_action
     from app.services.sectors import list_sector_options
 
@@ -232,13 +263,14 @@ async def contract_edit_page(request: Request, sheet_row: int):
         "atividades": "ordens",
         "ordens": "ordens",
         "ordem": "ordens",
-        "proposta": "proposta",
-        "propostas": "proposta",
+        "proposta": "dados",
+        "propostas": "dados",
         "acesso": "acesso",
         "oppi": "acesso",
         "ponto": "acesso",
         "financeiro": "financeiro",
-        "suporte": "suporte",
+        "treinamento": "treinamento",
+        "suporte": "ordens",
     }
     active_tab = tab_aliases.get(active_tab, "dados")
 
@@ -261,13 +293,17 @@ async def contract_edit_page(request: Request, sheet_row: int):
         lead_created_at=row.get("_data_chamado") or data_chamado_raw or parsed_date,
         from_page=from_page,
     )
+    vendedor = seller_name_from_login(row.get("_vendedor", ""))
+    seller_options = get_seller_options(df)
+    if vendedor and vendedor not in seller_options:
+        seller_options = [vendedor, *seller_options]
     page_ctx = build_cadastro_edit_page_context(
         tenant_id=DEFAULT_TENANT_ID,
         sheet_row=sheet_row,
         row=row,
         columns=columns,
         values=values,
-        vendedor=normalize_text(row.get("_vendedor", "")) or "Sem vendedor",
+        vendedor=vendedor,
         current_status=current_status,
         data_chamado=data_chamado_raw or parsed_date.isoformat(),
         cadastro_tipo=cadastro_tipo,
@@ -282,6 +318,7 @@ async def contract_edit_page(request: Request, sheet_row: int):
     )
     payment_history = load_payment_history(DEFAULT_TENANT_ID, sheet_row)
     billing_plan = load_billing_plan(DEFAULT_TENANT_ID, sheet_row)
+    asaas_payments: list = []
     asaas_payments_unique: list = []
     summary_payments = payment_history
     if active_tab == "financeiro":
@@ -341,7 +378,7 @@ async def contract_edit_page(request: Request, sheet_row: int):
                 "overview": "Visão Geral",
             }.get(from_page, "Empresas"),
             "sheet_row": sheet_row,
-            "seller_options": get_seller_options(df),
+            "seller_options": seller_options,
             "niche_options": niche_options,
             "sector_options": sector_options,
             "status_options": STATUS_OPTIONS,
@@ -355,14 +392,14 @@ async def contract_edit_page(request: Request, sheet_row: int):
             "payment_status_options": PAYMENT_STATUS_OPTIONS,
             "closed_services": closed_services,
             "payment_history": payment_history,
-            "asaas_payments": asaas_payments_unique,
+            "asaas_payments": asaas_payments,
             "billing_plan": billing_plan,
             "plan_cycle_options": PLAN_CYCLE_OPTIONS,
             "billing_form_options": BILLING_FORM_OPTIONS,
             "asaas_configured": asaas_is_configured(),
             "financial_summary": financial_summary(closed_services, summary_payments),
             "colaborador_options": get_colaborador_options(),
-            "vendedor": normalize_text(row.get("_vendedor", "")) or "Sem vendedor",
+            "vendedor": vendedor,
             "error": request.session.pop("edit_error", ""),
             "success": request.session.pop("edit_success", ""),
             "cadastro_tipo": cadastro_tipo,
@@ -371,6 +408,7 @@ async def contract_edit_page(request: Request, sheet_row: int):
             "service_orders_count": len(service_orders),
             "org_sectors": list_sectors(),
             "org_people": list_people(),
+            "trainers": list_people("treinador"),
             "today_iso": date.today().isoformat(),
             "priority_options": PRIORITY_OPTIONS,
             "cadastro_tipo_options": CADASTRO_TIPO_OPTIONS,
@@ -380,6 +418,37 @@ async def contract_edit_page(request: Request, sheet_row: int):
             **page_ctx,
         },
     )
+
+
+@router.post("/cadastro/todos/{sheet_row}/treinamento")
+async def schedule_company_training(request: Request, sheet_row: int):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+    form = await request.form()
+    from_page = _resolve_edit_from_page(form.get("from"))
+    back = _edit_page_url(sheet_row, tab="treinamento", from_page=from_page)
+    try:
+        from app.routers.registration import schedule_training
+        from app.services.org_registry import get_person
+
+        payload = {key: form.get(key, "") for key in form.keys()}
+        trainer = get_person(payload.get("training_trainer_id", ""))
+        hour = normalize_text(payload.get("training_time"))
+        day = normalize_text(payload.get("training_date"))
+        empresa = normalize_text(form.get("empresa")) or "Cliente"
+        user = normalize_text(request.session.get("username")) or "Usuário"
+        schedule_training(payload, int(sheet_row), empresa, user)
+        from app.services.org_registry import slot_label
+
+        trainer_name = trainer.get("name") if trainer else "o treinador"
+        period = slot_label(hour) if hour else hour
+        request.session["edit_success"] = f"Treinamento agendado com {trainer_name} em {day}, {period}."
+    except ValueError as error:
+        request.session["edit_error"] = str(error)
+    except Exception as error:
+        request.session["edit_error"] = f"Não consegui agendar o treinamento: {error}"
+    return RedirectResponse(url=back, status_code=303)
 
 
 @router.post("/cadastro/todos/{sheet_row}/editar")
@@ -406,16 +475,30 @@ async def contract_edit_submit(request: Request, sheet_row: int):
     try:
         if action == "save_financeiro":
             payments = parse_payment_history_from_form(form)
-            save_payment_history(DEFAULT_TENANT_ID, sheet_row, payments)
+            save_payment_history(DEFAULT_TENANT_ID, sheet_row, payments, mirror_sheet=False)
             closed_items = parse_closed_services_from_form(form)
-            save_closed_services(DEFAULT_TENANT_ID, sheet_row, closed_items, sync_sheet=False)
+            primary_closed = save_closed_services(
+                DEFAULT_TENANT_ID,
+                sheet_row,
+                closed_items,
+                sync_sheet=False,
+                mirror_sheet=False,
+            )
+            if normalize_text(primary_closed.get("servico")):
+                form_dict["servico"] = primary_closed.get("servico", "")
+            if normalize_text(primary_closed.get("valor")):
+                form_dict["valor_proposta"] = primary_closed.get("valor", "")
             previous_plan = load_billing_plan(DEFAULT_TENANT_ID, sheet_row)
-            save_billing_plan(
+            saved_plan = save_billing_plan(
                 DEFAULT_TENANT_ID,
                 sheet_row,
                 parse_billing_plan_from_form(form, previous=previous_plan),
+                mirror_sheet=False,
             )
-            request.session["edit_success"] = "Financeiro atualizado com sucesso."
+            request.session["edit_success"] = (
+                "Financeiro atualizado com sucesso."
+                + _raissa_save_note(form_dict, saved_plan, sheet_row=sheet_row, update_only=True)
+            )
             return RedirectResponse(
                 url=_edit_page_url(sheet_row, tab="financeiro", from_page=from_page),
                 status_code=303,
@@ -423,12 +506,13 @@ async def contract_edit_submit(request: Request, sheet_row: int):
 
         if action == "generate_invoice":
             payments = parse_payment_history_from_form(form)
-            save_payment_history(DEFAULT_TENANT_ID, sheet_row, payments)
+            save_payment_history(DEFAULT_TENANT_ID, sheet_row, payments, mirror_sheet=False)
             previous_plan = load_billing_plan(DEFAULT_TENANT_ID, sheet_row)
             plan = save_billing_plan(
                 DEFAULT_TENANT_ID,
                 sheet_row,
                 parse_billing_plan_from_form(form, previous=previous_plan),
+                mirror_sheet=False,
             )
             df, columns = get_prepared_data()
             row = _get_row_by_sheet(df, sheet_row)
@@ -487,14 +571,20 @@ async def contract_edit_submit(request: Request, sheet_row: int):
             form_dict["servico"] = primary_closed.get("servico", "")
             form_dict["valor_proposta"] = primary_closed.get("valor", "")
         previous_tipo = resolve_cadastro_tipo(DEFAULT_TENANT_ID, sheet_row, cnpj=form_dict.get("cnpj", ""))
-        save_company_edit(sheet_row, form_dict)
-        save_cadastro_tipo(DEFAULT_TENANT_ID, sheet_row, form_dict.get("cadastro_tipo", "lead"))
-        save_access_fields(DEFAULT_TENANT_ID, sheet_row, form_dict)
+        save_company_edit(sheet_row, form_dict, mirror_sheet=False)
+        save_cadastro_tipo(
+            DEFAULT_TENANT_ID,
+            sheet_row,
+            form_dict.get("cadastro_tipo", "lead"),
+            mirror_sheet=False,
+        )
+        save_access_fields(DEFAULT_TENANT_ID, sheet_row, form_dict, mirror_sheet=False)
         save_nicho(
             DEFAULT_TENANT_ID,
             sheet_row,
             form_dict.get("nicho", ""),
             form_dict.get("nicho_outro", ""),
+            mirror_sheet=False,
         )
         from app.services.sectors import get_sector
 
@@ -505,7 +595,11 @@ async def contract_edit_submit(request: Request, sheet_row: int):
             sheet_row,
             setor_id,
             (setor or {}).get("name", ""),
+            mirror_sheet=False,
         )
+        from app.services.crm_registrations_storage import _mirror_registration_to_folha1
+
+        _mirror_registration_to_folha1(int(sheet_row))
         invalidate_sheet_cache()
 
         onboard_note = ""
@@ -528,7 +622,9 @@ async def contract_edit_submit(request: Request, sheet_row: int):
         except Exception:
             pass
 
-        request.session["edit_success"] = f"Cadastro salvo com sucesso.{onboard_note}"
+        request.session["edit_success"] = (
+            f"Cadastro salvo com sucesso.{_raissa_save_note(form_dict, load_billing_plan(DEFAULT_TENANT_ID, sheet_row), sheet_row=sheet_row)}{onboard_note}"
+        )
         return RedirectResponse(url=_edit_page_url(sheet_row, from_page=from_page), status_code=303)
     except DuplicateRegistrationError as error:
         request.session["edit_error"] = str(error)

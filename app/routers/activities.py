@@ -2,7 +2,7 @@ from datetime import date
 import json
 
 from fastapi import APIRouter, Form, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 
 from app.dependencies import get_prepared_data, is_admin, require_auth
 from app.services.activity_service import (
@@ -122,10 +122,25 @@ def _modal_context(
 
 
 def _os_board_context(request: Request) -> dict:
+    from app.dependencies import get_session_user
+    from app.services.kanban_summary import build_kanban_summary, pick_support_sector, support_level
     from app.services.org_registry import add_sector_queue, list_sectors
     from app.services.service_orders import build_sector_board
 
     sectors = list_sectors()
+    user = get_session_user(request) or {}
+    viewer = " ".join(
+        normalize_text(part)
+        for part in (
+            user.get("department_name"),
+            user.get("name"),
+            user.get("username"),
+            request.session.get("org_sector_name"),
+            request.session.get("org_person_name"),
+        )
+        if normalize_text(part)
+    )
+    viewer_level = support_level(viewer)
     employee = bool(request.session.get("org_person_id"))
     if employee:
         sector_id = normalize_text(request.session.get("org_sector_id"))
@@ -137,16 +152,32 @@ def _os_board_context(request: Request) -> dict:
             chosen = sectors[0]
             sector_id = chosen["id"]
         sector_name = chosen["name"] if chosen else ""
-    from app.services.kanban_summary import build_kanban_summary
-
+    if viewer_level and not is_admin(request):
+        folded = sector_name.lower()
+        on_support_board = "suporte" in folded or "nível" in folded or "nivel" in folded
+        current_level = support_level(sector_name)
+        if not on_support_board or (current_level is not None and current_level != viewer_level):
+            preferred = pick_support_sector(sectors, viewer_level)
+            if preferred:
+                sector_id = preferred["id"]
+                sector_name = preferred["name"]
     inicio = normalize_text(request.query_params.get("inicio"))
     fim = normalize_text(request.query_params.get("fim"))
-    summary = build_kanban_summary(sector_name, inicio, fim)
+    busca = normalize_text(request.query_params.get("busca"))
+    summary = build_kanban_summary(sector_name, inicio, fim, viewer=viewer)
     columns = (
-        build_sector_board(sector_id, sector_name, summary["inicio"], summary["fim"])
+        build_sector_board(sector_id, sector_name, summary["inicio"], summary["fim"], busca)
         if sector_id
         else []
     )
+    trainer_name = _logged_trainer_name(request)
+    if trainer_name:
+        for column in columns:
+            column["cards"] = [
+                card
+                for card in column["cards"]
+                if normalize_text(card.get("responsible")).lower() == trainer_name
+            ]
     return {
         "active_page": "activities",
         "is_admin": not employee,
@@ -157,8 +188,11 @@ def _os_board_context(request: Request) -> dict:
         "can_manage_queues": bool(sector_id),
         "inicio": summary["inicio"],
         "fim": summary["fim"],
+        "busca": busca,
+        "search_count": sum(len(column["cards"]) for column in columns) if busca else 0,
         "summary": summary,
         "is_commercial": "comercial" in sector_name.lower(),
+        "can_delete_orders": _oppi_tech_board(request, sector_name),
         "success": request.session.pop("os_board_success", ""),
         "error": request.session.pop("os_board_error", ""),
     }
@@ -170,6 +204,39 @@ async def activities_page(request: Request):
     if redirect:
         return redirect
     return render(request, "activities/os_board.html", _os_board_context(request))
+
+
+@router.get("/proposta", response_class=HTMLResponse)
+async def proposal_page(request: Request):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+    from app.services.org_registry import list_sectors
+    from app.services.service_orders import build_sector_board, is_commercial_sector
+
+    cards = []
+    sector_name = ""
+    for sector in list_sectors():
+        if not is_commercial_sector(sector.get("name") or ""):
+            continue
+        sector_name = sector["name"]
+        columns = build_sector_board(sector["id"], sector_name)
+        cards = [
+            card
+            for column in columns
+            if "proposta" in (column.get("name") or "").lower()
+            for card in column.get("cards") or []
+        ]
+        break
+    return render(
+        request,
+        "activities/proposal_list.html",
+        {
+            "active_page": "proposta",
+            "sector_name": sector_name,
+            "cards": cards,
+        },
+    )
 
 
 @router.post("/atividades/filas")
@@ -278,8 +345,11 @@ async def activities_move_order(
     if redirect:
         return redirect
     from app.services.org_registry import list_sectors
-    from app.services.service_orders import move_service_order
+    from app.services.service_orders import get_order_detail, move_service_order
 
+    detail = get_order_detail(order_id)
+    if not detail or not _order_visible(request, detail):
+        return HTMLResponse("Ordem de serviço não encontrada.", status_code=404)
     employee_sector = normalize_text(request.session.get("org_sector_id"))
     target = employee_sector or normalize_text(sector_id)
     sectors = list_sectors()
@@ -297,6 +367,45 @@ async def activities_move_order(
         )
     except ValueError as error:
         return HTMLResponse(str(error), status_code=400)
+    from app.services.org_registry import list_sector_queues
+
+    queue_name = next(
+        (
+            item["name"]
+            for item in list_sector_queues(sector["id"])
+            if item["id"] == normalize_text(queue_id)
+        ),
+        "",
+    )
+    if "proposta" in queue_name.lower():
+        return HTMLResponse(f"/atividades/os/{order_id}/proposta")
+    if normalize_text(queue_id) == "concluida":
+        from app.services.campaign_leads import open_lead_cadastro_url
+        from app.services.service_orders import is_commercial_sector, is_oppi_tech_sector
+
+        if is_commercial_sector(sector["name"]) or is_oppi_tech_sector(sector["name"]):
+            target = open_lead_cadastro_url(detail)
+            if target.startswith("/cadastro/"):
+                return HTMLResponse(target)
+    return HTMLResponse("ok")
+
+
+@router.post("/atividades/os/{order_id}/excluir")
+async def activities_delete_order(request: Request, order_id: str):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+    from app.services.service_orders import delete_service_order, get_order_detail
+
+    detail = get_order_detail(order_id)
+    if not detail or not _order_visible(request, detail):
+        return HTMLResponse("Ordem de serviço não encontrada.", status_code=404)
+    if not _oppi_tech_board(request, detail.get("sector") or ""):
+        return HTMLResponse("Somente o acesso Oppi Tech pode excluir o card.", status_code=403)
+    try:
+        delete_service_order(order_id)
+    except ValueError as error:
+        return HTMLResponse(str(error), status_code=400)
     return HTMLResponse("ok")
 
 
@@ -308,11 +417,76 @@ def _os_actor(request: Request) -> str:
     )
 
 
+def _matches_oppi_tech_access(value: str) -> bool:
+    """Oppi Tech, e o login Oppi que abre todas as telas da solução."""
+    import re
+    import unicodedata
+
+    from app.services.service_orders import is_oppi_tech_sector
+
+    if is_oppi_tech_sector(value or ""):
+        return True
+    text = unicodedata.normalize("NFKD", normalize_text(value).lower())
+    text = "".join(ch for ch in text if not unicodedata.combining(ch))
+    compact = re.sub(r"[^a-z0-9]", "", text)
+    return compact in {"oppi", "oppitech", "opitech"}
+
+
+def _oppi_tech_login(request: Request) -> bool:
+    """Acesso Oppi Tech: funcionário desse setor, ou o login Oppi/Oppi Tech com todas as telas."""
+    from app.dependencies import get_session_user
+
+    if request.session.get("org_person_id"):
+        return _matches_oppi_tech_access(request.session.get("org_sector_name") or "")
+
+    user = get_session_user(request) or {}
+    return any(
+        _matches_oppi_tech_access(value or "")
+        for value in (
+            request.session.get("username"),
+            user.get("name"),
+            user.get("username"),
+            user.get("department_name"),
+        )
+    )
+
+
+def _oppi_tech_board(request: Request, _sector_name: str = "") -> bool:
+    """Excluir o card do kanban só para quem entrou pelo acesso Oppi Tech."""
+    return _oppi_tech_login(request)
+
+
+def _order_panel_context(order: dict, sector_notice: str = "", can_delete_order: bool = False) -> dict:
+    from app.services.org_registry import list_sectors
+    from app.services.service_orders import queue_choices
+
+    sector_id, queues = queue_choices(order.get("sector") or "")
+    return {
+        "order": order,
+        "order_sectors": list_sectors(),
+        "sector_notice": sector_notice,
+        "order_sector_id": sector_id,
+        "order_queues": queues,
+        "can_delete_order": can_delete_order,
+    }
+
+
+def _logged_trainer_name(request: Request) -> str:
+    if normalize_text(request.session.get("org_person_kind")) != "treinador":
+        return ""
+    return normalize_text(request.session.get("org_person_name")).lower()
+
+
 def _order_visible(request: Request, detail: dict) -> bool:
     if not request.session.get("org_person_id"):
         return True
     sector_name = normalize_text(request.session.get("org_sector_name"))
-    return sector_name.lower() == normalize_text(detail.get("sector")).lower()
+    if sector_name.lower() != normalize_text(detail.get("sector")).lower():
+        return False
+    trainer_name = _logged_trainer_name(request)
+    if trainer_name and normalize_text(detail.get("responsible")).lower() != trainer_name:
+        return False
+    return True
 
 
 @router.get("/atividades/os/{order_id}", response_class=HTMLResponse)
@@ -325,7 +499,14 @@ async def activities_order_detail(request: Request, order_id: str):
     detail = get_order_detail(order_id)
     if not detail or not _order_visible(request, detail):
         return HTMLResponse("Ordem de serviço não encontrada.", status_code=404)
-    return render(request, "partials/os_order_panel.html", {"order": detail})
+    return render(
+        request,
+        "partials/os_order_panel.html",
+        _order_panel_context(
+            detail,
+            can_delete_order=_oppi_tech_board(request, detail.get("sector") or ""),
+        ),
+    )
 
 
 @router.post("/atividades/os/{order_id}/atualizacao", response_class=HTMLResponse)
@@ -343,7 +524,273 @@ async def activities_order_update(request: Request, order_id: str, note: str = F
     except ValueError as error:
         return HTMLResponse(str(error), status_code=400)
     detail = get_order_detail(order_id)
-    return render(request, "partials/os_order_panel.html", {"order": detail})
+    return render(
+        request,
+        "partials/os_order_panel.html",
+        _order_panel_context(
+            detail,
+            can_delete_order=_oppi_tech_board(request, detail.get("sector") or ""),
+        ),
+    )
+
+
+@router.post("/atividades/os/{order_id}/setor", response_class=HTMLResponse)
+async def activities_direct_sector(request: Request, order_id: str, sector_name: str = Form("")):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+    from app.services.service_orders import get_order_detail, send_order_to_sector
+    from app.services.ticket_orders import ticket_card_extra, write_directed_sector
+
+    detail = get_order_detail(order_id)
+    if not detail or not _order_visible(request, detail):
+        return HTMLResponse("Ordem de serviço não encontrada.", status_code=404)
+    try:
+        notice = send_order_to_sector(order_id, sector_name, _os_actor(request))
+    except ValueError as error:
+        return render(
+            request,
+            "partials/os_order_panel.html",
+            _order_panel_context(
+                detail,
+                str(error),
+                can_delete_order=_oppi_tech_board(request, detail.get("sector") or ""),
+            ),
+        )
+    extra = ticket_card_extra(order_id) or {}
+    sheet_note = ""
+    if extra.get("sheet_row_ticket"):
+        sheet_note = write_directed_sector(int(extra["sheet_row_ticket"]), normalize_text(sector_name))
+    request.session["os_board_success"] = sheet_note or notice or f"OS encaminhada para {normalize_text(sector_name)}."
+    return HTMLResponse("ok")
+
+
+def _proposal_values(order: dict, form: dict | None = None) -> dict:
+    client = order.get("client") or {}
+    values = {
+        "razao_social": order.get("empresa") or "",
+        "cnpj": "",
+        "endereco": client.get("endereco") or "",
+        "email": client.get("email") or "",
+        "responsavel": client.get("contato") or "",
+        "cargo": "",
+        "telefone": client.get("whatsapp") or client.get("telefone") or "",
+        "nome_fantasia": "",
+        "colaboradores": "",
+        "plan_key": "boleto",
+        "valor_boleto": "",
+        "valor_cartao": "",
+        "valor_anual": "",
+        "valor_mensal_equivalente": "",
+        "valor_adicional": "",
+        "valor_final": "",
+        "observacao": "",
+    }
+    try:
+        df, columns = get_prepared_data()
+        from app.services.proposal_commercial_pdf import collect_client_data
+
+        found = collect_client_data(values["razao_social"], df, columns)
+        for key in ("cnpj", "endereco", "email", "responsavel", "cargo", "nome_fantasia"):
+            if found.get(key) and not values.get(key):
+                values[key] = found[key]
+        if found.get("whatsapp") and not values["telefone"]:
+            values["telefone"] = found["whatsapp"]
+        if found.get("colaboradores"):
+            values["colaboradores"] = found["colaboradores"]
+    except Exception:
+        pass
+    typed_keys = {
+        "colaboradores",
+        "plan_key",
+        "valor_boleto",
+        "valor_cartao",
+        "valor_anual",
+        "valor_mensal_equivalente",
+        "valor_adicional",
+        "valor_final",
+        "observacao",
+    }
+    if form:
+        for key in values:
+            posted = normalize_text(form.get(key))
+            if posted or key in typed_keys:
+                values[key] = posted
+    return values
+
+
+def _proposal_pdf_bytes(order: dict, values: dict) -> tuple[bytes, str]:
+    from app.services.proposal_commercial_pdf import generate_commercial_proposal_pdf, proposal_pdf_filename
+
+    try:
+        df, columns = get_prepared_data()
+    except Exception:
+        import pandas as pd
+
+        df, columns = pd.DataFrame(), {}
+    try:
+        colaboradores = int(normalize_text(values.get("colaboradores")) or "0")
+    except ValueError:
+        colaboradores = 0
+    pdf = generate_commercial_proposal_pdf(
+        values.get("razao_social") or order.get("empresa") or "Cliente",
+        df,
+        columns or {},
+        proposal_snapshot={
+            "colaboradores": colaboradores,
+            "plan_key": values.get("plan_key") or "boleto",
+            "manual": True,
+            "valor_boleto": values.get("valor_boleto") or "",
+            "valor_cartao": values.get("valor_cartao") or "",
+            "valor_anual": values.get("valor_anual") or "",
+            "valor_mensal_equivalente": values.get("valor_mensal_equivalente") or "",
+            "valor_adicional": values.get("valor_adicional") or "",
+            "valor_final": values.get("valor_final") or "",
+            "observacao": values.get("observacao") or "",
+        },
+        client_override={
+            "razao_social": values.get("razao_social"),
+            "empresa": values.get("razao_social"),
+            "cnpj": values.get("cnpj"),
+            "documento": values.get("cnpj"),
+            "endereco": values.get("endereco"),
+            "email": values.get("email"),
+            "responsavel": values.get("responsavel"),
+            "cargo": values.get("cargo"),
+            "telefone": values.get("telefone"),
+            "whatsapp": values.get("telefone"),
+            "nome_fantasia": values.get("nome_fantasia"),
+        },
+    )
+    return pdf, proposal_pdf_filename(values.get("razao_social") or order.get("empresa") or "Cliente")
+
+
+@router.get("/atividades/os/{order_id}/proposta", response_class=HTMLResponse)
+async def activities_proposal_form(request: Request, order_id: str):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+    from app.services.service_orders import get_order_detail
+
+    detail = get_order_detail(order_id)
+    if not detail or not _order_visible(request, detail):
+        return HTMLResponse("Ordem de serviço não encontrada.", status_code=404)
+    return render(
+        request,
+        "activities/proposal_form.html",
+        {
+            "active_page": "activities",
+            "order": detail,
+            "values": _proposal_values(detail),
+            "error": "",
+        },
+    )
+
+
+@router.post("/atividades/os/{order_id}/proposta/pdf")
+async def activities_proposal_pdf(
+    request: Request,
+    order_id: str,
+    razao_social: str = Form(""),
+    cnpj: str = Form(""),
+    endereco: str = Form(""),
+    email: str = Form(""),
+    responsavel: str = Form(""),
+    cargo: str = Form(""),
+    telefone: str = Form(""),
+    nome_fantasia: str = Form(""),
+    colaboradores: str = Form(""),
+    plan_key: str = Form("boleto"),
+    valor_boleto: str = Form(""),
+    valor_cartao: str = Form(""),
+    valor_anual: str = Form(""),
+    valor_mensal_equivalente: str = Form(""),
+    valor_adicional: str = Form(""),
+    valor_final: str = Form(""),
+    observacao: str = Form(""),
+    disposicao: str = Form("anexo"),
+):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+    from app.services.service_orders import get_order_detail
+
+    detail = get_order_detail(order_id)
+    if not detail or not _order_visible(request, detail):
+        return HTMLResponse("Ordem de serviço não encontrada.", status_code=404)
+    values = _proposal_values(
+        detail,
+        {
+            "razao_social": razao_social,
+            "cnpj": cnpj,
+            "endereco": endereco,
+            "email": email,
+            "responsavel": responsavel,
+            "cargo": cargo,
+            "telefone": telefone,
+            "nome_fantasia": nome_fantasia,
+            "colaboradores": colaboradores,
+            "plan_key": plan_key,
+            "valor_boleto": valor_boleto,
+            "valor_cartao": valor_cartao,
+            "valor_anual": valor_anual,
+            "valor_mensal_equivalente": valor_mensal_equivalente,
+            "valor_adicional": valor_adicional,
+            "valor_final": valor_final,
+            "observacao": observacao,
+        },
+    )
+    if not normalize_text(values.get("razao_social")):
+        return render(
+            request,
+            "activities/proposal_form.html",
+            {
+                "active_page": "activities",
+                "order": detail,
+                "values": values,
+                "error": "Informe o nome do contratante.",
+            },
+            status_code=400,
+        )
+    typed_prices = (
+        values.get("valor_boleto"),
+        values.get("valor_cartao"),
+        values.get("valor_anual"),
+        values.get("valor_mensal_equivalente"),
+        values.get("valor_final"),
+    )
+    if not any(any(ch.isdigit() for ch in normalize_text(item)) for item in typed_prices):
+        return render(
+            request,
+            "activities/proposal_form.html",
+            {
+                "active_page": "activities",
+                "order": detail,
+                "values": values,
+                "error": "Digite pelo menos um valor da negociação. O PDF não calcula preço sozinho.",
+            },
+            status_code=400,
+        )
+    try:
+        pdf, filename = _proposal_pdf_bytes(detail, values)
+    except Exception:
+        return render(
+            request,
+            "activities/proposal_form.html",
+            {
+                "active_page": "activities",
+                "order": detail,
+                "values": values,
+                "error": "Não consegui montar o PDF desta proposta.",
+            },
+            status_code=500,
+        )
+    mode = "inline" if normalize_text(disposicao) == "inline" else "attachment"
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'{mode}; filename="{filename}"'},
+    )
 
 
 @router.get("/atividades/nova/modal", response_class=HTMLResponse)

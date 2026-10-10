@@ -1,0 +1,440 @@
+{% extends "base.html" %}
+{% block content %}
+<link rel="stylesheet" href="/static/css/financeiro.css?v={{ static_version }}">
+{% macro payable_delete(item) %}
+<div class="fin-delete">
+  <button type="button" class="fin-action fin-action-danger fin-delete-ask">Excluir</button>
+  <form method="post" action="/financeiro/contas-a-pagar/{{ item.id }}/excluir" class="fin-delete-box" hidden>
+    <input type="hidden" name="period_start" value="{{ filters.period_start }}">
+    <input type="hidden" name="period_end" value="{{ filters.period_end }}">
+    <input type="hidden" name="status" value="{{ filters.status or '' }}">
+    <input type="text" name="confirm_text" class="fin-delete-word" placeholder="Digite excluir" autocomplete="off">
+    <button type="submit" class="fin-delete-go" disabled>Apagar</button>
+    <button type="button" class="fin-delete-cancel">Cancelar</button>
+  </form>
+</div>
+{% endmacro %}
+<div class="page-header">
+  <div>
+    <div class="page-title">Contas a pagar</div>
+    <div class="page-subtitle">{{ payables.month_label }}. Use De e Até para ver outros meses. Pagamento único lança uma vez; quantas vezes repete o mesmo valor, mês a mês.</div>
+  </div>
+  <div class="page-actions">
+    <a class="btn btn-secondary" href="/financeiro/entrada">Entrada</a>
+  </div>
+</div>
+
+{% if flash %}
+<div class="alert-success fin-flash">{{ flash }}</div>
+{% endif %}
+
+<div class="metric-grid metric-grid-fin metric-grid-fin-4">
+  {% for card in kpi_cards %}
+  <div class="metric-card">
+    <div class="metric-top">
+      <div class="metric-icon tone-{{ card.tone }}">{{ card.icon }}</div>
+    </div>
+    <div class="metric-label">{{ card.label }}</div>
+    <div class="metric-value">{{ card.value }}</div>
+    <div class="metric-note">{{ card.note }}</div>
+  </div>
+  {% endfor %}
+</div>
+
+<form class="toolbar-card fin-toolbar" method="get" action="/financeiro/contas-a-pagar">
+  <div class="filters-row filters-row-main">
+    <div class="filter-field filter-field-sm">
+      <label>De</label>
+      <input type="date" name="period_start" value="{{ filters.period_start }}">
+    </div>
+    <div class="filter-field filter-field-sm">
+      <label>Até</label>
+      <input type="date" name="period_end" value="{{ filters.period_end }}">
+    </div>
+    <div class="filter-field filter-field-sm">
+      <label>Status</label>
+      <select name="status">
+        <option value="" {% if not filters.status %}selected{% endif %}>Todos</option>
+        <option value="a_pagar" {% if filters.status == 'a_pagar' %}selected{% endif %}>A pagar</option>
+        <option value="atrasado" {% if filters.status == 'atrasado' %}selected{% endif %}>Atrasado</option>
+        <option value="pago" {% if filters.status == 'pago' %}selected{% endif %}>Pago</option>
+      </select>
+    </div>
+    <div class="filter-field fin-search">
+      <label>Buscar</label>
+      <input type="search" name="search" value="{{ filters.search }}" placeholder="Conta, fornecedor ou classificação">
+    </div>
+    <div class="filter-field filter-field-sm">
+      <label>&nbsp;</label>
+      <button type="submit" class="btn">Filtrar</button>
+    </div>
+  </div>
+</form>
+
+<div class="panel fin-payable-form-card">
+  <div class="section-heading">Nova conta</div>
+  <form method="post" action="/financeiro/contas-a-pagar" class="fin-payable-form" id="payable-form">
+    <input type="hidden" name="period_start" value="{{ filters.period_start }}">
+    <input type="hidden" name="period_end" value="{{ filters.period_end }}">
+    <input type="hidden" name="status" value="{{ filters.status or '' }}">
+    <div class="filter-field">
+      <label>Descrição</label>
+      <input type="text" name="description" required placeholder="Ex.: aluguel, energia, contador">
+    </div>
+    <div class="filter-field">
+      <label>Fornecedor</label>
+      <input type="text" name="supplier" list="payable-suppliers" placeholder="Quem recebe" autocomplete="off">
+      <datalist id="payable-suppliers">
+        {% for name in payables.suppliers %}
+        <option value="{{ name }}"></option>
+        {% endfor %}
+      </datalist>
+    </div>
+    <div class="filter-field filter-field-sm">
+      <label>Classificação</label>
+      <select name="category">
+        <option value="fixa">Fixa</option>
+        <option value="emprestimo">Empréstimo</option>
+        <option value="variavel">Variável</option>
+        <option value="imposto">Imposto</option>
+        <option value="servico">Serviço</option>
+        <option value="outra" selected>Outra</option>
+      </select>
+    </div>
+    <div class="filter-field filter-field-sm">
+      <label>Valor</label>
+      <input type="text" name="amount" required inputmode="decimal" placeholder="0,00">
+    </div>
+    <div class="filter-field filter-field-sm">
+      <label>Vencimento</label>
+      <input type="date" name="due_date" required value="{{ filters.period_start }}">
+    </div>
+    <div class="filter-field filter-field-sm">
+      <label>Este pagamento é</label>
+      <select name="repeat_mode" id="payable-repeat-mode">
+        <option value="unico">Único</option>
+        <option value="vezes">Quantas vezes</option>
+      </select>
+    </div>
+    <div class="filter-field filter-field-sm fin-times is-off" id="payable-times-field">
+      <label>Quantas vezes</label>
+      <input type="number" name="repeat_count" id="payable-repeat-count" min="2" max="36" value="2" disabled>
+    </div>
+    <div class="filter-field filter-field-sm">
+      <label>&nbsp;</label>
+      <button type="button" class="btn" id="payable-preview">Lançar</button>
+    </div>
+    <div class="fin-fixed" id="payable-fixed" hidden>
+      <div class="fin-fixed-title">Conferência antes de salvar</div>
+      <p class="fin-fixed-note">Estes dados ficam gravados assim. Nada é apagado, a não ser que você peça para excluir.</p>
+      <dl id="payable-fixed-list"></dl>
+      <div class="fin-fixed-actions">
+        <button type="button" class="btn btn-secondary" id="payable-edit">Corrigir</button>
+        <button type="submit" class="btn" id="payable-save">Salvar</button>
+      </div>
+    </div>
+  </form>
+</div>
+
+{% if payables.compare_note %}
+<p class="fin-empty">{{ payables.compare_note }}</p>
+{% endif %}
+
+<div class="panel fin-table-card">
+  <div class="section-heading">Contas a pagar</div>
+  <div class="fin-payable-totals">
+    <span>A pagar <strong class="fin-money-out">{{ payables.lista_a_pagar_label }}</strong></span>
+    <span>Pago <strong class="fin-money-in">{{ payables.lista_pago_label }}</strong></span>
+    <span>Entrada <strong class="fin-money-in">{{ payables.entrada_label }}</strong></span>
+    <span>A receber <strong class="fin-money-in">{{ payables.a_receber_label }}</strong></span>
+    <span>Saída <strong class="fin-money-out">{{ payables.saida_label }}</strong></span>
+    <span>Total das dívidas <strong class="fin-money-out">{{ payables.dividas_label }}</strong></span>
+  </div>
+  {% if payables.show_grid %}
+  <div class="table-wrap">
+    <table class="data-table fin-table fin-day-grid">
+      <thead>
+        <tr>
+          <th>Dia</th>
+          <th>Conta</th>
+          <th>A pagar</th>
+          <th>Pago</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for day in payables.days %}
+          {% if day["items"] %}
+            {% for item in day["items"] %}
+            <tr class="{% if day.weekday >= 5 %}fin-day-weekend{% endif %}">
+              <td class="fin-cell-num">{{ day.day }}</td>
+              <td class="fin-payable-name">
+                <strong>{{ item.description }}</strong>
+                <span>{% if item.supplier %}{{ item.supplier }} · {% endif %}{{ item.category_label }}</span>
+              </td>
+              <td class="fin-cell-num fin-money-out">{% if not item.paid %}{{ item.valor_label }}{% endif %}</td>
+              <td class="fin-cell-num fin-money-in">{% if item.paid %}{{ item.valor_label }}{% endif %}</td>
+              <td class="fin-payable-actions">
+                <span class="fin-badge tone-{{ item.status_tone }}">{{ item.status_label }}</span>
+                {% if item.paid %}
+                <form method="post" action="/financeiro/contas-a-pagar/{{ item.id }}/reabrir" class="fin-inline-form">
+                  <input type="hidden" name="period_start" value="{{ filters.period_start }}">
+                  <input type="hidden" name="period_end" value="{{ filters.period_end }}">
+                  <input type="hidden" name="status" value="{{ filters.status or '' }}">
+                  <button type="submit" class="fin-action">Reabrir</button>
+                </form>
+                {% else %}
+                <form method="post" action="/financeiro/contas-a-pagar/{{ item.id }}/pagar" class="fin-inline-form">
+                  <input type="hidden" name="period_start" value="{{ filters.period_start }}">
+                  <input type="hidden" name="period_end" value="{{ filters.period_end }}">
+                  <input type="hidden" name="status" value="{{ filters.status or '' }}">
+                  <button type="submit" class="fin-action">Pago</button>
+                </form>
+                {% endif %}
+                {{ payable_delete(item) }}
+              </td>
+            </tr>
+            {% endfor %}
+          {% else %}
+            <tr class="fin-day-empty {% if day.weekday >= 5 %}fin-day-weekend{% endif %}">
+              <td class="fin-cell-num">{{ day.day }}</td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td></td>
+            </tr>
+          {% endif %}
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  {% if payables.rows %}
+  <div class="table-wrap">
+    <table class="data-table fin-table fin-stack fin-cols-conta">
+      <thead>
+        <tr>
+          <th>Vencimento</th>
+          <th>Conta</th>
+          <th>Fornecedor</th>
+          <th>Classificação</th>
+          <th>Valor</th>
+          <th>Status</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in payables.rows %}
+        <tr>
+          <td>{{ item.due_label }}</td>
+          <td>{{ item.description }}</td>
+          <td>{{ item.supplier or "—" }}</td>
+          <td>{{ item.category_label }}</td>
+          <td class="fin-cell-num">{{ item.valor_label }}</td>
+          <td><span class="fin-badge tone-{{ item.status_tone }}">{{ item.status_label }}</span></td>
+          <td>
+            <div class="fin-payable-actions">
+              {% if item.paid %}
+              <form method="post" action="/financeiro/contas-a-pagar/{{ item.id }}/reabrir" class="fin-inline-form">
+                <input type="hidden" name="period_start" value="{{ filters.period_start }}">
+                <input type="hidden" name="period_end" value="{{ filters.period_end }}">
+                <input type="hidden" name="status" value="{{ filters.status or '' }}">
+                <button type="submit" class="fin-action">Reabrir</button>
+              </form>
+              {% else %}
+              <form method="post" action="/financeiro/contas-a-pagar/{{ item.id }}/pagar" class="fin-inline-form">
+                <input type="hidden" name="period_start" value="{{ filters.period_start }}">
+                <input type="hidden" name="period_end" value="{{ filters.period_end }}">
+                <input type="hidden" name="status" value="{{ filters.status or '' }}">
+                <button type="submit" class="fin-action">Pago</button>
+              </form>
+              {% endif %}
+              {{ payable_delete(item) }}
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="fin-empty">Nenhuma conta neste período.</p>
+  {% endif %}
+  {% endif %}
+</div>
+<script>
+(function () {
+  var form = document.getElementById("payable-form");
+  var mode = document.getElementById("payable-repeat-mode");
+  var times = document.getElementById("payable-times-field");
+  var input = document.getElementById("payable-repeat-count");
+  var preview = document.getElementById("payable-preview");
+  var panel = document.getElementById("payable-fixed");
+  var list = document.getElementById("payable-fixed-list");
+  var edit = document.getElementById("payable-edit");
+  var save = document.getElementById("payable-save");
+  var ready = false;
+
+  function syncTimes() {
+    if (!mode || !times) return;
+    var on = mode.value === "vezes";
+    times.classList.toggle("is-off", !on);
+    if (input) input.disabled = !on;
+  }
+
+  function field(name) {
+    return form ? form.elements[name] : null;
+  }
+
+  function dateBR(iso) {
+    var parts = String(iso || "").split("-");
+    if (parts.length !== 3) return iso || "";
+    return parts[2] + "/" + parts[1] + "/" + parts[0];
+  }
+
+  function addMonthsLabel(iso, step) {
+    var parts = String(iso || "").split("-").map(Number);
+    if (parts.length !== 3 || !parts[0]) return "";
+    var cursor = new Date(parts[0], parts[1] - 1 + step, 1);
+    var last = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0).getDate();
+    var day = Math.min(parts[2], last);
+    var due = new Date(cursor.getFullYear(), cursor.getMonth(), day);
+    var month = String(due.getMonth() + 1).padStart(2, "0");
+    var shown = String(due.getDate()).padStart(2, "0");
+    return shown + "/" + month + "/" + due.getFullYear();
+  }
+
+  function selectedText(select) {
+    if (!select || select.selectedIndex < 0) return "";
+    return select.options[select.selectedIndex].text;
+  }
+
+  function lock(on) {
+    if (!form) return;
+    Array.prototype.forEach.call(form.querySelectorAll("input, select"), function (el) {
+      if (el.type === "hidden" || el === save) return;
+      if (el === input && mode && mode.value !== "vezes") {
+        el.disabled = true;
+        return;
+      }
+      if (el.tagName === "SELECT") el.disabled = on;
+      else el.readOnly = on;
+    });
+    if (preview) preview.disabled = on;
+  }
+
+  function text(value) {
+    return String(value)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function line(label, value) {
+    return "<dt>" + text(label) + "</dt><dd>" + text(value) + "</dd>";
+  }
+
+  if (mode) mode.addEventListener("change", syncTimes);
+  syncTimes();
+
+  if (form) {
+    form.addEventListener("submit", function (event) {
+      if (!ready) event.preventDefault();
+    });
+  }
+
+  if (preview && form && panel && list) {
+    preview.addEventListener("click", function () {
+      if (!form.reportValidity()) return;
+      var description = (field("description").value || "").trim();
+      var supplier = (field("supplier").value || "").trim() || "Não informado";
+      var category = selectedText(field("category"));
+      var amount = (field("amount").value || "").trim();
+      var due = field("due_date").value;
+      var payment = "Único, em " + dateBR(due);
+      if (mode && mode.value === "vezes") {
+        var count = parseInt(input && input.value, 10) || 0;
+        if (count < 2) {
+          if (input) input.reportValidity();
+          return;
+        }
+        var dates = [];
+        for (var step = 0; step < count; step += 1) dates.push(addMonthsLabel(due, step));
+        payment = count + " vezes: " + dates.join(", ");
+      }
+      list.innerHTML = [
+        line("Descrição", description),
+        line("Fornecedor", supplier),
+        line("Classificação", category),
+        line("Valor", amount),
+        line("Pagamento", payment)
+      ].join("");
+      ready = false;
+      lock(true);
+      panel.hidden = false;
+    });
+  }
+
+  if (edit) {
+    edit.addEventListener("click", function () {
+      ready = false;
+      lock(false);
+      syncTimes();
+      if (panel) panel.hidden = true;
+    });
+  }
+
+  if (save) {
+    save.addEventListener("click", function () {
+      ready = true;
+      if (!form) return;
+      Array.prototype.forEach.call(form.querySelectorAll("select"), function (el) {
+        el.disabled = false;
+      });
+      if (mode && mode.value === "vezes" && input) input.disabled = false;
+    });
+  }
+
+  function closeDelete(wrap) {
+    if (!wrap) return;
+    var opened = wrap.querySelector(".fin-delete-box");
+    var opener = wrap.querySelector(".fin-delete-ask");
+    if (opened) {
+      opened.hidden = true;
+      opened.classList.remove("is-open");
+    }
+    if (opener) opener.hidden = false;
+    var typed = wrap.querySelector(".fin-delete-word");
+    if (typed) typed.value = "";
+    var submit = wrap.querySelector("button[type=submit]");
+    if (submit) submit.disabled = true;
+  }
+
+  document.addEventListener("click", function (event) {
+    var ask = event.target.closest(".fin-delete-ask");
+    if (ask) {
+      document.querySelectorAll(".fin-delete").forEach(closeDelete);
+      var box = ask.parentElement.querySelector(".fin-delete-box");
+      ask.hidden = true;
+      if (box) {
+        box.hidden = false;
+        box.classList.add("is-open");
+      }
+      var word = box && box.querySelector(".fin-delete-word");
+      if (word) word.focus();
+      return;
+    }
+    var cancel = event.target.closest(".fin-delete-cancel");
+    if (!cancel) return;
+    closeDelete(cancel.closest(".fin-delete"));
+  });
+
+  document.addEventListener("input", function (event) {
+    if (!event.target.classList || !event.target.classList.contains("fin-delete-word")) return;
+    var submit = event.target.closest("form").querySelector("button[type=submit]");
+    if (submit) submit.disabled = event.target.value.trim().toLowerCase() !== "excluir";
+  });
+})();
+</script>
+{% endblock %}

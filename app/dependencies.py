@@ -210,7 +210,7 @@ def get_session_user(request: Request) -> dict | None:
             "id": request.session.get("org_person_id"),
             "username": username,
             "name": request.session.get("org_person_name") or username,
-            "role": "Funcionário",
+            "role": "Treinador" if request.session.get("org_person_kind") == "treinador" else "Funcionário",
             "managed": True,
             "department_name": request.session.get("org_sector_name") or "",
         }

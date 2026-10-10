@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
-<link rel="stylesheet" href="/static/css/org-registry.css?v=3">
+<link rel="stylesheet" href="/static/css/org-registry.css?v=5">
 <div class="page-header">
   <div>
     <div class="page-title">Sistema</div>
@@ -284,7 +284,7 @@
 {% elif active_tab == 'treinadores' %}
 <section class="panel org-panel">
   <h2>{% if editing %}Editar treinador{% else %}Treinador{% endif %}</h2>
-  <p>Quem entra aqui aparece na lista do agendamento de treinamento.</p>
+  <p>Marque os dias e os horários de 1 hora em que este treinador atende. Exemplo: 09:00 – 10:00, 10:00 – 11:00 e 11:00 – 12:00. Na empresa, ao escolher o dia e o treinador, aparecem só os horários livres.</p>
   <form method="post" action="/cadastros/pessoas" class="org-form">
     <input type="hidden" name="kind" value="treinador">
     {% if editing %}<input type="hidden" name="person_id" value="{{ editing.id }}">{% endif %}
@@ -297,8 +297,32 @@
           {% for sector in sectors %}<option value="{{ sector.id }}" {% if editing and editing.sector_id == sector.id %}selected{% elif not editing and sector.name == 'Treinamento' %}selected{% endif %}>{{ sector.name }}</option>{% endfor %}
         </select>
       </div>
+      <div class="form-group"><label>Login</label><input name="username" required maxlength="40" autocomplete="off" placeholder="usuario.acesso" value="{{ editing.username if editing else '' }}"></div>
+      <div class="form-group"><label>{% if editing and editing.has_password %}Nova senha{% else %}Senha{% endif %}</label><input name="password" type="password" {% if not editing or not editing.has_password %}required{% endif %} minlength="6" autocomplete="new-password" placeholder="{% if editing and editing.has_password %}Deixe em branco para manter{% else %}Mínimo 6 caracteres{% endif %}"></div>
       <div class="form-group"><label>Telefone</label><input name="phone" maxlength="40" value="{{ editing.phone if editing else '' }}"></div>
       <div class="form-group"><label>E-mail</label><input name="email" type="email" maxlength="120" value="{{ editing.email if editing else '' }}"></div>
+      <div class="form-group full">
+        <label>Dias de atendimento</label>
+        <div class="org-day-list">
+          {% for key, label in [('seg','Seg'),('ter','Ter'),('qua','Qua'),('qui','Qui'),('sex','Sex'),('sab','Sáb'),('dom','Dom')] %}
+          <label class="org-day">
+            <input type="checkbox" name="schedule_day" value="{{ key }}" {% if editing and key in editing.schedule.days %}checked{% endif %}>
+            <span>{{ label }}</span>
+          </label>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="form-group full">
+        <label>Horários de atendimento</label>
+        <div class="org-day-list">
+          {% for slot in training_slots %}
+          <label class="org-day">
+            <input type="checkbox" name="schedule_slot" value="{{ slot.value }}" {% if editing and slot.value in editing.schedule.slots %}checked{% endif %}>
+            <span>{{ slot.label }}</span>
+          </label>
+          {% endfor %}
+        </div>
+      </div>
     </div>
     <div class="org-form-actions">
       <button type="submit" class="btn">{% if editing %}Salvar alterações{% else %}Cadastrar treinador{% endif %}</button>
@@ -312,7 +336,7 @@
     <div class="org-card-head">
       <div>
         <strong>{{ person.name }}</strong>
-        <span>{{ person.sector_name }}{% if person.phone != '—' %} · {{ person.phone }}{% endif %}</span>
+        <span>{{ person.sector_name }}{% if person.schedule_label %} · {{ person.schedule_label }}{% endif %}{% if person.phone != '—' %} · {{ person.phone }}{% endif %}</span>
       </div>
       <div class="org-card-actions">
         <a class="btn btn-secondary btn-small" href="/cadastros?tipo=treinadores&editar={{ person.id }}">Editar</a>

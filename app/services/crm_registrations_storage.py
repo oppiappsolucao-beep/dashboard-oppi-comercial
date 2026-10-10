@@ -22,6 +22,8 @@ logger = logging.getLogger(__name__)
 DEFAULT_TENANT_ID = "default"
 _TZ = ZoneInfo("America/Sao_Paulo")
 _df_lock = threading.Lock()
+_mirror_locks_guard = threading.Lock()
+_mirror_locks: dict[int, threading.Lock] = {}
 _df_cache: pd.DataFrame | None = None
 _df_columns: dict | None = None
 _df_cached_at = 0.0
@@ -29,7 +31,10 @@ _DF_TTL_SEC = 20.0
 
 REGISTRATION_FIELD_KEYS = (
     "empresa",
+    "nome_fantasia",
     "data_abertura",
+    "data_fechamento",
+    "responsavel_legal",
     "capital",
     "cnpj",
     "endereco",
@@ -561,6 +566,9 @@ def delete_registration(
     mirror_sheet: bool = True,
 ) -> None:
     tenant = normalize_text(tenant_id) or DEFAULT_TENANT_ID
+    empresa = ""
+    cnpj = ""
+    raissa_row = 0
     db = SessionLocal()
     try:
         row = (
@@ -572,12 +580,25 @@ def delete_registration(
             .first()
         )
         if row:
+            empresa = normalize_text(row.empresa)
+            cnpj = normalize_text(row.cnpj)
+            extras = _json_loads(row.extras_json, {})
+            try:
+                raissa_row = int(extras.get("raissa_sheet_row") or 0)
+            except (TypeError, ValueError):
+                raissa_row = 0
             db.delete(row)
             db.commit()
     finally:
         db.close()
     invalidate_registrations_cache()
     if mirror_sheet:
+        try:
+            from app.services.raissa_company_sync import remove_company_from_raissa
+
+            remove_company_from_raissa(empresa, cnpj, raissa_row)
+        except Exception:
+            logger.exception("Falha ao tirar empresa da aba Raissa")
         try:
             from app.services.legacy_core import delete_company_from_sheet
 
@@ -739,6 +760,102 @@ def build_prepared_dataframe() -> tuple[pd.DataFrame, dict]:
     return prepared.copy(), dict(columns or {})
 
 
+def _registration_mirror_lock(sheet_row: int) -> threading.Lock:
+    with _mirror_locks_guard:
+        lock = _mirror_locks.get(int(sheet_row))
+        if lock is None:
+            lock = threading.Lock()
+            _mirror_locks[int(sheet_row)] = lock
+        return lock
+
+
+def _sheet_row_outside_grid(error: Exception) -> bool:
+    text = str(error).lower()
+    if "429" in text or "quota" in text:
+        return False
+    return "exceeds grid" in text or "grid limits" in text
+
+
+def _remember_folha1_sheet_row(registration_id: int, folha1_row: int) -> None:
+    if not registration_id or int(folha1_row) <= 1:
+        return
+    db = SessionLocal()
+    try:
+        current = db.get(CrmRegistration, int(registration_id))
+        if current is None:
+            return
+        extras = _json_loads(current.extras_json, {})
+        if int(extras.get("folha1_sheet_row") or 0) == int(folha1_row):
+            return
+        extras["folha1_sheet_row"] = int(folha1_row)
+        current.extras_json = _json_dumps(extras)
+        db.commit()
+    finally:
+        db.close()
+
+
+def _remember_named_sheet_row(sheet_row: int, key: str, value: int) -> None:
+    """Guarda no cadastro a linha real de uma aba. O id interno (sheet_row) não é essa linha."""
+    if not sheet_row or not key or int(value) <= 1:
+        return
+    row = get_registration_by_sheet_row(int(sheet_row))
+    if row is None:
+        return
+    db = SessionLocal()
+    try:
+        current = db.get(CrmRegistration, int(row.id))
+        if current is None:
+            return
+        extras = _json_loads(current.extras_json, {})
+        if int(extras.get(key) or 0) == int(value):
+            return
+        extras[key] = int(value)
+        current.extras_json = _json_dumps(extras)
+        db.commit()
+    finally:
+        db.close()
+
+
+_worksheet_row_count = {"at": 0.0, "count": 0}
+
+
+def _worksheet_accepts_row(row_number: int) -> bool:
+    """False quando a linha passa do tamanho da aba (ex.: id 851 numa aba de 119 linhas)."""
+    if int(row_number) <= 1:
+        return False
+    now = time.time()
+    if now - float(_worksheet_row_count["at"]) < 60 and int(_worksheet_row_count["count"]) > 0:
+        return int(row_number) <= int(_worksheet_row_count["count"])
+    try:
+        from app.config import settings
+        from app.services.legacy_core import _open_worksheet, get_gsheet_client
+
+        if not settings.sheets_configured:
+            return False
+        client = get_gsheet_client()
+        spreadsheet = client.open_by_key(settings.sheet_id)
+        worksheet = _open_worksheet(spreadsheet, settings.worksheet_name)
+        count = int(worksheet.row_count or 0)
+        _worksheet_row_count["at"] = now
+        _worksheet_row_count["count"] = count
+        return int(row_number) <= count
+    except Exception:
+        logger.exception("Não consegui medir a aba da planilha")
+        if int(_worksheet_row_count["count"]) > 0:
+            return int(row_number) <= int(_worksheet_row_count["count"])
+        return False
+
+
+def _access_fields_from_registration(row: CrmRegistration) -> dict[str, str]:
+    actions = _json_loads(row.actions_json, {})
+    payload: dict[str, str] = {}
+    for key in ("email_login_gestor", "email_cobranca", "senha_acesso"):
+        value = normalize_text(actions.get(key))
+        if value:
+            payload[key] = value
+    return payload
+
+
 def _schedule_mirror_registration(sheet_row: int, *, tenant_id: str | None = None) -> None:
     def _run() -> None:
         try:
@@ -759,41 +876,89 @@ def _schedule_mirror_lead_actions(*, tenant_id: str | None = None) -> None:
     threading.Thread(target=_run, daemon=True).start()
 
 
+def _company_match_key(value: str) -> str:
+    return "".join(character for character in normalize_text(value).lower() if character.isalnum())
+
+
+def _folha1_row_for_company(payload: dict) -> int:
+    """Linha da Folha1 que já tem este CNPJ ou este nome. Zero se ainda não existe."""
+    from app.config import settings
+    from app.services.legacy_core import _open_worksheet, get_gsheet_client
+
+    if not settings.sheets_configured:
+        return 0
+    cnpj = "".join(character for character in normalize_text(payload.get("cnpj")) if character.isdigit())
+    name = _company_match_key(payload.get("empresa") or "")
+    if len(cnpj) < 11 and len(name) < 3:
+        return 0
+    client = get_gsheet_client()
+    spreadsheet = client.open_by_key(settings.sheet_id)
+    worksheet = _open_worksheet(spreadsheet, settings.worksheet_name)
+    values = worksheet.get_all_values() or []
+    if len(values) < 2:
+        return 0
+    headers = [normalize_text(cell).lower() for cell in values[0]]
+
+    def column_of(*aliases: str) -> int | None:
+        for alias in aliases:
+            if alias in headers:
+                return headers.index(alias)
+        return None
+
+    cnpj_index = column_of("cnpj")
+    name_index = column_of("nome empresas", "nome da empresa", "empresa", "nome empresa")
+    for offset, raw in enumerate(values[1:], start=2):
+        if cnpj and cnpj_index is not None and cnpj_index < len(raw):
+            cell = "".join(character for character in raw[cnpj_index] if character.isdigit())
+            if cell and cell == cnpj:
+                return offset
+        if name and name_index is not None and name_index < len(raw):
+            if _company_match_key(raw[name_index]) == name:
+                return offset
+    return 0
+
+
 def _mirror_registration_to_folha1(sheet_row: int, *, tenant_id: str | None = None) -> None:
     from app.config import settings
     from app.services.legacy_core import append_company_to_sheet, update_company_in_sheet
 
     if not settings.sheets_configured:
         return
-    row = get_registration_by_sheet_row(sheet_row, tenant_id=tenant_id)
-    if not row:
-        return
-    payload = registration_to_payload(row)
-    # Prefer update; if Folha1 missing this row, append and remount sheet_row.
-    try:
-        update_company_in_sheet(int(sheet_row), payload)
-    except Exception:
-        try:
-            new_row = append_company_to_sheet(payload)
-            if int(new_row) != int(sheet_row):
-                db = SessionLocal()
-                try:
-                    current = (
-                        db.query(CrmRegistration)
-                        .filter(CrmRegistration.id == row.id)
-                        .first()
-                    )
-                    if current:
-                        # Keep local sheet_row stable for URLs; append may create a new Folha1 line.
-                        # Store actual Folha1 row in extras for reconciliation.
-                        extras = _json_loads(current.extras_json, {})
-                        extras["folha1_sheet_row"] = int(new_row)
-                        current.extras_json = _json_dumps(extras)
-                        db.commit()
-                finally:
-                    db.close()
-        except Exception:
-            logger.exception("Não foi possível espelhar cadastro sheet_row=%s", sheet_row)
+    # Vários saves do mesmo cadastro disparam este espelho. Uma empresa = uma linha.
+    with _registration_mirror_lock(int(sheet_row)):
+        row = get_registration_by_sheet_row(sheet_row, tenant_id=tenant_id)
+        if not row:
+            return
+        payload = registration_to_payload(row)
+        payload.update(_access_fields_from_registration(row))
+        extras = payload.get("extras") if isinstance(payload.get("extras"), dict) else {}
+        stored_row = int(extras.get("folha1_sheet_row") or 0)
+        if stored_row > 1 and not _worksheet_accepts_row(stored_row):
+            stored_row = 0
+        if stored_row > 1:
+            target = stored_row
+        elif payload.get("is_filial"):
+            target = 0
+        else:
+            try:
+                target = _folha1_row_for_company(payload)
+            except Exception:
+                logger.exception("Não consegui localizar a empresa na Folha1")
+                target = 0
+        if target > 1:
+            try:
+                update_company_in_sheet(target, payload)
+            except Exception:
+                logger.exception("Não foi possível espelhar cadastro sheet_row=%s", sheet_row)
+                return
+        else:
+            try:
+                target = int(append_company_to_sheet(payload))
+            except Exception:
+                logger.exception("Não foi possível incluir cadastro sheet_row=%s na planilha", sheet_row)
+                return
+        if stored_row != int(target):
+            _remember_folha1_sheet_row(int(row.id), int(target))
 
 
 def _mirror_all_lead_actions(*, tenant_id: str | None = None) -> None:

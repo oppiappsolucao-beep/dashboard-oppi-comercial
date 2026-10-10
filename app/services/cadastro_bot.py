@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from datetime import date
 
 _UFS = {
     "AC", "AL", "AM", "AP", "BA", "CE", "DF", "ES", "GO", "MA", "MG", "MS", "MT",
@@ -28,7 +29,10 @@ _LABELS: tuple[tuple[str, str], ...] = (
     ("data_abertura", "data de abertura"),
     ("data_abertura", "data abertura"),
     ("nome_contato", "nome do contato"),
-    ("nome_contato", "nome do responsavel"),
+    ("responsavel_legal", "responsavel legal"),
+    ("responsavel_legal", "nome do responsavel"),
+    ("nome_fantasia", "nome fantasia"),
+    ("nome_fantasia", "nome de fantasia"),
     ("empresa_matriz", "empresa matriz"),
     ("empresa_matriz", "nome da matriz"),
     ("fantasia", "titulo do estabelecimento"),
@@ -40,12 +44,14 @@ _LABELS: tuple[tuple[str, str], ...] = (
     ("porte", "porte"),
     ("empresa", "razao social"),
     ("empresa", "nome da empresa"),
-    ("empresa", "nome fantasia"),
     ("telefone_alternativo", "telefone alternativo"),
     ("telefone_alternativo", "celular alternativo"),
     ("telefone_fixo", "telefone fixo"),
+    ("telefone_b2b", "celular whatsapp"),
     ("telefone_b2b", "whatsapp"),
     ("telefone_b2b", "celular"),
+    ("senha_acesso", "senha de acesso"),
+    ("senha_acesso", "senha"),
     ("endereco_complemento", "complemento"),
     ("endereco_numero", "numero"),
     ("is_filial", "e filial"),
@@ -65,10 +71,10 @@ _LABELS: tuple[tuple[str, str], ...] = (
     ("site", "site"),
     ("email", "e-mail"),
     ("email", "email"),
-    ("telefone_b2b", "telefone"),
-    ("telefone_b2b", "fone"),
+    ("telefone_card", "telefone"),
+    ("telefone_card", "fone"),
     ("nome_contato", "contato"),
-    ("nome_contato", "responsavel"),
+    ("responsavel_legal", "responsavel"),
     ("bairro", "bairro distrito"),
     ("cep", "cep"),
     ("endereco", "logradouro"),
@@ -111,6 +117,9 @@ _FIELD_LABELS = {
     "site": "Site",
     "email": "E-mail",
     "telefone_b2b": "WhatsApp",
+    "nome_fantasia": "Nome fantasia",
+    "data_fechamento": "Data de fechamento",
+    "responsavel_legal": "Responsável legal",
     "nome_contato": "Nome do contato",
     "telefone_fixo": "Telefone fixo",
     "telefone_alternativo": "Telefone alternativo",
@@ -129,6 +138,8 @@ _FIELD_LABELS = {
     "telefone_socio_1": "Telefone do sócio 1",
     "cpf_socio_1": "CPF do sócio 1",
     "email_socio_1": "E-mail do sócio 1",
+    "email_login_gestor": "E-mail de login",
+    "senha_acesso": "Senha de acesso",
     "socio_2": "Sócio 2",
     "telefone_socio_2": "Telefone do sócio 2",
     "cpf_socio_2": "CPF do sócio 2",
@@ -209,7 +220,7 @@ def _yes(value: str) -> bool:
 
 
 def _match_label(label: str) -> str:
-    plain = _plain(label).rstrip(" .").replace("/", " ")
+    plain = " ".join(_plain(label).rstrip(" .").replace("/", " ").split())
     if not plain:
         return ""
     best = ""
@@ -337,18 +348,29 @@ def _prefer_name(current: str, new: str) -> str:
     return current
 
 
-def _put_phone(fields: dict[str, str], value: str, *, alternate: bool = False) -> None:
+def _put_phone(fields: dict[str, str], value: str, *, alternate: bool = False, preferred: bool = False) -> None:
     found = _PHONE_RE.search(value or "")
     phone = _format_phone(found.group(0) if found else value)
     digits = _digits(phone)
     if len(digits) not in {10, 11}:
         return
-    current = _digits(fields.get("telefone_b2b", ""))
-    if not alternate and not current:
+    current = fields.get("telefone_b2b", "")
+    current_digits = _digits(current)
+    if preferred:
+        if current and current_digits != digits:
+            if not fields.get("telefone_fixo"):
+                fields["telefone_fixo"] = current
+            elif not fields.get("telefone_alternativo"):
+                fields["telefone_alternativo"] = current
         fields["telefone_b2b"] = phone
         return
-    if digits != current and not fields.get("telefone_alternativo"):
-        fields["telefone_alternativo"] = phone
+    if alternate or current:
+        if digits != current_digits and not fields.get("telefone_fixo"):
+            fields["telefone_fixo"] = phone
+        elif digits != current_digits and not fields.get("telefone_alternativo"):
+            fields["telefone_alternativo"] = phone
+        return
+    fields["telefone_b2b"] = phone
 
 
 def _apply_field(
@@ -375,15 +397,33 @@ def _apply_field(
         return
     if field == "fantasia":
         extra["fantasia"] = value
+        if not _blank(value):
+            fields["nome_fantasia"] = value
         return
     if field == "nome_empresarial":
         extra["nome_empresarial"] = value
+        fields["empresa"] = value
+        return
+    if field == "senha_acesso":
+        fields["senha_acesso"] = value.strip()
+        return
+    if field == "telefone_card":
+        _put_phone(fields, value)
         return
     if field == "porte":
         extra["notes"].append(f"Porte: {value}")
         return
     if field == "atividade":
-        extra["notes"].append(f"Atividade: {_activity_text(value)}")
+        extra["atividade"] = _activity_text(value)
+        extra["notes"].append(f"Atividade: {extra['atividade']}")
+        return
+    if field == "responsavel_legal":
+        fields["responsavel_legal"] = value
+        _assign_partner(partners, "nome", value)
+        return
+    if field == "nome_fantasia":
+        fields["nome_fantasia"] = value
+        extra["fantasia"] = value
         return
     if field == "situacao":
         extra["notes"].append(f"Situação cadastral: {value}")
@@ -394,7 +434,7 @@ def _apply_field(
         return
     if field in {"telefone_b2b", "telefone_fixo", "telefone_alternativo"}:
         if field == "telefone_b2b":
-            _put_phone(fields, value)
+            _put_phone(fields, value, preferred=True)
         elif field not in fields:
             found = _PHONE_RE.search(value)
             fields[field] = _format_phone(found.group(0) if found else value)
@@ -478,6 +518,30 @@ def formulario_dados_gerais() -> dict:
     }
 
 
+def ensure_login_fields(fields: dict) -> None:
+    """Copia o e-mail da empresa para o login e gera a senha quando ainda estiver vazia."""
+    email = str(
+        fields.get("email")
+        or fields.get("email_socio_1")
+        or fields.get("email_login_gestor")
+        or ""
+    ).strip()
+    if email:
+        for key in (
+            "email",
+            "email_socio_1",
+            "email_login_gestor",
+            "email_confirmacao_admin",
+            "email_cobranca",
+        ):
+            if not str(fields.get(key) or "").strip():
+                fields[key] = email
+    if not str(fields.get("senha_acesso") or "").strip():
+        from app.services.cnpj_lookup import generate_access_password
+
+        fields["senha_acesso"] = generate_access_password()
+
+
 def read_dados_gerais(text: str, niche_options: list[str] | None = None) -> dict:
     """Extrai Dados gerais. Não devolve serviço, valor nem forma de pagamento."""
     raw = str(text or "").replace("\r\n", "\n").replace("\r", "\n").strip()
@@ -542,12 +606,6 @@ def read_dados_gerais(text: str, niche_options: list[str] | None = None) -> dict
 
     fantasia = extra["fantasia"]
     legal = extra["nome_empresarial"]
-    if fantasia and not _blank(fantasia):
-        fields["empresa"] = fantasia
-    elif legal and "empresa" not in fields:
-        fields["empresa"] = legal
-    if legal and _plain(legal) != _plain(fields.get("empresa", "")):
-        fields["nome_contato"] = _prefer_name(fields.get("nome_contato", ""), legal)
 
     role_next = False
     for line in loose:
@@ -560,7 +618,8 @@ def read_dados_gerais(text: str, niche_options: list[str] | None = None) -> dict
         if _EMAIL_RE.fullmatch(line.strip()):
             continue
         if _looks_password(line):
-            extra["notes"].append(f"Senha informada: {line.strip()}")
+            if not fields.get("senha_acesso"):
+                fields["senha_acesso"] = line.strip()
             continue
         if _PHONE_RE.search(line):
             _put_phone(fields, line, alternate=True)
@@ -572,6 +631,11 @@ def read_dados_gerais(text: str, niche_options: list[str] | None = None) -> dict
             elif "empresa" not in fields:
                 fields["empresa"] = line.strip()
             role_next = False
+
+    if legal:
+        fields["empresa"] = legal
+    if fantasia and not _blank(fantasia):
+        fields["nome_fantasia"] = fantasia
 
     if extra["notes"]:
         note = ". ".join(extra["notes"])
@@ -589,6 +653,20 @@ def read_dados_gerais(text: str, niche_options: list[str] | None = None) -> dict
     partner_count = max((len(items) for items in partners.values()), default=0)
     if partner_count:
         fields["quantidade_socios"] = str(min(partner_count, 3))
+    if fields.get("responsavel_legal") and not fields.get("socio_1"):
+        fields["socio_1"] = fields["responsavel_legal"]
+        fields["quantidade_socios"] = fields.get("quantidade_socios") or "1"
+    if fields.get("socio_1") and not fields.get("responsavel_legal"):
+        fields["responsavel_legal"] = fields["socio_1"]
+    if extra.get("atividade") and not fields.get("nicho"):
+        from app.services.cnpj_lookup import niche_from_cnae
+
+        niche = niche_from_cnae("", extra.get("atividade") or "")
+        if niche:
+            fields["nicho"] = niche
+    if not fields.get("data_fechamento"):
+        fields["data_fechamento"] = date.today().isoformat()
+    ensure_login_fields(fields)
 
     filled = [label for key, label in _FIELD_LABELS.items() if fields.get(key)]
     if not filled:

@@ -7,7 +7,16 @@ from typing import Any
 from urllib.parse import quote
 from zoneinfo import ZoneInfo
 
-from app.services.asaas_client import AsaasError, fetch_dashboard_payload, is_configured
+from app.services.asaas_client import (
+    AsaasError,
+    fetch_account_balance,
+    fetch_dashboard_payload,
+    fetch_payments_due,
+    fetch_payments_received,
+    fetch_statement,
+    is_configured,
+)
+from app.services.company_payables import list_payables, list_suppliers, payable_calendar, total_launched
 from app.services.internal_finance import build_internal_forecast, resolve_period
 from app.services.legacy_core import (
     normalize_cnpj_for_duplicate,
@@ -30,6 +39,39 @@ TAB_VISAO = "visao"
 TAB_FATURAS = "faturas"
 TAB_RECORRENCIAS = "recorrencias"
 TAB_ATRASO = "atraso"
+TAB_ENTRADAS = "entradas"
+TAB_PAGAR = "pagar"
+
+_MESES = (
+    "",
+    "Janeiro",
+    "Fevereiro",
+    "Março",
+    "Abril",
+    "Maio",
+    "Junho",
+    "Julho",
+    "Agosto",
+    "Setembro",
+    "Outubro",
+    "Novembro",
+    "Dezembro",
+)
+
+ENTRADA_TIPOS = {
+    "PAYMENT_RECEIVED": "Cobrança recebida",
+    "PIX_TRANSACTION_CREDIT": "Pix recebido",
+    "TRANSFER": "Transferência recebida",
+    "TRANSFER_REVERSAL": "Estorno de transferência",
+    "PAYMENT_REFUND_CANCELLED": "Cancelamento de estorno",
+    "RECEIVABLE_ANTICIPATION_GROSS_CREDIT": "Antecipação de recebíveis",
+    "RECEIVABLE_ANTICIPATION_CREDIT": "Antecipação",
+    "PAYMENT_CUSTODY_BLOCK_REVERSAL": "Liberação de saldo",
+    "INTERNAL_TRANSFER_CREDIT": "Transferência interna",
+    "PAYMENT_FEE_REVERSAL": "Estorno de tarifa",
+    "CHARGEBACK_REVERSAL": "Estorno de chargeback",
+    "PROMOTIONAL_CODE_CREDIT": "Crédito promocional",
+}
 
 
 def _today() -> date:
@@ -181,6 +223,367 @@ def _match_crm(customer: dict | None, crm_rows: list[dict[str, Any]]) -> dict[st
             if empresa and (empresa == name or name in empresa or empresa in name):
                 return row
     return None
+
+
+def month_label(start: date, end: date) -> str:
+    if start.year == end.year and start.month == end.month and start.day == 1:
+        last = (end.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
+        if end == last:
+            return f"{_MESES[start.month]} {start.year}"
+    return f"{format_date_br(start)} a {format_date_br(end)}"
+
+
+def entrada_type_label(kind: str) -> str:
+    key = normalize_text(kind).upper()
+    if key in ENTRADA_TIPOS:
+        return ENTRADA_TIPOS[key]
+    if not key:
+        return "Entrada"
+    return key.replace("_", " ").capitalize()
+
+
+def map_entradas(
+    transactions: list[dict] | None,
+    payment_index: dict[str, dict] | None = None,
+) -> list[dict[str, Any]]:
+    """Créditos do extrato Asaas — o que entrou na conta e aparece no banco."""
+    payment_index = payment_index or {}
+    rows = []
+    for item in transactions or []:
+        if not isinstance(item, dict):
+            continue
+        try:
+            value = float(item.get("value") or 0)
+        except (TypeError, ValueError):
+            continue
+        if value <= 0:
+            continue
+        when = _parse_date(item.get("date"))
+        payment_id = normalize_text(item.get("paymentId"))
+        linked = payment_index.get(payment_id) if payment_id else None
+        tipo = entrada_type_label(item.get("type") or "")
+        description = normalize_text(item.get("description"))
+        if linked:
+            cliente = normalize_text(linked.get("cliente"))
+            servico = normalize_text(linked.get("servico"))
+            description = " — ".join(part for part in (cliente, servico) if part) or description
+        rows.append(
+            {
+                "id": normalize_text(item.get("id")),
+                "date": when,
+                "date_label": format_date_br(when),
+                "description": description or tipo,
+                "tipo": tipo,
+                "valor": value,
+                "valor_label": format_brl(value),
+                "payment_id": payment_id,
+            }
+        )
+    rows.sort(key=lambda row: row.get("date") or date.min, reverse=True)
+    return rows
+
+
+def _boleto_row(payment: dict, today: date) -> dict[str, Any] | None:
+    if normalize_text(payment.get("billingType")).upper() != "BOLETO":
+        return None
+    classified = classify_payment(payment, today=today)
+    if classified["key"] == "cancelado":
+        return None
+    try:
+        value = float(payment.get("value") or 0)
+    except (TypeError, ValueError):
+        value = 0.0
+    due = _parse_date(payment.get("dueDate"))
+    return {
+        "cliente": _service_name(payment),
+        "valor": value,
+        "valor_label": format_brl(value),
+        "vencimento": due,
+        "vencimento_label": format_date_br(due),
+        "status_key": classified["key"],
+        "status_label": classified["label"],
+        "status_tone": classified["tone"],
+        "invoice_url": payment.get("invoiceUrl") or payment.get("bankSlipUrl") or "",
+    }
+
+
+def summarize_boletos(hoje_raw: list[dict] | None, mes_raw: list[dict] | None, today: date) -> dict[str, Any]:
+    """Conta boletos do Asaas que vencem hoje e os que vencem no mês."""
+    hoje = [row for row in (_boleto_row(item, today) for item in (hoje_raw or []) if isinstance(item, dict)) if row]
+    mes = [row for row in (_boleto_row(item, today) for item in (mes_raw or []) if isinstance(item, dict)) if row]
+    hoje.sort(key=lambda row: row["valor"], reverse=True)
+    mes.sort(key=lambda row: (row.get("vencimento") or date.min, row["cliente"]))
+    pagos = [row for row in mes if row["status_key"] == "pago"]
+    abertos = [row for row in mes if row["status_key"] != "pago"]
+
+    def _sum(rows: list[dict]) -> float:
+        return sum(float(row["valor"]) for row in rows)
+
+    hoje_total = _sum(hoje)
+    mes_total = _sum(mes)
+    pagos_total = _sum(pagos)
+    abertos_total = _sum(abertos)
+    return {
+        "error": "",
+        "month_label": f"{_MESES[today.month]} {today.year}",
+        "hoje_n": len(hoje),
+        "hoje_valor_label": format_brl(hoje_total),
+        "hoje": hoje,
+        "mes_n": len(mes),
+        "mes_valor_label": format_brl(mes_total),
+        "mes_pagos_n": len(pagos),
+        "mes_pagos_label": format_brl(pagos_total),
+        "mes_abertos_n": len(abertos),
+        "mes_abertos_label": format_brl(abertos_total),
+        "mes": mes,
+        "entraram": [],
+        "entraram_n": 0,
+        "entraram_valor_label": format_brl(0),
+        "entradas_n": 0,
+        "entradas_valor_label": format_brl(0),
+        "entradas_outras_n": 0,
+        "entradas_outras_label": format_brl(0),
+        "entraram_aviso": "",
+    }
+
+
+def received_entries(payments: list[dict] | None, start: date, end: date, today: date) -> list[dict[str, Any]]:
+    """Tudo que foi pago no período, pela data em que entrou."""
+    rows = []
+    for payment in payments or []:
+        if not isinstance(payment, dict):
+            continue
+        classified = classify_payment(payment, today=today)
+        if classified["key"] != "pago":
+            continue
+        paid_on = _parse_date(
+            payment.get("paymentDate") or payment.get("clientPaymentDate") or payment.get("confirmedDate")
+        )
+        if not paid_on or paid_on < start or paid_on > end:
+            continue
+        try:
+            value = float(payment.get("value") or 0)
+        except (TypeError, ValueError):
+            value = 0.0
+        billing = normalize_text(payment.get("billingType")).upper()
+        due = _parse_date(payment.get("dueDate"))
+        rows.append(
+            {
+                "cliente": _service_name(payment),
+                "valor": value,
+                "valor_label": format_brl(value),
+                "pago_em": paid_on,
+                "pago_label": format_date_br(paid_on),
+                "vencimento_label": format_date_br(due),
+                "billing_type": billing,
+                "forma": billing_label(billing),
+                "status_label": classified["label"],
+                "status_tone": classified["tone"],
+                "invoice_url": payment.get("invoiceUrl") or payment.get("bankSlipUrl") or "",
+            }
+        )
+    rows.sort(key=lambda row: (row.get("pago_em") or date.min, row["cliente"]), reverse=True)
+    return rows
+
+
+def load_boleto_entrada(today: date, start: date, end: date, *, force: bool = False) -> dict[str, Any]:
+    blank = summarize_boletos([], [], today)
+    blank["month_label"] = month_label(start, end)
+    if not is_configured():
+        blank["error"] = "Configure ASAAS_API_KEY para ler os boletos."
+        return blank
+    try:
+        hoje_raw = fetch_payments_due(today, today, billing_type="BOLETO", force=force)
+        mes_raw = fetch_payments_due(start, end, billing_type="BOLETO", force=force)
+    except AsaasError as exc:
+        blank["error"] = str(exc)
+        return blank
+    except Exception:
+        logger.exception("Falha ao ler boletos do Asaas")
+        blank["error"] = "Não foi possível ler os boletos do Asaas agora."
+        return blank
+    result = summarize_boletos(hoje_raw, mes_raw, today)
+    result["month_label"] = month_label(start, end)
+    return _attach_received(result, start, end, today, force=force)
+
+
+def _attach_received(result: dict[str, Any], start: date, end: date, today: date, *, force: bool) -> dict[str, Any]:
+    try:
+        raw, truncated = fetch_payments_received(start, end, force=force)
+    except AsaasError as exc:
+        result["entraram_aviso"] = str(exc)
+        return result
+    except Exception:
+        logger.exception("Falha ao validar entradas do Asaas")
+        result["entraram_aviso"] = "Não foi possível validar os boletos que entraram."
+        return result
+    rows = received_entries(raw, start, end, today)
+    boletos = [row for row in rows if row.get("billing_type") == "BOLETO"]
+    outras = [row for row in rows if row.get("billing_type") != "BOLETO"]
+
+    def _sum(items: list[dict]) -> float:
+        return sum(float(item.get("valor") or 0) for item in items)
+
+    result["entraram"] = boletos
+    result["entraram_n"] = len(boletos)
+    result["entraram_valor_label"] = format_brl(_sum(boletos))
+    result["entradas_n"] = len(rows)
+    result["entradas_valor_label"] = format_brl(_sum(rows))
+    result["entradas_outras_n"] = len(outras)
+    result["entradas_outras_label"] = format_brl(_sum(outras))
+    if truncated:
+        result["entraram_aviso"] = "A consulta passou do limite. O total pode estar incompleto."
+    return result
+
+
+def apply_boleto_status(boletos: dict[str, Any], status: str) -> dict[str, Any]:
+    """Filtra os boletos do período pelo status escolhido."""
+    key = normalize_text(status).lower()
+    aliases = {
+        "a_vencer": "receber",
+        "avencer": "receber",
+        "vencehoje": "vence_hoje",
+    }
+    key = aliases.get(key, key)
+    out = dict(boletos)
+    out["status"] = key
+    if not key:
+        return out
+    rows = [row for row in (boletos.get("mes") or []) if row.get("status_key") == key]
+    pagos = [row for row in rows if row.get("status_key") == "pago"]
+    abertos = [row for row in rows if row.get("status_key") != "pago"]
+
+    def _sum(items: list[dict]) -> float:
+        return sum(float(item.get("valor") or 0) for item in items)
+
+    out["mes"] = rows
+    out["mes_n"] = len(rows)
+    out["mes_valor_label"] = format_brl(_sum(rows))
+    out["mes_pagos_n"] = len(pagos)
+    out["mes_pagos_label"] = format_brl(_sum(pagos))
+    out["mes_abertos_n"] = len(abertos)
+    out["mes_abertos_label"] = format_brl(_sum(abertos))
+    return out
+
+
+def _payables_view(start: date, end: date, search: str, status: str = "", today: date | None = None) -> dict[str, Any]:
+    today = today or _today()
+    rows = list_payables(start, end, today)
+    atrasados = [row for row in rows if row.get("status") == "atrasado"]
+    atraso_total = sum(float(row["amount"]) for row in atrasados)
+    saida = sum(float(row["amount"]) for row in rows)
+    periodo_a_pagar = sum(float(row["amount"]) for row in rows if not row.get("paid"))
+    periodo_pago = sum(float(row["amount"]) for row in rows if row.get("paid"))
+    needle = normalize_text(search).lower()
+    if needle:
+        rows = [
+            row for row in rows
+            if needle in f"{row['description']} {row.get('supplier') or ''} {row.get('category_label') or ''}".lower()
+        ]
+    status_key = normalize_text(status).lower()
+    if status_key in {"pago", "atrasado", "a_pagar"}:
+        rows = [row for row in rows if row.get("status") == status_key]
+    calendar = payable_calendar(rows, start, end)
+    listed = []
+    for row in rows:
+        listed.append(
+            {
+                **row,
+                "valor_label": format_brl(row["amount"]),
+                "due_label": format_date_br(row["due"]),
+                "paid_label": format_date_br(row["paid_on"]) if row.get("paid_on") else "",
+                "status_label": {"pago": "Pago", "atrasado": "Atrasado", "a_pagar": "A pagar"}.get(row.get("status"), "A pagar"),
+                "status_tone": {"pago": "green", "atrasado": "red", "a_pagar": "blue"}.get(row.get("status"), "blue"),
+            }
+        )
+    dividas = total_launched()
+    return {
+        "rows": listed,
+        "days": [
+            {
+                **day,
+                "a_pagar_label": format_brl(day["a_pagar"]) if day["a_pagar"] else "",
+                "pago_label": format_brl(day["pago"]) if day["pago"] else "",
+                "items": [
+                    {
+                        **item,
+                        "valor_label": format_brl(item["amount"]),
+                        "status_label": {"pago": "Pago", "atrasado": "Atrasado", "a_pagar": "A pagar"}.get(item.get("status"), "A pagar"),
+                        "status_tone": {"pago": "green", "atrasado": "red", "a_pagar": "blue"}.get(item.get("status"), "blue"),
+                    }
+                    for item in day["items"]
+                ],
+            }
+            for day in calendar["days"]
+        ],
+        "show_grid": calendar["show_grid"],
+        "a_pagar": periodo_a_pagar,
+        "pago": periodo_pago,
+        "aberto": periodo_a_pagar,
+        "a_pagar_label": format_brl(periodo_a_pagar),
+        "pago_label": format_brl(periodo_pago),
+        "aberto_label": format_brl(periodo_a_pagar),
+        "lista_a_pagar_label": format_brl(sum(float(row["amount"]) for row in rows if not row.get("paid"))),
+        "lista_pago_label": format_brl(sum(float(row["amount"]) for row in rows if row.get("paid"))),
+        "atrasado_n": len(atrasados),
+        "atrasado_label": format_brl(atraso_total),
+        "saida": saida,
+        "saida_label": format_brl(saida),
+        "entrada": 0.0,
+        "entrada_label": format_brl(0),
+        "a_receber": 0.0,
+        "a_receber_label": format_brl(0),
+        "dividas": dividas,
+        "dividas_label": format_brl(dividas),
+        "saldo": 0.0,
+        "saldo_label": format_brl(0),
+        "compare_note": "",
+        "suppliers": list_suppliers(),
+        "month_label": month_label(start, end),
+    }
+
+
+def attach_cash_compare(payables: dict[str, Any], start: date, end: date, today: date, *, force: bool = False) -> dict[str, Any]:
+    """Compara o que entrou no Asaas com a saída das contas do período."""
+    saida = float(payables.get("saida") or 0)
+    entrada = 0.0
+    a_receber = 0.0
+    note = ""
+    if not is_configured():
+        note = "Asaas não configurado para ler a entrada."
+    else:
+        try:
+            raw, _truncated = fetch_payments_received(start, end, force=force)
+            entrada = sum(float(row["valor"]) for row in received_entries(raw, start, end, today))
+        except AsaasError as exc:
+            note = str(exc)
+        except Exception:
+            logger.exception("Falha ao comparar entrada e saída")
+            note = "Não foi possível ler as entradas do Asaas."
+        try:
+            due_raw = fetch_payments_due(start, end, billing_type="BOLETO", force=force)
+            abertos = [
+                row for row in (summarize_boletos([], due_raw, today).get("mes") or [])
+                if row.get("status_key") != "pago"
+            ]
+            a_receber = sum(float(row["valor"]) for row in abertos)
+        except AsaasError as exc:
+            note = note or str(exc)
+        except Exception:
+            logger.exception("Falha ao ler o valor a receber")
+            note = note or "Não foi possível ler o valor a receber."
+    saldo = entrada - saida
+    dividas = total_launched()
+    payables["entrada"] = entrada
+    payables["entrada_label"] = format_brl(entrada)
+    payables["a_receber"] = a_receber
+    payables["a_receber_label"] = format_brl(a_receber)
+    payables["dividas"] = dividas
+    payables["dividas_label"] = format_brl(dividas)
+    payables["saldo"] = saldo
+    payables["saldo_label"] = format_brl(saldo)
+    payables["compare_note"] = note
+    return payables
 
 
 def _wa_link(phone: str, text: str) -> str:
@@ -336,10 +739,28 @@ def build_financeiro_context(params: dict | None = None, *, force_sync: bool = F
         "period_end": period_end.isoformat(),
     }
     tab = normalize_text(params.get("tab")).lower() or TAB_VISAO
-    if tab not in {TAB_VISAO, TAB_FATURAS, TAB_RECORRENCIAS, TAB_ATRASO}:
+    if tab not in {TAB_VISAO, TAB_FATURAS, TAB_RECORRENCIAS, TAB_ATRASO, TAB_ENTRADAS, TAB_PAGAR}:
         tab = TAB_VISAO
 
     forecast = build_internal_forecast(period_start, period_end)
+    payable_status = normalize_text(params.get("status")) if tab == TAB_PAGAR else ""
+    payables = _payables_view(
+        period_start,
+        period_end,
+        normalize_text(params.get("search")),
+        payable_status,
+        today,
+    )
+    if tab == TAB_PAGAR:
+        payables = attach_cash_compare(payables, period_start, period_end, today, force=force_sync)
+    boletos = (
+        apply_boleto_status(
+            load_boleto_entrada(today, period_start, period_end, force=force_sync),
+            normalize_text(params.get("status")),
+        )
+        if tab == TAB_ENTRADAS
+        else summarize_boletos([], [], today)
+    )
     empty = {
         "active_page": "financeiro",
         "asaas_configured": is_configured(),
@@ -352,6 +773,12 @@ def build_financeiro_context(params: dict | None = None, *, force_sync: bool = F
         "saldo_count": 0,
         "subscriptions": [],
         "overdue_clients": [],
+        "entradas": [],
+        "entradas_total": 0.0,
+        "entradas_total_label": format_brl(0),
+        "entradas_error": "",
+        "payables": payables,
+        "boletos": boletos,
         "tab": tab,
         "filters": params,
         "status_options": [
@@ -375,19 +802,22 @@ def build_financeiro_context(params: dict | None = None, *, force_sync: bool = F
     if not is_configured():
         empty["kpi_cards"] = _kpi_cards(0, 0, 0, 0, 0, 0, 0, 0)
         empty["asaas_error"] = "Configure ASAAS_API_KEY no Easypanel para puxar as cobranças."
-        return empty
+        empty["entradas_error"] = empty["asaas_error"]
+        return _with_tab_kpis(empty, tab)
 
     try:
         payload = fetch_dashboard_payload(force=force_sync)
     except AsaasError as exc:
         empty["kpi_cards"] = _kpi_cards(0, 0, 0, 0, 0, 0, 0, 0)
         empty["asaas_error"] = str(exc)
-        return empty
+        empty["entradas_error"] = str(exc)
+        return _with_tab_kpis(empty, tab)
     except Exception:
         logger.exception("Falha inesperada no Asaas")
         empty["kpi_cards"] = _kpi_cards(0, 0, 0, 0, 0, 0, 0, 0)
         empty["asaas_error"] = "Não foi possível sincronizar o Asaas agora."
-        return empty
+        empty["entradas_error"] = empty["asaas_error"]
+        return _with_tab_kpis(empty, tab)
 
     customers = {
         normalize_text(row.get("id")): row
@@ -501,6 +931,16 @@ def build_financeiro_context(params: dict | None = None, *, force_sync: bool = F
             len(proximos),
             inadimplencia,
         )
+    if tab == TAB_ENTRADAS:
+        entradas, entradas_error, _ = _load_entradas(
+            period_start,
+            period_end,
+            invoices=invoices,
+            search=normalize_text(params.get("search")),
+            force=force_sync,
+        )
+    else:
+        entradas, entradas_error = [], ""
     empty.update({
         "kpi_cards": asaas_cards,
         "invoices": listed,
@@ -511,8 +951,118 @@ def build_financeiro_context(params: dict | None = None, *, force_sync: bool = F
         "overdue_clients": overdue_clients,
         "inadimplencia": inadimplencia,
         "asaas_error": "",
+        "entradas": entradas,
+        "entradas_total": sum(row["valor"] for row in entradas),
+        "entradas_total_label": format_brl(sum(row["valor"] for row in entradas)),
+        "entradas_error": entradas_error,
     })
-    return empty
+    return _with_tab_kpis(empty, tab)
+
+
+def _load_entradas(
+    start: date,
+    end: date,
+    *,
+    invoices: list[dict],
+    search: str,
+    force: bool,
+) -> tuple[list[dict], str, str]:
+    saldo_label = ""
+    try:
+        balance = fetch_account_balance(force=force)
+        if balance is not None:
+            saldo_label = format_brl(balance)
+    except AsaasError as exc:
+        logger.warning("Saldo Asaas indisponível: %s", exc)
+    except Exception:
+        logger.exception("Falha ao ler saldo Asaas")
+    try:
+        statement = fetch_statement(start, end, force=force)
+    except AsaasError as exc:
+        return [], str(exc), saldo_label
+    except Exception:
+        logger.exception("Falha ao ler extrato Asaas")
+        return [], "Não foi possível ler as entradas do Asaas agora.", saldo_label
+    index = {normalize_text(row.get("id")): row for row in invoices if normalize_text(row.get("id"))}
+    rows = [
+        row for row in map_entradas(statement, index)
+        if (not row.get("date")) or start <= row["date"] <= end
+    ]
+    needle = normalize_text(search).lower()
+    if needle:
+        rows = [
+            row for row in rows
+            if needle in f"{row['description']} {row['tipo']}".lower()
+        ]
+    return rows, "", saldo_label
+
+
+def _with_tab_kpis(ctx: dict[str, Any], tab: str) -> dict[str, Any]:
+    if tab == TAB_ENTRADAS:
+        boletos = ctx.get("boletos") or {}
+        ctx["kpi_cards"] = [
+            {
+                "label": "Boletos vencem hoje",
+                "value": str(boletos.get("hoje_n") or 0),
+                "note": boletos.get("hoje_valor_label") or format_brl(0),
+                "tone": "orange",
+                "icon": "!",
+            },
+            {
+                "label": "Boletos que entraram",
+                "value": str(boletos.get("entraram_n") or 0),
+                "note": boletos.get("entraram_valor_label") or format_brl(0),
+                "tone": "green",
+                "icon": "✓",
+            },
+            {
+                "label": "Todas as entradas",
+                "value": str(boletos.get("entradas_n") or 0),
+                "note": boletos.get("entradas_valor_label") or format_brl(0),
+                "tone": "purple",
+                "icon": "↓",
+            },
+            {
+                "label": "Ainda entram",
+                "value": str(boletos.get("mes_abertos_n") or 0),
+                "note": boletos.get("mes_abertos_label") or format_brl(0),
+                "tone": "blue",
+                "icon": "📅",
+            },
+        ]
+    elif tab == TAB_PAGAR:
+        payables = ctx.get("payables") or {}
+        ctx["kpi_cards"] = [
+            {
+                "label": "A pagar",
+                "value": payables.get("a_pagar_label") or format_brl(0),
+                "note": "Em aberto no período, incluindo as atrasadas",
+                "tone": "orange",
+                "icon": "!",
+            },
+            {
+                "label": "Pago",
+                "value": payables.get("pago_label") or format_brl(0),
+                "note": "Contas quitadas no período",
+                "tone": "green",
+                "icon": "✓",
+            },
+            {
+                "label": "Atrasado",
+                "value": payables.get("atrasado_label") or format_brl(0),
+                "note": f"{payables.get('atrasado_n') or 0} conta(s) vencida(s)",
+                "tone": "orange",
+                "icon": "!",
+            },
+            {
+                "label": "Entrada − saída",
+                "value": payables.get("saldo_label") or format_brl(0),
+                "note": f"Entrou {payables.get('entrada_label') or format_brl(0)} · saiu {payables.get('saida_label') or format_brl(0)}",
+                "tone": "purple",
+                "icon": "↔",
+            },
+        ]
+    return ctx
 
 
 def _kpi_cards(

@@ -117,6 +117,103 @@ class CadastroBillingMappingTest(unittest.TestCase):
         self.assertEqual(plan["valor"], "R$ 59,90")
 
 
+class BoletosEntradaTest(unittest.TestCase):
+    def test_conta_hoje_e_mes_sem_cancelado(self):
+        from app.services.financeiro import summarize_boletos
+
+        today = date(2026, 10, 9)
+        hoje = [
+            {"billingType": "BOLETO", "status": "PENDING", "value": 59.9, "dueDate": "2026-10-09", "description": "Oppi RH — Alfa"},
+            {"billingType": "BOLETO", "status": "DELETED", "value": 10, "dueDate": "2026-10-09", "description": "Cancelado"},
+            {"billingType": "PIX", "status": "PENDING", "value": 20, "dueDate": "2026-10-09", "description": "Pix"},
+        ]
+        mes = hoje + [
+            {"billingType": "BOLETO", "status": "RECEIVED", "value": 49.9, "dueDate": "2026-10-03", "description": "Oppi RH — Beta"},
+            {"billingType": "BOLETO", "status": "OVERDUE", "value": 119.8, "dueDate": "2026-10-01", "description": "Oppi RH — Gama"},
+        ]
+        out = summarize_boletos(hoje, mes, today)
+        self.assertEqual(out["hoje_n"], 1)
+        self.assertEqual(out["hoje_valor_label"], "R$ 59,90")
+        self.assertEqual(out["mes_n"], 3)
+        self.assertEqual(out["mes_pagos_n"], 1)
+        self.assertEqual(out["mes_abertos_n"], 2)
+        self.assertEqual(out["month_label"], "Outubro 2026")
+
+    def test_boletos_que_entraram_usam_data_de_pagamento(self):
+        from app.services.financeiro import received_entries
+
+        rows = received_entries(
+            [
+                {"id": "1", "billingType": "BOLETO", "status": "RECEIVED", "value": 59.9, "paymentDate": "2026-10-04", "dueDate": "2026-09-10", "description": "Oppi RH — Alfa"},
+                {"id": "2", "billingType": "PIX", "status": "RECEIVED", "value": 100, "paymentDate": "2026-10-05", "description": "Pix avulso"},
+                {"id": "3", "billingType": "BOLETO", "status": "RECEIVED", "value": 49.9, "paymentDate": "2026-09-28", "description": "Mês anterior"},
+                {"id": "4", "billingType": "BOLETO", "status": "PENDING", "value": 10, "dueDate": "2026-10-09", "description": "Ainda aberto"},
+            ],
+            date(2026, 10, 1),
+            date(2026, 10, 31),
+            date(2026, 10, 9),
+        )
+        boletos = [row for row in rows if row["billing_type"] == "BOLETO"]
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(len(boletos), 1)
+        self.assertEqual(boletos[0]["cliente"], "Oppi RH — Alfa")
+        self.assertEqual(boletos[0]["pago_label"], "04/10/2026")
+
+
+class EntradasEContasTest(unittest.TestCase):
+    def test_extrato_ignora_tarifa_e_saida(self):
+        from app.services.financeiro import map_entradas
+
+        rows = map_entradas(
+            [
+                {
+                    "id": "ft_1",
+                    "type": "PAYMENT_RECEIVED",
+                    "value": 59.9,
+                    "date": "2026-10-07",
+                    "paymentId": "pay_1",
+                },
+                {"id": "ft_2", "type": "PAYMENT_FEE", "value": -2.99, "date": "2026-10-07"},
+                {"id": "ft_3", "type": "TRANSFER", "value": -100, "date": "2026-10-08"},
+                {"id": "ft_4", "type": "PIX_TRANSACTION_CREDIT", "value": 120, "date": "2026-10-15"},
+            ],
+            {"pay_1": {"cliente": "Cliente A", "servico": "Oppi RH"}},
+        )
+        self.assertEqual([row["id"] for row in rows], ["ft_4", "ft_1"])
+        self.assertEqual(rows[1]["description"], "Cliente A — Oppi RH")
+        self.assertEqual(rows[1]["tipo"], "Cobrança recebida")
+        self.assertEqual(rows[0]["tipo"], "Pix recebido")
+        self.assertAlmostEqual(sum(row["valor"] for row in rows), 179.9)
+
+    def test_grade_separa_a_pagar_e_pago(self):
+        from app.services.company_payables import payable_calendar, parse_money
+
+        self.assertEqual(parse_money("1.870,20"), 1870.2)
+        self.assertIsNone(parse_money("0"))
+        rows = [
+            {"due": date(2026, 10, 7), "amount": 6.0, "paid": False, "description": "Taxa"},
+            {"due": date(2026, 10, 15), "amount": 1540.2, "paid": True, "description": "Folha"},
+        ]
+        calendar = payable_calendar(rows, date(2026, 10, 1), date(2026, 10, 31))
+        self.assertTrue(calendar["show_grid"])
+        self.assertEqual(len(calendar["days"]), 31)
+        self.assertAlmostEqual(calendar["a_pagar"], 6.0)
+        self.assertAlmostEqual(calendar["pago"], 1540.2)
+        self.assertEqual(calendar["days"][6]["day"], 7)
+        self.assertAlmostEqual(calendar["days"][6]["a_pagar"], 6.0)
+        self.assertTrue(calendar["days"][0]["empty"])
+
+    def test_status_e_repeticao_mensal(self):
+        from app.services.company_payables import add_months, payable_status
+
+        hoje = date(2026, 10, 9)
+        self.assertEqual(payable_status(date(2026, 10, 1), False, hoje), "atrasado")
+        self.assertEqual(payable_status(date(2026, 10, 9), False, hoje), "a_pagar")
+        self.assertEqual(payable_status(date(2026, 10, 1), True, hoje), "pago")
+        self.assertEqual(add_months(date(2026, 1, 31), 1), date(2026, 2, 28))
+        self.assertEqual(add_months(date(2026, 10, 9), 3), date(2027, 1, 9))
+
+
 class InternalFinanceTest(unittest.TestCase):
     def test_monthly_occurrences_in_august(self):
         from app.services.internal_finance import occurrences_in_period

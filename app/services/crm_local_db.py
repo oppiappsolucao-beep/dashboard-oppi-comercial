@@ -168,6 +168,7 @@ def init_crm_local_db() -> None:
                     password_hash TEXT NOT NULL DEFAULT '',
                     state_name TEXT NOT NULL DEFAULT '',
                     city TEXT NOT NULL DEFAULT '',
+                    schedule_json TEXT NOT NULL DEFAULT '{}',
                     active INTEGER NOT NULL DEFAULT 1,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
@@ -248,9 +249,52 @@ def init_crm_local_db() -> None:
                 ("password_hash", "TEXT NOT NULL DEFAULT ''"),
                 ("state_name", "TEXT NOT NULL DEFAULT ''"),
                 ("city", "TEXT NOT NULL DEFAULT ''"),
+                ("schedule_json", "TEXT NOT NULL DEFAULT '{}'"),
             ):
                 if people_cols and column not in people_cols:
                     conn.execute(f"ALTER TABLE org_people ADD COLUMN {column} {definition}")
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS ticket_orders (
+                    id TEXT PRIMARY KEY,
+                    sheet_row INTEGER NOT NULL UNIQUE,
+                    order_id TEXT NOT NULL,
+                    empresa TEXT NOT NULL DEFAULT '',
+                    phone TEXT NOT NULL DEFAULT '',
+                    email TEXT NOT NULL DEFAULT '',
+                    contact_name TEXT NOT NULL DEFAULT '',
+                    subject TEXT NOT NULL DEFAULT '',
+                    created_at TEXT NOT NULL
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS company_payables (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    description TEXT NOT NULL,
+                    amount REAL NOT NULL,
+                    due_date TEXT NOT NULL,
+                    paid_on TEXT NOT NULL DEFAULT '',
+                    created_at TEXT NOT NULL
+                )
+                """
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_company_payables_due ON company_payables(due_date)"
+            )
+            payable_cols = {
+                row[1]
+                for row in conn.execute("PRAGMA table_info(company_payables)").fetchall()
+            }
+            for column, definition in (
+                ("supplier", "TEXT NOT NULL DEFAULT ''"),
+                ("category", "TEXT NOT NULL DEFAULT 'outra'"),
+                ("repeat_count", "INTEGER NOT NULL DEFAULT 1"),
+                ("series_id", "TEXT NOT NULL DEFAULT ''"),
+            ):
+                if payable_cols and column not in payable_cols:
+                    conn.execute(f"ALTER TABLE company_payables ADD COLUMN {column} {definition}")
             conn.commit()
         _initialized = True
 

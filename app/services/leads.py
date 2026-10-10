@@ -508,8 +508,14 @@ def _raissa_table_row(item: dict) -> dict:
         "valor": "—",
         "valor_num": 0,
         "whatsapp_href": _whatsapp_href(telefone if telefone != "—" else ""),
-        "sheet_row": 0,
-        "href": "/leads-e-empresas",
+        "cnpj": normalize_text(item.get("cnpj")),
+        "telefone_cadastro": telefone if telefone != "—" else "",
+        "sheet_row": int(item.get("sheet_row") or 0),
+        "href": (
+            f"/cadastro/todos/{int(item.get('sheet_row') or 0)}/editar?from=leads"
+            if int(item.get("sheet_row") or 0)
+            else "/leads-e-empresas"
+        ),
     }
 
 

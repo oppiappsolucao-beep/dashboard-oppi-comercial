@@ -271,10 +271,227 @@
     });
   }
 
+  function initCnpjLookup() {
+    var input = document.querySelector('input[name="cnpj"]');
+    var form = input && input.form;
+    if (!input || !form || input.dataset.cnpjLookupBound === "1") return;
+    input.dataset.cnpjLookupBound = "1";
+
+    var status = document.createElement("p");
+    status.className = "registration-filial-matriz-hint";
+    status.setAttribute("data-cnpj-lookup-status", "");
+    status.hidden = true;
+    input.insertAdjacentElement("afterend", status);
+
+    var timer = null;
+    var requestSeq = 0;
+
+    function digits(value) {
+      return String(value || "").replace(/\D/g, "");
+    }
+
+    function setStatus(message, visible) {
+      status.textContent = message || "";
+      status.hidden = !visible;
+    }
+
+    function setIfEmpty(name, value) {
+      if (!value) return false;
+      var fields = form.querySelectorAll('[name="' + name + '"]');
+      var applied = false;
+      fields.forEach(function (field) {
+        if (field.disabled) return;
+        if (String(field.value || "").trim()) return;
+        field.value = value;
+        field.dispatchEvent(new Event("input", { bubbles: true }));
+        applied = true;
+      });
+      return applied;
+    }
+
+    function selectNiche(niche) {
+      var select = form.querySelector('select[name="nicho"]');
+      if (!select || !niche || String(select.value || "").trim()) return false;
+      var target = String(niche).trim().toLowerCase();
+      for (var i = 0; i < select.options.length; i++) {
+        var optionValue = String(select.options[i].value || "").trim().toLowerCase();
+        if (optionValue && optionValue === target) {
+          select.value = select.options[i].value;
+          return true;
+        }
+      }
+      return false;
+    }
+
+    function ensureOnePartner() {
+      var count = form.querySelector("#partners-count");
+      if (!count || String(count.value || "").trim()) return;
+      count.value = "1";
+      count.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+
+    function fillAccess(email, password) {
+      ensureOnePartner();
+      if (email) {
+        setIfEmpty("email", email);
+        setIfEmpty("email_socio_1", email);
+        setIfEmpty("email_login_gestor", email);
+        setIfEmpty("email_confirmacao_admin", email);
+        setIfEmpty("email_cobranca", email);
+      }
+      if (!password) return Boolean(email);
+      form.querySelectorAll('input[name="senha_acesso"]').forEach(function (field) {
+        if (field.disabled || String(field.value || "").trim()) return;
+        field.type = "text";
+        field.value = password;
+      });
+      return true;
+    }
+
+    function sellerName() {
+      var field = form.querySelector('[name="nome_contato"]');
+      return field ? String(field.value || "").trim() : "";
+    }
+
+    function applySellerResponsible() {
+      var name = sellerName();
+      var legal = form.querySelector('[name="responsavel_legal"]');
+      if (!legal || legal.dataset.sellerEdited === "1" || !name) return;
+      if (String(legal.value || "").trim() && legal.dataset.fromSeller !== "1") return;
+      legal.dataset.fromSeller = "1";
+      legal.value = name;
+      var socio = form.querySelector('input[name="socio_1"]');
+      if (socio && socio.type === "hidden" && !String(socio.value || "").trim()) {
+        socio.value = name;
+      }
+    }
+
+    function applyPayload(data) {
+      [
+        "empresa",
+        "nome_fantasia",
+        "data_abertura",
+        "capital",
+        "cep",
+        "endereco",
+        "endereco_numero",
+        "endereco_complemento",
+        "bairro",
+        "municipio",
+        "uf",
+      ].forEach(function (name) {
+        setIfEmpty(name, data[name] || "");
+      });
+      setIfEmpty("telefone_b2b", data.telefone || "");
+      setIfEmpty("telefone_fixo", data.telefone_2 || "");
+      var nicheApplied = selectNiche(data.nicho || "");
+      applySellerResponsible();
+      var parts = [];
+      if (nicheApplied && data.nicho) {
+        parts.push("Nicho " + data.nicho + " selecionado pelo CNAE.");
+      } else if (data.nicho && form.querySelector('select[name="nicho"]') && form.querySelector('select[name="nicho"]').value) {
+        parts.push("Nicho mantido.");
+      }
+      parts.push("Responsável, e-mails e senha ficam com o que você preencheu.");
+      setStatus(parts.join(" ") || "Dados da empresa aplicados.", true);
+    }
+
+    function lookup() {
+      var cnpj = digits(input.value);
+      if (cnpj.length !== 14) {
+        if (cnpj.length === 0) setStatus("", false);
+        return;
+      }
+      if (input.dataset.lastCnpjLookup === cnpj) return;
+      var seq = ++requestSeq;
+      setStatus("Consultando CNPJ…", true);
+      fetch("/cadastro/api/cnpj/" + encodeURIComponent(cnpj), { credentials: "same-origin" })
+        .then(function (response) {
+          return response.json().then(function (body) {
+            return { ok: response.ok, body: body };
+          });
+        })
+        .then(function (result) {
+          if (seq !== requestSeq) return;
+          if (!result.ok || !result.body || !result.body.ok) {
+            input.dataset.lastCnpjLookup = "";
+            setStatus((result.body && result.body.error) || "Não consegui consultar o CNPJ.", true);
+            return;
+          }
+          input.dataset.lastCnpjLookup = cnpj;
+          applyPayload(result.body);
+        })
+        .catch(function () {
+          if (seq !== requestSeq) return;
+          input.dataset.lastCnpjLookup = "";
+          setStatus("Não consegui consultar o CNPJ agora.", true);
+        });
+    }
+
+    input.addEventListener("input", function () {
+      var cnpj = digits(input.value);
+      if (input.dataset.lastCnpjLookup && input.dataset.lastCnpjLookup !== cnpj) {
+        input.dataset.lastCnpjLookup = "";
+      }
+      clearTimeout(timer);
+      timer = setTimeout(lookup, 450);
+    });
+    input.addEventListener("blur", function () {
+      clearTimeout(timer);
+      lookup();
+    });
+
+    var emailInput = form.querySelector('input[name="email"]');
+    if (emailInput) {
+      emailInput.addEventListener("change", function () {
+        if (!form.dataset.generatedPassword) return;
+        var email = String(emailInput.value || "").trim();
+        if (!email || email.indexOf("@") === -1) return;
+        if (fillAccess(email, form.dataset.generatedPassword)) {
+          setStatus("1 responsável preenchido com o e-mail informado e a senha.", true);
+        }
+      });
+    }
+
+    var contato = form.querySelector('[name="nome_contato"]');
+    var legal = form.querySelector('[name="responsavel_legal"]');
+    if (legal) {
+      legal.addEventListener("input", function (event) {
+        if (event.isTrusted) legal.dataset.sellerEdited = "1";
+      });
+    }
+    if (contato) contato.addEventListener("input", applySellerResponsible);
+    applySellerResponsible();
+
+    if (form.id === "registration-new-form" && digits(input.value).length === 14) {
+      lookup();
+    }
+  }
+
   document.addEventListener("DOMContentLoaded", function () {
+    var editForm = document.getElementById("client-edit-form");
+    if (editForm) {
+      editForm.addEventListener("submit", function (event) {
+        if (editForm.dataset.saving === "1") {
+          event.preventDefault();
+          return;
+        }
+        editForm.dataset.saving = "1";
+        var submitter = event.submitter;
+        if (submitter && submitter.name && !editForm.querySelector("input[data-kept-action]")) {
+          var kept = document.createElement("input");
+          kept.type = "hidden";
+          kept.name = submitter.name;
+          kept.value = submitter.value;
+          kept.setAttribute("data-kept-action", "1");
+          editForm.appendChild(kept);
+        }
+      });
+    }
     document.querySelectorAll(".registration-tipo-switch").forEach(initTipoSwitch);
     initClosedServices();
     initDeleteModal();
     initFilialMatriz();
+    initCnpjLookup();
   });
 })();

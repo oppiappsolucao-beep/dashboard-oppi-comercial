@@ -250,6 +250,11 @@ body.activity-kanban-dragging .activities-kanban-board {
   opacity: 0.35;
 }
 
+.activities-kanban-card.is-touch-dragging {
+  opacity: 0.35;
+  pointer-events: none;
+}
+
 .activities-kanban-card-ghost {
   position: fixed;
   z-index: 1300;
@@ -292,7 +297,13 @@ body.activity-kanban-dragging * {
   cursor: grab;
   font: inherit;
   user-select: none;
-  touch-action: none;
+}
+
+@media (pointer: coarse) {
+  .activities-kanban-card,
+  .activities-kanban-card-grip {
+    touch-action: none;
+  }
 }
 
 .activities-kanban-card-grip {
@@ -303,7 +314,6 @@ body.activity-kanban-dragging * {
   font-size: 0.72rem;
   letter-spacing: -0.12em;
   line-height: 1;
-  pointer-events: none;
 }
 
 .activities-kanban-card:active {
@@ -1280,6 +1290,23 @@ body.activity-drawer-open {
 }
 
 @media (max-width: 900px) {
+  .activities-kanban-board {
+    display: flex;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .activities-kanban-column {
+    flex: 0 0 min(78vw, 260px);
+    width: min(78vw, 260px);
+    min-width: min(78vw, 260px);
+    max-width: 280px;
+  }
+
   .activities-filter-bar {
     grid-template-columns: 1fr;
   }

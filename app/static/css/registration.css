@@ -1470,11 +1470,13 @@
 }
 
 .client-edit-tab-title {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
   font-size: 0.92rem;
   font-weight: 800;
+  white-space: nowrap;
 }
 
 .client-edit-tab-icon {
@@ -1885,6 +1887,32 @@
   color: var(--muted);
 }
 
+.invoice-copy {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 220px;
+}
+
+.invoice-copy-url {
+  flex: 1;
+  min-width: 0;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid #E5E7EB;
+  border-radius: 8px;
+  background: #F9FAFB;
+  color: #374151;
+  font-size: 12px;
+}
+
+.invoice-copy-btn {
+  flex: 0 0 auto;
+  height: 32px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
 .fin-badge {
   display: inline-flex;
   align-items: center;
@@ -2057,7 +2085,30 @@
   }
 
   .client-edit-tabs {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    grid-template-columns: none;
+  }
+
+  .client-edit-tab {
+    flex: 0 0 auto;
+  }
+
+  .client-edit-tab-sub {
+    white-space: nowrap;
+  }
+
+  .client-edit-footer,
+  .client-edit-footer-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .client-edit-footer .btn {
+    width: 100%;
+    justify-content: center;
   }
 
   .client-edit-tabs-new {

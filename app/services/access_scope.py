@@ -8,6 +8,7 @@ FULL_ACCESS = (
     "gestao",
     "atendimentos",
     "kanban",
+    "agenda",
     "empresas",
     "novo_cadastro",
     "financeiro",
@@ -37,7 +38,11 @@ def allowed_accesses(request: Request) -> set[str]:
     raw = request.session.get("org_accesses") or []
     if isinstance(raw, str):
         raw = [item for item in raw.split(",") if item]
-    return {str(item) for item in raw if item}
+    allowed = {str(item) for item in raw if item}
+    sector = str(request.session.get("org_sector_name") or "").lower()
+    if "comercial" in sector:
+        allowed.update({"novo_cadastro", "empresas", "propostas"})
+    return allowed
 
 
 def nav_permissions(request: Request) -> dict[str, bool]:
@@ -47,6 +52,8 @@ def nav_permissions(request: Request) -> dict[str, bool]:
 
 def home_url(request: Request) -> str:
     allowed = allowed_accesses(request)
+    if request.session.get("org_person_kind") == "treinador" and "agenda" in allowed:
+        return "/agenda"
     for key, url in HOME_BY_ACCESS:
         if key in allowed:
             return url
@@ -64,6 +71,8 @@ def _required_access(path: str) -> str | None:
         ("/metas-e-relatorios", "gestao"),
         ("/atendimentos", "atendimentos"),
         ("/atividades", "kanban"),
+        ("/agenda", "agenda"),
+        ("/proposta", "propostas"),
         ("/propostas", "propostas"),
         ("/financeiro", "financeiro"),
         ("/leads-e-empresas", "empresas"),

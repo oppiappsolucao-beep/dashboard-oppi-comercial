@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import APP_BUILD, settings
-from app.routers import auth, activities, attendances, contracts, evolution_webhook, financeiro, funnel, gestao, goals_reports, leads, org_registry, overview, proposals, registration
+from app.routers import agenda, auth, activities, attendances, contracts, evolution_webhook, financeiro, funnel, gestao, goals_reports, leads, org_registry, overview, proposals, registration
 from app.routers import migration_ponto
 from app.routers import settings as settings_router
 from app.templating import render
@@ -30,6 +30,7 @@ app.include_router(gestao.router)
 app.include_router(overview.router)
 app.include_router(funnel.router)
 app.include_router(activities.router)
+app.include_router(agenda.router)
 app.include_router(attendances.router)
 app.include_router(evolution_webhook.router)
 app.include_router(proposals.router)
@@ -86,9 +87,18 @@ app.add_api_route("/metas-e-relatorios", goals_page, methods=["GET"], tags=["goa
 app.add_api_route("/metas-e-relatorios/filtros", goals_filters, methods=["POST"], tags=["goals"])
 app.add_api_route("/metas-e-relatorios/atualizar", goals_refresh, methods=["POST"], tags=["goals"])
 
-from app.routers.financeiro import financeiro_filters, financeiro_page, financeiro_refresh, financeiro_sync  # noqa: E402
+from app.routers.financeiro import (  # noqa: E402
+    financeiro_entrada_page,
+    financeiro_filters,
+    financeiro_page,
+    financeiro_pagar_page,
+    financeiro_refresh,
+    financeiro_sync,
+)
 
 app.add_api_route("/financeiro", financeiro_page, methods=["GET"], tags=["financeiro"])
+app.add_api_route("/financeiro/entrada", financeiro_entrada_page, methods=["GET"], tags=["financeiro"])
+app.add_api_route("/financeiro/contas-a-pagar", financeiro_pagar_page, methods=["GET"], tags=["financeiro"])
 app.add_api_route("/financeiro/filtros", financeiro_filters, methods=["POST"], tags=["financeiro"])
 app.add_api_route("/financeiro/atualizar", financeiro_refresh, methods=["POST"], tags=["financeiro"])
 app.add_api_route("/financeiro/sincronizar", financeiro_sync, methods=["POST"], tags=["financeiro"])

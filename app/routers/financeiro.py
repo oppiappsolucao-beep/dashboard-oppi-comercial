@@ -1,8 +1,19 @@
+import calendar
+from datetime import date
+from urllib.parse import urlencode
+
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from app.dependencies import require_admin
+from app.dependencies import require_auth
 from app.services.asaas_client import invalidate_cache
+from app.services.company_payables import (
+    create_payable,
+    delete_payable,
+    mark_payable_paid,
+    parse_money,
+    reopen_payable,
+)
 from app.services.financeiro import build_financeiro_context
 from app.services.legacy_core import normalize_text
 from app.templating import render
@@ -24,18 +35,74 @@ def _params(request: Request, form: dict | None = None) -> dict:
     }
 
 
-def _page(request: Request, params: dict, *, force_sync: bool = False, flash: str = ""):
+def _screen(
+    request: Request,
+    params: dict,
+    template: str,
+    active_page: str,
+    *,
+    force_sync: bool = False,
+    flash: str = "",
+):
     ctx = build_financeiro_context(params, force_sync=force_sync)
     ctx["flash"] = flash
-    return render(request, "financeiro/index.html", ctx)
+    ctx["active_page"] = active_page
+    return render(request, template, ctx)
+
+
+def _page(request: Request, params: dict, *, force_sync: bool = False, flash: str = ""):
+    return _screen(
+        request,
+        params,
+        "financeiro/index.html",
+        "financeiro",
+        force_sync=force_sync,
+        flash=flash,
+    )
 
 
 @router.get("/financeiro", response_class=HTMLResponse)
 async def financeiro_page(request: Request):
-    denied = require_admin(request)
+    denied = require_auth(request)
     if denied:
         return denied
-    return _page(request, _params(request))
+    params = _params(request)
+    flash = normalize_text(request.query_params.get("flash"))
+    return _page(request, params, flash=flash)
+
+
+@router.get("/financeiro/entrada", response_class=HTMLResponse)
+async def financeiro_entrada_page(request: Request):
+    denied = require_auth(request)
+    if denied:
+        return denied
+    params = _params(request)
+    params["tab"] = "entradas"
+    flash = normalize_text(request.query_params.get("flash"))
+    return _screen(
+        request,
+        params,
+        "financeiro/entrada.html",
+        "entrada",
+        flash=flash,
+    )
+
+
+@router.get("/financeiro/contas-a-pagar", response_class=HTMLResponse)
+async def financeiro_pagar_page(request: Request):
+    denied = require_auth(request)
+    if denied:
+        return denied
+    params = _params(request)
+    params["tab"] = "pagar"
+    flash = normalize_text(request.query_params.get("flash"))
+    return _screen(
+        request,
+        params,
+        "financeiro/contas_a_pagar.html",
+        "contas_pagar",
+        flash=flash,
+    )
 
 
 @router.post("/financeiro/filtros", response_class=HTMLResponse)
@@ -48,7 +115,7 @@ async def financeiro_filters(
     period_start: str = Form(""),
     period_end: str = Form(""),
 ):
-    denied = require_admin(request)
+    denied = require_auth(request)
     if denied:
         return denied
     params = {
@@ -66,17 +133,154 @@ async def financeiro_filters(
 
 @router.post("/financeiro/atualizar")
 async def financeiro_refresh(request: Request):
-    denied = require_admin(request)
+    denied = require_auth(request)
     if denied:
         return denied
     return RedirectResponse(url="/financeiro", status_code=303)
 
 
 @router.post("/financeiro/sincronizar")
-async def financeiro_sync(request: Request):
-    denied = require_admin(request)
+async def financeiro_sync(
+    request: Request,
+    destino: str = Form(""),
+    period_start: str = Form(""),
+    period_end: str = Form(""),
+    status: str = Form(""),
+    search: str = Form(""),
+):
+    denied = require_auth(request)
     if denied:
         return denied
     invalidate_cache()
-    params = _params(request)
-    return _page(request, params, force_sync=True, flash="Dados sincronizados com o Asaas.")
+    params = {
+        "tab": "visao",
+        "status": status,
+        "forma": "",
+        "search": search,
+        "period_start": period_start,
+        "period_end": period_end,
+    }
+    flash = "Dados sincronizados com o Asaas."
+    if normalize_text(destino) == "entrada":
+        params["tab"] = "entradas"
+        return _screen(
+            request,
+            params,
+            "financeiro/entrada.html",
+            "entrada",
+            force_sync=True,
+            flash=flash,
+        )
+    return _page(request, params, force_sync=True, flash=flash)
+
+
+def _payable_back(period_start: str, period_end: str, flash: str, status: str = "") -> RedirectResponse:
+    query = urlencode(
+        {
+            "period_start": period_start,
+            "period_end": period_end,
+            "status": status,
+            "flash": flash,
+        }
+    )
+    return RedirectResponse(url=f"/financeiro/contas-a-pagar?{query}", status_code=303)
+
+
+def _month_bounds(due: date) -> tuple[str, str]:
+    last = calendar.monthrange(due.year, due.month)[1]
+    start = date(due.year, due.month, 1)
+    end = date(due.year, due.month, last)
+    return start.isoformat(), end.isoformat()
+
+
+@router.post("/financeiro/contas-a-pagar")
+async def financeiro_payable_create(
+    request: Request,
+    description: str = Form(""),
+    amount: str = Form(""),
+    due_date: str = Form(""),
+    supplier: str = Form(""),
+    category: str = Form("outra"),
+    repeat_mode: str = Form("unico"),
+    repeat_count: str = Form("1"),
+    period_start: str = Form(""),
+    period_end: str = Form(""),
+    status: str = Form(""),
+):
+    denied = require_auth(request)
+    if denied:
+        return denied
+    name = normalize_text(description)
+    value = parse_money(amount)
+    try:
+        due = date.fromisoformat(normalize_text(due_date)[:10])
+    except ValueError:
+        due = None
+    back_start = normalize_text(period_start)
+    back_end = normalize_text(period_end)
+    back_status = normalize_text(status)
+    if not name or value is None or due is None:
+        return _payable_back(back_start, back_end, "Informe descrição, valor e vencimento.", back_status)
+    times = 1
+    if normalize_text(repeat_mode).lower() == "vezes":
+        try:
+            times = int(normalize_text(repeat_count) or "1")
+        except ValueError:
+            times = 1
+        if times < 2:
+            return _payable_back(back_start, back_end, "Informe quantas vezes, a partir de 2.", back_status)
+    create_payable(name, value, due, supplier=supplier, category=category, repeat_count=times)
+    start, end = _month_bounds(due)
+    if times > 1:
+        flash = f"Conta lançada {times} vezes, uma por mês. Use De e Até para ver os outros meses."
+    else:
+        flash = "Conta a pagar lançada."
+    return _payable_back(start, end, flash, back_status)
+
+
+@router.post("/financeiro/contas-a-pagar/{payable_id}/pagar")
+async def financeiro_payable_pay(
+    request: Request,
+    payable_id: int,
+    period_start: str = Form(""),
+    period_end: str = Form(""),
+    status: str = Form(""),
+):
+    denied = require_auth(request)
+    if denied:
+        return denied
+    mark_payable_paid(payable_id)
+    return _payable_back(period_start, period_end, "Conta marcada como paga.", status)
+
+
+@router.post("/financeiro/contas-a-pagar/{payable_id}/reabrir")
+async def financeiro_payable_reopen(
+    request: Request,
+    payable_id: int,
+    period_start: str = Form(""),
+    period_end: str = Form(""),
+    status: str = Form(""),
+):
+    denied = require_auth(request)
+    if denied:
+        return denied
+    reopen_payable(payable_id)
+    return _payable_back(period_start, period_end, "Conta voltou para a pagar.", status)
+
+
+@router.post("/financeiro/contas-a-pagar/{payable_id}/excluir")
+async def financeiro_payable_delete(
+    request: Request,
+    payable_id: int,
+    period_start: str = Form(""),
+    period_end: str = Form(""),
+    status: str = Form(""),
+    confirm_text: str = Form(""),
+):
+    denied = require_auth(request)
+    if denied:
+        return denied
+    if normalize_text(confirm_text).lower() != "excluir":
+        return _payable_back(period_start, period_end, "A conta continua salva. Digite excluir para apagar.", status)
+    delete_payable(payable_id)
+    return _payable_back(period_start, period_end, "Conta excluída.", status)

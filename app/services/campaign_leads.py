@@ -10,7 +10,7 @@ from urllib.parse import urlencode
 from app.services.legacy_core import normalize_text
 from app.services.registry_store import _lock, connect, init_store
 
-TAB_NAMES = ("Leads Raissa", "Leads Raíssa", "LeadsRaissa")
+TAB_NAMES = ("Leads Raissa", "Leads Raíssa", "LeadsRaissa", "Leads")
 COMPANY_TAB_NAMES = ("Raissa", "Raíssa")
 
 _HEADER_ALIASES = {
@@ -182,13 +182,24 @@ def read_raissa_companies() -> dict:
     tipo_index = _header_index(headers, ("tipo", "tipo empresa", "categoria", "vinculo", "classificacao"))
     flag_index = _header_index(headers, ("filial", "e filial", "is filial"))
     parent_index = _header_index(headers, ("empresa matriz", "nome da matriz", "matriz vinculada", "matriz"))
-    phone_index = _header_index(headers, ("whatsapp", "telefone", "celular", "fone", "telefone b2b"))
+    phone_index = _header_index(
+        headers,
+        ("cobranca / whatsapp", "cobranca/whatsapp", "whatsapp", "telefone", "celular", "fone", "telefone b2b"),
+    )
     email_index = _header_index(headers, ("email", "e-mail", "email empresa"))
+    cnpj_index = _header_index(headers, ("cnpj", "cnpj empresa"))
+    if cnpj_index is None:
+        for index, header in enumerate(headers):
+            if "cnpj" in _plain(header):
+                cnpj_index = index
+                break
     contact_index = _header_index(
         headers,
         ("contato", "nome contato", "nome do contato", "responsavel", "socio"),
         skip_words=("matriz",),
     )
+    from app.services.raissa_company_sync import company_hidden_on_raissa_list, names_are_same_company
+
     empresas = []
     for item in sheet.get("clientes") or []:
         values = [item.get(header, "") for header in headers]
@@ -200,17 +211,31 @@ def read_raissa_companies() -> dict:
         tipo = values[tipo_index] if tipo_index is not None and tipo_index < len(values) else ""
         flag = values[flag_index] if flag_index is not None and flag_index < len(values) else ""
         kind = _company_kind(tipo, parent, flag)
-        empresas.append(
-            {
-                "linha": item.get("linha") or 0,
-                "empresa": empresa,
-                "tipo": kind,
-                "matriz": normalize_text(parent),
-                "telefone": normalize_text(values[phone_index]) if phone_index is not None and phone_index < len(values) else "",
-                "email": normalize_text(values[email_index]) if email_index is not None and email_index < len(values) else "",
-                "contato": normalize_text(values[contact_index]) if contact_index is not None and contact_index < len(values) else "",
-            }
+        cnpj = normalize_text(values[cnpj_index]) if cnpj_index is not None and cnpj_index < len(values) else ""
+        if company_hidden_on_raissa_list(empresa, cnpj):
+            continue
+        row_item = {
+            "linha": item.get("linha") or 0,
+            "empresa": empresa,
+            "tipo": kind,
+            "matriz": normalize_text(parent),
+            "telefone": normalize_text(values[phone_index]) if phone_index is not None and phone_index < len(values) else "",
+            "email": normalize_text(values[email_index]) if email_index is not None and email_index < len(values) else "",
+            "cnpj": cnpj,
+            "contato": normalize_text(values[contact_index]) if contact_index is not None and contact_index < len(values) else "",
+        }
+        duplicate_at = next(
+            (
+                index
+                for index, current in enumerate(empresas)
+                if names_are_same_company(current.get("empresa", ""), empresa)
+            ),
+            None,
         )
+        if duplicate_at is not None:
+            empresas[duplicate_at] = row_item
+            continue
+        empresas.append(row_item)
     return {
         "aba": sheet.get("aba") or "",
         "total": len(empresas),
@@ -220,79 +245,219 @@ def read_raissa_companies() -> dict:
 
 
 def _find_raissa_worksheet(spreadsheet):
-    wanted = {_plain(name) for name in TAB_NAMES} | {_plain(name).replace(" ", "") for name in TAB_NAMES}
-    fallback = None
+    by_title = {}
     for item in spreadsheet.worksheets():
         title = _plain(item.title)
         compact = title.replace(" ", "")
-        if title in wanted or compact in wanted:
+        by_title.setdefault(title, item)
+        by_title.setdefault(compact, item)
+    for name in TAB_NAMES:
+        found = by_title.get(_plain(name)) or by_title.get(_plain(name).replace(" ", ""))
+        if found is not None:
+            return found
+    for item in spreadsheet.worksheets():
+        if "raissa" in _plain(item.title).replace(" ", ""):
             return item
-        if "raissa" in compact and fallback is None:
-            fallback = item
-    return fallback
+    return None
+
+
+_raissa_last_values: list[list[str]] | None = None
+_raissa_last_title = "Raissa"
+_raissa_quota_until = 0.0
+
+
+def _raissa_snapshot_path():
+    from app.services.storage_paths import get_storage_dir
+
+    return get_storage_dir() / "raissa_snapshot.json"
+
+
+def drop_company_from_raissa_cache(empresa: str, cnpj: str, raissa_row: int = 0) -> None:
+    """Remove a empresa da cópia local da lista, sem esperar outra leitura do Google."""
+    from app.services.raissa_company_sync import _raissa_rows_to_remove
+    from app.services.sheet_read_cache import store_worksheet_values
+
+    stored = _stored_raissa_values()
+    if not stored:
+        return
+    title, values = stored
+    drop_rows = set(_raissa_rows_to_remove(values, empresa, cnpj, raissa_row))
+    if not drop_rows:
+        return
+    kept = [row for index, row in enumerate(values, start=1) if index not in drop_rows]
+    _remember_raissa_values(title, kept)
+    store_worksheet_values(title, kept)
+
+
+def _remember_raissa_values(title: str, values: list[list[str]]) -> None:
+    import json
+
+    global _raissa_last_values, _raissa_last_title
+    _raissa_last_title = title or "Raissa"
+    _raissa_last_values = [list(row) for row in values]
+    try:
+        path = _raissa_snapshot_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            json.dumps({"aba": _raissa_last_title, "values": _raissa_last_values}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+    except Exception:
+        pass
+
+
+def _stored_raissa_values() -> tuple[str, list[list[str]]] | None:
+    import json
+
+    if _raissa_last_values:
+        return _raissa_last_title, [list(row) for row in _raissa_last_values]
+    path = _raissa_snapshot_path()
+    if path.exists():
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            values = data.get("values") if isinstance(data, dict) else None
+            if isinstance(values, list) and values:
+                return str(data.get("aba") or "Raissa"), values
+        except (OSError, json.JSONDecodeError):
+            pass
+    try:
+        from app.services.sheet_read_cache import peek_cached_worksheet_values
+
+        for title in ("Raissa", "Raíssa", "Raisa"):
+            cached = peek_cached_worksheet_values(title)
+            if cached:
+                return title, cached
+    except Exception:
+        pass
+    try:
+        from app.config import settings
+        from app.services.legacy_core import get_last_good_sheet_values, hydrate_sheet_cache_from_disk
+
+        tab = _plain(settings.worksheet_name).replace(" ", "")
+        if "raissa" in tab or "raisa" in tab:
+            values = get_last_good_sheet_values()
+            if not values and hydrate_sheet_cache_from_disk():
+                values = get_last_good_sheet_values()
+            if values:
+                return settings.worksheet_name, values
+    except Exception:
+        pass
+    return None
+
+
+def _quota_limited(error: Exception) -> bool:
+    text = str(error).lower()
+    return "429" in text or "quota" in text
+
+
+def _raissa_sheet_from_values(title: str, values: list[list[str]]) -> dict:
+    empty = {"aba": title, "total": 0, "colunas": [], "clientes": [], "aviso": ""}
+    if not values:
+        empty["aviso"] = "A aba Raissa está vazia."
+        return empty
+    header_at = 0
+    if len(values) > 1:
+        filled_first = sum(1 for cell in values[0] if normalize_text(cell))
+        filled_second = sum(1 for cell in values[1] if normalize_text(cell))
+        if filled_first <= 1 and filled_second >= 3:
+            header_at = 1
+    headers = []
+    used = set()
+    for index, cell in enumerate(values[header_at], start=1):
+        name = normalize_text(cell) or f"Coluna {index}"
+        key = name
+        suffix = 2
+        while key.lower() in used:
+            key = f"{name} {suffix}"
+            suffix += 1
+        used.add(key.lower())
+        headers.append(key)
+    clientes = []
+    for offset, raw in enumerate(values[header_at + 1 :], start=header_at + 2):
+        row = [normalize_text(cell) for cell in raw]
+        if not any(row):
+            continue
+        item = {"linha": offset}
+        for index, header in enumerate(headers):
+            item[header] = row[index] if index < len(row) else ""
+        clientes.append(item)
+    return {
+        "aba": title,
+        "total": len(clientes),
+        "colunas": headers,
+        "clientes": clientes,
+        "aviso": "",
+    }
+
+
+def _fetch_raissa_values() -> tuple[str, list[list[str]]]:
+    from app.config import settings
+    from app.services.legacy_core import get_gsheet_client
+    from app.services.sheet_read_cache import get_cached_worksheet_values
+
+    client = get_gsheet_client()
+    spreadsheet = client.open_by_key(settings.sheet_id)
+    worksheet = None
+    for title in ("Raissa", "Raíssa", "Raisa"):
+        try:
+            worksheet = spreadsheet.worksheet(title)
+            break
+        except Exception as exc:
+            if _quota_limited(exc):
+                raise
+            worksheet = None
+    if worksheet is None:
+        worksheet = _find_raissa_company_worksheet(spreadsheet)
+    if worksheet is None:
+        raise RuntimeError("Aba Raissa não encontrada na planilha.")
+    values = get_cached_worksheet_values(worksheet.title, worksheet.get_all_values)
+    if not values:
+        raise RuntimeError("Não consegui ler a aba Raissa.")
+    return worksheet.title, values
 
 
 def read_raissa_sheet() -> dict:
     """Lê a aba Raissa inteira, com as colunas como estão na planilha."""
+    import time
+
+    global _raissa_quota_until
     empty = {"aba": "", "total": 0, "colunas": [], "clientes": [], "aviso": ""}
     try:
         from app.config import settings
-        from app.services.legacy_core import get_gsheet_client
-        from app.services.sheet_read_cache import get_cached_worksheet_values
 
         if not settings.sheets_configured:
             empty["aviso"] = "Planilha não configurada."
             return empty
-        client = get_gsheet_client()
-        spreadsheet = client.open_by_key(settings.sheet_id)
-        worksheet = _find_raissa_company_worksheet(spreadsheet)
-        if worksheet is None:
-            titles = ", ".join(item.title for item in spreadsheet.worksheets())
-            empty["aviso"] = f"Aba Raissa não encontrada. Abas na planilha: {titles}."
+        if time.time() < _raissa_quota_until:
+            stored = _stored_raissa_values()
+            if stored:
+                return _raissa_sheet_from_values(stored[0], stored[1])
+            empty["aviso"] = (
+                "O Google limitou a leitura da aba Raissa por um minuto. "
+                "Os clientes continuam na planilha. Atualize de novo daqui a pouco."
+            )
             return empty
-        values = get_cached_worksheet_values(worksheet.title, worksheet.get_all_values)
-        if values is None:
-            empty["aba"] = worksheet.title
-            empty["aviso"] = "Não consegui ler a aba Raissa."
-            return empty
-        if not values:
-            empty["aba"] = worksheet.title
-            empty["aviso"] = "A aba Raissa está vazia."
-            return empty
-        header_at = 0
-        if len(values) > 1:
-            filled_first = sum(1 for cell in values[0] if normalize_text(cell))
-            filled_second = sum(1 for cell in values[1] if normalize_text(cell))
-            if filled_first <= 1 and filled_second >= 3:
-                header_at = 1
-        headers = []
-        used = set()
-        for index, cell in enumerate(values[header_at], start=1):
-            name = normalize_text(cell) or f"Coluna {index}"
-            key = name
-            suffix = 2
-            while key.lower() in used:
-                key = f"{name} {suffix}"
-                suffix += 1
-            used.add(key.lower())
-            headers.append(key)
-        clientes = []
-        for offset, raw in enumerate(values[header_at + 1 :], start=header_at + 2):
-            row = [normalize_text(cell) for cell in raw]
-            if not any(row):
-                continue
-            item = {"linha": offset}
-            for index, header in enumerate(headers):
-                item[header] = row[index] if index < len(row) else ""
-            clientes.append(item)
-        return {
-            "aba": worksheet.title,
-            "total": len(clientes),
-            "colunas": headers,
-            "clientes": clientes,
-            "aviso": "",
-        }
+        from app.services.sheet_read_cache import peek_fresh_worksheet_values
+
+        for title in ("Raissa", "Raíssa", "Raisa"):
+            fresh = peek_fresh_worksheet_values(title)
+            if fresh:
+                return _raissa_sheet_from_values(title, fresh)
+        title, values = _fetch_raissa_values()
+        _remember_raissa_values(title, values)
+        return _raissa_sheet_from_values(title, values)
     except Exception as exc:
+        if _quota_limited(exc):
+            _raissa_quota_until = time.time() + 70
+        stored = _stored_raissa_values()
+        if stored:
+            return _raissa_sheet_from_values(stored[0], stored[1])
+        if _quota_limited(exc):
+            empty["aviso"] = (
+                "O Google limitou a leitura da aba Raissa por um minuto. "
+                "Os clientes continuam na planilha. Atualize de novo daqui a pouco."
+            )
+            return empty
         detail = normalize_text(str(exc))[:140]
         empty["aviso"] = f"Não consegui ler a aba Raissa. {detail}".strip()
         return empty
@@ -311,7 +476,7 @@ def read_raissa_leads() -> tuple[list[dict], str]:
         spreadsheet = client.open_by_key(settings.sheet_id)
         worksheet = _find_raissa_worksheet(spreadsheet)
         if worksheet is None:
-            return [], "Aba Leads Raissa não encontrada na planilha."
+            return [], "Aba de leads não encontrada na planilha."
 
         values = get_cached_worksheet_values(worksheet.title, worksheet.get_all_values)
         if not values or len(values) < 2:
@@ -342,7 +507,7 @@ def read_raissa_leads() -> tuple[list[dict], str]:
             )
         return leads, ""
     except Exception:
-        return [], "Não consegui ler a aba Leads Raissa."
+        return [], "Não consegui ler a aba de leads."
 
 
 def count_raissa_leads(start: str, end: str) -> tuple[int, str]:
@@ -355,7 +520,7 @@ def count_raissa_leads(start: str, end: str) -> tuple[int, str]:
         if not day or not (start <= day <= end):
             continue
         total += 1
-    note = warning or "Leads da aba Leads Raissa neste período."
+    note = warning or "Leads novos neste período."
     return total, note
 
 
@@ -465,6 +630,50 @@ def _refresh_lead_date(current, lead: dict) -> None:
         )
 
 
+def open_lead_cadastro_url(order: dict) -> str:
+    """Cadastro do lead ao concluir a OS no Comercial ou na Oppi Tech."""
+    client = order.get("client") if isinstance(order.get("client"), dict) else {}
+    enriched = dict(order)
+    enriched["contact_name"] = order.get("contact_name") or client.get("contato") or ""
+    enriched["phone"] = order.get("phone") or client.get("whatsapp") or client.get("telefone") or ""
+    enriched["email"] = order.get("email") or client.get("email") or ""
+    enriched["city"] = order.get("city") or client.get("cidade") or ""
+    enriched["uf"] = order.get("uf") or client.get("uf") or ""
+    enriched["order_id"] = order.get("order_id") or order.get("id") or ""
+    url = finish_cadastro_url(enriched)
+    if not url.startswith("/cadastro/"):
+        return ""
+    if "from=" not in url:
+        url += ("&" if "?" in url else "?") + "from=activities"
+    return url
+
+
+def finish_cadastro_url(order: dict) -> str:
+    """Endereço do cadastro ao concluir um lead comercial."""
+    current = normalize_text(order.get("cadastro_url"))
+    if current.startswith("/cadastro/"):
+        return current
+    text = order.get("description") or ""
+
+    def line(label: str) -> str:
+        match = re.search(rf"(?im)^{re.escape(label)}:\s*(.+)$", text)
+        return normalize_text(match.group(1)) if match else ""
+
+    return cadastro_url(
+        {
+            "empresa": order.get("empresa") or "",
+            "contact_name": order.get("contact_name") or line("Contato"),
+            "phone": order.get("phone") or line("WhatsApp"),
+            "email": order.get("email") or line("E-mail"),
+            "campaign": order.get("campaign") or line("Campanha"),
+            "creative": order.get("creative") or line("Criativo") or order.get("subject") or "",
+            "city": order.get("city") or "",
+            "uf": order.get("uf") or "",
+            "order_id": order.get("order_id") or order.get("id") or "",
+        }
+    )
+
+
 def cadastro_url(link: dict) -> str:
     notes = " · ".join(
         part
@@ -482,6 +691,7 @@ def cadastro_url(link: dict) -> str:
         "municipio": link.get("city") or "",
         "uf": link.get("uf") or "",
         "observacoes": notes,
+        "os": link.get("order_id") or "",
     }
     clean = {key: value for key, value in params.items() if normalize_text(value)}
     if not clean:
@@ -550,5 +760,7 @@ def attach_campaign_cards(cards: list[dict]) -> None:
         card["source"] = "campanha"
         card["cadastro_url"] = link["cadastro_url"]
         card["creative"] = link["creative"]
+        card["phone"] = link.get("phone") or ""
+        card["contact_name"] = link.get("contact_name") or ""
         if link.get("lead_date"):
             card["lead_date"] = link["lead_date"]

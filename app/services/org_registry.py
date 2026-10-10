@@ -16,6 +16,7 @@ ACCESS_OPTIONS = [
     ("empresas", "Empresas"),
     ("novo_cadastro", "Cadastro"),
     ("ordens", "Ordens de serviço"),
+    ("agenda", "Agenda"),
     ("kanban", "Kanban"),
     ("atendimentos", "Atendimentos"),
     ("financeiro", "Financeiro"),
@@ -31,6 +32,19 @@ BRAZIL_UFS = [
     "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO",
 ]
 DEFAULT_SECTORS = ["Comercial", "Suporte", "Financeiro", "Representação"]
+COMMERCIAL_CADASTRO_ACCESS = ("novo_cadastro", "empresas", "propostas")
+TRAINING_ACCESS = ("agenda", "kanban", "empresas")
+SCHEDULE_DAYS = (
+    ("seg", "Seg"),
+    ("ter", "Ter"),
+    ("qua", "Qua"),
+    ("qui", "Qui"),
+    ("sex", "Sex"),
+    ("sab", "Sáb"),
+    ("dom", "Dom"),
+)
+SCHEDULE_DAY_KEYS = [key for key, _label in SCHEDULE_DAYS]
+TRAINING_SLOT_STARTS = tuple(f"{hour:02d}:00" for hour in range(8, 21))
 
 
 def _now() -> str:
@@ -77,25 +91,52 @@ def _ensure_seed(conn) -> None:
 
 def _ensure_training_sector(conn) -> None:
     row = conn.execute(
-        "SELECT id FROM org_sectors WHERE lower(name) = ? AND active = 1",
+        "SELECT id, accesses_json FROM org_sectors WHERE lower(name) = ? AND active = 1",
         ("treinamento",),
     ).fetchone()
-    if row:
-        return
     stamp = _now()
+    if row is None:
+        conn.execute(
+            """
+            INSERT INTO org_sectors (id, name, accesses_json, active, created_at, updated_at)
+            VALUES (?, ?, ?, 1, ?, ?)
+            """,
+            (
+                f"sec_{uuid.uuid4().hex[:12]}",
+                "Treinamento",
+                json.dumps(list(TRAINING_ACCESS)),
+                stamp,
+                stamp,
+            ),
+        )
+        return
+    current = _loads(row["accesses_json"])
+    merged = list(dict.fromkeys([*current, *TRAINING_ACCESS]))
+    if merged == current:
+        return
     conn.execute(
-        """
-        INSERT INTO org_sectors (id, name, accesses_json, active, created_at, updated_at)
-        VALUES (?, ?, ?, 1, ?, ?)
-        """,
-        (
-            f"sec_{uuid.uuid4().hex[:12]}",
-            "Treinamento",
-            json.dumps(["kanban", "ordens"]),
-            stamp,
-            stamp,
-        ),
+        "UPDATE org_sectors SET accesses_json = ?, updated_at = ? WHERE id = ?",
+        (json.dumps(merged), stamp, row["id"]),
     )
+
+
+def _ensure_commercial_cadastro(conn) -> None:
+    """Comercial cadastra cliente como o acesso administrativo."""
+    rows = conn.execute(
+        "SELECT id, name, accesses_json FROM org_sectors WHERE active = 1"
+    ).fetchall()
+    stamp = _now()
+    for row in rows:
+        if "comercial" not in (row["name"] or "").lower():
+            continue
+        current = _loads(row["accesses_json"])
+        merged = list(dict.fromkeys([*current, *COMMERCIAL_CADASTRO_ACCESS]))
+        if merged == current:
+            continue
+        conn.execute(
+            "UPDATE org_sectors SET accesses_json = ?, updated_at = ? WHERE id = ?",
+            (json.dumps(merged), stamp, row["id"]),
+        )
 
 
 def list_sectors() -> list[dict]:
@@ -103,6 +144,7 @@ def list_sectors() -> list[dict]:
     with _lock, _connect() as conn:
         _ensure_seed(conn)
         _ensure_training_sector(conn)
+        _ensure_commercial_cadastro(conn)
         rows = conn.execute(
             "SELECT * FROM org_sectors WHERE active = 1 ORDER BY name COLLATE NOCASE"
         ).fetchall()
@@ -118,6 +160,126 @@ def list_sectors() -> list[dict]:
             ).fetchall()
         }
     return [_sector_view(row, int(counts.get(row["id"], 0))) for row in rows]
+
+
+def empty_schedule() -> dict:
+    return {"days": [], "slots": []}
+
+
+def slot_label(start: str) -> str:
+    text = normalize_text(start)
+    if not re.match(r"^\d{2}:\d{2}$", text):
+        return text
+    end_hour = int(text[:2]) + 1
+    return f"{text} – {end_hour:02d}:{text[3:]}"
+
+
+def training_slot_choices() -> list[dict]:
+    return [{"value": start, "label": slot_label(start)} for start in TRAINING_SLOT_STARTS]
+
+
+def _schedule_from_raw(raw: str) -> dict:
+    try:
+        data = json.loads(raw or "{}")
+    except json.JSONDecodeError:
+        data = {}
+    if not isinstance(data, dict):
+        data = {}
+    days = []
+    for day in data.get("days") or []:
+        key = normalize_text(day).lower()
+        if key in SCHEDULE_DAY_KEYS and key not in days:
+            days.append(key)
+    days.sort(key=SCHEDULE_DAY_KEYS.index)
+    slots = []
+    for item in data.get("slots") or []:
+        key = normalize_text(item)[:5]
+        if key in TRAINING_SLOT_STARTS and key not in slots:
+            slots.append(key)
+    if not slots:
+        start = normalize_text(data.get("start"))[:5]
+        end = normalize_text(data.get("end"))[:5]
+        if re.match(r"^\d{2}:\d{2}$", start) and re.match(r"^\d{2}:\d{2}$", end) and start < end:
+            slots = [key for key in TRAINING_SLOT_STARTS if start <= key < end]
+    slots.sort()
+    return {"days": days, "slots": slots}
+
+
+def schedule_label(schedule: dict) -> str:
+    days = schedule.get("days") or []
+    slots = schedule.get("slots") or []
+    if not days or not slots:
+        return "Agenda não definida"
+    names = [label for key, label in SCHEDULE_DAYS if key in days]
+    periods = ", ".join(slot_label(slot) for slot in slots)
+    return f"{', '.join(names)} · {periods}"
+
+
+def parse_trainer_schedule(days, slots) -> str:
+    chosen_days = []
+    for day in days or []:
+        key = normalize_text(day).lower()
+        if key in SCHEDULE_DAY_KEYS and key not in chosen_days:
+            chosen_days.append(key)
+    chosen_days.sort(key=SCHEDULE_DAY_KEYS.index)
+    chosen_slots = []
+    for slot in slots or []:
+        key = normalize_text(slot)[:5]
+        if key in TRAINING_SLOT_STARTS and key not in chosen_slots:
+            chosen_slots.append(key)
+    chosen_slots.sort()
+    if not chosen_days:
+        raise ValueError("Marque os dias em que o treinador atende.")
+    if not chosen_slots:
+        raise ValueError("Marque os horários de 1 hora em que o treinador atende.")
+    return json.dumps({"days": chosen_days, "slots": chosen_slots}, ensure_ascii=False)
+
+
+def ensure_training_slot(trainer: dict, day: str, hour: str) -> None:
+    """O horário precisa ser um período de 1 hora da agenda do treinador."""
+    schedule = trainer.get("schedule") or empty_schedule()
+    name = trainer.get("name") or "O treinador"
+    slots = schedule.get("slots") or []
+    days = schedule.get("days") or []
+    if not days or not slots:
+        raise ValueError(f"Cadastre os horários de {name} em Sistema.")
+    hour_text = normalize_text(hour)[:5]
+    try:
+        weekday = datetime.fromisoformat(normalize_text(day)).weekday()
+    except ValueError as error:
+        raise ValueError("Informe a data do treinamento.") from error
+    if SCHEDULE_DAY_KEYS[weekday] not in days:
+        raise ValueError(f"{name} não atende nesse dia da semana.")
+    if hour_text not in slots:
+        periods = ", ".join(slot_label(slot) for slot in slots)
+        raise ValueError(f"{name} atende nestes horários: {periods}.")
+
+
+def available_training_slots(trainer: dict, day: str) -> tuple[list[dict], str]:
+    """Horários de 1 hora livres para o treinador na data escolhida."""
+    schedule = trainer.get("schedule") or empty_schedule()
+    name = trainer.get("name") or "O treinador"
+    slots = schedule.get("slots") or []
+    days = schedule.get("days") or []
+    if not days or not slots:
+        return [], "Este treinador ainda não tem horários cadastrados."
+    try:
+        weekday = datetime.fromisoformat(normalize_text(day)).weekday()
+    except ValueError:
+        return [], "Informe a data do treinamento."
+    if SCHEDULE_DAY_KEYS[weekday] not in days:
+        return [], f"{name} não atende nesse dia da semana."
+    from app.services.service_orders import trainer_busy_hours
+
+    busy = trainer_busy_hours(name, day)
+    open_slots = [
+        {"value": start, "label": slot_label(start)}
+        for start in slots
+        if start not in busy
+    ]
+    if not open_slots:
+        return [], "Nenhum horário livre neste dia."
+    return open_slots, ""
 
 
 def list_people(kind: str | None = None) -> list[dict]:
@@ -138,6 +300,7 @@ def list_people(kind: str | None = None) -> list[dict]:
         rows = conn.execute(query, params).fetchall()
     people = []
     for row in rows:
+        schedule = _schedule_from_raw(row["schedule_json"] if "schedule_json" in row.keys() else "")
         people.append(
             {
                 "id": row["id"],
@@ -151,6 +314,8 @@ def list_people(kind: str | None = None) -> list[dict]:
                 "username": (row["username"] if "username" in row.keys() else "") or "—",
                 "state_name": (row["state_name"] if "state_name" in row.keys() else "") or "—",
                 "city": (row["city"] if "city" in row.keys() else "") or "—",
+                "schedule": schedule,
+                "schedule_label": schedule_label(schedule),
             }
         )
     return people
@@ -249,6 +414,7 @@ def get_person(person_id: str) -> dict | None:
             return ""
         return normalize_text(row[key])
 
+    schedule = _schedule_from_raw(row["schedule_json"] if "schedule_json" in row.keys() else "")
     return {
         "id": row["id"],
         "kind": row["kind"],
@@ -261,6 +427,9 @@ def get_person(person_id: str) -> dict | None:
         "username": raw("username"),
         "state_name": raw("state_name"),
         "city": raw("city"),
+        "has_password": bool(row["password_hash"] if "password_hash" in row.keys() else ""),
+        "schedule": schedule,
+        "schedule_label": schedule_label(schedule),
     }
 
 
@@ -277,6 +446,7 @@ def save_person(
     state_name: str = "",
     city: str = "",
     person_id: str = "",
+    schedule_json: str = "",
 ) -> dict:
     if kind not in PERSON_KINDS:
         raise ValueError("Tipo de cadastro inválido.")
@@ -285,17 +455,13 @@ def save_person(
         raise ValueError("Informe o nome.")
     clean_person_id = normalize_text(person_id)
     password_text = str(password or "").strip()
-    if kind == "treinador":
-        clean_username = ""
+    clean_username = _normalize_username(username)
+    if password_text:
+        password_hash = _hash_password(password_text)
+    elif clean_person_id:
         password_hash = ""
     else:
-        clean_username = _normalize_username(username)
-        if password_text:
-            password_hash = _hash_password(password_text)
-        elif clean_person_id:
-            password_hash = ""
-        else:
-            password_hash = _hash_password(password)
+        password_hash = _hash_password(password)
     clean_region = normalize_text(region).upper()
     clean_state = normalize_text(state_name)
     clean_city = normalize_text(city)
@@ -321,13 +487,11 @@ def save_person(
                 raise ValueError("Cadastro não encontrado.")
             if current["kind"] != kind:
                 raise ValueError("Tipo de cadastro inválido.")
-            if kind == "treinador":
-                clean_username = normalize_text(current["username"]) or f"tr.{uuid.uuid4().hex[:10]}"
+            if not password_hash:
                 password_hash = current["password_hash"] or ""
-            elif not password_hash:
-                password_hash = current["password_hash"] or ""
-        if kind == "treinador" and not clean_username:
-            clean_username = f"tr.{uuid.uuid4().hex[:10]}"
+        stored_schedule = schedule_json if kind == "treinador" else "{}"
+        if kind == "treinador" and not stored_schedule:
+            raise ValueError("Informe a agenda do treinador.")
         taken = conn.execute(
             "SELECT id FROM org_people WHERE lower(username) = ? AND active = 1 AND id != ?",
             (clean_username, clean_person_id),
@@ -351,8 +515,8 @@ def save_person(
                 """
                 INSERT INTO org_people (
                     id, kind, name, email, phone, sector_id, region, username, password_hash,
-                    state_name, city, active, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+                    state_name, city, schedule_json, active, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
                 """,
                 (
                     clean_person_id,
@@ -366,6 +530,7 @@ def save_person(
                     password_hash,
                     clean_state,
                     clean_city,
+                    stored_schedule,
                     stamp,
                     stamp,
                 ),
@@ -376,7 +541,7 @@ def save_person(
                 """
                 UPDATE org_people
                 SET name = ?, email = ?, phone = ?, sector_id = ?, region = ?, username = ?,
-                    password_hash = ?, state_name = ?, city = ?, updated_at = ?
+                    password_hash = ?, state_name = ?, city = ?, schedule_json = ?, updated_at = ?
                 WHERE id = ?
                 """,
                 (
@@ -389,6 +554,7 @@ def save_person(
                     password_hash,
                     clean_state,
                     clean_city,
+                    stored_schedule,
                     stamp,
                     clean_person_id,
                 ),
@@ -412,11 +578,12 @@ def remove_person(person_id: str) -> None:
 
 
 def authenticate_employee(username: str, password: str) -> dict | None:
-    """Login de funcionário. Representante fica cadastrado, mas ainda não entra no sistema."""
+    """Login de funcionário ou treinador. Representante fica cadastrado, mas ainda não entra no sistema."""
     clean_username = normalize_text(username).lower()
     clean_password = str(password or "")
     if not clean_username or not clean_password:
         return None
+    list_sectors()
     init_crm_local_db()
     with _lock, _connect() as conn:
         row = conn.execute(
@@ -424,7 +591,7 @@ def authenticate_employee(username: str, password: str) -> dict | None:
             SELECT people.*, sectors.name AS sector_name, sectors.accesses_json
             FROM org_people AS people
             LEFT JOIN org_sectors AS sectors ON sectors.id = people.sector_id AND sectors.active = 1
-            WHERE lower(people.username) = ? AND people.active = 1 AND people.kind = 'funcionario'
+            WHERE lower(people.username) = ? AND people.active = 1 AND people.kind IN ('funcionario', 'treinador')
             """,
             (clean_username,),
         ).fetchone()
@@ -442,6 +609,7 @@ def authenticate_employee(username: str, password: str) -> dict | None:
         "id": row["id"],
         "name": row["name"],
         "username": row["username"],
+        "kind": row["kind"],
         "sector_id": row["sector_id"] or "",
         "sector_name": row["sector_name"] or "",
         "accesses": accesses,

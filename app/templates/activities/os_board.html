@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
-<link rel="stylesheet" href="/static/css/activities.css?v={{ static_version }}-scroll2">
+<link rel="stylesheet" href="/static/css/activities.css?v={{ static_version }}-mobile6">
 <style>
 .os-queue-form, .os-sector-switch { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
 .os-queue-form input, .os-sector-switch select { height: 40px; border: 1px solid var(--border); border-radius: 10px; padding: 0 10px; }
@@ -8,23 +8,48 @@
 .activities-kanban-column.is-done .activities-kanban-column-title { color: #166534; }
 .activities-kanban-column.is-campaign .activities-kanban-column-title { color: #7C3AED; }
 .os-period { display: flex; flex-wrap: wrap; align-items: end; gap: 14px; padding: 14px 16px; margin-bottom: 16px; }
-.os-period label { display: flex; flex-direction: column; gap: 6px; font-size: 0.84rem; font-weight: 600; color: var(--muted); }
-.os-period input { min-height: 42px; padding: 0 12px; border: 1px solid var(--border); border-radius: 12px; background: #fff; font: inherit; }
+.os-period label, .os-card-search label { display: flex; flex-direction: column; gap: 6px; font-size: 0.84rem; font-weight: 600; color: var(--muted); }
+.os-period input, .os-card-search input { min-height: 42px; padding: 0 12px; border: 1px solid var(--border); border-radius: 12px; background: #fff; font: inherit; }
+.os-card-search { display: flex; align-items: end; gap: 14px; padding: 14px 16px; margin: -4px 0 16px; }
+.os-search-note { margin: -8px 0 16px; color: var(--muted); font-size: 0.9rem; }
+.os-card-search label, .os-card-search input { width: min(100%, 420px); }
 .os-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
-.os-summary article { padding: 16px; }
-.os-summary span { display: block; font-size: 0.78rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--purple, #7C3AED); }
+.os-summary.is-support { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.os-summary.is-columns { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+.os-summary article { padding: 16px; min-width: 0; }
+.os-summary span { display: block; font-size: 0.78rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--purple, #7C3AED); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .os-summary strong { display: block; margin-top: 8px; font-size: 1.8rem; letter-spacing: -0.03em; }
 .os-summary p { margin: 8px 0 0; color: var(--muted); line-height: 1.45; }
 .os-detail-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .os-column-tools { display: flex; gap: 4px; margin-top: 6px; }
 .os-column-tools form { margin: 0; }
 .os-column-tools button { min-height: 28px; padding: 0 8px; border-radius: 8px; font-size: 0.75rem; }
-@media (max-width: 900px) { .os-summary { grid-template-columns: 1fr 1fr; } }
-@media (max-width: 640px) { .os-summary { grid-template-columns: 1fr; } }
+.os-card-delete { display: inline-flex; width: 100%; margin-top: 8px; background: #fff; color: #B91C1C; border: 1px solid #FECACA; }
+.os-proposta-link { display: inline-flex; margin-top: 8px; padding: 4px 8px; border-radius: 8px; background: #F3E8FF; font-size: 0.75rem; font-weight: 700; color: var(--purple, #7C3AED); text-decoration: none; }
+.os-card-status { display: grid; gap: 4px; margin-top: 8px; font-size: 0.72rem; font-weight: 700; color: var(--muted); }
+.os-card-status select { width: 100%; min-height: 32px; border: 1px solid var(--border); border-radius: 8px; padding: 0 8px; font: inherit; background: #fff; cursor: pointer; }
+#os-queue-form { display: grid; gap: 8px; max-width: 280px; }
+#os-queue-form select { min-height: 40px; border: 1px solid var(--border); border-radius: 10px; padding: 0 10px; }
+#os-sector-form { display: grid; gap: 8px; max-width: 280px; }
+#os-sector-form select { min-height: 40px; border: 1px solid var(--border); border-radius: 10px; padding: 0 10px; }
+@media (max-width: 1100px) { .os-summary.is-support { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 900px) { .os-summary, .os-summary.is-support { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 900px) {
+  .os-card-search { flex-direction: column; align-items: stretch; }
+  .os-card-search label, .os-card-search input, .os-card-search .btn, .os-card-search a.btn { width: 100%; }
+  .os-card-search input { font-size: 16px; }
+}
+@media (max-width: 640px) {
+  .os-summary, .os-summary.is-support, .os-summary.is-columns { grid-template-columns: 1fr 1fr; }
+  .os-period, .os-sector-switch, .os-queue-form { flex-direction: column; align-items: stretch; }
+  .os-period input, .os-period button, .os-sector-switch select, .os-queue-form input, .os-queue-form button, .os-card-search label, .os-card-search input, .os-card-search button { width: 100%; }
+  .os-column-tools { flex-wrap: wrap; }
+  .activities-kanban-card-title, .activities-kanban-card-meta { overflow-wrap: anywhere; }
+}
 .os-modal[hidden] { display: none; }
-.os-modal { position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; padding: 16px; }
+.os-modal { position: fixed; inset: 0; z-index: 200; display: grid; place-items: center; padding: 16px; padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
 .os-modal-backdrop { position: absolute; inset: 0; background: rgba(15, 23, 42, 0.45); }
-.os-modal-card { position: relative; width: min(440px, 100%); max-height: min(80vh, 720px); overflow: auto; background: #fff; border-radius: 16px; padding: 18px 18px 16px; box-shadow: 0 18px 50px rgba(15, 23, 42, 0.2); }
+.os-modal-card { position: relative; width: min(440px, 100%); max-height: min(80dvh, 720px); overflow: auto; background: #fff; border-radius: 16px; padding: 18px 18px 16px; box-shadow: 0 18px 50px rgba(15, 23, 42, 0.2); }
 .os-modal-close { position: absolute; top: 10px; right: 10px; border: 0; background: transparent; font-size: 1.4rem; cursor: pointer; }
 .os-detail-protocol { margin: 0 28px 4px 0; color: var(--muted); font-size: 0.82rem; }
 .os-detail h2 { margin: 0 28px 12px 0; font-size: 1.15rem; }
@@ -75,27 +100,40 @@
   <button type="submit" class="btn">Ver período</button>
 </form>
 
-<section class="os-summary" aria-label="Resumo do período">
+<form class="os-card-search panel" id="os-card-search-form" method="get" action="/atividades">
+  {% if sector_id %}<input type="hidden" name="setor" value="{{ sector_id }}">{% endif %}
+  <input type="hidden" name="inicio" value="{{ inicio }}">
+  <input type="hidden" name="fim" value="{{ fim }}">
+  <label>Telefone, empresa ou OS
+    <input type="search" name="busca" id="os-card-filter" value="{{ busca or '' }}" placeholder="Telefone, empresa ou número da OS" autocomplete="off">
+  </label>
+  <button type="submit" class="btn">Pesquisar</button>
+  {% if busca %}
+  <a class="btn btn-secondary" href="/atividades?setor={{ sector_id }}&inicio={{ inicio }}&fim={{ fim }}">Limpar</a>
+  {% endif %}
+</form>
+{% if busca %}
+<p class="os-search-note">{% if search_count %}{{ search_count }} ordem{{ 'ns' if search_count != 1 else '' }} para “{{ busca }}”. A pesquisa por telefone traz a OS mesmo fora do período.{% else %}Nenhuma OS encontrada para “{{ busca }}”.{% endif %}</p>
+{% endif %}
+
+<section class="os-summary{% if summary.layout == 'suporte' %} is-support{% else %} is-columns{% endif %}" aria-label="Ordens por coluna">
+  {% if summary.layout == 'suporte' %}
+  {% for card in summary.cards %}
   <article class="panel">
-    <span>Resultado de conversas</span>
-    <strong>{{ summary.conversations }}</strong>
-    <p>{{ summary.conversations_note }}</p>
+    <span title="{{ card.label }}">{{ card.label }}</span>
+    <strong>{{ card.value }}</strong>
+    <p>{{ card.note }}</p>
   </article>
+  {% endfor %}
+  {% else %}
+  {% for column in columns %}
   <article class="panel">
-    <span>Leads Raissa</span>
-    <strong>{{ summary.leads }}</strong>
-    <p>{{ summary.leads_note }}</p>
+    <span title="{{ column.name }}">{{ column.name }}</span>
+    <strong>{{ column.cards|length }}</strong>
+    <p>Ordens nesta coluna.</p>
   </article>
-  <article class="panel">
-    <span>Em andamento</span>
-    <strong>{{ summary.andamento }}</strong>
-    <p>{{ summary.andamento_note }}</p>
-  </article>
-  <article class="panel">
-    <span>Concluídos</span>
-    <strong>{{ summary.concluidos }}</strong>
-    <p>{{ summary.concluidos_note }}</p>
-  </article>
+  {% endfor %}
+  {% endif %}
 </section>
 
 {% if is_admin and sectors %}
@@ -111,7 +149,8 @@
 </form>
 {% endif %}
 
-<div class="activities-kanban-board" id="os-kanban-board">
+{% set delete_os = can_delete_orders %}
+<div class="activities-kanban-board" id="os-kanban-board" {% if is_commercial %}data-commercial="1"{% endif %}>
   {% for column in columns %}
   <section class="activities-kanban-column{% if column.id == 'concluida' %} is-done{% endif %}{% if column.id == 'campanha' %} is-campaign{% endif %}">
     <header class="activities-kanban-column-header">
@@ -136,28 +175,36 @@
         <input type="hidden" name="direction" value="direita">
         <button type="submit" class="btn btn-secondary btn-small" aria-label="Mover {{ column.name }} para a direita">→</button>
       </form>
+      {% if is_admin or not delete_os %}
       <form method="post" action="/atividades/filas/{{ column.id }}/remover" onsubmit="return confirm('Excluir esta coluna? As ordens dela voltam para Análise.');">
         <input type="hidden" name="sector_id" value="{{ sector_id }}">
         <input type="hidden" name="inicio" value="{{ inicio }}">
         <input type="hidden" name="fim" value="{{ fim }}">
         <button type="submit" class="btn btn-secondary btn-small">Excluir</button>
       </form>
+      {% endif %}
     </div>
     {% endif %}
     <div class="activities-kanban-column-body" data-drop-queue="{{ column.id }}">
       {% for card in column.cards %}
-      <article class="activities-kanban-card" draggable="true" data-order-id="{{ card.id }}" data-current-queue="{{ column.id }}" {% if card.cadastro_url %}data-cadastro-url="{{ card.cadastro_url }}"{% endif %}>
+      <article class="activities-kanban-card" draggable="true" data-order-id="{{ card.id }}" data-current-queue="{{ column.id }}" data-search="{{ (card.empresa or '') ~ ' ' ~ (card.contact_name or '') ~ ' ' ~ (card.protocol or '') ~ ' ' ~ (card.phone or '') ~ ' ' ~ ((card.description or '')|replace('\n', ' ')) }}" {% if card.cadastro_url %}data-cadastro-url="{{ card.cadastro_url }}"{% endif %}>
         <span class="activities-kanban-card-grip" aria-hidden="true">⋮⋮</span>
-        <div class="activities-kanban-card-title">{{ card.empresa }}</div>
-        <div class="activities-kanban-card-action">{{ card.subject }}</div>
+        <div class="activities-kanban-card-title">{% if card.contact_name and card.empresa in ['', '-', '—'] %}{{ card.contact_name }}{% else %}{{ card.empresa }}{% endif %}</div>
+        {% if card.contact_name and card.empresa not in ['', '-', '—'] %}
+        <div class="activities-kanban-card-meta">
+          <span>{{ card.contact_name }}</span>
+        </div>
+        {% endif %}
         <div class="activities-kanban-card-meta">
           <span>{{ card.protocol }}</span>
-          <span>{{ card.responsible }}</span>
         </div>
         <div class="activities-kanban-card-when">
           <span aria-hidden="true">📅</span>
           <span>{{ card.scheduled_date_label }}</span>
         </div>
+        {% if delete_os %}
+        <button type="button" class="btn btn-secondary btn-small os-card-delete" draggable="false" data-delete-order="{{ card.id }}">Excluir</button>
+        {% endif %}
       </article>
       {% else %}
       <div class="activities-kanban-empty">Nenhuma ordem</div>
@@ -173,5 +220,5 @@
     <div id="os-order-modal-body">Carregando…</div>
   </div>
 </div>
-<script src="/static/js/os-kanban.js?v=3"></script>
+<script src="/static/js/os-kanban.js?v=17"></script>
 {% endblock %}

@@ -1,5 +1,6 @@
 import csv
 import io
+import logging
 
 from dataclasses import replace
 
@@ -25,6 +26,7 @@ from app.services.legacy_core import invalidate_sheet_cache, normalize_text
 from app.templating import render
 
 router = APIRouter()
+log = logging.getLogger(__name__)
 
 
 def _parse_leads_params(request: Request, form: dict | None = None) -> dict:
@@ -123,11 +125,50 @@ def _leads_context(request: Request, filters, leads_params: dict):
     }
 
 
+def _with_cadastro_sheet_rows(empresas: list[dict]) -> list[dict]:
+    """Recoloca o botão Ver: a aba Raissa não guarda o número do cadastro."""
+    if not empresas:
+        return empresas
+    try:
+        from app.services.legacy_core import row_field_value
+        from app.services.raissa_company_sync import match_cadastro_sheet_rows
+
+        df, columns = get_prepared_data()
+        if df is None or df.empty:
+            return empresas
+        cadastros = []
+        for _, row in df.iterrows():
+            try:
+                sheet_row = int(row.get("_sheet_row", 0) or 0)
+            except (TypeError, ValueError):
+                continue
+            if sheet_row <= 0:
+                continue
+            phones = [
+                row_field_value(row, columns, key)
+                for key in ("telefone_b2b", "telefone_fixo", "telefone_alternativo", "telefone_socio_1")
+            ]
+            cadastros.append(
+                {
+                    "sheet_row": sheet_row,
+                    "empresa": row.get("_empresa") or "",
+                    "nome_fantasia": row_field_value(row, columns, "nome_fantasia"),
+                    "cnpj": row_field_value(row, columns, "cnpj"),
+                    "telefones": [phone for phone in phones if phone],
+                }
+            )
+        return match_cadastro_sheet_rows(empresas, cadastros)
+    except Exception:
+        log.exception("Não liguei a lista de Empresas ao cadastro")
+        return empresas
+
+
 def _raissa_empresas_context(filters, leads_params: dict):
     from app.services.campaign_leads import read_raissa_companies
 
     loaded = read_raissa_companies()
     empresas = loaded.get("empresas") or []
+    empresas = _with_cadastro_sheet_rows(empresas)
     searching = bool(normalize_text(filters.search))
     table, _page_rows = build_raissa_empresas_table(
         empresas,

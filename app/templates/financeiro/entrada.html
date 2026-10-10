@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+{% block content %}
+<link rel="stylesheet" href="/static/css/financeiro.css?v={{ static_version }}">
+<div class="page-header">
+  <div>
+    <div class="page-title">Entrada</div>
+    <div class="page-subtitle">Entradas do Asaas no período. Boletos que entraram são os pagos pela data do pagamento, não só pelo vencimento.</div>
+  </div>
+  <div class="page-actions">
+    <a class="btn btn-secondary" href="/financeiro/contas-a-pagar">Contas a pagar</a>
+    <form method="post" action="/financeiro/sincronizar">
+      <input type="hidden" name="destino" value="entrada">
+      <input type="hidden" name="period_start" value="{{ filters.period_start }}">
+      <input type="hidden" name="period_end" value="{{ filters.period_end }}">
+      <input type="hidden" name="status" value="{{ filters.status }}">
+      <button type="submit" class="btn">Atualizar Asaas</button>
+    </form>
+  </div>
+</div>
+
+{% if flash %}
+<div class="alert-success fin-flash">{{ flash }}</div>
+{% endif %}
+{% if boletos.error %}
+<div class="fin-banner">{{ boletos.error }}</div>
+{% endif %}
+
+<div class="metric-grid metric-grid-fin metric-grid-fin-4">
+  {% for card in kpi_cards %}
+  <div class="metric-card">
+    <div class="metric-top">
+      <div class="metric-icon tone-{{ card.tone }}">{{ card.icon }}</div>
+    </div>
+    <div class="metric-label">{{ card.label }}</div>
+    <div class="metric-value">{{ card.value }}</div>
+    <div class="metric-note">{{ card.note }}</div>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="panel fin-table-card">
+  <div class="section-heading">Boletos que entraram em {{ boletos.month_label }}</div>
+  {% if boletos.entraram_aviso %}
+  <div class="fin-banner">{{ boletos.entraram_aviso }}</div>
+  {% endif %}
+  <div class="fin-entradas-total">{{ boletos.entraram_n }} boleto{{ 's' if boletos.entraram_n != 1 else '' }} pagos · <strong>{{ boletos.entraram_valor_label }}</strong>{% if boletos.entradas_outras_n %} · outras entradas {{ boletos.entradas_outras_n }} · {{ boletos.entradas_outras_label }}{% endif %}</div>
+  <div class="table-wrap">
+    <table class="data-table fin-table fin-stack fin-cols-pago">
+      <thead>
+        <tr>
+          <th>Cliente</th>
+          <th>Valor</th>
+          <th>Pago em</th>
+          <th>Vencimento</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in boletos.entraram %}
+        <tr>
+          <td>{{ row.cliente }}</td>
+          <td class="fin-cell-num fin-money-in">{{ row.valor_label }}</td>
+          <td class="fin-cell-num">{{ row.pago_label }}</td>
+          <td class="fin-cell-num">{{ row.vencimento_label }}</td>
+          <td>
+            {% if row.invoice_url %}
+            <a class="btn btn-secondary fin-btn-sm" href="{{ row.invoice_url }}" target="_blank" rel="noopener">Ver</a>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="fin-empty">Nenhum boleto entrou neste período.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="panel fin-table-card">
+  <div class="section-heading">Boletos que vencem hoje</div>
+  <div class="fin-entradas-total">{{ boletos.hoje_n }} boleto{{ 's' if boletos.hoje_n != 1 else '' }} · <strong>{{ boletos.hoje_valor_label }}</strong></div>
+  <div class="table-wrap">
+    <table class="data-table fin-table fin-stack fin-cols-status">
+      <thead>
+        <tr>
+          <th>Cliente</th>
+          <th>Valor</th>
+          <th>Vencimento</th>
+          <th>Status</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in boletos.hoje %}
+        <tr>
+          <td>{{ row.cliente }}</td>
+          <td class="fin-cell-num">{{ row.valor_label }}</td>
+          <td class="fin-cell-num">{{ row.vencimento_label }}</td>
+          <td><span class="fin-badge tone-{{ row.status_tone }}">{{ row.status_label }}</span></td>
+          <td>
+            {% if row.invoice_url %}
+            <a class="btn btn-secondary fin-btn-sm" href="{{ row.invoice_url }}" target="_blank" rel="noopener">Ver</a>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="fin-empty">Nenhum boleto vence hoje.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="panel fin-table-card">
+  <div class="fin-period-head">
+    <div class="section-heading">Boletos com vencimento em {{ boletos.month_label }}</div>
+    <form method="get" action="/financeiro/entrada" class="fin-period-form">
+      <label>De
+        <input type="date" name="period_start" value="{{ filters.period_start }}">
+      </label>
+      <label>Até
+        <input type="date" name="period_end" value="{{ filters.period_end }}">
+      </label>
+      <label>Status
+        <select name="status">
+          <option value="" {% if not filters.status %}selected{% endif %}>Todos</option>
+          <option value="receber" {% if filters.status == 'receber' %}selected{% endif %}>A vencer</option>
+          <option value="vence_hoje" {% if filters.status == 'vence_hoje' %}selected{% endif %}>Vence hoje</option>
+          <option value="atrasado" {% if filters.status == 'atrasado' %}selected{% endif %}>Atrasado</option>
+          <option value="pago" {% if filters.status == 'pago' %}selected{% endif %}>Pago</option>
+          <option value="recorrente" {% if filters.status == 'recorrente' %}selected{% endif %}>Recorrente</option>
+        </select>
+      </label>
+      <button type="submit" class="btn">Ver período</button>
+    </form>
+  </div>
+  <div class="fin-entradas-total">{{ boletos.mes_n }} boleto{{ 's' if boletos.mes_n != 1 else '' }} · <strong>{{ boletos.mes_valor_label }}</strong> · recebidos {{ boletos.mes_pagos_label }} · em aberto {{ boletos.mes_abertos_label }}</div>
+  <div class="table-wrap">
+    <table class="data-table fin-table fin-stack fin-cols-status">
+      <thead>
+        <tr>
+          <th>Cliente</th>
+          <th>Valor</th>
+          <th>Vencimento</th>
+          <th>Status</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in boletos.mes %}
+        <tr>
+          <td>{{ row.cliente }}</td>
+          <td class="fin-cell-num">{{ row.valor_label }}</td>
+          <td class="fin-cell-num">{{ row.vencimento_label }}</td>
+          <td><span class="fin-badge tone-{{ row.status_tone }}">{{ row.status_label }}</span></td>
+          <td>
+            {% if row.invoice_url %}
+            <a class="btn btn-secondary fin-btn-sm" href="{{ row.invoice_url }}" target="_blank" rel="noopener">Ver</a>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="fin-empty">Nenhum boleto neste mês.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

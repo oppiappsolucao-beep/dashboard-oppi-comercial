@@ -157,7 +157,37 @@
   color: var(--muted);
 }
 
+.org-day-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.org-day {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: #fff;
+  font-weight: 700;
+}
+
 @media (max-width: 700px) {
+  .org-form .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .org-day-list {
+    max-width: 100%;
+  }
+
+  .org-card-head {
+    flex-direction: column;
+  }
+
   .org-access-list,
   .org-service-row {
     grid-template-columns: 1fr;
