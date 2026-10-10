@@ -50,46 +50,11 @@
   </div>
 </div>
 
+{% if boletos.entradas_outras %}
 <div class="panel fin-table-card">
-  <div class="section-heading">Boletos que entraram em {{ boletos.month_label }}</div>
   {% if boletos.entraram_aviso %}
   <div class="fin-banner">{{ boletos.entraram_aviso }}</div>
   {% endif %}
-  <div class="fin-entradas-total">{{ boletos.entraram_n }} boleto{{ 's' if boletos.entraram_n != 1 else '' }} pagos · <strong>{{ boletos.entraram_valor_label }}</strong>{% if boletos.entradas_outras_n %} · outras entradas {{ boletos.entradas_outras_n }} · {{ boletos.entradas_outras_label }}{% endif %}</div>
-  <div class="table-wrap">
-    <table class="data-table fin-table fin-stack fin-cols-pago">
-      <thead>
-        <tr>
-          <th>Cliente</th>
-          <th>Valor</th>
-          <th>Pago em</th>
-          <th>Vencimento</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for row in boletos.entraram %}
-        <tr>
-          <td>{{ row.cliente }}</td>
-          <td class="fin-cell-num fin-money-in">{{ row.valor_label }}</td>
-          <td class="fin-cell-num">{{ row.pago_label }}</td>
-          <td class="fin-cell-num">{{ row.vencimento_label }}</td>
-          <td>
-            {% if row.invoice_url %}
-            <a class="btn btn-secondary fin-btn-sm" href="{{ row.invoice_url }}" target="_blank" rel="noopener">Ver</a>
-            {% endif %}
-          </td>
-        </tr>
-        {% else %}
-        <tr><td colspan="5" class="fin-empty">Nenhum boleto entrou neste período.</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</div>
-
-{% if boletos.entradas_outras %}
-<div class="panel fin-table-card">
   <div class="section-heading">PIX e cartão que entraram em {{ boletos.month_label }}</div>
   <div class="fin-entradas-total">{{ boletos.entradas_outras_n }} pagamento{{ 's' if boletos.entradas_outras_n != 1 else '' }} · <strong>{{ boletos.entradas_outras_label }}</strong></div>
   <div class="table-wrap">
