@@ -23,6 +23,8 @@ PAID_STATUSES = {"RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"}
 PENDING_STATUSES = {"PENDING", "AWAITING_RISK_ANALYSIS"}
 OVERDUE_STATUSES = {"OVERDUE"}
 CANCELLED_STATUSES = {"REFUNDED", "REFUND_REQUESTED", "DELETED"}
+# Cobranças que entram no saldo do mês: boleto, PIX e cartão (e PIX/Boleto avulso).
+ENTRY_BILLING_TYPES = {"BOLETO", "PIX", "CREDIT_CARD", "DEBIT_CARD", "UNDEFINED"}
 
 TAB_VISAO = "visao"
 TAB_FATURAS = "faturas"
@@ -69,6 +71,8 @@ def billing_label(billing_type: str, *, has_subscription: bool = False) -> str:
         return "Cartão recorrente" if has_subscription else "Cartão"
     if kind == "TRANSFER":
         return "Transferência"
+    if kind == "UNDEFINED":
+        return "PIX/Boleto"
     return kind or "—"
 
 
@@ -193,6 +197,7 @@ def _map_invoice(payment: dict, customers: dict[str, dict], crm_rows: list[dict]
     crm = _match_crm(customer, crm_rows)
     classified = classify_payment(payment, today=today)
     due = _parse_date(payment.get("dueDate"))
+    entered = _parse_date(payment.get("dateCreated"))
     value = float(payment.get("value") or 0)
     cliente = (
         (crm or {}).get("empresa")
@@ -216,6 +221,8 @@ def _map_invoice(payment: dict, customers: dict[str, dict], crm_rows: list[dict]
         "valor_label": format_brl(value),
         "vencimento": due,
         "vencimento_label": due_label,
+        "entrada": entered,
+        "entrada_label": format_date_br(entered),
         "forma": billing_label(payment.get("billingType") or "", has_subscription=bool(payment.get("subscription"))),
         "billing_type": normalize_text(payment.get("billingType")).upper(),
         "status_key": classified["key"],
@@ -253,6 +260,22 @@ def _map_subscription(item: dict, customers: dict[str, dict], crm_rows: list[dic
         "sheet_row": sheet_row,
         "cliente_href": f"/cadastro/todos/{sheet_row}/editar" if sheet_row else "",
     }
+
+
+def charges_entered_in_period(rows: list[dict], start: date, end: date) -> list[dict]:
+    """Boleto, PIX e cartão gerados no período. Cancelados ficam de fora do saldo."""
+    out = []
+    for row in rows:
+        if row.get("billing_type") not in ENTRY_BILLING_TYPES:
+            continue
+        if row.get("status_key") == "cancelado":
+            continue
+        entered = row.get("entrada")
+        if not entered or entered < start or entered > end:
+            continue
+        out.append(row)
+    out.sort(key=lambda row: row.get("entrada") or date.min, reverse=True)
+    return out
 
 
 def _filter_invoices(rows: list[dict], params: dict) -> list[dict]:
@@ -324,6 +347,9 @@ def build_financeiro_context(params: dict | None = None, *, force_sync: bool = F
         "kpi_cards": _kpi_cards(0, 0, 0, 0, 0, 0, 0, 0),
         "forecast": forecast,
         "invoices": [],
+        "saldo": 0.0,
+        "saldo_label": format_brl(0),
+        "saldo_count": 0,
         "subscriptions": [],
         "overdue_clients": [],
         "tab": tab,
@@ -461,7 +487,9 @@ def build_financeiro_context(params: dict | None = None, *, force_sync: bool = F
         })
     overdue_clients.sort(key=lambda row: row.get("days") or 0, reverse=True)
 
-    filtered = _filter_invoices(invoices, params)
+    entered = charges_entered_in_period(invoices, period_start, period_end)
+    listed = _filter_invoices(entered, {**params, "period_start": "", "period_end": ""})
+    saldo = sum(row["valor"] for row in listed)
     asaas_cards = _kpi_cards(
             sum(row["valor"] for row in receber_mes),
             len(receber_mes),
@@ -475,7 +503,10 @@ def build_financeiro_context(params: dict | None = None, *, force_sync: bool = F
         )
     empty.update({
         "kpi_cards": asaas_cards,
-        "invoices": filtered,
+        "invoices": listed,
+        "saldo": saldo,
+        "saldo_label": format_brl(saldo),
+        "saldo_count": len(listed),
         "subscriptions": subscriptions,
         "overdue_clients": overdue_clients,
         "inadimplencia": inadimplencia,

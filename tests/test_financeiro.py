@@ -51,6 +51,21 @@ class FinanceiroMappingTest(unittest.TestCase):
         )
         self.assertEqual(_service_name({"description": "Parcela 2 de 12"}, "MARCOS"), "Parcela 2 de 12")
 
+    def test_month_entries_include_boleto_pix_and_card(self):
+        from app.services.financeiro import charges_entered_in_period
+
+        rows = [
+            {"billing_type": "BOLETO", "status_key": "pago", "entrada": date(2026, 10, 2), "valor": 100},
+            {"billing_type": "PIX", "status_key": "receber", "entrada": date(2026, 10, 8), "valor": 50},
+            {"billing_type": "CREDIT_CARD", "status_key": "pago", "entrada": date(2026, 10, 9), "valor": 80},
+            {"billing_type": "DEBIT_CARD", "status_key": "pago", "entrada": date(2026, 9, 30), "valor": 10},
+            {"billing_type": "BOLETO", "status_key": "cancelado", "entrada": date(2026, 10, 3), "valor": 999},
+            {"billing_type": "TRANSFER", "status_key": "pago", "entrada": date(2026, 10, 4), "valor": 20},
+        ]
+        entered = charges_entered_in_period(rows, date(2026, 10, 1), date(2026, 10, 31))
+        self.assertEqual([row["billing_type"] for row in entered], ["CREDIT_CARD", "PIX", "BOLETO"])
+        self.assertEqual(sum(row["valor"] for row in entered), 230)
+
 
 class CadastroBillingMappingTest(unittest.TestCase):
     def test_asaas_types(self):
