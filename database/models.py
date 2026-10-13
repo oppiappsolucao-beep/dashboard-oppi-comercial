@@ -736,6 +736,23 @@ class CampaignLead(Base):
     created_at = Column(String(40), nullable=False, default="")
 
 
+class CompanyPayable(Base):
+    """Conta a pagar da empresa. Fica no Postgres para não sumir no redeploy."""
+
+    __tablename__ = "company_payables"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    description = Column(String(255), nullable=False, default="")
+    amount = Column(Float, nullable=False, default=0)
+    due_date = Column(String(20), nullable=False, default="", index=True)
+    paid_on = Column(String(20), nullable=False, default="")
+    created_at = Column(String(40), nullable=False, default="")
+    supplier = Column(String(255), nullable=False, default="")
+    category = Column(String(40), nullable=False, default="outra")
+    repeat_count = Column(Integer, nullable=False, default=1)
+    series_id = Column(String(64), nullable=False, default="")
+
+
 class ServiceOrderEvent(Base):
     """Histórico da ordem: criação, fila, conclusão, reabertura e atualizações."""
 
