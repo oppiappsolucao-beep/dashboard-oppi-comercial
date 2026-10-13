@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block content %}
+<link rel="stylesheet" href="/static/css/gestao.css?v={{ static_version }}">
+<div class="page-header">
+  <div>
+    <div class="page-title">Gestão de tráfego</div>
+    <div class="page-subtitle">Espelho do Meta no período, para conferir campanha, criativo e conversa.</div>
+  </div>
+</div>
+
+<form class="gestao-filters panel" method="get" action="/gestao">
+  <label>
+    De
+    <input type="date" name="inicio" value="{{ inicio }}">
+  </label>
+  <label>
+    Até
+    <input type="date" name="fim" value="{{ fim }}">
+  </label>
+  <button type="submit" class="btn">Ver período</button>
+</form>
+
+{% if not mirror.configured %}
+<section class="panel gestao-note">
+  <h2>Conectar o Meta</h2>
+  <p>No Easypanel, defina estas variáveis e faça o Implantar de novo:</p>
+  <ul>
+    <li><code>META_AD_ACCOUNT_ID</code> — número da conta de anúncios, com ou sem <code>act_</code>.</li>
+    <li><code>META_ACCESS_TOKEN</code> — token com permissão de leitura dos anúncios (<code>ads_read</code>).</li>
+  </ul>
+  <p>O token fica só no servidor. A tela lê o período e não altera campanha nenhuma.</p>
+</section>
+{% elif mirror.error %}
+<section class="panel gestao-note gestao-note-error">
+  <h2>Não consegui ler o Meta</h2>
+  <p>{{ mirror.error }}</p>
+</section>
+{% else %}
+<p class="gestao-account">Conta {{ mirror.account_name }} · {{ mirror.totals.ads_label }} criativos com entrega</p>
+
+<section class="gestao-cards" aria-label="Resultado do Meta no período">
+  <article class="gestao-card panel">
+    <span>Investido</span>
+    <strong>{{ mirror.totals.spend_label }}</strong>
+    <p>Valor que o Meta contabilizou no período.</p>
+  </article>
+  <article class="gestao-card panel">
+    <span>Cliques</span>
+    <strong>{{ mirror.totals.clicks_label }}</strong>
+    <p>CTR {{ mirror.totals.ctr_label }} em {{ mirror.totals.impressions_label }} impressões.</p>
+  </article>
+  <article class="gestao-card panel">
+    <span>Conversas</span>
+    <strong>{{ mirror.totals.conversations_label }}</strong>
+    <p>Conversa de mensagem iniciada, no critério do Meta.</p>
+  </article>
+  <article class="gestao-card panel">
+    <span>Custo por conversa</span>
+    <strong>{{ mirror.totals.cost_label }}</strong>
+    <p>Investido dividido pelas conversas do período.</p>
+  </article>
+</section>
+
+<section class="panel gestao-table-wrap">
+  <h2>Criativos</h2>
+  {% if mirror.rows %}
+  <div class="gestao-table-scroll">
+    <table class="gestao-table">
+      <thead>
+        <tr>
+          <th>Campanha</th>
+          <th>Conjunto</th>
+          <th>Criativo</th>
+          <th>Investido</th>
+          <th>Impressões</th>
+          <th>Cliques</th>
+          <th>CTR</th>
+          <th>Conversas</th>
+          <th>Custo / conversa</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in mirror.rows %}
+        <tr>
+          <td>{{ row.campaign }}</td>
+          <td>{{ row.adset }}</td>
+          <td>{{ row.ad }}</td>
+          <td>{{ row.spend_label }}</td>
+          <td>{{ row.impressions_label }}</td>
+          <td>{{ row.clicks_label }}</td>
+          <td>{{ row.ctr_label }}</td>
+          <td>{{ row.conversations_label }}</td>
+          <td>{{ row.cost_label }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p>Nenhum criativo com entrega de {{ inicio }} até {{ fim }}.</p>
+  {% endif %}
+</section>
+{% endif %}
+{% endblock %}

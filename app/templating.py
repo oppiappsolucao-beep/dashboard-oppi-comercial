@@ -17,6 +17,7 @@ templates.env.globals["support_whatsapp_label"] = settings.support_whatsapp_labe
 templates.env.globals["static_version"] = APP_BUILD
 
 PAGE_BACK_FALLBACKS = {
+    "gestao": "/gestao",
     "overview": "/visao-geral",
     "funnel": "/funil-de-vendas",
     "leads": "/leads-e-empresas",
@@ -25,6 +26,8 @@ PAGE_BACK_FALLBACKS = {
     "proposals": "/propostas",
     "goals": "/metas-e-relatorios",
     "financeiro": "/financeiro",
+    "entrada": "/financeiro/entrada",
+    "contas_pagar": "/financeiro/contas-a-pagar",
     "registration_new": "/leads-e-empresas",
     "contracts": "/leads-e-empresas",
     "settings": "/visao-geral",
@@ -41,7 +44,7 @@ def render(
     if "back_fallback" not in ctx:
         active_page = ctx.get("active_page")
         if active_page:
-            ctx["back_fallback"] = PAGE_BACK_FALLBACKS.get(active_page, "/visao-geral")
+            ctx["back_fallback"] = PAGE_BACK_FALLBACKS.get(active_page, "/gestao")
     if "display_username" not in ctx or "display_role" not in ctx:
         try:
             from app.dependencies import get_session_user
@@ -58,6 +61,13 @@ def render(
         else:
             ctx.setdefault("display_username", settings.app_username)
             ctx.setdefault("display_role", "")
+    if "nav" not in ctx:
+        try:
+            from app.services.access_scope import nav_permissions
+
+            ctx["nav"] = nav_permissions(request)
+        except Exception:
+            ctx["nav"] = {}
     if "is_admin" not in ctx:
         try:
             from app.dependencies import is_admin

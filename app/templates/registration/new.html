@@ -1,109 +1,301 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="client-edit-page">
-  <header class="client-edit-header panel">
-    <div class="client-edit-header-main">
-      <div class="client-edit-identity">
-        <span class="client-edit-avatar">{{ header_initials }}</span>
-        <div class="client-edit-identity-text">
-          <h1 class="client-edit-title" id="registration-client-title">{{ client_edit_title }}</h1>
-          <div class="client-edit-meta">
-            <span class="client-edit-registered">
-              <span class="client-edit-meta-icon" aria-hidden="true">📅</span>
-              {{ header_subtitle }}
-            </span>
-            <span class="client-edit-meta-sep" aria-hidden="true"></span>
-            <span class="client-edit-id-badge">{{ header_id }}</span>
-          </div>
-        </div>
-      </div>
+<style>
+  .client-edit-tabs-new {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: 100%;
+  }
+  .client-edit-tabs-new .client-edit-tab {
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+  }
+  .client-edit-tabs-new .client-edit-tab-title,
+  .client-edit-tabs-new .client-edit-tab-sub {
+    display: flex;
+    width: 100%;
+    justify-content: center;
+    text-align: center;
+  }
+  .cadastro-closes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 12px; }
+  .cadastro-close-card { display: block; width: 100%; text-align: left; border: 1px solid var(--border); background: #fff; border-radius: 16px; padding: 16px; cursor: pointer; font: inherit; color: inherit; }
+  .cadastro-close-card.is-open { border-color: #7C3AED; background: #FCFAFF; }
+  .cadastro-close-card span { display: block; font-size: 0.78rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: #7C3AED; }
+  .cadastro-close-card strong { display: block; margin-top: 8px; font-size: 1.8rem; letter-spacing: -0.03em; }
+  .cadastro-close-card p { margin: 8px 0 0; color: var(--muted); line-height: 1.45; }
+  .cadastro-close-list { display: grid; gap: 10px; padding: 14px; margin-bottom: 14px; }
+  .cadastro-close-list[hidden] { display: none; }
+  .cadastro-close-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .cadastro-close-actions { display: flex; align-items: flex-end; gap: 8px; }
+  .cadastro-lead-status { display: grid; gap: 4px; min-width: 148px; margin: 0; }
+  .cadastro-lead-status span { font-size: 0.72rem; font-weight: 700; color: var(--muted); }
+  .cadastro-lead-status select, .cadastro-form-status select { min-height: 36px; border: 1px solid var(--border); border-radius: 10px; padding: 0 8px; font: inherit; background: #fff; }
+  .cadastro-form-status { display: grid; gap: 6px; margin-bottom: 12px; }
+  .cadastro-form-status p { margin: 0; color: var(--muted); }
+  .cadastro-close-row:last-child { border-bottom: 0; padding-bottom: 0; }
+  .cadastro-close-row strong, .cadastro-close-row span { display: block; }
+  .cadastro-close-row span { color: var(--muted); font-size: 0.86rem; }
+  .cadastro-close-name { color: inherit; text-decoration: none; display: block; }
+  .cadastro-close-name:hover strong { color: #7C3AED; }
+  #cadastro-bot[hidden] { display: none; }
+  @media (max-width: 720px) { .cadastro-closes { grid-template-columns: 1fr; } .cadastro-close-row { flex-direction: column; align-items: flex-start; } }
+  .cadastro-bot { display: grid; gap: 10px; margin-bottom: 12px; }
+  .cadastro-bot h2 { margin: 0; font-size: 1rem; }
+  .cadastro-bot p { margin: 0; color: var(--muted); line-height: 1.45; }
+  .cadastro-bot textarea { width: 100%; min-height: 140px; padding: 12px; border: 1px solid var(--border); border-radius: 12px; font: inherit; resize: vertical; }
+  .cadastro-bot-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+</style>
+  {% if error %}<div class="alert-error">{{ error }}</div>{% endif %}
+  {% if success %}<div class="alert-success">{{ success }}</div>{% endif %}
 
-      <div class="client-edit-header-center">
-        {% with form_id='registration-new-form' %}
-        {% include "partials/registration_tipo_switch.html" %}
-        {% endwith %}
-      </div>
-
-      <div class="client-edit-status-block" aria-label="Status do negócio">
-        <div class="client-edit-status-title">Status do negócio</div>
-        <div class="client-edit-pipeline">
-          {% for step in pipeline_steps %}
-          <div class="client-edit-pipeline-step {% if step.is_active %}is-active{% elif step.is_done %}is-done{% endif %}">
-            <span class="client-edit-pipeline-dot"></span>
-            <span class="client-edit-pipeline-label">{{ step.label }}</span>
-          </div>
-          {% endfor %}
-        </div>
+  <section class="cadastro-closes" aria-label="Leads concluídos">
+    <button type="button" class="cadastro-close-card" data-close-list="pending" aria-expanded="false" aria-controls="cadastro-close-pending">
+      <span>Concluídos no Kanban</span>
+      <strong>{{ registration_closes.pending_total }}</strong>
+      <p>Leads que Comercial ou Oppi Tech colocou em Concluída e ainda vão para o cadastro.</p>
+    </button>
+    <button type="button" class="cadastro-close-card" data-close-list="registered" aria-expanded="false" aria-controls="cadastro-close-registered">
+      <span>Fechados no mês</span>
+      <strong>{{ registration_closes.registered_total }}</strong>
+      <p>Leads computados para fechado em {{ registration_closes.month_label }}.</p>
+    </button>
+  </section>
+  <div id="cadastro-close-pending" class="cadastro-close-list panel" hidden>
+    {% for item in registration_closes.pending %}
+    <div class="cadastro-close-row">
+      <a class="cadastro-close-name" href="{{ item.transfer_url }}#cadastro-bot">
+        <strong>{{ item.empresa }}</strong>
+        <span>{{ item.phone }}{% if item.contact_name %} · {{ item.contact_name }}{% endif %}</span>
+      </a>
+      <div class="cadastro-close-actions">
+        {% if item.order_id and item.queues %}
+        <form method="post" action="/cadastro/lead/status" class="cadastro-lead-status">
+          <span>Status</span>
+          <input type="hidden" name="order_id" value="{{ item.order_id }}">
+          <select name="queue_id" aria-label="Status de {{ item.empresa }}" onchange="if (this.value !== '{{ item.queue_id }}' && '{{ item.queue_id }}' === 'concluida' && !confirm('Alterar o local deste lead?')) { this.value = '{{ item.queue_id }}'; return; } this.form.requestSubmit();">
+            {% for queue in item.queues %}
+            <option value="{{ queue.id }}" {% if item.queue_id == queue.id %}selected{% endif %}>{{ queue.name }}</option>
+            {% endfor %}
+          </select>
+        </form>
+        {% endif %}
+        {% if item.companies and item.companies|length > 1 %}
+        {% for company in item.companies %}
+        <a class="btn btn-small btn-secondary" href="{{ company.url }}">Ver {{ company.kind|lower }} · {{ company.empresa }}</a>
+        {% endfor %}
+        {% elif item.company_url %}
+        <a class="btn btn-small btn-secondary" href="{{ item.company_url }}">Ver empresas</a>
+        {% else %}
+        <a class="btn btn-small btn-secondary" href="/leads-e-empresas">Ver empresas</a>
+        {% endif %}
+        <a class="btn btn-small" href="{{ item.transfer_url }}#cadastro-bot">Cadastrar</a>
+        {% if item.order_id %}
+        <form method="post" action="/cadastro/lead/fechar">
+          <input type="hidden" name="os" value="{{ item.order_id }}">
+          <button type="submit" class="btn btn-small btn-secondary">Computar para fechado</button>
+        </form>
+        {% endif %}
       </div>
     </div>
-  </header>
-
-  {% if error %}<div class="alert-error">{{ error }}</div>{% endif %}
-
-  <div class="client-edit-summary-grid">
-    {% for card in summary_cards %}
-    <article class="client-edit-summary-card panel">
-      <span class="client-edit-summary-icon" aria-hidden="true">{{ card.icon }}</span>
-      <div class="client-edit-summary-body">
-        <span class="client-edit-summary-label">{{ card.label }}</span>
-        <strong class="client-edit-summary-value">{{ card.value }}</strong>
-        <span class="client-edit-summary-hint">{{ card.hint }}</span>
+    {% else %}
+    <p>Nenhum cliente aguardando cadastro.</p>
+    {% endfor %}
+  </div>
+  <div id="cadastro-close-registered" class="cadastro-close-list panel" hidden>
+    {% for item in registration_closes.registered %}
+    <div class="cadastro-close-row">
+      <div>
+        <strong>{{ item.empresa }}</strong>
+        <span>{{ item.phone }}{% if item.contact_name %} · {{ item.contact_name }}{% endif %}</span>
       </div>
-    </article>
+      {% if item.companies and item.companies|length > 1 %}
+      {% for company in item.companies %}
+      <a class="btn btn-small btn-secondary" href="{{ company.url }}">Ver {{ company.kind|lower }} · {{ company.empresa }}</a>
+      {% endfor %}
+      {% elif item.company_url %}
+      <a class="btn btn-small btn-secondary" href="{{ item.company_url }}">Ver empresas</a>
+      {% else %}
+      <a class="btn btn-small btn-secondary" href="/leads-e-empresas">Ver empresas</a>
+      {% endif %}
+    </div>
+    {% else %}
+    <p>Nenhum lead fechado neste mês.</p>
     {% endfor %}
   </div>
 
-  <nav class="client-edit-tabs panel client-edit-tabs-interactive client-edit-tabs-new" aria-label="Abas do cadastro">
-    <button type="button" class="client-edit-tab is-active" data-registration-tab="dados">
-      <span class="client-edit-tab-title">Dados gerais</span>
-      <span class="client-edit-tab-sub">Informações da empresa</span>
-    </button>
-    <button type="button" class="client-edit-tab" data-registration-tab="atividades">
-      <span class="client-edit-tab-title">Atividades</span>
-      <span class="client-edit-tab-sub">Primeira atividade comercial</span>
-    </button>
-    <button type="button" class="client-edit-tab" data-registration-tab="proposta">
-      <span class="client-edit-tab-title">Proposta</span>
-      <span class="client-edit-tab-sub">Resumo comercial</span>
-    </button>
-    <button type="button" class="client-edit-tab" data-registration-tab="financeiro">
-      <span class="client-edit-tab-title">Financeiro</span>
-      <span class="client-edit-tab-sub">Forma de pagamento</span>
-    </button>
-  </nav>
-
   <form method="post" action="/cadastro/novo" class="client-edit-form" id="registration-new-form">
-    <input type="hidden" name="create_first_activity" id="create-first-activity" value="0">
+    <input type="hidden" name="cadastro_tipo" value="lead">
+    <input type="hidden" name="create_training" id="create-first-activity" value="0">
     <input type="hidden" name="status" value="Novo Lead">
+    <input type="hidden" name="os" value="{{ values.os }}">
+    {% set lead_ns = namespace(queues=[]) %}
+    {% for item in registration_closes.pending %}
+      {% if values.os and item.order_id == values.os %}
+        {% set lead_ns.queues = item.queues %}
+      {% endif %}
+    {% endfor %}
+    {% if not lead_ns.queues and registration_closes.pending %}
+      {% set lead_ns.queues = registration_closes.pending[0].queues %}
+    {% endif %}
+    {% set counted_ns = namespace(ok=false) %}
+    {% for item in registration_closes.registered %}
+      {% if values.os and item.order_id == values.os %}
+        {% set counted_ns.ok = true %}
+      {% endif %}
+    {% endfor %}
+    {% if values.os %}
+    <section class="cadastro-form-status panel">
+      {% if lead_ns.queues %}
+      <label for="cadastro-kanban-queue"><strong>Status do lead</strong></label>
+      <p>Escolha o local. Concluída fecha o lead no cadastro e tira ele da coluna atual.</p>
+      <select id="cadastro-kanban-queue" name="kanban_queue">
+        {% for queue in lead_ns.queues %}
+        <option value="{{ queue.id }}" {% if (values.kanban_queue or 'concluida') == queue.id %}selected{% endif %}>{{ queue.name }}</option>
+        {% endfor %}
+      </select>
+      {% endif %}
+      {% if counted_ns.ok %}
+      <p>Este lead já está no card Fechados no mês, ao lado.</p>
+      {% else %}
+      <button type="submit" class="btn btn-secondary" formaction="/cadastro/lead/fechar" formmethod="post" formnovalidate>Computar para fechado</button>
+      <p>Conta este lead no card Fechados no mês, ao lado.</p>
+      {% endif %}
+    </section>
+    {% endif %}
+    <input type="hidden" name="vendedor" value="{{ vendedor }}">
     <input type="hidden" name="data_chamado" value="{{ today }}">
     {% if from_page %}<input type="hidden" name="from" value="{{ from_page }}">{% endif %}
 
     <div class="client-edit-tab-panel" data-registration-panel="dados">
+      <section class="cadastro-bot panel" id="cadastro-bot" {% if not values.empresa %}hidden{% endif %}>
+        <h2>Ler mensagem do cliente</h2>
+        <p>Cole o texto que o cliente enviou. O bot preenche só Dados gerais. O treinamento é agendado depois, na empresa.</p>
+        <textarea id="cadastro-bot-text" placeholder="Cole aqui a mensagem do cliente"></textarea>
+        <div class="cadastro-bot-actions">
+          <button type="button" class="btn" id="cadastro-bot-run">Enviar para cadastro</button>
+          <p id="cadastro-bot-note" hidden></p>
+        </div>
+      </section>
       {% include "partials/registration_edit_dados_tab.html" %}
-    </div>
-
-    <div class="client-edit-tab-panel is-hidden" data-registration-panel="atividades">
-      {% include "partials/registration_new_activities_tab.html" %}
-    </div>
-
-    <div class="client-edit-tab-panel is-hidden" data-registration-panel="proposta">
-      {% include "partials/registration_new_proposta_tab.html" %}
-    </div>
-
-    <div class="client-edit-tab-panel is-hidden" data-registration-panel="financeiro">
-      {% include "partials/registration_new_financeiro_tab.html" %}
     </div>
 
     <footer class="client-edit-footer panel">
       <div class="client-edit-footer-actions">
         <button type="submit" class="btn">Salvar cadastro</button>
+        <button type="button" class="btn btn-secondary" id="cadastro-enviar-ponto">Enviar ao Ponto</button>
         <a href="{{ back_href }}" class="btn btn-secondary">Cancelar</a>
       </div>
+      <p class="page-subtitle" id="cadastro-ponto-note" hidden>Primeiro salve o cadastro. Ele vai para a aba Raissa e entra em Empresas. Depois, no cadastro salvo, use Enviar ao Ponto para liberar o login.</p>
     </footer>
   </form>
 </div>
 
+<script>
+  document.querySelectorAll("[data-close-list]").forEach(function (card) {
+    card.addEventListener("click", function () {
+      var name = card.getAttribute("data-close-list");
+      var list = document.getElementById("cadastro-close-" + name);
+      var open = list && list.hidden;
+      document.querySelectorAll(".cadastro-close-list").forEach(function (panel) { panel.hidden = true; });
+      document.querySelectorAll("[data-close-list]").forEach(function (item) {
+        item.classList.remove("is-open");
+        item.setAttribute("aria-expanded", "false");
+      });
+      if (open && list) {
+        list.hidden = false;
+        card.classList.add("is-open");
+        card.setAttribute("aria-expanded", "true");
+      }
+    });
+  });
+  if (new URLSearchParams(window.location.search).get("computado") === "1") {
+    var closedCard = document.querySelector('[data-close-list="registered"]');
+    if (closedCard) closedCard.click();
+  } else if (new URLSearchParams(window.location.search).get("os")) {
+    var pendingCard = document.querySelector('[data-close-list="pending"]');
+    if (pendingCard) pendingCard.click();
+  }
+  document.getElementById("cadastro-bot-run")?.addEventListener("click", async function () {
+    var note = document.getElementById("cadastro-bot-note");
+    var source = document.getElementById("cadastro-bot-text");
+    var text = source ? source.value.trim() : "";
+    if (note) {
+      note.hidden = false;
+      note.textContent = "Lendo a mensagem…";
+    }
+    if (!text) {
+      if (note) note.textContent = "Cole a mensagem do cliente antes de analisar.";
+      return;
+    }
+    try {
+      var response = await fetch("/cadastro/bot/dados-gerais", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: text }),
+      });
+      var data = await response.json();
+      var fields = data.fields || {};
+      var form = document.getElementById("registration-new-form");
+      if (fields.quantidade_socios) {
+        var count = document.getElementById("partners-count");
+        if (count) {
+          count.value = String(fields.quantidade_socios);
+          count.dispatchEvent(new Event("change"));
+        }
+      }
+      Object.keys(fields).forEach(function (name) {
+        if (name === "is_filial" || name === "matriz_nome" || name === "quantidade_socios") return;
+        var input = form ? form.querySelector('[name="' + name + '"]') : null;
+        if (!input || input.readOnly) return;
+        if (input.tagName === "SELECT") {
+          var wanted = String(fields[name] || "").trim().toLowerCase();
+          var match = Array.prototype.find.call(input.options, function (option) {
+            return String(option.value || "").trim().toLowerCase() === wanted;
+          });
+          if (match) input.value = match.value;
+          return;
+        }
+        if (name === "senha_acesso") input.type = "text";
+        input.value = fields[name];
+      });
+      var cnpjField = form ? form.querySelector('[name="cnpj"]') : null;
+      if (cnpjField && String(cnpjField.value || "").replace(/\D/g, "").length === 14) {
+        cnpjField.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+      var fechamento = form ? form.querySelector('[name="data_fechamento"]') : null;
+      if (fechamento && !String(fechamento.value || "").trim()) {
+        var hoje = new Date();
+        var mes = String(hoje.getMonth() + 1).padStart(2, "0");
+        var dia = String(hoje.getDate()).padStart(2, "0");
+        fechamento.value = hoje.getFullYear() + "-" + mes + "-" + dia;
+      }
+      if (fields.is_filial) {
+        var filial = form ? form.querySelector("[data-filial-toggle]") : null;
+        if (filial && !filial.checked) {
+          filial.checked = true;
+          filial.dispatchEvent(new Event("change", { bubbles: true }));
+        }
+      }
+      if (fields.matriz_nome) {
+        var matriz = document.getElementById("empresa_matriz_search");
+        if (matriz) matriz.value = fields.matriz_nome;
+      }
+      if (note) {
+        var names = (data.preenchidos || []).join(", ");
+        note.textContent = names ? data.aviso + " " + names + "." : (data.aviso || "Nada para preencher.");
+      }
+    } catch (error) {
+      if (note) note.textContent = "Não consegui ler a mensagem agora.";
+    }
+  });
+  document.getElementById("cadastro-enviar-ponto")?.addEventListener("click", function () {
+    var note = document.getElementById("cadastro-ponto-note");
+    if (note) note.hidden = false;
+  });
+</script>
 <script src="/static/js/partners-form.js?v={{ static_version }}" defer></script>
-<script src="/static/js/registration-edit.js?v={{ static_version }}" defer></script>
-<script src="/static/js/registration-new.js?v={{ static_version }}" defer></script>
+<script src="/static/js/registration-edit.js?v={{ static_version }}-seller1" defer></script>
+<script src="/static/js/registration-new.js?v={{ static_version }}-save1" defer></script>
 {% endblock %}

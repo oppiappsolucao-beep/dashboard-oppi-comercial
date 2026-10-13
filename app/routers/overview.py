@@ -26,14 +26,13 @@ from app.services.crm_validation_service import (
 from app.services.legacy_core import invalidate_sheet_cache, normalize_text, status_group
 from app.services.filters import (
     DashboardFilters,
-    apply_default_period_filters,
     get_filter_options,
     parse_dashboard_filters,
 )
+from app.services.overview import build_overview_analytics
 from app.services.followup_service import (
     OperationalFilters,
     apply_seller_scope,
-    build_operational_overview_context,
     parse_operational_filters,
 )
 from app.services.lead_actions_storage import DEFAULT_TENANT_ID, complete_activity, get_lead_action
@@ -45,27 +44,19 @@ router = APIRouter()
 def _overview_context(request: Request, filters: DashboardFilters, operational: OperationalFilters, success: str = ""):
     df, columns = get_prepared_data()
     options = get_filter_options(df)
-    filters = apply_default_period_filters(filters, df)
     filters = apply_seller_scope(request, filters, options["seller_options"], is_admin(request))
-
-    operational_ctx = build_operational_overview_context(
-        df,
-        columns,
-        filters,
-        operational,
-        tenant_id=DEFAULT_TENANT_ID,
-    )
+    analytics = build_overview_analytics(df, columns, filters)
 
     return {
         "active_page": "overview",
         "success": success or request.session.pop("company_registration_success", "") or request.session.pop("overview_success", ""),
         "overview_error": request.session.pop("overview_error", ""),
-        "filters": filters,
+        "filters": analytics["filters"],
         "options": options,
         "columns": columns,
         "is_admin": is_admin(request),
         "current_user": normalize_text(request.session.get("username", "")),
-        **operational_ctx,
+        **analytics,
     }
 
 

@@ -177,6 +177,11 @@ def get_prepared_data(refresh: bool = False):
 def require_auth(request: Request):
     if not request.session.get("authenticated"):
         return RedirectResponse(url="/login", status_code=303)
+    from app.services.access_scope import enforce_access
+
+    denied = enforce_access(request)
+    if denied:
+        return denied
     return None
 
 
@@ -184,6 +189,11 @@ def check_credentials(username: str, password: str) -> bool:
     clean_username = normalize_text(username)
     if clean_username == settings.app_username and password == settings.app_password:
         return True
+    if clean_username == settings.app_username:
+        from app.services.password_recovery import verify_admin_password_override
+
+        if verify_admin_password_override(password):
+            return True
 
     from app.services.account_users import verify_account_user_credentials
 
@@ -194,6 +204,16 @@ def get_session_user(request: Request) -> dict | None:
     username = normalize_text(request.session.get("username", ""))
     if not username:
         return None
+
+    if request.session.get("org_person_id"):
+        return {
+            "id": request.session.get("org_person_id"),
+            "username": username,
+            "name": request.session.get("org_person_name") or username,
+            "role": "Treinador" if request.session.get("org_person_kind") == "treinador" else "Funcionário",
+            "managed": True,
+            "department_name": request.session.get("org_sector_name") or "",
+        }
 
     if username.lower() == settings.app_username.lower():
         return {
@@ -220,6 +240,8 @@ def get_session_user(request: Request) -> dict | None:
 
 
 def is_admin(request: Request) -> bool:
+    if request.session.get("org_person_id"):
+        return False
     user = get_session_user(request)
     if user:
         return user.get("role") == "Administrador"
@@ -232,5 +254,5 @@ def require_admin(request: Request):
     if redirect:
         return redirect
     if not is_admin(request):
-        return RedirectResponse(url="/visao-geral", status_code=303)
+        return RedirectResponse(url="/gestao", status_code=303)
     return None

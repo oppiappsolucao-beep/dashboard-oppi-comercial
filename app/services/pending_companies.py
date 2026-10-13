@@ -127,6 +127,7 @@ def enqueue_payload_locally(payload: dict, *, last_error: str = "Migração loca
     from app.services.legacy_core import (
         get_last_good_sheet_values,
         hydrate_sheet_cache_from_disk,
+        _set_first_alias,
         _set_sheet_value_by_header,
         _apply_address_fields,
         _apply_commercial_fields,
@@ -157,7 +158,7 @@ def enqueue_payload_locally(payload: dict, *, last_error: str = "Migração loca
     _apply_address_fields(row_values, headers, payload)
     _set_sheet_value_by_header(row_values, headers, ["Email", "E-mail"], payload.get("email_empresa"))
     _set_sheet_value_by_header(row_values, headers, ["Site empresa", "Site", "Website"], payload.get("site"))
-    _set_sheet_value_by_header(row_values, headers, ["Celular WhatsApp", "Telefone (b2b)", "Telefone b2b"], payload.get("telefone_b2b"))
+    _set_first_alias(row_values, headers, ["Celular / WhatsApp", "Celular/WhatsApp", "Celular WhatsApp", "Telefone (b2b)", "Telefone b2b"], payload.get("telefone_b2b"))
     _set_sheet_value_by_header(row_values, headers, ["Nome do contato", "Nome contato", "Contato WhatsApp"], payload.get("nome_contato"))
     _set_sheet_value_by_header(row_values, headers, ["Telefone fixo", "Fixo"], payload.get("telefone_fixo"))
     _set_sheet_value_by_header(row_values, headers, ["Telefone lemitt", "Telefone alternativo", "Outro telefone"], payload.get("telefone_alternativo"))

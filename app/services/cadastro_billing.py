@@ -21,7 +21,6 @@ from app.services.legacy_core import (
     normalize_digits,
     normalize_text,
     parse_money,
-    phones_match_for_duplicate,
 )
 from app.services.payment_history import load_payment_history, save_payment_history
 
@@ -132,7 +131,13 @@ def parse_billing_plan_from_form(form: Any, *, previous: dict | None = None) -> 
     })
 
 
-def save_billing_plan(tenant_id: str | None, sheet_row: int, plan: dict) -> dict[str, Any]:
+def save_billing_plan(
+    tenant_id: str | None,
+    sheet_row: int,
+    plan: dict,
+    *,
+    mirror_sheet: bool = True,
+) -> dict[str, Any]:
     normalized = _normalize_plan(plan)
     payload = {
         "ciclo": normalized["ciclo"],
@@ -143,7 +148,7 @@ def save_billing_plan(tenant_id: str | None, sheet_row: int, plan: dict) -> dict
         "asaas_customer_id": normalized["asaas_customer_id"],
         "asaas_subscription_id": normalized["asaas_subscription_id"],
     }
-    save_lead_action(tenant_id, sheet_row, {"billing_plan": payload})
+    save_lead_action(tenant_id, sheet_row, {"billing_plan": payload}, mirror_sheet=mirror_sheet)
     return load_billing_plan(tenant_id, sheet_row)
 
 
@@ -182,17 +187,14 @@ def _crm_row_from_values(values: dict) -> dict[str, Any]:
 
 
 def _customer_matches_crm(customer: dict, crm: dict) -> bool:
+    """Só o CNPJ deste cadastro. Sem CNPJ, só o nome inteiro igual — nunca um trecho de outro cliente."""
     cnpj = normalize_cnpj_for_duplicate(customer.get("cpfCnpj") or "")
-    if cnpj and crm.get("cnpj") and cnpj == crm["cnpj"]:
-        return True
-    for phone in (customer.get("mobilePhone"), customer.get("phone")):
-        if phones_match_for_duplicate(crm.get("telefone"), phone or ""):
-            return True
+    crm_cnpj = normalize_cnpj_for_duplicate(crm.get("cnpj") or "")
+    if crm_cnpj:
+        return bool(cnpj) and cnpj == crm_cnpj
     name = normalize_text(customer.get("name")).lower()
     empresa = normalize_text(crm.get("empresa")).lower()
-    if name and empresa and (name == empresa or name in empresa or empresa in name):
-        return True
-    return False
+    return bool(name and empresa and name == empresa)
 
 
 def find_asaas_customer_for_cadastro(
@@ -204,14 +206,17 @@ def find_asaas_customer_for_cadastro(
     stored_id = normalize_text((plan or {}).get("asaas_customer_id"))
     payload = fetch_dashboard_payload()
     customers = payload.get("customers") or []
+    crm = _crm_row_from_values(values)
     if stored_id:
         for customer in customers:
-            if normalize_text(customer.get("id")) == stored_id:
+            if normalize_text(customer.get("id")) == stored_id and _customer_matches_crm(customer, crm):
                 return customer
-    crm = _crm_row_from_values(values)
     if allow_lookup and crm.get("cnpj"):
         try:
-            hits = find_customers(cpfCnpj=crm["cnpj"])
+            hits = [
+                item for item in (find_customers(cpfCnpj=crm["cnpj"]) or [])
+                if _customer_matches_crm(item, crm)
+            ]
             if hits:
                 return hits[0]
         except AsaasError:
@@ -340,7 +345,7 @@ def generate_asaas_invoice(
             "externalReference": f"crm-{sheet_row}",
         })
     normalized["asaas_customer_id"] = customer_id
-    save_billing_plan(tenant_id, sheet_row, normalized)
+    save_billing_plan(tenant_id, sheet_row, normalized, mirror_sheet=False)
 
     history = load_payment_history(tenant_id, sheet_row)
     payment_id = normalize_text(created.get("id"))
@@ -353,8 +358,9 @@ def generate_asaas_invoice(
             "status": "Pendente",
             "forma_pagamento": normalized["forma_label"],
             "asaas_payment_id": payment_id,
+            "invoice_url": created.get("invoiceUrl") or created.get("bankSlipUrl") or created.get("paymentLink") or "",
         })
-        save_payment_history(tenant_id, sheet_row, history)
+        save_payment_history(tenant_id, sheet_row, history, mirror_sheet=False)
 
     invoice_url = created.get("invoiceUrl") or created.get("bankSlipUrl") or created.get("paymentLink") or ""
     return {

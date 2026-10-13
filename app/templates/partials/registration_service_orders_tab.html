@@ -1,0 +1,116 @@
+<div class="registration-activities-panel panel">
+  <div class="registration-activities-head">
+    <div>
+      <h2>Ordens de serviço</h2>
+      <p>Cada ordem fica registrada neste cliente com um protocolo gerado automaticamente.</p>
+    </div>
+  </div>
+
+  {% if cadastro_ativo %}
+  <section class="service-order-create">
+    <h3>Nova ordem de serviço</h3>
+    <div class="form-grid">
+      <div class="form-group full">
+        <label for="os-subject">Assunto <span class="req">*</span></label>
+        <input id="os-subject" name="subject" form="os-create-form" required maxlength="180" placeholder="Ex.: Implantação, ajuste de acesso, suporte técnico">
+      </div>
+      <div class="form-group">
+        <label for="os-sector">Setor <span class="req">*</span></label>
+        <select id="os-sector" name="sector" form="os-create-form" required>
+          <option value="">Selecione o setor</option>
+          {% for sector in org_sectors %}
+          <option value="{{ sector.name }}">{{ sector.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="os-responsible">Responsável <span class="req">*</span></label>
+        <select id="os-responsible" name="responsible" form="os-create-form" required>
+          <option value="">Selecione o setor primeiro</option>
+          {% for person in org_people %}
+          <option value="{{ person.name }}" data-sector="{{ person.sector_name }}" hidden>{{ person.name }}{% if person.kind == 'representante' %} · {{ person.region }}{% endif %}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="os-priority">Prioridade</label>
+        <select id="os-priority" name="priority" form="os-create-form">
+          {% for priority in priority_options %}
+          <option value="{{ priority }}" {% if priority == 'Média' %}selected{% endif %}>{{ priority }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="os-day">Dia <span class="req">*</span></label>
+        <input id="os-day" name="scheduled_date" type="date" form="os-create-form" required value="{{ today_iso }}">
+      </div>
+      <div class="form-group full">
+        <label for="os-description">Descrição</label>
+        <textarea id="os-description" name="description" form="os-create-form" rows="3" maxlength="2000" placeholder="Descreva o que precisa ser feito nesta ordem de serviço."></textarea>
+      </div>
+    </div>
+    <p class="service-order-protocol-hint">O responsável aparece depois do setor. Cadastre a equipe em Sistema, abaixo de Empresas. O protocolo é gerado no registro e não se repete.</p>
+    <button type="submit" class="btn" form="os-create-form">Registrar ordem de serviço</button>
+  </section>
+  <script>
+  (function () {
+    var sector = document.getElementById("os-sector");
+    var responsible = document.getElementById("os-responsible");
+    if (!sector || !responsible) return;
+    function syncResponsible() {
+      var selected = sector.value;
+      var placeholder = responsible.querySelector("option[value='']");
+      var visible = 0;
+      responsible.querySelectorAll("option[data-sector]").forEach(function (option) {
+        var show = selected && option.getAttribute("data-sector") === selected;
+        option.hidden = !show;
+        option.disabled = !show;
+        if (show) visible += 1;
+      });
+      if (responsible.selectedOptions[0] && responsible.selectedOptions[0].hidden) {
+        responsible.value = "";
+      }
+      if (placeholder) {
+        placeholder.textContent = selected
+          ? (visible ? "Selecione o responsável" : "Nenhum responsável neste setor")
+          : "Selecione o setor primeiro";
+      }
+    }
+    sector.addEventListener("change", syncResponsible);
+    syncResponsible();
+  })();
+  </script>
+  {% else %}
+  <div class="registration-activities-empty">
+    Este cadastro está desativado. Ative o cliente para abrir uma nova ordem de serviço.
+  </div>
+  {% endif %}
+
+  {% if service_orders %}
+  <div class="registration-activities-list">
+    {% for order in service_orders %}
+    <article class="registration-activity-card service-order-card">
+      <div class="registration-activity-card-head">
+        <div>
+          <div class="service-order-protocol">{{ order.protocol }}</div>
+          <div class="registration-activity-title">{{ order.subject }}</div>
+          <div class="registration-activity-meta">
+            {% if order.sector %}{{ order.sector }} · {% endif %}{{ order.scheduled_date_label }} · {{ order.responsible }} · {{ order.priority }}
+          </div>
+        </div>
+        <span class="registration-activity-status status-{{ order.status_class }}">{{ order.status_label }}</span>
+      </div>
+      {% if order.description %}
+      <div class="registration-activity-card-body">
+        <span>{{ order.description }}</span>
+      </div>
+      {% endif %}
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="registration-activities-empty">
+    Nenhuma ordem de serviço registrada para este cliente ainda.
+  </div>
+  {% endif %}
+</div>

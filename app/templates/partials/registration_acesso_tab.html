@@ -56,10 +56,7 @@
         <label>E-mail de login do gestor</label>
         <input name="email_login_gestor" type="email" value="{{ values.email_login_gestor }}" autocomplete="off">
       </div>
-      <div class="form-group">
-        <label>E-mail de confirmação do administrador</label>
-        <input name="email_confirmacao_admin" type="email" value="{{ values.email_confirmacao_admin }}" autocomplete="off">
-      </div>
+      <input type="hidden" name="email_confirmacao_admin" value="{{ values.email_confirmacao_admin }}">
       <div class="form-group">
         <label>E-mail de cobrança</label>
         <input name="email_cobranca" type="email" value="{{ values.email_cobranca }}" autocomplete="off">

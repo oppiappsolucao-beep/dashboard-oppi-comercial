@@ -1,0 +1,98 @@
+<div class="os-detail">
+  <p class="os-detail-protocol">{{ order.protocol }} · {{ order.status_label }} · {{ order.queue_name }}</p>
+  <h2 id="os-modal-title">{{ order.subject }}</h2>
+  {% if can_delete_order %}
+  <div class="os-detail-actions">
+    <button type="button" class="btn btn-secondary btn-small os-card-delete" draggable="false" data-delete-order="{{ order.id }}">Excluir</button>
+  </div>
+  {% endif %}
+
+  <section class="os-detail-block">
+    <h3>Quem criou</h3>
+    <p><strong>{{ order.created_by }}</strong> em {{ order.created_at_label }}</p>
+    <p>Responsável: {{ order.responsible }} · Dia: {{ order.scheduled_date_label }} · Prioridade: {{ order.priority }}</p>
+    {% set ns = namespace(lines=[]) %}
+    {% for line in (order.description or "").splitlines() %}
+      {% if not (order.client.whatsapp and line.strip().lower().startswith("whatsapp:")) %}
+        {% set ns.lines = ns.lines + [line] %}
+      {% endif %}
+    {% endfor %}
+    <p class="os-detail-text">{{ ns.lines|join("\n")|trim or "Sem descrição." }}</p>
+  </section>
+
+  <section class="os-detail-block">
+    <h3>Cliente</h3>
+    <p><strong>{{ order.empresa }}</strong></p>
+    <p>Contato: {{ order.client.contato or "Não informado" }}</p>
+    <p>WhatsApp: {% if order.client.whatsapp %}<a href="tel:{{ order.client.whatsapp }}">{{ order.client.whatsapp }}</a> <button type="button" class="btn btn-small btn-secondary" data-copy-phone="{{ order.client.whatsapp }}">Copiar</button>{% else %}Não informado{% endif %}</p>
+    <p>Telefone: {% if order.client.telefone %}<a href="tel:{{ order.client.telefone }}">{{ order.client.telefone }}</a>{% else %}Não informado{% endif %}</p>
+    <p>E-mail: {% if order.client.email %}<a href="mailto:{{ order.client.email }}">{{ order.client.email }}</a>{% else %}Não informado{% endif %}</p>
+    {% if order.client.endereco %}<p>{{ order.client.endereco }}</p>{% endif %}
+    {% if order.company_links|length > 1 %}
+    <div class="os-detail-actions">
+      {% for company in order.company_links %}
+      <a class="btn btn-small" href="{{ company.url }}">Ver {{ company.kind|lower }} · {{ company.empresa }}</a>
+      {% endfor %}
+    </div>
+    {% elif order.company_links %}
+    <a class="btn btn-small" href="{{ order.company_links[0].url }}">Ver empresas</a>
+    {% elif order.queue_id == 'concluida' %}
+    <a class="btn btn-small" href="/leads-e-empresas">Ver empresas</a>
+    {% elif order.sheet_row %}
+    <a class="btn btn-small btn-secondary" href="/cadastro/todos/{{ order.sheet_row }}/editar?tab=ordens&from=activities">Abrir cadastro</a>
+    {% endif %}
+    {% if 'proposta' in (order.queue_name or '')|lower %}
+    <div class="os-detail-actions">
+      <a class="btn btn-small" href="/atividades/os/{{ order.id }}/proposta">Abrir proposta</a>
+    </div>
+    {% endif %}
+  </section>
+
+  <section class="os-detail-block">
+    <h3>Setor</h3>
+    <p>Enviar esta ordem para outro setor. Ela entra em Análise no setor escolhido.</p>
+    {% if sector_notice %}<p>{{ sector_notice }}</p>{% endif %}
+    <form id="os-sector-form" method="post" action="/atividades/os/{{ order.id }}/setor">
+      <label for="os-sector-target">Setor</label>
+      <select id="os-sector-target" name="sector_name" required>
+        {% for sector in order_sectors|default([]) %}
+        <option value="{{ sector.name }}" {% if order.sector == sector.name %}selected{% endif %}>{{ sector.name }}</option>
+        {% endfor %}
+      </select>
+      <button type="submit" class="btn btn-small">Enviar ao setor</button>
+    </form>
+  </section>
+
+  {% if order.source == 'campanha' %}
+  <section class="os-detail-block">
+    <h3>Campanha</h3>
+    {% if order.campaign %}<p>Campanha: {{ order.campaign }}</p>{% endif %}
+    {% if order.creative %}<p>Criativo: {{ order.creative }}</p>{% endif %}
+    {% if order.queue_id == 'concluida' %}
+    <div class="os-detail-actions">
+      <a class="btn btn-small" href="{{ order.cadastro_url }}">Finalizar cadastro</a>
+    </div>
+    {% else %}
+    <p>Quando o cliente fechar, arraste o card para Concluída. O cadastro abre com estes dados.</p>
+    {% endif %}
+  </section>
+  {% endif %}
+
+  <section class="os-detail-block">
+    <h3>Histórico</h3>
+    <ol class="os-detail-history">
+      {% for item in order.history %}
+      <li>
+        <strong>{{ item.kind_label }}</strong>
+        <span>{{ item.created_at_label }} · {{ item.author }}</span>
+        {% if item.summary %}<p>{{ item.summary }}</p>{% endif %}
+      </li>
+      {% endfor %}
+    </ol>
+    <form id="os-update-form" method="post" action="/atividades/os/{{ order.id }}/atualizacao" data-order-id="{{ order.id }}">
+      <label for="os-update-note">Atualização</label>
+      <textarea id="os-update-note" name="note" maxlength="1000" rows="3" required placeholder="O que mudou nesta ordem"></textarea>
+      <button type="submit" class="btn btn-small">Registrar atualização</button>
+    </form>
+  </section>
+</div>

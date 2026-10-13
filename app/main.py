@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import APP_BUILD, settings
-from app.routers import auth, activities, attendances, contracts, evolution_webhook, financeiro, funnel, goals_reports, leads, overview, proposals, registration
+from app.routers import agenda, auth, activities, attendances, contracts, evolution_webhook, financeiro, funnel, gestao, goals_reports, leads, org_registry, overview, proposals, registration
 from app.routers import migration_ponto
 from app.routers import settings as settings_router
 from app.templating import render
@@ -26,15 +26,18 @@ static_dir = Path(__file__).resolve().parent / "static"
 app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
 app.include_router(auth.router)
+app.include_router(gestao.router)
 app.include_router(overview.router)
 app.include_router(funnel.router)
 app.include_router(activities.router)
+app.include_router(agenda.router)
 app.include_router(attendances.router)
 app.include_router(evolution_webhook.router)
 app.include_router(proposals.router)
 app.include_router(goals_reports.router)
 app.include_router(financeiro.router)
 app.include_router(leads.router)
+app.include_router(org_registry.router)
 app.include_router(registration.router)
 app.include_router(contracts.router)
 app.include_router(migration_ponto.router)
@@ -84,9 +87,18 @@ app.add_api_route("/metas-e-relatorios", goals_page, methods=["GET"], tags=["goa
 app.add_api_route("/metas-e-relatorios/filtros", goals_filters, methods=["POST"], tags=["goals"])
 app.add_api_route("/metas-e-relatorios/atualizar", goals_refresh, methods=["POST"], tags=["goals"])
 
-from app.routers.financeiro import financeiro_filters, financeiro_page, financeiro_refresh, financeiro_sync  # noqa: E402
+from app.routers.financeiro import (  # noqa: E402
+    financeiro_entrada_page,
+    financeiro_filters,
+    financeiro_page,
+    financeiro_pagar_page,
+    financeiro_refresh,
+    financeiro_sync,
+)
 
 app.add_api_route("/financeiro", financeiro_page, methods=["GET"], tags=["financeiro"])
+app.add_api_route("/financeiro/entrada", financeiro_entrada_page, methods=["GET"], tags=["financeiro"])
+app.add_api_route("/financeiro/contas-a-pagar", financeiro_pagar_page, methods=["GET"], tags=["financeiro"])
 app.add_api_route("/financeiro/filtros", financeiro_filters, methods=["POST"], tags=["financeiro"])
 app.add_api_route("/financeiro/atualizar", financeiro_refresh, methods=["POST"], tags=["financeiro"])
 app.add_api_route("/financeiro/sincronizar", financeiro_sync, methods=["POST"], tags=["financeiro"])
@@ -193,6 +205,13 @@ async def startup_maintenance() -> None:
             ensure_default_sectors()
             ensure_default_attendance_tags()
             ensure_default_account_users()
+            try:
+                from app.services.registry_store import init_store
+
+                init_store()
+                log.info("Cadastros de setor, funcionário e OS prontos no banco persistente")
+            except Exception as registry_error:
+                log.error("Cadastros persistentes: %s", registry_error)
             migrate_info = migrate_attendance_from_sqlite_if_needed()
             log.info("Attendance DB migrate: %s", migrate_info)
             try:
@@ -508,7 +527,7 @@ async def health_pdf_engine():
 
 @app.get("/")
 async def root():
-    return RedirectResponse(url="/visao-geral", status_code=303)
+    return RedirectResponse(url="/gestao", status_code=303)
 
 
 @app.exception_handler(HTTPException)

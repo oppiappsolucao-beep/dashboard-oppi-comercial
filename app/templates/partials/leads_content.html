@@ -5,6 +5,7 @@
 >
   <input type="hidden" name="tab" value="empresas" id="leads-tab-input">
   <input type="hidden" name="page" value="{{ table.page }}" id="leads-page-input">
+  <input type="hidden" name="letter" value="{{ leads_params.letter or 'A' }}" id="leads-letter-input">
 
   <div class="metric-grid metric-grid-leads">
     {% for card in kpi_cards %}
@@ -87,6 +88,23 @@
   </div>
 
   <div class="panel-card panel leads-table-card">
+    <nav class="leads-alphabet" aria-label="Empresas por letra">
+      {% for item in table.alphabet %}
+      <button type="button"
+        class="leads-alphabet-letter {% if not filters.search and item.letter == leads_params.letter %}is-active{% endif %}"
+        {% if not item.count %}disabled{% endif %}
+        aria-pressed="{{ 'true' if not filters.search and item.letter == leads_params.letter else 'false' }}"
+        onclick="document.getElementById('leads-letter-input').value='{{ item.letter }}'; document.getElementById('leads-page-input').value='1'; var search=document.querySelector('#leads-filters input[name=search]'); if(search){search.value='';} document.getElementById('leads-filters').requestSubmit();">
+        {{ item.letter }}
+      </button>
+      {% endfor %}
+    </nav>
+    {% if raissa_aviso %}
+    <p class="leads-alphabet-hint">{{ raissa_aviso }}</p>
+    {% endif %}
+    {% if filters.search %}
+    <p class="leads-alphabet-hint">Busca em todas as letras. Toque numa letra para voltar ao alfabeto.</p>
+    {% endif %}
     {% if table.rows %}
     <table class="data-table leads-table">
       <thead>
@@ -106,11 +124,7 @@
             <div class="table-company">
               <span class="table-company-icon">{{ row.empresa_initials }}</span>
               <div>
-                {% if row.sheet_row %}
-                <a class="table-company-name table-company-link" href="/cadastro/todos/{{ row.sheet_row }}/editar?from=leads">{{ row.nome }}</a>
-                {% else %}
-                <div class="table-company-name">{{ row.nome }}</div>
-                {% endif %}
+                <a class="table-company-name table-company-link" href="{% if row.sheet_row %}/cadastro/todos/{{ row.sheet_row }}/editar?from=leads{% else %}/cadastro/novo?empresa={{ row.nome | urlencode }}&cnpj={{ row.cnpj | default('') | urlencode }}&telefone_b2b={{ row.telefone_cadastro | default('') | urlencode }}{% endif %}">{{ row.nome }}</a>
                 <div class="table-company-meta">{{ row.meta_label or row.tipo_label }}</div>
               </div>
             </div>
@@ -161,9 +175,7 @@
               {% else %}
               <span class="leads-wa-placeholder" aria-hidden="true"></span>
               {% endif %}
-              {% if row.sheet_row %}
-              <a href="/cadastro/todos/{{ row.sheet_row }}/editar?from=leads" class="btn btn-small btn-secondary">Ver</a>
-              {% endif %}
+              <a href="{% if row.sheet_row %}/cadastro/todos/{{ row.sheet_row }}/editar?from=leads{% else %}/cadastro/novo?empresa={{ row.nome | urlencode }}&cnpj={{ row.cnpj | default('') | urlencode }}&telefone_b2b={{ row.telefone_cadastro | default('') | urlencode }}{% endif %}" class="btn btn-small btn-secondary">Ver</a>
             </div>
           </td>
         </tr>
@@ -203,7 +215,15 @@
     </div>
     {% else %}
     <div class="empty-note leads-empty">
-      Nenhuma empresa encontrada com os filtros atuais.
+      {% if filters.search %}
+      Nenhuma empresa encontrada para essa busca.
+      {% else %}
+      {% if raissa_aviso %}
+      {{ raissa_aviso }}
+      {% else %}
+      Nenhuma empresa na letra {{ leads_params.letter }}.
+      {% endif %}
+      {% endif %}
     </div>
     {% endif %}
   </div>

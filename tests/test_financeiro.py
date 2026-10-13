@@ -51,6 +51,21 @@ class FinanceiroMappingTest(unittest.TestCase):
         )
         self.assertEqual(_service_name({"description": "Parcela 2 de 12"}, "MARCOS"), "Parcela 2 de 12")
 
+    def test_month_entries_include_boleto_pix_and_card(self):
+        from app.services.financeiro import charges_entered_in_period
+
+        rows = [
+            {"billing_type": "BOLETO", "status_key": "pago", "entrada": date(2026, 10, 2), "valor": 100},
+            {"billing_type": "PIX", "status_key": "receber", "entrada": date(2026, 10, 8), "valor": 50},
+            {"billing_type": "CREDIT_CARD", "status_key": "pago", "entrada": date(2026, 10, 9), "valor": 80},
+            {"billing_type": "DEBIT_CARD", "status_key": "pago", "entrada": date(2026, 9, 30), "valor": 10},
+            {"billing_type": "BOLETO", "status_key": "cancelado", "entrada": date(2026, 10, 3), "valor": 999},
+            {"billing_type": "TRANSFER", "status_key": "pago", "entrada": date(2026, 10, 4), "valor": 20},
+        ]
+        entered = charges_entered_in_period(rows, date(2026, 10, 1), date(2026, 10, 31))
+        self.assertEqual([row["billing_type"] for row in entered], ["CREDIT_CARD", "PIX", "BOLETO"])
+        self.assertEqual(sum(row["valor"] for row in entered), 230)
+
 
 class CadastroBillingMappingTest(unittest.TestCase):
     def test_asaas_types(self):
@@ -100,6 +115,143 @@ class CadastroBillingMappingTest(unittest.TestCase):
         self.assertEqual(plan["forma"], "boleto_recorrente")
         self.assertEqual(plan["servico"], "Oppi RH")
         self.assertEqual(plan["valor"], "R$ 59,90")
+
+
+class BoletosEntradaTest(unittest.TestCase):
+    def test_conta_hoje_e_mes_sem_cancelado(self):
+        from app.services.financeiro import summarize_boletos
+
+        today = date(2026, 10, 9)
+        hoje = [
+            {"billingType": "BOLETO", "status": "PENDING", "value": 59.9, "dueDate": "2026-10-09", "description": "Oppi RH — Alfa"},
+            {"billingType": "BOLETO", "status": "DELETED", "value": 10, "dueDate": "2026-10-09", "description": "Cancelado"},
+            {"billingType": "PIX", "status": "PENDING", "value": 20, "dueDate": "2026-10-09", "description": "Pix"},
+            {"billingType": "UNDEFINED", "status": "PENDING", "value": 80, "dueDate": "2026-10-09", "description": "Oppi RH — Delta"},
+        ]
+        mes = hoje + [
+            {"billingType": "BOLETO", "status": "RECEIVED", "value": 49.9, "dueDate": "2026-10-03", "description": "Oppi RH — Beta"},
+            {"billingType": "BOLETO", "status": "OVERDUE", "value": 119.8, "dueDate": "2026-10-01", "description": "Oppi RH — Gama"},
+        ]
+        out = summarize_boletos(hoje, mes, today)
+        self.assertEqual(out["hoje_n"], 2)
+        self.assertEqual(out["hoje_valor_label"], "R$ 139,90")
+        self.assertEqual(out["mes_n"], 4)
+        self.assertEqual(out["mes_pagos_n"], 1)
+        self.assertEqual(out["mes_abertos_n"], 3)
+        self.assertEqual(out["month_label"], "Outubro 2026")
+
+    def test_vencimento_no_dia_ignora_o_dia_seguinte(self):
+        from app.services.financeiro import _payments_due_on
+
+        rows = _payments_due_on(
+            [
+                {"id": "hoje", "dueDate": "2026-10-10"},
+                {"id": "amanha", "dueDate": "2026-10-11"},
+            ],
+            date(2026, 10, 10),
+            date(2026, 10, 10),
+        )
+        self.assertEqual([row["id"] for row in rows], ["hoje"])
+
+    def test_boletos_que_entraram_usam_data_de_pagamento(self):
+        from app.services.financeiro import received_entries
+
+        rows = received_entries(
+            [
+                {"id": "1", "billingType": "BOLETO", "status": "RECEIVED", "value": 59.9, "paymentDate": "2026-10-04", "dueDate": "2026-09-10", "description": "Oppi RH — Alfa"},
+                {"id": "2", "billingType": "PIX", "status": "RECEIVED", "value": 100, "paymentDate": "2026-10-05", "description": "Pix avulso"},
+                {"id": "3", "billingType": "BOLETO", "status": "RECEIVED", "value": 49.9, "paymentDate": "2026-09-28", "description": "Mês anterior"},
+                {"id": "4", "billingType": "BOLETO", "status": "PENDING", "value": 10, "dueDate": "2026-10-09", "description": "Ainda aberto"},
+            ],
+            date(2026, 10, 1),
+            date(2026, 10, 31),
+            date(2026, 10, 9),
+        )
+        boletos = [row for row in rows if row["billing_type"] == "BOLETO"]
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(len(boletos), 1)
+        outras = [row for row in rows if row["billing_type"] != "BOLETO"]
+        self.assertEqual(len(outras), 1)
+        self.assertEqual(outras[0]["cliente"], "Pix avulso")
+        self.assertEqual(outras[0]["forma"], "PIX")
+        self.assertEqual(boletos[0]["cliente"], "Oppi RH — Alfa")
+        self.assertEqual(boletos[0]["pago_label"], "04/10/2026")
+
+
+class EntradasEContasTest(unittest.TestCase):
+    def test_extrato_ignora_tarifa_e_saida(self):
+        from app.services.financeiro import map_entradas
+
+        rows = map_entradas(
+            [
+                {
+                    "id": "ft_1",
+                    "type": "PAYMENT_RECEIVED",
+                    "value": 59.9,
+                    "date": "2026-10-07",
+                    "paymentId": "pay_1",
+                },
+                {"id": "ft_2", "type": "PAYMENT_FEE", "value": -2.99, "date": "2026-10-07"},
+                {"id": "ft_3", "type": "TRANSFER", "value": -100, "date": "2026-10-08"},
+                {"id": "ft_4", "type": "PIX_TRANSACTION_CREDIT", "value": 120, "date": "2026-10-15"},
+            ],
+            {"pay_1": {"cliente": "Cliente A", "servico": "Oppi RH"}},
+        )
+        self.assertEqual([row["id"] for row in rows], ["ft_4", "ft_1"])
+        self.assertEqual(rows[1]["description"], "Cliente A — Oppi RH")
+        self.assertEqual(rows[1]["tipo"], "Cobrança recebida")
+        self.assertEqual(rows[0]["tipo"], "Pix recebido")
+        self.assertAlmostEqual(sum(row["valor"] for row in rows), 179.9)
+
+    def test_grade_separa_a_pagar_e_pago(self):
+        from app.services.company_payables import payable_calendar, parse_money
+
+        self.assertEqual(parse_money("1.870,20"), 1870.2)
+        self.assertIsNone(parse_money("0"))
+        rows = [
+            {"due": date(2026, 10, 7), "amount": 6.0, "paid": False, "description": "Taxa"},
+            {"due": date(2026, 10, 15), "amount": 1540.2, "paid": True, "description": "Folha"},
+        ]
+        calendar = payable_calendar(rows, date(2026, 10, 1), date(2026, 10, 31))
+        self.assertTrue(calendar["show_grid"])
+        self.assertEqual(len(calendar["days"]), 31)
+        self.assertAlmostEqual(calendar["a_pagar"], 6.0)
+        self.assertAlmostEqual(calendar["pago"], 1540.2)
+        self.assertEqual(calendar["days"][6]["day"], 7)
+        self.assertAlmostEqual(calendar["days"][6]["a_pagar"], 6.0)
+        self.assertTrue(calendar["days"][0]["empty"])
+
+    def test_status_e_repeticao_mensal(self):
+        from app.services.company_payables import add_months, payable_status
+
+        hoje = date(2026, 10, 9)
+        self.assertEqual(payable_status(date(2026, 10, 1), False, hoje), "atrasado")
+        self.assertEqual(payable_status(date(2026, 10, 9), False, hoje), "a_pagar")
+        self.assertEqual(payable_status(date(2026, 10, 1), True, hoje), "pago")
+        self.assertEqual(add_months(date(2026, 1, 31), 1), date(2026, 2, 28))
+        self.assertEqual(add_months(date(2026, 10, 9), 3), date(2027, 1, 9))
+
+
+class InternalFinanceTest(unittest.TestCase):
+    def test_monthly_occurrences_in_august(self):
+        from app.services.internal_finance import occurrences_in_period
+        from datetime import date
+
+        item = {
+            "vencimento": "2026-01-10",
+            "forma_pagamento": "Mensal",
+            "valor": "49,90",
+            "quantidade": "1",
+        }
+        dates = occurrences_in_period(item, date(2026, 8, 1), date(2026, 8, 31))
+        self.assertEqual(dates, [date(2026, 8, 10)])
+
+    def test_catalog_accepts_legacy_string_list(self):
+        from app.services.commercial_services import _normalize_catalog
+
+        items = _normalize_catalog(["Oppi RH", {"name": "Oppi Ponto", "valor": "49,90", "quantidade": 2}])
+        self.assertEqual(items[0]["name"], "Oppi RH")
+        self.assertEqual(items[1]["quantidade"], 2)
 
 
 if __name__ == "__main__":

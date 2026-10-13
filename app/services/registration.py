@@ -47,7 +47,7 @@ STAGE_SUMMARY_HINTS = {
 }
 
 REGISTRATION_FIELDS = [
-    "empresa", "data_abertura", "capital", "cnpj", "endereco", "endereco_numero", "endereco_complemento",
+    "empresa", "nome_fantasia", "data_abertura", "data_fechamento", "responsavel_legal", "capital", "cnpj", "endereco", "endereco_numero", "endereco_complemento",
     "cep", "bairro", "municipio", "uf", "email_empresa", "site",
     "telefone_b2b", "nome_contato", "telefone_fixo", "telefone_alternativo",
     "socio_1", "cpf_socio_1", "email_socio_1", "telefone_socio_1",
@@ -346,6 +346,28 @@ def assert_unique_registration_contacts(
         assert_cnpj_not_registered(cnpj, ignore_sheet_row=ignore_sheet_row)
 
 
+def _sheet_date(value: str) -> str:
+    raw = normalize_text(value)
+    if len(raw) >= 10 and raw[4] == "-" and raw[7] == "-":
+        try:
+            return datetime.strptime(raw[:10], "%Y-%m-%d").strftime("%d/%m/%Y")
+        except ValueError:
+            return raw
+    return raw
+
+
+def iso_date_for_input(value: str) -> str:
+    raw = normalize_text(value)
+    if len(raw) >= 10 and raw[2] == "/" and raw[5] == "/":
+        try:
+            return datetime.strptime(raw[:10], "%d/%m/%Y").date().isoformat()
+        except ValueError:
+            return ""
+    if len(raw) >= 10 and raw[4] == "-" and raw[7] == "-":
+        return raw[:10]
+    return ""
+
+
 def build_registration_payload(form: dict) -> dict:
     now_text = pd.Timestamp.now(tz="America/Sao_Paulo").strftime("%d/%m/%Y %H:%M")
     data_chamado = form.get("data_chamado") or date.today().strftime("%d/%m/%Y")
@@ -366,6 +388,8 @@ def build_registration_payload(form: dict) -> dict:
             data_chamado = raw
 
     payload = {field: normalize_text(form.get(field, "")) for field in REGISTRATION_FIELDS}
+    for date_field in ("data_abertura", "data_fechamento"):
+        payload[date_field] = _sheet_date(payload.get(date_field))
     # Celular WhatsApp: sempre grava com o 9º dígito quando for móvel BR
     if payload.get("telefone_b2b"):
         from app.services.legacy_core import format_br_whatsapp_display
@@ -379,10 +403,17 @@ def build_registration_payload(form: dict) -> dict:
     payload["is_filial"] = is_filial
     matriz = parse_empresa_matriz_sheet_row(form.get("empresa_matriz_sheet_row")) if is_filial else None
     payload["empresa_matriz_sheet_row"] = matriz
+    for field in ("email_login_gestor", "email_cobranca", "senha_acesso"):
+        payload[field] = normalize_text(form.get(field, ""))
+    seller_name = normalize_text(form.get("nome_contato"))
+    if seller_name and not payload.get("responsavel_legal"):
+        payload["responsavel_legal"] = seller_name
+    if seller_name and not payload.get("socio_1"):
+        payload["socio_1"] = seller_name
     return payload
 
 
-def save_new_company(form: dict) -> int:
+def save_new_company(form: dict, *, mirror_sheet: bool = True) -> int:
     error = validate_registration_form(form, require_whatsapp=True)
     if error:
         raise ValueError(error)
@@ -395,7 +426,7 @@ def save_new_company(form: dict) -> int:
         )
 
         if is_crm_postgres_ready():
-            return upsert_registration_from_payload(payload, mirror_sheet=True)
+            return upsert_registration_from_payload(payload, mirror_sheet=mirror_sheet)
     except DuplicateRegistrationError:
         raise
     except Exception:
@@ -448,7 +479,7 @@ def _existing_edit_field_values(sheet_row: int) -> dict[str, str]:
     }
 
 
-def save_company_edit(sheet_row: int, form: dict) -> None:
+def save_company_edit(sheet_row: int, form: dict, *, mirror_sheet: bool = True) -> None:
     error = validate_registration_form(form, require_whatsapp=False)
     if error:
         raise ValueError(error)
@@ -468,7 +499,7 @@ def save_company_edit(sheet_row: int, form: dict) -> None:
             upsert_registration_from_payload(
                 payload,
                 sheet_row=int(sheet_row),
-                mirror_sheet=True,
+                mirror_sheet=mirror_sheet,
             )
             return
     except DuplicateRegistrationError:
@@ -496,6 +527,65 @@ def delete_company_registration(tenant_id: str | None, sheet_row: int) -> None:
 
     delete_company_from_sheet(sheet_row)
     delete_lead_action(tenant_id, sheet_row)
+
+
+DEFAULT_SELLER_NAME = "Raissa"
+_EMPTY_SELLER_NAMES = {"", "sem vendedor", "selecionar", "usuario", "usuário", "—", "-"}
+
+
+def _login_people() -> list[dict]:
+    people: list[dict] = []
+    try:
+        from app.services.account_users import load_account_users
+
+        for user in load_account_users():
+            if user.get("active", True) is False:
+                continue
+            people.append(user)
+    except Exception:
+        pass
+    try:
+        from app.services.org_registry import list_people
+
+        for person in list_people():
+            if person.get("active", True) is False:
+                continue
+            people.append(person)
+    except Exception:
+        pass
+    return people
+
+
+def match_login_name(stored: str, people: list[dict]) -> str:
+    """Nome de exibição quando o valor bate com um login. Vazio se não houver conta."""
+    needle = normalize_text(stored).lower()
+    if needle in _EMPTY_SELLER_NAMES:
+        return ""
+    for person in people:
+        name = normalize_text(person.get("name"))
+        username = normalize_text(person.get("username"))
+        if not name or username in {"", "—"}:
+            continue
+        if needle in {name.lower(), username.lower()}:
+            return name
+    return ""
+
+
+def seller_name_from_login(stored: str, people: list[dict] | None = None) -> str:
+    """Vendedor do login que vendeu. Sem login, Raissa."""
+    found = match_login_name(stored, people if people is not None else _login_people())
+    return found or DEFAULT_SELLER_NAME
+
+
+def seller_from_session_user(session_user: dict | None) -> str:
+    """Nome do login atual. Conta sem pessoa vinculada vira Raissa."""
+    user = session_user or {}
+    if not user.get("managed"):
+        return DEFAULT_SELLER_NAME
+    name = normalize_text(user.get("name"))
+    if name.lower() in _EMPTY_SELLER_NAMES:
+        return DEFAULT_SELLER_NAME
+    return name
 
 
 SELLER_ROLES = {"Vendedor"}
@@ -613,18 +703,18 @@ def load_access_fields(tenant_id: str | None, sheet_row: int) -> dict[str, str]:
     return {field: normalize_text(stored.get(field)) for field in ACCESS_FIELDS}
 
 
-def save_access_fields(tenant_id: str | None, sheet_row: int, form: dict) -> None:
+def save_access_fields(tenant_id: str | None, sheet_row: int, form: dict, *, mirror_sheet: bool = True) -> None:
     if not sheet_row:
         return
     payload = {field: normalize_text(form.get(field)) for field in ACCESS_FIELDS}
-    save_lead_action(tenant_id, sheet_row, payload)
+    save_lead_action(tenant_id, sheet_row, payload, mirror_sheet=mirror_sheet)
 
 
-def save_cadastro_tipo(tenant_id: str | None, sheet_row: int, tipo: str) -> None:
+def save_cadastro_tipo(tenant_id: str | None, sheet_row: int, tipo: str, *, mirror_sheet: bool = True) -> None:
     if not sheet_row:
         return
     normalized = "empresa" if normalize_text(tipo).lower() == "empresa" else "lead"
-    save_lead_action(tenant_id, sheet_row, {"cadastro_tipo": normalized})
+    save_lead_action(tenant_id, sheet_row, {"cadastro_tipo": normalized}, mirror_sheet=mirror_sheet)
 
 
 def is_cadastro_ativo(tenant_id: str | None, sheet_row: int) -> bool:
@@ -704,7 +794,7 @@ def resolve_nicho(
     return infer_niche_from_company_name(empresa)
 
 
-def save_nicho(tenant_id: str | None, sheet_row: int, nicho: str, nicho_outro: str = "") -> None:
+def save_nicho(tenant_id: str | None, sheet_row: int, nicho: str, nicho_outro: str = "", *, mirror_sheet: bool = True) -> None:
     if not sheet_row:
         return
     try:
@@ -715,10 +805,17 @@ def save_nicho(tenant_id: str | None, sheet_row: int, nicho: str, nicho_outro: s
         normalized = normalize_text(nicho_outro) or normalize_text(nicho)
     if not normalized:
         return
-    save_lead_action(tenant_id, sheet_row, {"nicho": normalized})
+    save_lead_action(tenant_id, sheet_row, {"nicho": normalized}, mirror_sheet=mirror_sheet)
 
 
-def save_setor(tenant_id: str | None, sheet_row: int, setor_id: str | int | None, setor_name: str = "") -> None:
+def save_setor(
+    tenant_id: str | None,
+    sheet_row: int,
+    setor_id: str | int | None,
+    setor_name: str = "",
+    *,
+    mirror_sheet: bool = True,
+) -> None:
     if not sheet_row:
         return
     payload: dict = {}
@@ -732,7 +829,7 @@ def save_setor(tenant_id: str | None, sheet_row: int, setor_id: str | int | None
     if name:
         payload["setor"] = name
     if payload:
-        save_lead_action(tenant_id, sheet_row, payload)
+        save_lead_action(tenant_id, sheet_row, payload, mirror_sheet=mirror_sheet)
 
 
 def _cadastro_initials(name: str) -> str:
@@ -897,7 +994,7 @@ def build_cadastro_edit_page_context(
             {
                 "icon": "👤",
                 "label": "Vendedor Responsável",
-                "value": vendedor or "Sem vendedor",
+                "value": seller_name_from_login(vendedor),
                 "hint": "Responsável comercial",
             },
             {
