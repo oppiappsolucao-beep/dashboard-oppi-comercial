@@ -32,6 +32,8 @@ PAID_STATUSES = {"RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"}
 PENDING_STATUSES = {"PENDING", "AWAITING_RISK_ANALYSIS"}
 OVERDUE_STATUSES = {"OVERDUE"}
 CANCELLED_STATUSES = {"REFUNDED", "REFUND_REQUESTED", "DELETED"}
+# Cobranças que entram no saldo do mês: boleto, PIX e cartão (e PIX/Boleto avulso).
+ENTRY_BILLING_TYPES = {"BOLETO", "PIX", "CREDIT_CARD", "DEBIT_CARD", "UNDEFINED"}
 
 TAB_VISAO = "visao"
 TAB_FATURAS = "faturas"
@@ -111,6 +113,8 @@ def billing_label(billing_type: str, *, has_subscription: bool = False) -> str:
         return "Cartão recorrente" if has_subscription else "Cartão"
     if kind == "TRANSFER":
         return "Transferência"
+    if kind == "UNDEFINED":
+        return "PIX/Boleto"
     return kind or "—"
 
 
@@ -279,8 +283,16 @@ def map_entradas(
     return rows
 
 
+def _is_boleto_payment(payment: dict) -> bool:
+    """Boleto puro, boleto/PIX (UNDEFINED) ou cobrança que já tem link de boleto."""
+    kind = normalize_text(payment.get("billingType")).upper()
+    if kind in {"BOLETO", "UNDEFINED"}:
+        return True
+    return bool(normalize_text(payment.get("bankSlipUrl")))
+
+
 def _boleto_row(payment: dict, today: date) -> dict[str, Any] | None:
-    if normalize_text(payment.get("billingType")).upper() != "BOLETO":
+    if not _is_boleto_payment(payment):
         return None
     classified = classify_payment(payment, today=today)
     if classified["key"] == "cancelado":
@@ -339,8 +351,25 @@ def summarize_boletos(hoje_raw: list[dict] | None, mes_raw: list[dict] | None, t
         "entradas_valor_label": format_brl(0),
         "entradas_outras_n": 0,
         "entradas_outras_label": format_brl(0),
+        "entradas_outras": [],
+        "entradas_conta": [],
+        "entradas_conta_n": 0,
+        "entradas_conta_label": format_brl(0),
+        "saldo_conta_label": "",
         "entraram_aviso": "",
     }
+
+
+def _payments_due_on(payments: list[dict] | None, start: date, end: date) -> list[dict]:
+    """O Asaas às vezes devolve vazio quando o vencimento inicial e o final são o mesmo dia."""
+    rows = []
+    for payment in payments or []:
+        if not isinstance(payment, dict):
+            continue
+        due = _parse_date(payment.get("dueDate"))
+        if due and start <= due <= end:
+            rows.append(payment)
+    return rows
 
 
 def received_entries(payments: list[dict] | None, start: date, end: date, today: date) -> list[dict[str, Any]]:
@@ -389,8 +418,15 @@ def load_boleto_entrada(today: date, start: date, end: date, *, force: bool = Fa
         blank["error"] = "Configure ASAAS_API_KEY para ler os boletos."
         return blank
     try:
-        hoje_raw = fetch_payments_due(today, today, billing_type="BOLETO", force=force)
-        mes_raw = fetch_payments_due(start, end, billing_type="BOLETO", force=force)
+        hoje_raw = _payments_due_on(
+            fetch_payments_due(today, today + timedelta(days=1), force=force),
+            today,
+            today,
+        )
+        mes_end = end if end > start else end + timedelta(days=1)
+        mes_raw = fetch_payments_due(start, mes_end, force=force)
+        if start == end:
+            mes_raw = _payments_due_on(mes_raw, start, end)
     except AsaasError as exc:
         blank["error"] = str(exc)
         return blank
@@ -427,9 +463,29 @@ def _attach_received(result: dict[str, Any], start: date, end: date, today: date
     result["entradas_valor_label"] = format_brl(_sum(rows))
     result["entradas_outras_n"] = len(outras)
     result["entradas_outras_label"] = format_brl(_sum(outras))
+    result["entradas_outras"] = outras
+    result["entradas_conta"] = rows
+    result["entradas_conta_n"] = len(rows)
+    result["entradas_conta_label"] = format_brl(_sum(rows))
+    result["saldo_conta_label"] = _account_balance_label(force=force)
     if truncated:
         result["entraram_aviso"] = "A consulta passou do limite. O total pode estar incompleto."
     return result
+
+
+def _account_balance_label(*, force: bool) -> str:
+    """Saldo atual da conta Asaas. Vazio se a consulta não responder."""
+    try:
+        balance = fetch_account_balance(force=force)
+    except AsaasError as exc:
+        logger.warning("Saldo Asaas indisponível: %s", exc)
+        return ""
+    except Exception:
+        logger.exception("Falha ao ler saldo Asaas")
+        return ""
+    if balance is None:
+        return ""
+    return format_brl(balance)
 
 
 def apply_boleto_status(boletos: dict[str, Any], status: str) -> dict[str, Any]:
@@ -596,6 +652,7 @@ def _map_invoice(payment: dict, customers: dict[str, dict], crm_rows: list[dict]
     crm = _match_crm(customer, crm_rows)
     classified = classify_payment(payment, today=today)
     due = _parse_date(payment.get("dueDate"))
+    entered = _parse_date(payment.get("dateCreated"))
     value = float(payment.get("value") or 0)
     cliente = (
         (crm or {}).get("empresa")
@@ -619,6 +676,8 @@ def _map_invoice(payment: dict, customers: dict[str, dict], crm_rows: list[dict]
         "valor_label": format_brl(value),
         "vencimento": due,
         "vencimento_label": due_label,
+        "entrada": entered,
+        "entrada_label": format_date_br(entered),
         "forma": billing_label(payment.get("billingType") or "", has_subscription=bool(payment.get("subscription"))),
         "billing_type": normalize_text(payment.get("billingType")).upper(),
         "status_key": classified["key"],
@@ -656,6 +715,22 @@ def _map_subscription(item: dict, customers: dict[str, dict], crm_rows: list[dic
         "sheet_row": sheet_row,
         "cliente_href": f"/cadastro/todos/{sheet_row}/editar" if sheet_row else "",
     }
+
+
+def charges_entered_in_period(rows: list[dict], start: date, end: date) -> list[dict]:
+    """Boleto, PIX e cartão gerados no período. Cancelados ficam de fora do saldo."""
+    out = []
+    for row in rows:
+        if row.get("billing_type") not in ENTRY_BILLING_TYPES:
+            continue
+        if row.get("status_key") == "cancelado":
+            continue
+        entered = row.get("entrada")
+        if not entered or entered < start or entered > end:
+            continue
+        out.append(row)
+    out.sort(key=lambda row: row.get("entrada") or date.min, reverse=True)
+    return out
 
 
 def _filter_invoices(rows: list[dict], params: dict) -> list[dict]:
@@ -745,13 +820,15 @@ def build_financeiro_context(params: dict | None = None, *, force_sync: bool = F
         "kpi_cards": _kpi_cards(0, 0, 0, 0, 0, 0, 0, 0),
         "forecast": forecast,
         "invoices": [],
+        "saldo": 0.0,
+        "saldo_label": format_brl(0),
+        "saldo_count": 0,
         "subscriptions": [],
         "overdue_clients": [],
         "entradas": [],
         "entradas_total": 0.0,
         "entradas_total_label": format_brl(0),
         "entradas_error": "",
-        "saldo_label": "",
         "payables": payables,
         "boletos": boletos,
         "tab": tab,
@@ -892,7 +969,9 @@ def build_financeiro_context(params: dict | None = None, *, force_sync: bool = F
         })
     overdue_clients.sort(key=lambda row: row.get("days") or 0, reverse=True)
 
-    filtered = _filter_invoices(invoices, params)
+    entered = charges_entered_in_period(invoices, period_start, period_end)
+    listed = _filter_invoices(entered, {**params, "period_start": "", "period_end": ""})
+    saldo = sum(row["valor"] for row in listed)
     asaas_cards = _kpi_cards(
             sum(row["valor"] for row in receber_mes),
             len(receber_mes),
@@ -905,7 +984,7 @@ def build_financeiro_context(params: dict | None = None, *, force_sync: bool = F
             inadimplencia,
         )
     if tab == TAB_ENTRADAS:
-        entradas, entradas_error, saldo_label = _load_entradas(
+        entradas, entradas_error, _ = _load_entradas(
             period_start,
             period_end,
             invoices=invoices,
@@ -913,10 +992,13 @@ def build_financeiro_context(params: dict | None = None, *, force_sync: bool = F
             force=force_sync,
         )
     else:
-        entradas, entradas_error, saldo_label = [], "", ""
+        entradas, entradas_error = [], ""
     empty.update({
         "kpi_cards": asaas_cards,
-        "invoices": filtered,
+        "invoices": listed,
+        "saldo": saldo,
+        "saldo_label": format_brl(saldo),
+        "saldo_count": len(listed),
         "subscriptions": subscriptions,
         "overdue_clients": overdue_clients,
         "inadimplencia": inadimplencia,
@@ -925,7 +1007,6 @@ def build_financeiro_context(params: dict | None = None, *, force_sync: bool = F
         "entradas_total": sum(row["valor"] for row in entradas),
         "entradas_total_label": format_brl(sum(row["valor"] for row in entradas)),
         "entradas_error": entradas_error,
-        "saldo_label": saldo_label,
     })
     return _with_tab_kpis(empty, tab)
 
