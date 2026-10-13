@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
-<link rel="stylesheet" href="/static/css/financeiro.css?v={{ static_version }}">
+<link rel="stylesheet" href="/static/css/financeiro.css?v={{ static_version }}-entrada1">
 <div class="page-header">
   <div>
     <div class="page-title">Entrada</div>
@@ -56,7 +56,9 @@
   <div class="fin-banner">{{ boletos.entraram_aviso }}</div>
   {% endif %}
   <div class="section-heading">Tudo que entrou em {{ boletos.month_label }}</div>
-  <div class="fin-entradas-total">{{ boletos.entradas_conta_n }} pagamento{{ 's' if boletos.entradas_conta_n != 1 else '' }} · <strong>{{ boletos.entradas_conta_label }}</strong></div>
+  <div class="fin-entradas-total">
+    <span>{{ boletos.entradas_conta_n }} pagamento{{ 's' if boletos.entradas_conta_n != 1 else '' }} <strong class="fin-money-in">{{ boletos.entradas_conta_label }}</strong></span>
+  </div>
   <div class="table-wrap">
     <table class="data-table fin-table fin-stack fin-cols-pago">
       <thead>
@@ -90,7 +92,9 @@
 
 <div class="panel fin-table-card">
   <div class="section-heading">Boletos que vencem hoje</div>
-  <div class="fin-entradas-total">{{ boletos.hoje_n }} boleto{{ 's' if boletos.hoje_n != 1 else '' }} · <strong>{{ boletos.hoje_valor_label }}</strong></div>
+  <div class="fin-entradas-total">
+    <span>{{ boletos.hoje_n }} boleto{{ 's' if boletos.hoje_n != 1 else '' }} <strong>{{ boletos.hoje_valor_label }}</strong></span>
+  </div>
   <div class="table-wrap">
     <table class="data-table fin-table fin-stack fin-cols-status">
       <thead>
@@ -146,7 +150,11 @@
       <button type="submit" class="btn">Ver período</button>
     </form>
   </div>
-  <div class="fin-entradas-total">{{ boletos.mes_n }} boleto{{ 's' if boletos.mes_n != 1 else '' }} · <strong>{{ boletos.mes_valor_label }}</strong> · recebidos {{ boletos.mes_pagos_label }} · em aberto {{ boletos.mes_abertos_label }}</div>
+  <div class="fin-entradas-total">
+    <span>{{ boletos.mes_n }} boleto{{ 's' if boletos.mes_n != 1 else '' }} <strong>{{ boletos.mes_valor_label }}</strong></span>
+    <span>Recebidos <strong class="fin-money-in">{{ boletos.mes_pagos_label }}</strong></span>
+    <span>Em aberto <strong class="fin-money-out">{{ boletos.mes_abertos_label }}</strong></span>
+  </div>
   <div class="table-wrap">
     <table class="data-table fin-table fin-stack fin-cols-status">
       <thead>
