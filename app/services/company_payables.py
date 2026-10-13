@@ -213,7 +213,6 @@ def list_suppliers() -> list[str]:
                 db.query(CompanyPayable.supplier)
                 .filter(func.trim(CompanyPayable.supplier) != "")
                 .distinct()
-                .order_by(func.lower(CompanyPayable.supplier))
                 .all()
             )
         finally:
@@ -227,6 +226,7 @@ def list_suppliers() -> list[str]:
                 continue
             seen.add(key)
             names.append(name)
+        names.sort(key=str.lower)
         return names
     with _lock, _connect() as conn:
         rows = conn.execute(
