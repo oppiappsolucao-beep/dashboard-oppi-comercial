@@ -13,6 +13,7 @@ from app.services.asaas_client import (
     find_customers,
     is_configured,
     list_payments_for_customer,
+    update_customer,
 )
 from app.services.financeiro import classify_payment, format_brl, format_date_br
 from app.services.lead_actions_storage import get_lead_action, save_lead_action
@@ -176,13 +177,27 @@ def asaas_cycle(ciclo: str) -> str | None:
     return None
 
 
+def _same_email(left: str, right: str) -> bool:
+    return bool(left and right and left.lower() == right.lower() and "@" in left)
+
+
+def billing_email_from_values(values: dict) -> str:
+    """E-mail de cobrança e login do responsável. O e-mail da Receita não entra."""
+    company = normalize_text(values.get("email_empresa") or values.get("email") or "")
+    for key in ("email_cobranca", "email_login_gestor", "email_socio_1"):
+        candidate = normalize_text(values.get(key))
+        if candidate and "@" in candidate and not _same_email(candidate, company):
+            return candidate
+    return ""
+
+
 def _crm_row_from_values(values: dict) -> dict[str, Any]:
     return {
         "empresa": normalize_text(values.get("empresa")),
         "cnpj": normalize_cnpj_for_duplicate(values.get("cnpj") or ""),
         "telefone": normalize_text(values.get("telefone_b2b") or values.get("telefone_socio_1") or ""),
-        "email": normalize_text(values.get("email_empresa") or values.get("email") or ""),
-        "nome_contato": normalize_text(values.get("nome_contato") or ""),
+        "email": billing_email_from_values(values),
+        "nome_contato": normalize_text(values.get("nome_contato") or values.get("responsavel_legal") or ""),
     }
 
 
@@ -283,10 +298,18 @@ def _digits_phone(value: str) -> str:
 
 
 def ensure_asaas_customer(values: dict, *, plan: dict | None = None) -> dict:
+    crm = _crm_row_from_values(values)
     existing = find_asaas_customer_for_cadastro(values, plan=plan)
     if existing:
+        desired = normalize_text(crm.get("email"))
+        current = normalize_text(existing.get("email"))
+        customer_id = normalize_text(existing.get("id"))
+        if desired and customer_id and desired.lower() != current.lower():
+            updated = update_customer(customer_id, {"email": desired})
+            if isinstance(updated, dict) and updated.get("id"):
+                return updated
+            return {**existing, "email": desired}
         return existing
-    crm = _crm_row_from_values(values)
     name = crm.get("empresa") or crm.get("nome_contato")
     if not name:
         raise AsaasError("Informe o nome da empresa no cadastro para criar o cliente no Asaas.")

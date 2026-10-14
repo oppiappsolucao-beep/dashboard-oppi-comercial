@@ -190,10 +190,11 @@ def release_payment_on_ponto(
     return {"ok": True, "action": "release_payment", "company_id": company_id, "result": result}
 
 
-def _pick_email(*candidates: str) -> str:
+def _pick_email(*candidates: str, ignore: str = "") -> str:
+    ignored = normalize_text(ignore).lower()
     for value in candidates:
         text = normalize_text(value)
-        if text and "@" in text:
+        if text and "@" in text and text.lower() != ignored:
             return text
     return ""
 
@@ -209,25 +210,24 @@ def build_onboard_payload_from_crm(
     closed = closed_services or []
     primary = closed[0] if closed else {}
     password = password or normalize_text(access.get("senha_acesso")) or generate_access_password()
+    company_email = normalize_text(values.get("email_empresa") or values.get("email"))
     email_login = _pick_email(
         access.get("email_login_gestor"),
+        values.get("email_login_gestor"),
         values.get("email_socio_1"),
-        values.get("email_empresa"),
-        values.get("email"),
+        ignore=company_email,
     )
     email_cobranca = _pick_email(
         access.get("email_cobranca"),
-        values.get("email_empresa"),
-        values.get("email"),
-        email_login,
-    )
-    email_verificacao = _pick_email(
-        access.get("email_confirmacao_admin"),
-        email_login,
-        email_cobranca,
-    )
+        values.get("email_cobranca"),
+        ignore=company_email,
+    ) or email_login
+    if not email_login:
+        email_login = email_cobranca
+    email_verificacao = _pick_email(email_login, email_cobranca)
     admin_nome = (
-        normalize_text(values.get("socio_1"))
+        normalize_text(values.get("responsavel_legal"))
+        or normalize_text(values.get("socio_1"))
         or normalize_text(values.get("empresa"))
         or "Gestor"
     )
@@ -281,7 +281,10 @@ def sync_or_onboard_company(
             "ok": True,
             "action": "linked_existing",
             "company_id": existing_id,
-            "message": f"Empresa já existe no Oppi Ponto (#{existing_id}). Vinculada ao CRM.",
+            "message": (
+                f"Empresa já existe no Oppi Ponto (#{existing_id}). "
+                "O vínculo foi mantido. E-mail e responsável já gravados lá não são trocados por este envio."
+            ),
             "password": None,
         }
 

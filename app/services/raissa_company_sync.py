@@ -307,6 +307,40 @@ def _billing_labels(billing: dict | None) -> dict[str, str]:
     }
 
 
+def _same_email(left: str, right: str) -> bool:
+    return bool(left and right and left.lower() == right.lower() and "@" in left)
+
+
+def prefer_responsible_contacts(form: dict) -> dict:
+    """Nome e e-mails de Sócios e responsáveis vencem o e-mail da Receita.
+
+    O cartão CNPJ costuma trazer o e-mail do contador. Esse endereço fica no
+    e-mail da empresa. Login, cobrança e sócio usam o que o comercial digitou.
+    """
+    responsible = normalize_text(form.get("responsavel_legal") or form.get("nome_responsavel"))
+    login = normalize_text(form.get("email_login_gestor"))
+    billing = normalize_text(form.get("email_cobranca"))
+    company = normalize_text(form.get("email_empresa") or form.get("email"))
+    socio_email = normalize_text(form.get("email_socio_1"))
+    chosen = ""
+    if socio_email and not _same_email(socio_email, company):
+        chosen = socio_email
+    else:
+        for candidate in (login, billing):
+            if candidate and not _same_email(candidate, company):
+                chosen = candidate
+                break
+    updates: dict[str, str] = {}
+    if responsible:
+        updates["responsavel_legal"] = responsible
+        updates["socio_1"] = responsible
+    if chosen:
+        updates["email_socio_1"] = chosen
+    if login and not _same_email(login, company):
+        updates["email_confirmacao_admin"] = login
+    return updates
+
+
 def payload_for_raissa(form: dict, billing: dict | None = None) -> dict:
     finance = _billing_labels(billing)
     if not finance["plano"]:
@@ -320,13 +354,14 @@ def payload_for_raissa(form: dict, billing: dict | None = None) -> dict:
     if not finance["ciclo"] and normalize_text(form.get("billing_ciclo")):
         finance["ciclo"] = _CYCLE_LABELS.get(normalize_text(form.get("billing_ciclo")).lower(), normalize_text(form.get("billing_ciclo")))
     filial = normalize_text(form.get("is_filial")).lower() in {"1", "on", "true", "yes", "sim"}
+    contacts = prefer_responsible_contacts(form)
     return {
         "empresa": normalize_text(form.get("empresa")),
         "nome_fantasia": normalize_text(form.get("nome_fantasia")),
         "cnpj": normalize_text(form.get("cnpj")),
         "data_abertura": normalize_text(form.get("data_abertura")),
         "data_fechamento": normalize_text(form.get("data_fechamento")),
-        "responsavel_legal": normalize_text(form.get("responsavel_legal") or form.get("nome_responsavel") or form.get("socio_1")),
+        "responsavel_legal": contacts.get("responsavel_legal") or normalize_text(form.get("responsavel_legal") or form.get("nome_responsavel") or form.get("socio_1")),
         "capital": normalize_text(form.get("capital")),
         "endereco": normalize_text(form.get("endereco")),
         "endereco_numero": normalize_text(form.get("endereco_numero")),
@@ -341,14 +376,14 @@ def payload_for_raissa(form: dict, billing: dict | None = None) -> dict:
         "senha": normalize_text(form.get("senha_acesso") or form.get("senha")),
         "site": normalize_text(form.get("site")),
         "telefone": normalize_text(form.get("telefone_b2b")),
-        "nome_contato": normalize_text(form.get("nome_contato") or form.get("socio_1")),
+        "nome_contato": normalize_text(form.get("nome_contato") or contacts.get("socio_1") or form.get("socio_1")),
         "telefone_fixo": normalize_text(form.get("telefone_fixo")),
         "telefone_alternativo": normalize_text(form.get("telefone_alternativo")),
         "instagram": normalize_text(form.get("instagram")),
         "linkedin": normalize_text(form.get("linkedin")),
-        "socio_1": normalize_text(form.get("socio_1")),
+        "socio_1": contacts.get("socio_1") or normalize_text(form.get("socio_1")),
         "cpf_socio_1": normalize_text(form.get("cpf_socio_1")),
-        "email_socio_1": normalize_text(form.get("email_socio_1") or form.get("email_login_gestor")),
+        "email_socio_1": contacts.get("email_socio_1") or normalize_text(form.get("email_socio_1") or form.get("email_login_gestor")),
         "nicho": normalize_text(form.get("nicho")),
         "vendedor": normalize_text(form.get("vendedor")),
         "observacoes": normalize_text(form.get("observacoes")),

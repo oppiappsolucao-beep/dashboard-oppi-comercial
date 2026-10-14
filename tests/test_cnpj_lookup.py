@@ -60,10 +60,10 @@ class CnpjLookupTest(unittest.TestCase):
         self.assertEqual(payload["cpf_socio_1"], "12345678901")
         self.assertNotIn("socio_2", payload)
         self.assertEqual(payload["email"], "contato@brasilautopecas.com.br")
-        self.assertEqual(payload["email_socio_1"], payload["email"])
-        self.assertEqual(payload["email_login_gestor"], payload["email"])
-        self.assertEqual(payload["email_confirmacao_admin"], payload["email"])
-        self.assertEqual(payload["email_cobranca"], payload["email"])
+        self.assertEqual(payload["email_socio_1"], "")
+        self.assertEqual(payload["email_login_gestor"], "")
+        self.assertEqual(payload["email_confirmacao_admin"], "")
+        self.assertEqual(payload["email_cobranca"], "")
         self.assertEqual(payload["senha_acesso"], "Senha10Abc")
 
     def test_empresario_individual_vira_um_responsavel(self):
