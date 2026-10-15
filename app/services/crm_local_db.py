@@ -293,6 +293,21 @@ def init_crm_local_db() -> None:
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_company_payables_due ON company_payables(due_date)"
             )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS representative_prospects (
+                    person_id TEXT NOT NULL,
+                    tab_title TEXT NOT NULL,
+                    sheet_row INTEGER NOT NULL,
+                    empresa TEXT NOT NULL DEFAULT '',
+                    cnpj TEXT NOT NULL DEFAULT '',
+                    telefone TEXT NOT NULL DEFAULT '',
+                    uf TEXT NOT NULL DEFAULT '',
+                    updated_at TEXT NOT NULL,
+                    PRIMARY KEY (person_id, tab_title, sheet_row)
+                )
+                """
+            )
             payable_cols = {
                 row[1]
                 for row in conn.execute("PRAGMA table_info(company_payables)").fetchall()

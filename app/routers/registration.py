@@ -535,7 +535,12 @@ async def new_registration_submit(request: Request):
     form = await request.form()
     form_dict = dict(form)
     form_dict["email_empresa"] = form_dict.pop("email", form_dict.get("email_empresa", ""))
-    if not normalize_text(form_dict.get("vendedor")):
+    from app.services.representative_prospects import seller_for_representative
+
+    representative_name = seller_for_representative(request.session)
+    if representative_name:
+        form_dict["vendedor"] = representative_name
+    elif not normalize_text(form_dict.get("vendedor")):
         from app.dependencies import get_session_user
         from app.services.registration import seller_from_session_user
 

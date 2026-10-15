@@ -707,7 +707,9 @@ def save_registration_on_raissa(
                 "aviso": "Não encontrei este cliente na aba Raissa. O serviço ficou salvo no cadastro.",
             }
         if not row_number:
-            payload["status_cadastro"] = "1 Boleto Aguardando"
+            from app.services.representative_prospects import RAISSA_NEW_STATUS
+
+            payload["status_cadastro"] = RAISSA_NEW_STATUS
         existing = []
         if row_number and row_number - 1 < len(values):
             existing = values[row_number - 1]

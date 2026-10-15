@@ -25,6 +25,14 @@ router = APIRouter()
 TABS = {"funcionarios", "setores", "representantes", "treinadores", "servicos"}
 
 
+def _prospect_links(tab: str) -> dict:
+    if tab != "representantes":
+        return {}
+    from app.services.representative_prospects import prospect_summaries
+
+    return prospect_summaries()
+
+
 def _tab(value: str) -> str:
     tab = normalize_text(value).lower()
     return tab if tab in TABS else "funcionarios"
@@ -53,6 +61,7 @@ def _page(request: Request, tab: str):
             "sectors": list_sectors(),
             "funcionarios": list_people("funcionario"),
             "representantes": list_people("representante"),
+            "prospect_links": _prospect_links(tab),
             "treinadores": list_people("treinador"),
             "training_slots": training_slot_choices(),
             "access_options": ACCESS_OPTIONS,
@@ -179,7 +188,47 @@ async def org_save_person(request: Request):
             request.session["org_success"] = f"{label} {person['name']} cadastrado no setor {person['sector_name']}."
         else:
             request.session["org_success"] = f"{label} {person['name']} cadastrado."
+        if kind == "representante":
+            note = _link_representative_note(person)
+            if note.strip().lower().startswith("aba "):
+                request.session["org_success"] += note
+            else:
+                request.session["org_error"] = note.strip()
     return RedirectResponse(url=f"/cadastros?tipo={tab}", status_code=303)
+
+
+def _link_representative_note(person: dict) -> str:
+    from app.services.representative_prospects import RepresentativeSheetError, link_representative_sheet
+
+    try:
+        linked = link_representative_sheet(person)
+    except RepresentativeSheetError as error:
+        return f" {error}"
+    tabs = ", ".join(linked.get("tabs") or [])
+    count = int(linked.get("count") or 0)
+    if not tabs:
+        return " Nenhuma aba foi vinculada."
+    return (
+        f" Aba {tabs} vinculada ({count} empresas). "
+        "Elas entram na Raissa quando o representante salvar o cadastro."
+    )
+
+
+@router.post("/cadastros/pessoas/{person_id}/planilha")
+async def org_link_representative_sheet(request: Request, person_id: str):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+    person = get_person(person_id)
+    if person is None or person.get("kind") != "representante":
+        request.session["org_error"] = "Representante não encontrado."
+        return RedirectResponse(url="/cadastros?tipo=representantes", status_code=303)
+    note = _link_representative_note(person).strip()
+    if note.lower().startswith("aba "):
+        request.session["org_success"] = note
+    else:
+        request.session["org_error"] = note
+    return RedirectResponse(url="/cadastros?tipo=representantes", status_code=303)
 
 
 @router.post("/cadastros/pessoas/{person_id}/remover")

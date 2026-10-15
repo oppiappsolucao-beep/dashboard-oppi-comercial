@@ -1,0 +1,72 @@
+"""Aba Estado_Nome_01 liga o representante e o cadastro sai com vendedor para a Raissa."""
+from __future__ import annotations
+
+import sys
+import unittest
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
+from app.services.raissa_company_sync import apply_raissa_values, payload_for_raissa
+from app.services.representative_prospects import (
+    RAISSA_NEW_STATUS,
+    parse_prospect_tab,
+    read_prospect_rows,
+    registration_fields_from_prospect,
+    seller_for_representative,
+    tab_matches_representative,
+)
+
+
+JOSE = {
+    "kind": "representante",
+    "name": "José",
+    "state_name": "São Paulo",
+    "region": "SP",
+}
+
+
+class RepresentativeProspectsTest(unittest.TestCase):
+    def test_le_aba_sao_paulo_jose(self):
+        parsed = parse_prospect_tab("São Paulo_José_01")
+        self.assertEqual(parsed["state"], "São Paulo")
+        self.assertEqual(parsed["representative"], "José")
+        self.assertEqual(parsed["batch"], "01")
+        self.assertTrue(tab_matches_representative("São Paulo_José_01", JOSE))
+        self.assertFalse(tab_matches_representative("Pará_Raul_01", JOSE))
+
+    def test_le_as_quatro_colunas_da_planilha_nova(self):
+        rows = read_prospect_rows(
+            [
+                ["Nome da empresa", "CNPJ", "Telefone", "UF"],
+                ["Oficina Sol", "18.088.253/0001-24", "11988887777", "SP"],
+                ["", "", "", ""],
+            ]
+        )
+        self.assertEqual(len(rows), 1)
+        fields = registration_fields_from_prospect(rows[0], "José")
+        self.assertEqual(fields["empresa"], "Oficina Sol")
+        self.assertEqual(fields["cnpj"], "18.088.253/0001-24")
+        self.assertEqual(fields["telefone_b2b"], "11988887777")
+        self.assertEqual(fields["uf"], "SP")
+        self.assertEqual(fields["vendedor"], "José")
+
+    def test_salvar_do_representante_grava_vendedor_e_status_na_raissa(self):
+        self.assertEqual(seller_for_representative({"org_person_kind": "representante", "org_person_name": "José"}), "José")
+        self.assertEqual(seller_for_representative({"org_person_kind": "funcionario", "org_person_name": "Ana"}), "")
+        payload = payload_for_raissa(registration_fields_from_prospect(
+            {"empresa": "Oficina Sol", "cnpj": "18.088.253/0001-24", "telefone": "11988887777", "uf": "SP"},
+            "José",
+        ))
+        payload["status_cadastro"] = RAISSA_NEW_STATUS
+        headers = ["Empresa", "CNPJ", "WhatsApp", "UF", "Vendedor", "Status"]
+        row = apply_raissa_values([""] * len(headers), headers, payload, only_filled=False)
+        self.assertEqual(row[0], "Oficina Sol")
+        self.assertEqual(row[2], "11988887777")
+        self.assertEqual(row[4], "José")
+        self.assertEqual(row[5], "1 Boleto Aguardando")
+
+
+if __name__ == "__main__":
+    unittest.main()
