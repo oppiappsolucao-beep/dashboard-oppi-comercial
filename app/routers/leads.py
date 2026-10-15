@@ -163,6 +163,82 @@ def _with_cadastro_sheet_rows(empresas: list[dict]) -> list[dict]:
         return empresas
 
 
+def _representative_company_items(request: Request) -> list[dict]:
+    from app.services.representative_prospects import closed_companies, list_prospects
+
+    seller = normalize_text(request.session.get("org_person_name")) or "Representante"
+    items = []
+    for row in closed_companies(list_prospects(request.session.get("org_person_id") or "")):
+        try:
+            registration_row = int(row.get("registration_row") or 0)
+        except (TypeError, ValueError):
+            registration_row = 0
+        items.append(
+            {
+                "empresa": row.get("empresa") or "",
+                "cnpj": row.get("cnpj") or "",
+                "telefone": row.get("telefone") or "",
+                "email": "",
+                "contato": "",
+                "tipo": "Matriz",
+                "matriz": "",
+                "vendedor": seller,
+                "sheet_row": registration_row,
+            }
+        )
+    return items
+
+
+def _representative_empresas_context(request: Request, filters, leads_params: dict) -> dict:
+    empresas = _representative_company_items(request)
+    searching = bool(normalize_text(filters.search))
+    table, _page_rows = build_raissa_empresas_table(
+        empresas,
+        search=filters.search,
+        letter=leads_params["letter"] or "A",
+        page=leads_params["page"],
+        per_page=leads_params["per_page"],
+        apply_letter=not searching,
+    )
+    if searching:
+        full_table, _rows = build_raissa_empresas_table(
+            empresas,
+            search="",
+            letter=leads_params["letter"],
+            page=1,
+            per_page=leads_params["per_page"],
+            apply_letter=False,
+        )
+        table["alphabet"] = full_table["alphabet"]
+    return {
+        "active_page": "leads",
+        "filters": filters,
+        "options": {
+            "seller_options": [],
+            "niche_options": [],
+            "state_options": [],
+            "date_min": None,
+            "date_max": None,
+            "has_reference_dates": False,
+            "status_options": [],
+            "total_companies": len(empresas),
+            "total_capital": 0.0,
+        },
+        "leads_params": leads_params,
+        "stage_options": ["Todas as etapas"],
+        "kpi_cards": raissa_kpi_cards(empresas),
+        "table": table,
+        "raissa_aviso": "" if empresas else "Nenhuma empresa fechada ainda. No Kanban, arraste o card até Concluído e salve o cadastro.",
+        "raissa_total": len(empresas),
+    }
+
+
+def _scoped_empresas_context(request: Request, filters, leads_params: dict) -> dict:
+    if normalize_text(request.session.get("org_person_kind")) == "representante":
+        return _representative_empresas_context(request, filters, leads_params)
+    return _leads_context(request, filters, leads_params)
+
+
 def _raissa_empresas_context(filters, leads_params: dict):
     from app.services.campaign_leads import read_raissa_companies
 
@@ -229,21 +305,12 @@ async def leads_page(request: Request):
     redirect = require_auth(request)
     if redirect:
         return redirect
-    if normalize_text(request.session.get("org_person_kind")) == "representante":
-        from app.services.representative_prospects import closed_companies, list_prospects
-
-        return render(
-            request,
-            "leads/representative.html",
-            {
-                "active_page": "leads",
-                "companies": closed_companies(list_prospects(request.session.get("org_person_id") or "")),
-                "success": request.session.pop("company_registration_success", ""),
-            },
-        )
     filters = parse_dashboard_filters(request)
     leads_params = _parse_leads_params(request)
-    return render(request, "leads/index.html", _leads_context(request, filters, leads_params))
+    context = _scoped_empresas_context(request, filters, leads_params)
+    if normalize_text(request.session.get("org_person_kind")) == "representante":
+        context["success"] = request.session.pop("company_registration_success", "")
+    return render(request, "leads/index.html", context)
 
 
 @router.post("/leads-e-empresas/filtros", response_class=HTMLResponse)
@@ -284,7 +351,7 @@ async def leads_filters(
         "page": page,
         "per_page": per_page,
     })
-    return render(request, "partials/leads_content.html", _leads_context(request, filters, leads_params))
+    return render(request, "partials/leads_content.html", _scoped_empresas_context(request, filters, leads_params))
 
 
 @router.post("/leads-e-empresas/{sheet_row}/proxima-acao")
@@ -314,16 +381,19 @@ async def leads_export(request: Request):
 
     filters = parse_dashboard_filters(request)
     leads_params = _parse_leads_params(request)
-    from app.services.campaign_leads import read_raissa_companies
+    if normalize_text(request.session.get("org_person_kind")) == "representante":
+        empresas = _representative_company_items(request)
+    else:
+        from app.services.campaign_leads import read_raissa_companies
 
-    loaded = read_raissa_companies()
+        empresas = (read_raissa_companies() or {}).get("empresas") or []
     searching = bool(normalize_text(filters.search))
     table, _listed = build_raissa_empresas_table(
-        loaded.get("empresas") or [],
+        empresas,
         search=filters.search,
         letter=leads_params["letter"] or "A",
         page=1,
-        per_page=max(len(loaded.get("empresas") or []), 1),
+        per_page=max(len(empresas), 1),
         apply_letter=not searching,
     )
     rows = [

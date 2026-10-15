@@ -9,6 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from app.services.raissa_company_sync import apply_raissa_values, payload_for_raissa
+from app.services.leads import build_raissa_empresas_table
 from app.services.org_registry import login_accesses
 from app.services.representative_prospects import (
     RAISSA_NEW_STATUS,
@@ -81,6 +82,20 @@ class RepresentativeProspectsTest(unittest.TestCase):
         oficina["registered"] = 1
         self.assertEqual([row["empresa"] for row in closed_companies(rows)], ["Oficina Sol"])
         self.assertEqual([card["empresa"] for column in build_prospect_board(rows) for card in column["cards"]], ["Mercado Azul"])
+
+    def test_empresa_fechada_usa_a_tabela_padrao_com_o_representante(self):
+        table, _rows = build_raissa_empresas_table(
+            [{"empresa": "Oficina Sol", "telefone": "11988887777", "vendedor": "José", "tipo": "Matriz", "sheet_row": 12}],
+            apply_letter=False,
+        )
+        self.assertEqual(table["rows"][0]["vendedor"], "José")
+        self.assertEqual(table["rows"][0]["vendedor_initials"], "JO")
+        self.assertEqual(table["rows"][0]["telefone"], "11988887777")
+        untouched, _rows = build_raissa_empresas_table(
+            [{"empresa": "Oficina Sol", "tipo": "Matriz"}],
+            apply_letter=False,
+        )
+        self.assertEqual(untouched["rows"][0]["vendedor"], "Raissa")
 
     def test_salvar_do_representante_grava_vendedor_e_status_na_raissa(self):
         self.assertEqual(seller_for_representative({"org_person_kind": "representante", "org_person_name": "José"}), "José")
