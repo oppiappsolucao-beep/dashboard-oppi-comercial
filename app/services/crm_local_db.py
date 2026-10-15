@@ -137,7 +137,9 @@ def init_crm_local_db() -> None:
                     responsible TEXT NOT NULL DEFAULT '',
                     created_by TEXT NOT NULL DEFAULT '',
                     created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL
+                    updated_at TEXT NOT NULL,
+                    training_result TEXT NOT NULL DEFAULT '',
+                    training_reason TEXT NOT NULL DEFAULT ''
                 );
                 CREATE INDEX IF NOT EXISTS idx_service_orders_client
                     ON service_orders(tenant_id, sheet_row, created_at);
@@ -239,6 +241,14 @@ def init_crm_local_db() -> None:
             if order_cols and "queue_id" not in order_cols:
                 conn.execute(
                     "ALTER TABLE service_orders ADD COLUMN queue_id TEXT NOT NULL DEFAULT 'analise'"
+                )
+            if order_cols and "training_result" not in order_cols:
+                conn.execute(
+                    "ALTER TABLE service_orders ADD COLUMN training_result TEXT NOT NULL DEFAULT ''"
+                )
+            if order_cols and "training_reason" not in order_cols:
+                conn.execute(
+                    "ALTER TABLE service_orders ADD COLUMN training_reason TEXT NOT NULL DEFAULT ''"
                 )
             people_cols = {
                 row[1]

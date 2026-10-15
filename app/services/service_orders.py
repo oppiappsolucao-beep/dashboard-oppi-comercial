@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import re
 import uuid
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from config.crm_options import PRIORITY_OPTIONS
@@ -19,6 +19,12 @@ SERVICE_ORDER_STATUS_LABELS = {
     "concluida": "Concluída",
     "reaberta": "Reaberta",
     "cancelada": "Cancelada",
+}
+
+TRAINING_RESULT_LABELS = {
+    "faltou": "Faltou",
+    "realizado": "Realizado",
+    "reagendou": "Reagendou",
 }
 
 EVENT_KIND_LABELS = {
@@ -105,6 +111,8 @@ def _row_to_view(row) -> dict:
         "updated_at": row["updated_at"] if "updated_at" in row.keys() else "",
         "created_at_label": _format_when(row["created_at"]),
         "sheet_row": int(row["sheet_row"] or 0) if "sheet_row" in row.keys() else 0,
+        "training_result": normalize_text(row["training_result"]) if "training_result" in row.keys() else "",
+        "training_reason": normalize_text(row["training_reason"]) if "training_reason" in row.keys() else "",
     }
 
 
@@ -180,10 +188,13 @@ def list_training_appointments(responsible: str = "") -> list[dict]:
     return items
 
 
-def trainer_busy_hours(responsible: str, day: str) -> set[str]:
+def trainer_busy_hours(responsible: str, day: str, exclude_id: str = "") -> set[str]:
     target_day = normalize_text(day)
+    skipped = normalize_text(exclude_id)
     hours: set[str] = set()
     for item in list_training_appointments(responsible):
+        if skipped and item.get("id") == skipped:
+            continue
         if item.get("status") == "cancelada":
             continue
         if item.get("scheduled_date") == target_day and item.get("hour"):
@@ -191,8 +202,144 @@ def trainer_busy_hours(responsible: str, day: str) -> set[str]:
     return hours
 
 
-def trainer_is_busy(responsible: str, day: str, hour: str) -> bool:
-    return normalize_text(hour)[:5] in trainer_busy_hours(responsible, day)
+def trainer_is_busy(responsible: str, day: str, hour: str, exclude_id: str = "") -> bool:
+    return normalize_text(hour)[:5] in trainer_busy_hours(responsible, day, exclude_id)
+
+
+def _replace_training_hour(description: str, hour: str) -> str:
+    text = description or ""
+    if re.search(r"Horário:\s*\d{2}:\d{2}", text):
+        return re.sub(r"(Horário:\s*)\d{2}:\d{2}", rf"\g<1>{hour}", text, count=1)
+    extra = f"Horário: {hour}."
+    return f"{text} {extra}".strip() if text else extra
+
+
+def _load_service_order(order_id: str) -> dict | None:
+    init_crm_local_db()
+    with _lock, _connect() as conn:
+        row = conn.execute(
+            "SELECT * FROM service_orders WHERE id = ?",
+            (order_id,),
+        ).fetchone()
+    if row is None:
+        return None
+    view = _row_to_view(row)
+    if normalize_text(view.get("subject")).lower() == "treinamento":
+        view.update(_training_bits(view.get("description") or ""))
+        result = normalize_text(view.get("training_result")).lower()
+        view["training_result"] = result if result in TRAINING_RESULT_LABELS else ""
+        view["training_result_label"] = TRAINING_RESULT_LABELS.get(view["training_result"], "")
+    return view
+
+
+def update_training_appointment(
+    order_id: str,
+    *,
+    result: str,
+    reason: str,
+    day: str = "",
+    hour: str = "",
+    author: str = "",
+    actor_name: str = "",
+    actor_is_trainer: bool = False,
+    today: date | None = None,
+) -> dict:
+    """Registra faltou, realizado ou reagendou. Dia e horário só mudam antes do dia, ou no reagendamento."""
+    clean_result = normalize_text(result).lower()
+    if clean_result not in TRAINING_RESULT_LABELS:
+        raise ValueError("Escolha Faltou, Realizado ou Reagendou.")
+    clean_reason = normalize_text(reason)
+    if len(clean_reason) < 3:
+        raise ValueError("Informe o motivo.")
+    if len(clean_reason) > 500:
+        raise ValueError("O motivo pode ter no máximo 500 caracteres.")
+
+    current = _load_service_order(order_id)
+    if current is None or normalize_text(current.get("subject")).lower() != "treinamento":
+        raise ValueError("Treinamento não encontrado.")
+    if current.get("status") == "cancelada":
+        raise ValueError("Este treinamento foi cancelado.")
+    if actor_is_trainer and normalize_text(actor_name).lower() != normalize_text(current.get("responsible")).lower():
+        raise ValueError("Este treinamento é de outro treinador.")
+
+    try:
+        current_day = date.fromisoformat(normalize_text(current.get("scheduled_date")))
+    except ValueError as error:
+        raise ValueError("Este treinamento está sem dia.") from error
+    current_hour = normalize_text(current.get("hour"))[:5]
+    moment = today or _now().date()
+    can_edit_schedule = moment < current_day
+
+    sent_day = normalize_text(day)
+    sent_hour = normalize_text(hour)[:5]
+    schedule_changed = bool(sent_day and sent_day != current_day.isoformat()) or bool(
+        sent_hour and sent_hour != current_hour
+    )
+    new_day = current_day.isoformat()
+    new_hour = current_hour
+    description = current.get("description") or ""
+
+    if clean_result == "reagendou":
+        if not re.match(r"^\d{4}-\d{2}-\d{2}$", sent_day):
+            raise ValueError("Informe o novo dia do treinamento.")
+        if not re.match(r"^\d{2}:\d{2}$", sent_hour):
+            raise ValueError("Informe o novo horário do treinamento.")
+        try:
+            chosen_day = date.fromisoformat(sent_day)
+        except ValueError as error:
+            raise ValueError("Informe o novo dia do treinamento.") from error
+        if chosen_day < moment:
+            raise ValueError("O novo dia precisa ser hoje ou uma data futura.")
+        if sent_day == current_day.isoformat() and sent_hour == current_hour:
+            raise ValueError("Escolha outro dia ou outro horário para reagendar.")
+        from app.services.org_registry import ensure_training_slot, list_people
+
+        trainer = next(
+            (
+                person
+                for person in list_people("treinador")
+                if normalize_text(person.get("name")).lower() == normalize_text(current.get("responsible")).lower()
+            ),
+            None,
+        )
+        if trainer is None:
+            raise ValueError("Não encontrei a agenda deste treinador.")
+        ensure_training_slot(trainer, sent_day, sent_hour)
+        if trainer_is_busy(trainer.get("name", ""), sent_day, sent_hour, current["id"]):
+            raise ValueError(f"{trainer.get('name')} já tem um treinamento nesse horário.")
+        new_day = sent_day
+        new_hour = sent_hour
+        description = _replace_training_hour(description, new_hour)
+    elif schedule_changed:
+        if not can_edit_schedule:
+            raise ValueError("O dia e o horário só podem ser alterados antes do dia do treinamento.")
+        raise ValueError("Para alterar o dia ou o horário, marque Reagendou.")
+
+    stamp = _now().isoformat(timespec="seconds")
+    label = TRAINING_RESULT_LABELS[clean_result]
+    if clean_result == "reagendou":
+        summary = (
+            f"Treinamento reagendado para {_format_day(new_day)} às {new_hour}. Motivo: {clean_reason}"
+        )
+    else:
+        summary = f"Treinamento marcado como {label.lower()}. Motivo: {clean_reason}"
+
+    init_crm_local_db()
+    with _lock, _connect() as conn:
+        conn.execute(
+            """
+            UPDATE service_orders
+            SET scheduled_date = ?, description = ?, training_result = ?, training_reason = ?, updated_at = ?
+            WHERE id = ?
+            """,
+            (new_day, description, clean_result, clean_reason, stamp, current["id"]),
+        )
+        _add_event(conn, current["id"], "atualizacao", summary, author, stamp)
+
+    saved = _load_service_order(current["id"])
+    if saved is None:
+        raise ValueError("O treinamento foi salvo, mas não consegui recarregá-lo.")
+    return saved
 
 
 def list_service_orders(tenant_id: str | None, sheet_row: int) -> list[dict]:

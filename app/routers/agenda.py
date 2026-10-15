@@ -3,13 +3,23 @@ import re
 from calendar import monthrange
 from datetime import date, timedelta
 
-from fastapi import APIRouter, Request
-from fastapi.responses import HTMLResponse
+from fastapi import APIRouter, Form, Request
+from fastapi.responses import HTMLResponse, RedirectResponse
 
 from app.dependencies import require_auth
 from app.services.legacy_core import normalize_text
-from app.services.org_registry import SCHEDULE_DAY_KEYS, get_person, list_people, slot_label
-from app.services.service_orders import list_training_appointments
+from app.services.org_registry import (
+    SCHEDULE_DAY_KEYS,
+    TRAINING_SLOT_STARTS,
+    get_person,
+    list_people,
+    slot_label,
+)
+from app.services.service_orders import (
+    TRAINING_RESULT_LABELS,
+    list_training_appointments,
+    update_training_appointment,
+)
 from app.templating import render
 
 router = APIRouter()
@@ -53,14 +63,47 @@ def _meeting_link(description: str) -> str:
     return match.group(0).rstrip(".,)")
 
 
-def _event(item: dict, own: bool) -> dict:
+def _slots_by_trainer() -> dict[str, list[dict]]:
+    mapping: dict[str, list[dict]] = {}
+    for person in list_people("treinador"):
+        slots = (person.get("schedule") or {}).get("slots") or list(TRAINING_SLOT_STARTS)
+        mapping[normalize_text(person.get("name")).lower()] = [
+            {"value": slot, "label": slot_label(slot)} for slot in slots
+        ]
+    return mapping
+
+
+def _event(item: dict, own: bool, today: date, slots_by_trainer: dict[str, list[dict]]) -> dict:
+    scheduled = normalize_text(item.get("scheduled_date"))
+    try:
+        scheduled_day = date.fromisoformat(scheduled)
+    except ValueError:
+        scheduled_day = None
+    result = normalize_text(item.get("training_result")).lower()
+    if result not in TRAINING_RESULT_LABELS:
+        result = ""
+    hour = item.get("hour") or ""
+    responsible = item.get("responsible") or ""
+    slots = list(slots_by_trainer.get(normalize_text(responsible).lower()) or [
+        {"value": slot, "label": slot_label(slot)} for slot in TRAINING_SLOT_STARTS
+    ])
+    if hour and hour not in {slot["value"] for slot in slots}:
+        slots.append({"value": hour, "label": slot_label(hour)})
+        slots.sort(key=lambda slot: slot["value"])
     return {
+        "id": item.get("id") or "",
         "empresa": item.get("empresa") or "Cliente",
         "trainee": item.get("trainee") or "",
-        "hour": item.get("hour") or "",
-        "hour_label": item.get("hour_label") or item.get("hour") or "",
-        "responsible": "" if own else (item.get("responsible") or ""),
+        "hour": hour,
+        "hour_label": item.get("hour_label") or hour,
+        "responsible": "" if own else responsible,
         "link": _meeting_link(item.get("description") or ""),
+        "result": result,
+        "result_label": TRAINING_RESULT_LABELS.get(result, ""),
+        "reason": item.get("training_reason") or "",
+        "scheduled_date": scheduled,
+        "can_edit_schedule": bool(scheduled_day and today < scheduled_day),
+        "slots": slots,
     }
 
 
@@ -114,19 +157,20 @@ async def agenda_page(request: Request):
         by_day.setdefault(day, []).append(item)
 
     slots, work_days = _trainer_frame(request)
+    trainer_slots = _slots_by_trainer()
     weeks = []
     if view == "mes":
         prev_day = _shift_month(anchor.replace(day=1), -1)
         next_day = _shift_month(anchor.replace(day=1), 1)
         title = f"{_MONTHS[anchor.month - 1].capitalize()} de {anchor.year}"
-        weeks = _month_grid(anchor, by_day, own)
+        weeks = _month_grid(anchor, by_day, own, today, trainer_slots)
         week_days = []
         hours = []
     else:
         start = anchor - timedelta(days=anchor.weekday())
         prev_day = start - timedelta(days=7)
         next_day = start + timedelta(days=7)
-        week_days, hours, title = _week_grid(start, slots, work_days, by_day, own)
+        week_days, hours, title = _week_grid(start, slots, work_days, by_day, own, today, trainer_slots)
 
     return render(
         request,
@@ -145,11 +189,67 @@ async def agenda_page(request: Request):
             "today_url": _url(view, today),
             "week_url": _url("semana", anchor),
             "month_url": _url("mes", anchor),
+            "anchor": anchor.isoformat(),
+            "success": request.session.pop("agenda_success", ""),
+            "error": request.session.pop("agenda_error", ""),
+            "focus_id": request.session.pop("agenda_focus_id", ""),
         },
     )
 
 
-def _week_grid(start: date, slots: list[str], work_days: list[str], by_day: dict, own: bool):
+@router.post("/agenda/{order_id}")
+async def agenda_update(
+    request: Request,
+    order_id: str,
+    result: str = Form(""),
+    reason: str = Form(""),
+    day: str = Form(""),
+    hour: str = Form(""),
+    vista: str = Form("semana"),
+    data: str = Form(""),
+):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+    back = _url(
+        normalize_text(vista).lower() if normalize_text(vista).lower() in {"semana", "mes"} else "semana",
+        _anchor(data),
+    )
+    kind = normalize_text(request.session.get("org_person_kind"))
+    author = normalize_text(request.session.get("org_person_name") or request.session.get("username")) or "Usuário"
+    try:
+        saved = update_training_appointment(
+            order_id,
+            result=result,
+            reason=reason,
+            day=day,
+            hour=hour,
+            author=author,
+            actor_name=author,
+            actor_is_trainer=kind == "treinador",
+        )
+        if saved.get("training_result") == "reagendou":
+            request.session["agenda_success"] = (
+                f"Treinamento reagendado para {saved.get('scheduled_date_label')}, {saved.get('hour_label')}."
+            )
+        else:
+            label = saved.get("training_result_label") or "atualizado"
+            request.session["agenda_success"] = f"Treinamento marcado como {label.lower()}."
+    except ValueError as error:
+        request.session["agenda_error"] = str(error)
+        request.session["agenda_focus_id"] = order_id
+    return RedirectResponse(url=back, status_code=303)
+
+
+def _week_grid(
+    start: date,
+    slots: list[str],
+    work_days: list[str],
+    by_day: dict,
+    own: bool,
+    today: date,
+    trainer_slots: dict,
+):
     week = [start + timedelta(days=offset) for offset in range(7)]
     visible_keys = set(work_days)
     hours = list(slots)
@@ -165,7 +265,6 @@ def _week_grid(start: date, slots: list[str], work_days: list[str], by_day: dict
     if not visible_keys:
         visible_keys = set(SCHEDULE_DAY_KEYS[:5])
     columns = [day for day in week if SCHEDULE_DAY_KEYS[day.weekday()] in visible_keys]
-    today = date.today()
     week_days = []
     for day in columns:
         iso = day.isoformat()
@@ -173,7 +272,7 @@ def _week_grid(start: date, slots: list[str], work_days: list[str], by_day: dict
         for item in by_day.get(iso, []):
             hour = item.get("hour") or ""
             if hour in grouped:
-                grouped[hour].append(_event(item, own))
+                grouped[hour].append(_event(item, own, today, trainer_slots))
         week_days.append(
             {
                 "label": _WEEKDAYS[day.weekday()],
@@ -202,8 +301,7 @@ def _range_title(first: date, last: date) -> str:
     return f"{first.strftime('%d/%m/%Y')} – {last.strftime('%d/%m/%Y')}"
 
 
-def _month_grid(anchor: date, by_day: dict, own: bool) -> list[list[dict]]:
-    today = date.today()
+def _month_grid(anchor: date, by_day: dict, own: bool, today: date, trainer_slots: dict) -> list[list[dict]]:
     first = anchor.replace(day=1)
     end = date(anchor.year, anchor.month, monthrange(anchor.year, anchor.month)[1])
     cursor = first - timedelta(days=first.weekday())
@@ -212,7 +310,7 @@ def _month_grid(anchor: date, by_day: dict, own: bool) -> list[list[dict]]:
         week = []
         for _ in range(7):
             iso = cursor.isoformat()
-            events = [_event(item, own) for item in by_day.get(iso, [])]
+            events = [_event(item, own, today, trainer_slots) for item in by_day.get(iso, [])]
             events.sort(key=lambda item: item.get("hour") or "")
             week.append(
                 {

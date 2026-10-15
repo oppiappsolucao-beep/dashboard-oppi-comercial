@@ -689,6 +689,8 @@ class ServiceOrderRecord(Base):
     created_by = Column(String(255), nullable=False, default="")
     created_at = Column(String(40), nullable=False, default="")
     updated_at = Column(String(40), nullable=False, default="")
+    training_result = Column(String(20), nullable=False, default="")
+    training_reason = Column(Text, nullable=False, default="")
 
 
 class ServiceOrderCounter(Base):

@@ -1,0 +1,51 @@
+<article class="agenda-event {% if event.result %}is-{{ event.result }}{% endif %}">
+  <strong>{{ event.empresa }}</strong>
+  {% if event.result_label %}<b class="agenda-badge">{{ event.result_label }}</b>{% endif %}
+  {% if event.hour_label and view == 'mes' %}<span>{{ event.hour_label }}</span>{% endif %}
+  {% if event.trainee %}<span>{{ event.trainee }}</span>{% endif %}
+  {% if event.responsible %}<span>{{ event.responsible }}</span>{% endif %}
+  {% if event.reason %}<span class="agenda-reason">{{ event.reason }}</span>{% endif %}
+  {% if event.link %}<a href="{{ event.link }}" target="_blank" rel="noopener">Entrar na chamada</a>{% endif %}
+  <details class="agenda-edit" {% if focus_id == event.id %}open{% endif %}>
+    <summary>{% if event.result %}Atualizar{% else %}Registrar{% endif %}</summary>
+    <form class="agenda-form" method="post" action="/agenda/{{ event.id }}">
+      <input type="hidden" name="vista" value="{{ view }}">
+      <input type="hidden" name="data" value="{{ anchor }}">
+      <label>
+        Situação
+        <select name="result" class="agenda-result" data-can-edit="{{ '1' if event.can_edit_schedule else '0' }}" required>
+          <option value="">Escolha</option>
+          <option value="faltou" {% if event.result == 'faltou' %}selected{% endif %}>Faltou</option>
+          <option value="realizado" {% if event.result == 'realizado' %}selected{% endif %}>Realizado</option>
+          <option value="reagendou" {% if event.result == 'reagendou' %}selected{% endif %}>Reagendou</option>
+        </select>
+      </label>
+      <label>
+        Motivo
+        <textarea name="reason" required maxlength="500" placeholder="Por que faltou, foi realizado ou mudou">{{ event.reason }}</textarea>
+      </label>
+      <div class="agenda-when" {% if not event.can_edit_schedule and event.result != 'reagendou' %}hidden{% endif %}>
+        <p class="agenda-hint">
+          {% if event.can_edit_schedule %}
+          Até a véspera dá para mudar o dia e o horário. Ao mudar, a situação fica Reagendou.
+          {% else %}
+          Neste dia o horário original fica travado. Reagendou marca outro dia.
+          {% endif %}
+        </p>
+        <label>
+          Dia
+          <input type="date" name="day" value="{{ event.scheduled_date }}">
+        </label>
+        <label>
+          Horário
+          <select name="hour" data-current="{{ event.hour }}">
+            {% for slot in event.slots %}
+            <option value="{{ slot.value }}" {% if slot.value == event.hour %}selected{% endif %}>{{ slot.label }}</option>
+            {% endfor %}
+          </select>
+        </label>
+      </div>
+      <button type="submit" class="btn btn-small">Salvar</button>
+    </form>
+  </details>
+</article>
