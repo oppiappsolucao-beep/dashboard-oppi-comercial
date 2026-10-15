@@ -33,6 +33,7 @@ BRAZIL_UFS = [
 ]
 DEFAULT_SECTORS = ["Comercial", "Suporte", "Financeiro", "Representação"]
 COMMERCIAL_CADASTRO_ACCESS = ("novo_cadastro", "empresas", "propostas")
+REPRESENTATIVE_ACCESS = ("novo_cadastro",)
 TRAINING_ACCESS = ("agenda", "kanban", "empresas")
 SCHEDULE_DAYS = (
     ("seg", "Seg"),
@@ -577,8 +578,15 @@ def remove_person(person_id: str) -> None:
         )
 
 
+def login_accesses(kind: str, sector_accesses: list[str]) -> list[str]:
+    """Representante entra no cadastro. A base geral e o financeiro ficam fora do acesso dele."""
+    if kind == "representante":
+        return list(REPRESENTATIVE_ACCESS)
+    return [item for item in sector_accesses if item in ACCESS_KEYS]
+
+
 def authenticate_employee(username: str, password: str) -> dict | None:
-    """Login de funcionário ou treinador. Representante fica cadastrado, mas ainda não entra no sistema."""
+    """Login de funcionário, treinador ou representante."""
     clean_username = normalize_text(username).lower()
     clean_password = str(password or "")
     if not clean_username or not clean_password:
@@ -591,7 +599,7 @@ def authenticate_employee(username: str, password: str) -> dict | None:
             SELECT people.*, sectors.name AS sector_name, sectors.accesses_json
             FROM org_people AS people
             LEFT JOIN org_sectors AS sectors ON sectors.id = people.sector_id AND sectors.active = 1
-            WHERE lower(people.username) = ? AND people.active = 1 AND people.kind IN ('funcionario', 'treinador')
+            WHERE lower(people.username) = ? AND people.active = 1 AND people.kind IN ('funcionario', 'treinador', 'representante')
             """,
             (clean_username,),
         ).fetchone()
@@ -604,7 +612,7 @@ def authenticate_employee(username: str, password: str) -> dict | None:
         valid = False
     if not valid:
         return None
-    accesses = _loads(row["accesses_json"] or "[]")
+    accesses = login_accesses(row["kind"], _loads(row["accesses_json"] or "[]"))
     return {
         "id": row["id"],
         "name": row["name"],

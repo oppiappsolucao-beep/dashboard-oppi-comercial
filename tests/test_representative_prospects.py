@@ -9,6 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from app.services.raissa_company_sync import apply_raissa_values, payload_for_raissa
+from app.services.org_registry import login_accesses
 from app.services.representative_prospects import (
     RAISSA_NEW_STATUS,
     parse_prospect_tab,
@@ -28,6 +29,10 @@ JOSE = {
 
 
 class RepresentativeProspectsTest(unittest.TestCase):
+    def test_representante_entra_no_cadastro(self):
+        self.assertEqual(login_accesses("representante", ["gestao", "financeiro", "empresas"]), ["novo_cadastro"])
+        self.assertEqual(login_accesses("funcionario", ["kanban", "agenda"]), ["kanban", "agenda"])
+
     def test_le_aba_sao_paulo_jose(self):
         parsed = parse_prospect_tab("São Paulo_José_01")
         self.assertEqual(parsed["state"], "São Paulo")

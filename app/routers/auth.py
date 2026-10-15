@@ -62,7 +62,10 @@ async def login_submit(
         request.session["authenticated"] = True
         request.session["username"] = employee["username"]
         request.session["user_id"] = employee["id"]
-        request.session["user_role"] = "Treinador" if employee.get("kind") == "treinador" else "Funcionário"
+        request.session["user_role"] = {
+            "treinador": "Treinador",
+            "representante": "Representante",
+        }.get(employee.get("kind"), "Funcionário")
         request.session["org_person_id"] = employee["id"]
         request.session["org_person_kind"] = employee.get("kind") or "funcionario"
         request.session["org_person_name"] = employee["name"]
