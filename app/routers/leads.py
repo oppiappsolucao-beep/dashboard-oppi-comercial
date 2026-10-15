@@ -229,6 +229,18 @@ async def leads_page(request: Request):
     redirect = require_auth(request)
     if redirect:
         return redirect
+    if normalize_text(request.session.get("org_person_kind")) == "representante":
+        from app.services.representative_prospects import closed_companies, list_prospects
+
+        return render(
+            request,
+            "leads/representative.html",
+            {
+                "active_page": "leads",
+                "companies": closed_companies(list_prospects(request.session.get("org_person_id") or "")),
+                "success": request.session.pop("company_registration_success", ""),
+            },
+        )
     filters = parse_dashboard_filters(request)
     leads_params = _parse_leads_params(request)
     return render(request, "leads/index.html", _leads_context(request, filters, leads_params))

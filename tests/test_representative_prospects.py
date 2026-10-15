@@ -12,6 +12,9 @@ from app.services.raissa_company_sync import apply_raissa_values, payload_for_ra
 from app.services.org_registry import login_accesses
 from app.services.representative_prospects import (
     RAISSA_NEW_STATUS,
+    build_prospect_board,
+    closed_companies,
+    merge_prospect_rows,
     parse_prospect_tab,
     read_prospect_rows,
     registration_fields_from_prospect,
@@ -30,7 +33,10 @@ JOSE = {
 
 class RepresentativeProspectsTest(unittest.TestCase):
     def test_representante_entra_no_cadastro(self):
-        self.assertEqual(login_accesses("representante", ["gestao", "financeiro", "empresas"]), ["novo_cadastro"])
+        self.assertEqual(
+            login_accesses("representante", ["gestao", "financeiro", "empresas"]),
+            ["kanban", "novo_cadastro", "empresas"],
+        )
         self.assertEqual(login_accesses("funcionario", ["kanban", "agenda"]), ["kanban", "agenda"])
 
     def test_le_aba_sao_paulo_jose(self):
@@ -56,6 +62,25 @@ class RepresentativeProspectsTest(unittest.TestCase):
         self.assertEqual(fields["telefone_b2b"], "11988887777")
         self.assertEqual(fields["uf"], "SP")
         self.assertEqual(fields["vendedor"], "José")
+
+    def test_kanban_separa_lista_e_empresa_fechada(self):
+        incoming = [
+            {"tab_title": "São Paulo_José_01", "sheet_row": 2, "empresa": "Oficina Sol", "cnpj": "18.088.253/0001-24", "telefone": "11988887777", "uf": "SP"},
+            {"tab_title": "São Paulo_José_01", "sheet_row": 3, "empresa": "Mercado Azul", "cnpj": "22.222.222/0001-22", "telefone": "11977776666", "uf": "SP"},
+        ]
+        existing = [
+            {"tab_title": "São Paulo_José_01", "sheet_row": 2, "empresa": "Oficina Sol", "cnpj": "18.088.253/0001-24", "telefone": "11988887777", "uf": "SP", "queue": "proposta", "registered": 0, "registration_row": 0},
+        ]
+        rows = merge_prospect_rows(existing, incoming)
+        oficina = next(row for row in rows if row["empresa"] == "Oficina Sol")
+        self.assertEqual(oficina["queue"], "proposta")
+        board = build_prospect_board(rows)
+        self.assertEqual(board[0]["name"], "Lista")
+        self.assertEqual([card["empresa"] for card in board[0]["cards"]], ["Mercado Azul"])
+        self.assertEqual([card["empresa"] for card in board[2]["cards"]], ["Oficina Sol"])
+        oficina["registered"] = 1
+        self.assertEqual([row["empresa"] for row in closed_companies(rows)], ["Oficina Sol"])
+        self.assertEqual([card["empresa"] for column in build_prospect_board(rows) for card in column["cards"]], ["Mercado Azul"])
 
     def test_salvar_do_representante_grava_vendedor_e_status_na_raissa(self):
         self.assertEqual(seller_for_representative({"org_person_kind": "representante", "org_person_name": "José"}), "José")

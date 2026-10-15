@@ -198,12 +198,68 @@ def _os_board_context(request: Request) -> dict:
     }
 
 
+def _representative_kanban_context(request: Request) -> dict:
+    from app.services.org_registry import get_person
+    from app.services.representative_prospects import (
+        RepresentativeSheetError,
+        build_prospect_board,
+        link_representative_sheet,
+        list_prospects,
+    )
+
+    person = get_person(normalize_text(request.session.get("org_person_id")))
+    error = request.session.pop("rep_board_error", "")
+    notice = ""
+    rows = []
+    if person is None:
+        error = error or "Representante não encontrado."
+    else:
+        try:
+            linked = link_representative_sheet(person)
+            tabs = ", ".join(linked.get("tabs") or [])
+            if tabs:
+                notice = f"Lista da aba {tabs}."
+        except RepresentativeSheetError as exc:
+            error = error or str(exc)
+        rows = list_prospects(person["id"])
+    return {
+        "active_page": "activities",
+        "columns": build_prospect_board(rows),
+        "notice": notice,
+        "error": error,
+        "total": sum(1 for row in rows if not row.get("registered")),
+    }
+
+
 @router.get("/atividades", response_class=HTMLResponse)
 async def activities_page(request: Request):
     redirect = require_auth(request)
     if redirect:
         return redirect
+    if normalize_text(request.session.get("org_person_kind")) == "representante":
+        return render(request, "activities/representative_board.html", _representative_kanban_context(request))
     return render(request, "activities/os_board.html", _os_board_context(request))
+
+
+@router.post("/atividades/representante/mover")
+async def representative_move_prospect(request: Request):
+    redirect = require_auth(request)
+    if redirect:
+        return JSONResponse({"ok": False, "error": "Sem acesso."}, status_code=401)
+    if normalize_text(request.session.get("org_person_kind")) != "representante":
+        return JSONResponse({"ok": False, "error": "Sem acesso."}, status_code=403)
+    from app.services.representative_prospects import RepresentativeSheetError, move_prospect
+
+    form = await request.form()
+    try:
+        moved = move_prospect(
+            normalize_text(request.session.get("org_person_id")),
+            form.get("prospect", ""),
+            form.get("queue", ""),
+        )
+    except RepresentativeSheetError as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
+    return JSONResponse(moved)
 
 
 @router.get("/proposta", response_class=HTMLResponse)

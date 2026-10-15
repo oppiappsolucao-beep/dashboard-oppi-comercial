@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block content %}
+<link rel="stylesheet" href="/static/css/activities.css?v={{ static_version }}">
+<style>
+.activities-kanban-column.is-done .activities-kanban-column-title { color: #166534; }
+</style>
+<div class="page-header">
+  <div>
+    <div class="page-title">Kanban</div>
+    <div class="page-subtitle">Empresas da sua aba. Arraste até Concluído para abrir o cadastro.</div>
+  </div>
+</div>
+{% if error %}<div class="alert-error">{{ error }}</div>{% endif %}
+{% if notice %}<div class="alert-success">{{ notice }}</div>{% endif %}
+<div class="activities-kanban-board" id="rep-kanban-board">
+  {% for column in columns %}
+  <section class="activities-kanban-column{% if column.id == 'concluida' %} is-done{% endif %}">
+    <header class="activities-kanban-column-header">
+      <div class="activities-kanban-column-heading">
+        <span class="activities-kanban-column-title">{{ column.name }}</span>
+      </div>
+      <span class="activities-kanban-column-count" data-kanban-count>{{ column.cards|length }}</span>
+    </header>
+    <div class="activities-kanban-column-body" data-drop-queue="{{ column.id }}">
+      {% for card in column.cards %}
+      <article class="activities-kanban-card" draggable="true" data-prospect="{{ card.tab_title }}|{{ card.sheet_row }}" {% if column.id == 'concluida' %}data-cadastro-url="{{ card.cadastro_url }}"{% endif %}>
+        <div class="activities-kanban-card-title">{{ card.empresa }}</div>
+        <div class="activities-kanban-card-meta">{{ card.cnpj or 'Sem CNPJ' }}</div>
+        <div class="activities-kanban-card-meta">{{ card.telefone or 'Sem telefone' }}{% if card.uf %} · {{ card.uf }}{% endif %}</div>
+        {% if column.id == 'concluida' %}
+        <a class="os-proposta-link" href="{{ card.cadastro_url }}">Abrir cadastro</a>
+        {% endif %}
+      </article>
+      {% else %}
+      <div class="activities-kanban-empty">{% if total == 0 and column.id == 'entrada' %}Nenhuma empresa na aba ainda.{% else %}Nenhuma empresa{% endif %}</div>
+      {% endfor %}
+    </div>
+  </section>
+  {% endfor %}
+</div>
+<script src="/static/js/rep-kanban.js?v={{ static_version }}"></script>
+{% endblock %}
