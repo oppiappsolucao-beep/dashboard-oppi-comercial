@@ -1,8 +1,34 @@
 (function () {
   var board = document.getElementById("rep-kanban-board");
+  var modal = document.getElementById("os-order-modal");
+  var modalBody = document.getElementById("os-order-modal-body");
   if (!board) return;
   var dragged = null;
   var origin = null;
+  var suppressClick = false;
+
+  function closeModal() {
+    if (!modal) return;
+    modal.hidden = true;
+    if (modalBody) modalBody.innerHTML = "";
+  }
+
+  function openOrder(orderId) {
+    if (!modal || !modalBody || !orderId) return;
+    modal.hidden = false;
+    modalBody.textContent = "Carregando…";
+    fetch("/atividades/os/" + encodeURIComponent(orderId))
+      .then(function (response) {
+        if (!response.ok) throw new Error("fail");
+        return response.text();
+      })
+      .then(function (html) {
+        modalBody.innerHTML = html;
+      })
+      .catch(function () {
+        modalBody.textContent = "Não consegui abrir esta ordem.";
+      });
+  }
 
   function countColumn(column) {
     var body = column.querySelector(".activities-kanban-column-body");
@@ -27,6 +53,7 @@
         event.preventDefault();
         return;
       }
+      suppressClick = true;
       dragged = card;
       origin = card.parentElement;
       card.classList.add("is-dragging");
@@ -38,6 +65,14 @@
     card.addEventListener("dragend", function () {
       card.classList.remove("is-dragging");
       dragged = null;
+    });
+    card.addEventListener("click", function (event) {
+      if (suppressClick) {
+        suppressClick = false;
+        return;
+      }
+      if (event.target.closest("a, button, textarea, input, select, label")) return;
+      openOrder(card.getAttribute("data-order-id"));
     });
   });
 
@@ -84,4 +119,29 @@
         });
     });
   });
+
+  if (modal) {
+    modal.addEventListener("click", function (event) {
+      if (event.target.closest("[data-os-close]")) closeModal();
+    });
+    modal.addEventListener("submit", function (event) {
+      var form = event.target;
+      if (!form || form.id !== "os-update-form") return;
+      event.preventDefault();
+      fetch(form.action, { method: "POST", body: new FormData(form) })
+        .then(function (response) {
+          if (!response.ok) throw new Error("fail");
+          return response.text();
+        })
+        .then(function (html) {
+          modalBody.innerHTML = html;
+        })
+        .catch(function () {
+          modalBody.textContent = "Não consegui salvar esta atualização.";
+        });
+    });
+    document.addEventListener("keydown", function (event) {
+      if (event.key === "Escape" && !modal.hidden) closeModal();
+    });
+  }
 })();

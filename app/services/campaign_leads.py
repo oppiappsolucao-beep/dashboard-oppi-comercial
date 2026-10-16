@@ -14,16 +14,36 @@ TAB_NAMES = ("Leads Raissa", "Leads Raíssa", "LeadsRaissa", "Leads")
 COMPANY_TAB_NAMES = ("Raissa", "Raíssa")
 
 _HEADER_ALIASES = {
-    "empresa": ("empresa", "nome empresa", "nome empresas", "cliente", "razao social", "nome"),
-    "phone": ("whatsapp", "telefone", "celular", "fone", "telefone b2b"),
+    "empresa": (
+        "empresa",
+        "nome da empresa",
+        "nome empresa",
+        "nome empresas",
+        "cliente",
+        "razao social",
+        "nome",
+    ),
+    "phone": (
+        "whatsapp",
+        "telefone",
+        "celular",
+        "fone",
+        "telefone b2b",
+        "whatsapp b2b",
+        "celular / whatsapp",
+        "celular/whatsapp",
+        "celular whatsapp",
+        "telefone lemitt",
+    ),
     "email": ("email", "e-mail", "email empresa"),
     "contact_name": ("contato", "nome contato", "nome do contato", "responsavel"),
     "creative": ("criativo", "anuncio", "ad"),
     "campaign": ("campanha",),
-    "lead_date": ("data", "data entrada", "entrada", "criado em", "data do lead"),
+    "lead_date": ("data", "data entrada", "entrada", "criado em", "data do lead", "data lead"),
     "city": ("cidade", "municipio"),
     "uf": ("uf", "estado"),
 }
+_DATE_SKIP = ("abertura", "vencimento", "fechamento", "nascimento", "pagamento", "boleto")
 
 
 def _plain(value: str) -> str:
@@ -54,6 +74,22 @@ def _parse_day(value: str) -> str:
     return ""
 
 
+def _lead_date_index(headers: list[str]) -> int | None:
+    """A data do lead. Data de abertura, vencimento ou fechamento não entra no lugar dela."""
+    normalized = [_plain(header) for header in headers]
+    exact = set(_HEADER_ALIASES["lead_date"])
+    for index, header in enumerate(normalized):
+        if header in exact:
+            return index
+    for index, header in enumerate(normalized):
+        if not header.startswith("data"):
+            continue
+        if any(word in header for word in _DATE_SKIP):
+            continue
+        return index
+    return None
+
+
 def _pick_columns(headers: list[str]) -> dict[str, int]:
     found: dict[str, int] = {}
     normalized = [_plain(header) for header in headers]
@@ -64,11 +100,44 @@ def _pick_columns(headers: list[str]) -> dict[str, int]:
             if header in aliases:
                 found[key] = index
                 break
-    for index, header in enumerate(normalized):
-        if header in _HEADER_ALIASES["lead_date"] or header.startswith("data"):
-            found["lead_date"] = index
-            break
+    if "empresa" not in found:
+        for index, header in enumerate(normalized):
+            if "empresa" in header and "email" not in header:
+                found["empresa"] = index
+                break
+    if "phone" not in found:
+        for index, header in enumerate(normalized):
+            if "email" in header:
+                continue
+            if any(word in header for word in ("whatsapp", "telefone", "celular", "fone")):
+                found["phone"] = index
+                break
+    date_index = _lead_date_index(headers)
+    if date_index is not None:
+        found["lead_date"] = date_index
     return found
+
+
+def sheet_header_index(values: list) -> int:
+    """A planilha de base às vezes tem um título na primeira linha e o cabeçalho na segunda."""
+    if len(values) > 1:
+        filled_first = sum(1 for cell in values[0] if normalize_text(cell))
+        filled_second = sum(1 for cell in values[1] if normalize_text(cell))
+        if filled_first <= 1 and filled_second >= 3:
+            return 1
+    return 0
+
+
+def is_lead_worksheet_title(title: str) -> bool:
+    plain = _plain(title)
+    compact = plain.replace(" ", "")
+    known = set()
+    for name in TAB_NAMES:
+        known.add(_plain(name))
+        known.add(_plain(name).replace(" ", ""))
+    if plain in known or compact in known:
+        return True
+    return compact.startswith("leads") or "leadsraissa" in compact or "leadsraisa" in compact
 
 
 def _detect_date_column(headers: list[str], rows: list[list[str]]) -> int | None:
@@ -256,7 +325,7 @@ def _find_raissa_worksheet(spreadsheet):
         if found is not None:
             return found
     for item in spreadsheet.worksheets():
-        if "raissa" in _plain(item.title).replace(" ", ""):
+        if is_lead_worksheet_title(item.title):
             return item
     return None
 
@@ -463,6 +532,39 @@ def read_raissa_sheet() -> dict:
         return empty
 
 
+def leads_from_values(values: list) -> list[dict]:
+    if not values or len(values) < 2:
+        return []
+    header_at = sheet_header_index(values)
+    if header_at >= len(values) - 1:
+        return []
+    header_row = [str(cell) for cell in values[header_at]]
+    body = [[str(cell) for cell in raw] for raw in values[header_at + 1 :]]
+    columns = _pick_columns(header_row)
+    columns["lead_date"] = _detect_date_column(header_row, body)
+    leads = []
+    for offset, row in enumerate(body, start=header_at + 2):
+        empresa = _cell(row, columns.get("empresa"))
+        phone = _cell(row, columns.get("phone"))
+        if not empresa and not phone:
+            continue
+        leads.append(
+            {
+                "sheet_row": offset,
+                "empresa": empresa or "Lead de campanha",
+                "phone": phone,
+                "email": _cell(row, columns.get("email")),
+                "contact_name": _cell(row, columns.get("contact_name")),
+                "creative": _cell(row, columns.get("creative")),
+                "campaign": _cell(row, columns.get("campaign")),
+                "city": _cell(row, columns.get("city")),
+                "uf": _cell(row, columns.get("uf")),
+                "lead_date": _parse_day(_cell(row, columns.get("lead_date"))),
+            }
+        )
+    return leads
+
+
 def read_raissa_leads() -> tuple[list[dict], str]:
     """Lê a aba. O segundo valor é um aviso quando a planilha não abre."""
     try:
@@ -479,33 +581,7 @@ def read_raissa_leads() -> tuple[list[dict], str]:
             return [], "Aba de leads não encontrada na planilha."
 
         values = get_cached_worksheet_values(worksheet.title, worksheet.get_all_values)
-        if not values or len(values) < 2:
-            return [], ""
-        header_row = [str(cell) for cell in values[0]]
-        body = [[str(cell) for cell in raw] for raw in values[1:]]
-        columns = _pick_columns(header_row)
-        columns["lead_date"] = _detect_date_column(header_row, body)
-        leads = []
-        for offset, row in enumerate(body, start=2):
-            empresa = _cell(row, columns.get("empresa"))
-            phone = _cell(row, columns.get("phone"))
-            if not empresa and not phone:
-                continue
-            leads.append(
-                {
-                    "sheet_row": offset,
-                    "empresa": empresa or "Lead de campanha",
-                    "phone": phone,
-                    "email": _cell(row, columns.get("email")),
-                    "contact_name": _cell(row, columns.get("contact_name")),
-                    "creative": _cell(row, columns.get("creative")),
-                    "campaign": _cell(row, columns.get("campaign")),
-                    "city": _cell(row, columns.get("city")),
-                    "uf": _cell(row, columns.get("uf")),
-                    "lead_date": _parse_day(_cell(row, columns.get("lead_date"))),
-                }
-            )
-        return leads, ""
+        return leads_from_values(values or []), ""
     except Exception:
         return [], "Não consegui ler a aba de leads."
 

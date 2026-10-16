@@ -7,7 +7,7 @@
 <div class="page-header">
   <div>
     <div class="page-title">Kanban</div>
-    <div class="page-subtitle">Empresas da sua aba. Arraste até Concluído para abrir o cadastro.</div>
+    <div class="page-subtitle">Clique na empresa para abrir a OS. Arraste até Concluído para abrir o cadastro.</div>
   </div>
 </div>
 {% if error %}<div class="alert-error">{{ error }}</div>{% endif %}
@@ -23,7 +23,7 @@
     </header>
     <div class="activities-kanban-column-body" data-drop-queue="{{ column.id }}">
       {% for card in column.cards %}
-      <article class="activities-kanban-card" draggable="true" data-prospect="{{ card.tab_title }}|{{ card.sheet_row }}" {% if column.id == 'concluida' %}data-cadastro-url="{{ card.cadastro_url }}"{% endif %}>
+      <article class="activities-kanban-card" draggable="true" data-prospect="{{ card.tab_title }}|{{ card.sheet_row }}" data-order-id="{{ card.order_id }}" {% if column.id == 'concluida' %}data-cadastro-url="{{ card.cadastro_url }}"{% endif %}>
         <div class="activities-kanban-card-title">{{ card.empresa }}</div>
         <div class="activities-kanban-card-meta">{{ card.cnpj or 'Sem CNPJ' }}</div>
         <div class="activities-kanban-card-meta">{{ card.telefone or 'Sem telefone' }}{% if card.uf %} · {{ card.uf }}{% endif %}</div>
@@ -38,5 +38,12 @@
   </section>
   {% endfor %}
 </div>
-<script src="/static/js/rep-kanban.js?v={{ static_version }}"></script>
+<div id="os-order-modal" class="os-modal" hidden>
+  <div class="os-modal-backdrop" data-os-close></div>
+  <div class="os-modal-card" role="dialog" aria-modal="true" aria-labelledby="os-modal-title">
+    <button type="button" class="os-modal-close" data-os-close aria-label="Fechar">×</button>
+    <div id="os-order-modal-body">Carregando…</div>
+  </div>
+</div>
+<script src="/static/js/rep-kanban.js?v={{ static_version }}-os"></script>
 {% endblock %}

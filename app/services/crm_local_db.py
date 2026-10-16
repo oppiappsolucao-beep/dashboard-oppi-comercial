@@ -316,6 +316,7 @@ def init_crm_local_db() -> None:
                 ("queue", "TEXT NOT NULL DEFAULT 'entrada'"),
                 ("registered", "INTEGER NOT NULL DEFAULT 0"),
                 ("registration_row", "INTEGER NOT NULL DEFAULT 0"),
+                ("order_id", "TEXT NOT NULL DEFAULT ''"),
             ):
                 if prospect_cols and column not in prospect_cols:
                     conn.execute(f"ALTER TABLE representative_prospects ADD COLUMN {column} {definition}")

@@ -203,6 +203,7 @@ def _representative_kanban_context(request: Request) -> dict:
     from app.services.representative_prospects import (
         RepresentativeSheetError,
         build_prospect_board,
+        ensure_prospect_orders,
         link_representative_sheet,
         list_prospects,
     )
@@ -221,7 +222,7 @@ def _representative_kanban_context(request: Request) -> dict:
                 notice = f"Lista da aba {tabs}."
         except RepresentativeSheetError as exc:
             error = error or str(exc)
-        rows = list_prospects(person["id"])
+        rows = ensure_prospect_orders(person, list_prospects(person["id"]))
     return {
         "active_page": "activities",
         "columns": build_prospect_board(rows),
@@ -256,6 +257,7 @@ async def representative_move_prospect(request: Request):
             normalize_text(request.session.get("org_person_id")),
             form.get("prospect", ""),
             form.get("queue", ""),
+            author=normalize_text(request.session.get("org_person_name")),
         )
     except RepresentativeSheetError as exc:
         return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
@@ -536,6 +538,13 @@ def _logged_trainer_name(request: Request) -> str:
 def _order_visible(request: Request, detail: dict) -> bool:
     if not request.session.get("org_person_id"):
         return True
+    if normalize_text(request.session.get("org_person_kind")) == "representante":
+        name = normalize_text(request.session.get("org_person_name")).lower()
+        owners = {
+            normalize_text(detail.get("responsible")).lower(),
+            normalize_text(detail.get("created_by")).lower(),
+        }
+        return bool(name) and name in owners
     sector_name = normalize_text(request.session.get("org_sector_name"))
     if sector_name.lower() != normalize_text(detail.get("sector")).lower():
         return False

@@ -8,10 +8,20 @@ from datetime import datetime
 from app.services.legacy_core import normalize_text
 from app.services.registry_store import _lock, connect, init_store
 
-TAB_NAMES = ("ticket", "tickets", "chamados")
+TAB_NAMES = ("ticket", "tickets", "chamados", "base", "planilha de base")
 _HEADER_ALIASES = {
-    "empresa": ("empresa", "nome empresa", "cliente", "razao social", "nome"),
-    "phone": ("whatsapp", "telefone", "celular", "fone"),
+    "empresa": ("empresa", "nome da empresa", "nome empresa", "cliente", "razao social", "nome"),
+    "phone": (
+        "whatsapp",
+        "telefone",
+        "celular",
+        "fone",
+        "telefone b2b",
+        "celular / whatsapp",
+        "celular/whatsapp",
+        "celular whatsapp",
+        "telefone lemitt",
+    ),
     "email": ("email", "e-mail"),
     "contact_name": ("contato", "nome contato", "responsavel", "nome do responsavel"),
     "subject": ("assunto", "motivo", "solicitacao", "necessidade", "descricao", "pedido"),
@@ -49,6 +59,18 @@ def sector_column_index(headers: list[str]) -> int | None:
     return None
 
 
+def is_ticket_worksheet_title(title: str) -> bool:
+    plain = _plain(title)
+    compact = plain.replace(" ", "")
+    known = set()
+    for name in TAB_NAMES:
+        known.add(_plain(name))
+        known.add(_plain(name).replace(" ", ""))
+    if plain in known or compact in known:
+        return True
+    return plain.startswith("ticket") or plain.startswith("chamado") or plain.startswith("base ")
+
+
 def _find_ticket_worksheet(spreadsheet):
     by_title = {}
     for item in spreadsheet.worksheets():
@@ -56,9 +78,12 @@ def _find_ticket_worksheet(spreadsheet):
         by_title.setdefault(title, item)
         by_title.setdefault(title.replace(" ", ""), item)
     for name in TAB_NAMES:
-        found = by_title.get(name) or by_title.get(name.replace(" ", ""))
+        found = by_title.get(_plain(name)) or by_title.get(_plain(name).replace(" ", ""))
         if found is not None:
             return found
+    for item in spreadsheet.worksheets():
+        if is_ticket_worksheet_title(item.title):
+            return item
     return None
 
 
@@ -70,7 +95,49 @@ def _pick_columns(headers: list[str]) -> dict[str, int]:
             if header in aliases:
                 found[key] = index
                 break
+    if "empresa" not in found:
+        for index, header in enumerate(normalized):
+            if "empresa" in header and "email" not in header:
+                found["empresa"] = index
+                break
+    if "phone" not in found:
+        for index, header in enumerate(normalized):
+            if "email" in header:
+                continue
+            if any(word in header for word in ("whatsapp", "telefone", "celular", "fone")):
+                found["phone"] = index
+                break
     return found
+
+
+def ticket_rows_from_values(values: list) -> list[dict]:
+    from app.services.campaign_leads import sheet_header_index
+
+    if not values or len(values) < 2:
+        return []
+    header_at = sheet_header_index(values)
+    if header_at >= len(values) - 1:
+        return []
+    header_row = [str(cell) for cell in values[header_at]]
+    columns = _pick_columns(header_row)
+    rows = []
+    for offset, raw in enumerate(values[header_at + 1 :], start=header_at + 2):
+        row = [str(cell) for cell in raw]
+        empresa = _cell(row, columns.get("empresa"))
+        phone = _cell(row, columns.get("phone"))
+        if not empresa and not phone:
+            continue
+        rows.append(
+            {
+                "sheet_row": offset,
+                "empresa": empresa or "Cliente da base",
+                "phone": phone,
+                "email": _cell(row, columns.get("email")),
+                "contact_name": _cell(row, columns.get("contact_name")),
+                "subject": _cell(row, columns.get("subject")) or "Chamado da base",
+            }
+        )
+    return rows
 
 
 def read_ticket_rows() -> tuple[list[dict], str]:
@@ -87,28 +154,7 @@ def read_ticket_rows() -> tuple[list[dict], str]:
         if worksheet is None:
             return [], ""
         values = get_cached_worksheet_values(worksheet.title, worksheet.get_all_values)
-        if not values or len(values) < 2:
-            return [], ""
-        header_row = [str(cell) for cell in values[0]]
-        columns = _pick_columns(header_row)
-        rows = []
-        for offset, raw in enumerate(values[1:], start=2):
-            row = [str(cell) for cell in raw]
-            empresa = _cell(row, columns.get("empresa"))
-            phone = _cell(row, columns.get("phone"))
-            if not empresa and not phone:
-                continue
-            rows.append(
-                {
-                    "sheet_row": offset,
-                    "empresa": empresa or "Cliente da base",
-                    "phone": phone,
-                    "email": _cell(row, columns.get("email")),
-                    "contact_name": _cell(row, columns.get("contact_name")),
-                    "subject": _cell(row, columns.get("subject")) or "Chamado da base",
-                }
-            )
-        return rows, ""
+        return ticket_rows_from_values(values or []), ""
     except Exception:
         return [], "Não consegui ler a aba ticket."
 

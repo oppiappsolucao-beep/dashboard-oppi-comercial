@@ -217,6 +217,7 @@ def merge_prospect_rows(existing: list[dict], incoming: list[dict]) -> list[dict
                 "queue": _queue_id(previous.get("queue", "")),
                 "registered": 1 if previous.get("registered") else 0,
                 "registration_row": int(previous.get("registration_row") or 0),
+                "order_id": normalize_text(previous.get("order_id")),
             }
         )
         seen_pos.add(key)
@@ -240,6 +241,7 @@ def merge_prospect_rows(existing: list[dict], incoming: list[dict]) -> list[dict
                 "queue": "concluida",
                 "registered": 1,
                 "registration_row": int(row.get("registration_row") or 0),
+                "order_id": normalize_text(row.get("order_id")),
             }
         )
     return merged
@@ -348,6 +350,7 @@ def _row_dict(row) -> dict:
         "queue": _queue_id(row["queue"] if "queue" in row.keys() else ""),
         "registered": int(row["registered"] or 0) if "registered" in row.keys() else 0,
         "registration_row": int(row["registration_row"] or 0) if "registration_row" in row.keys() else 0,
+        "order_id": normalize_text(row["order_id"]) if "order_id" in row.keys() else "",
     }
 
 
@@ -379,6 +382,7 @@ def _replace_prospects(person_id: str, rows: list[dict]) -> None:
             _queue_id(row.get("queue", "")),
             1 if row.get("registered") else 0,
             int(row.get("registration_row") or 0),
+            normalize_text(row.get("order_id")),
             stamp,
         )
         for row in rows
@@ -390,8 +394,8 @@ def _replace_prospects(person_id: str, rows: list[dict]) -> None:
         conn.executemany(
             """
             INSERT INTO representative_prospects
-                (person_id, tab_title, sheet_row, empresa, cnpj, telefone, uf, queue, registered, registration_row, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (person_id, tab_title, sheet_row, empresa, cnpj, telefone, uf, queue, registered, registration_row, order_id, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             stored,
         )
@@ -421,7 +425,38 @@ def link_representative_sheet(person: dict) -> dict:
     return {"tabs": titles, "count": len(incoming)}
 
 
-def move_prospect(person_id: str, prospect_key: str, queue_id: str) -> dict:
+def ensure_prospect_orders(person: dict, rows: list[dict]) -> list[dict]:
+    """Cada empresa da aba vira uma OS, para o card abrir como no Kanban comercial."""
+    from app.services.service_orders import create_representative_order
+
+    person_id = normalize_text(person.get("id"))
+    name = normalize_text(person.get("name"))
+    if not person_id:
+        return rows
+    changed = False
+    for row in rows:
+        if row.get("registered") or normalize_text(row.get("order_id")):
+            continue
+        if not normalize_text(row.get("empresa")) and not normalize_text(row.get("telefone")):
+            continue
+        try:
+            row["order_id"] = create_representative_order(
+                empresa=row.get("empresa") or "",
+                phone=row.get("telefone") or "",
+                cnpj=row.get("cnpj") or "",
+                uf=row.get("uf") or "",
+                tab_title=row.get("tab_title") or "",
+                representative_name=name,
+            )
+            changed = True
+        except Exception:
+            continue
+    if changed:
+        _replace_prospects(person_id, rows)
+    return rows
+
+
+def move_prospect(person_id: str, prospect_key: str, queue_id: str, *, author: str = "") -> dict:
     queue = _queue_id(queue_id)
     if queue != normalize_text(queue_id).lower():
         raise RepresentativeSheetError("Coluna inválida.")
@@ -442,9 +477,18 @@ def move_prospect(person_id: str, prospect_key: str, queue_id: str) -> dict:
     if target is None:
         raise RepresentativeSheetError("Empresa não encontrada na lista.")
     _replace_prospects(person_id, rows)
+    order_id = normalize_text(target.get("order_id"))
+    if queue == "concluida" and order_id:
+        try:
+            from app.services.service_orders import move_service_order
+
+            move_service_order(order_id, "concluida", "", "Representação", author=author or "Representante")
+        except ValueError:
+            pass
     return {
         "ok": True,
         "queue": queue,
+        "order_id": order_id,
         "cadastro_url": prospect_cadastro_url(target) if queue == "concluida" else "",
     }
 

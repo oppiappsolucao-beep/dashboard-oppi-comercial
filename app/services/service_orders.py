@@ -570,6 +570,69 @@ def create_ticket_card(
     return order_id
 
 
+def create_representative_order(
+    *,
+    empresa: str,
+    phone: str = "",
+    cnpj: str = "",
+    uf: str = "",
+    tab_title: str = "",
+    representative_name: str = "",
+) -> str:
+    """OS da empresa que está na aba do representante."""
+    init_crm_local_db()
+    now = _now()
+    stamp = now.isoformat(timespec="seconds")
+    order_id = f"os_{uuid.uuid4().hex[:12]}"
+    lines = []
+    if normalize_text(cnpj):
+        lines.append(f"CNPJ: {normalize_text(cnpj)}")
+    if normalize_text(phone):
+        lines.append(f"Telefone: {normalize_text(phone)}")
+    if normalize_text(uf):
+        lines.append(f"UF: {normalize_text(uf).upper()[:2]}")
+    if normalize_text(tab_title):
+        lines.append(f"Aba: {normalize_text(tab_title)}")
+    description = "\n".join(lines)
+    name = normalize_text(representative_name) or "Representante"
+    with _lock, _connect() as conn:
+        protocol = _allocate_protocol(conn, now.year)
+        conn.execute(
+            """
+            INSERT INTO service_orders (
+                id, tenant_id, sheet_row, protocol, empresa, subject, description,
+                status, priority, sector, scheduled_date, queue_id, responsible, created_by, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, 'aberta', ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                order_id,
+                DEFAULT_TENANT_ID,
+                0,
+                protocol,
+                normalize_text(empresa) or "Empresa da lista",
+                normalize_text(empresa) or "Empresa da lista",
+                description,
+                "Média",
+                "Representação",
+                now.date().isoformat(),
+                ENTRY_QUEUE_ID,
+                name,
+                name,
+                stamp,
+                stamp,
+            ),
+        )
+        _add_event(
+            conn,
+            order_id,
+            "criada",
+            description or normalize_text(empresa) or "Empresa da lista do representante",
+            name,
+            stamp,
+        )
+    return order_id
+
+
 def is_commercial_sector(sector_name: str) -> bool:
     name = normalize_text(sector_name).lower()
     return "comercial" in name
