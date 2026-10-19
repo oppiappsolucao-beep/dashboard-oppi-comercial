@@ -267,8 +267,11 @@
         <strong>{{ person.name }}</strong>
         <span>{{ person.city }} · {{ person.state_name }} · {{ person.region }} · {{ person.username }}</span>
         {% set link = prospect_links.get(person.id) if prospect_links is defined else none %}
+        {% set expected = expected_tabs.get(person.id) if expected_tabs is defined else none %}
         {% if link and link.tabs %}
         <span>Aba {{ link.tabs|join(', ') }} · {{ link.count }} empresas. Entram na Raissa ao salvar o cadastro.</span>
+        {% elif expected %}
+        <span>Aba da planilha: {{ expected|join(' ou ') }}</span>
         {% endif %}
       </div>
       <div class="org-card-actions">

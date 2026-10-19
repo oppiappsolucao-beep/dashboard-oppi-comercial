@@ -71,9 +71,22 @@ def _now() -> str:
     return datetime.now(ZoneInfo("America/Sao_Paulo")).replace(tzinfo=None).isoformat(timespec="seconds")
 
 
+def _tab_piece(value: str) -> str:
+    text = normalize_text(value)
+    text = re.sub(r"[:\\/?*\[\]]", "", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _clean_tab_title(title: str) -> str:
+    text = normalize_text(title).replace("—", "-").replace("–", "-")
+    text = re.sub(r"\s*-\s*", "_", text)
+    text = re.sub(r"\s*_\s*", "_", text)
+    return text.strip("_ ")
+
+
 def parse_prospect_tab(title: str) -> dict | None:
-    """São Paulo_José_01 → estado, primeiro nome e lote."""
-    parts = normalize_text(title).rsplit("_", 2)
+    """São Paulo_José_01 → estado, primeiro nome e lote. Também aceita hífen."""
+    parts = _clean_tab_title(title).rsplit("_", 2)
     if len(parts) != 3:
         return None
     state, representative, batch = (normalize_text(part) for part in parts)
@@ -103,16 +116,54 @@ def _first_name(value: str) -> str:
     return parts[0] if parts else ""
 
 
-def tab_matches_representative(title: str, person: dict) -> bool:
-    parsed = parse_prospect_tab(title)
-    if parsed is None or normalize_text(person.get("kind")) not in {"", "representante"}:
+def expected_tab_title(person: dict) -> str:
+    """Nome da aba que o cadastro cria: Ceará_Lia_01."""
+    region = normalize_text(person.get("region")).upper()
+    state = _UF_NAMES.get(region) or normalize_text(person.get("state_name")) or normalize_text(person.get("city")) or "Estado"
+    name = _first_name(person.get("name", "")) or "Representante"
+    return f"{_tab_piece(state)}_{_tab_piece(name)}_01"
+
+
+def accepted_tab_examples(person: dict) -> list[str]:
+    titles = [expected_tab_title(person)]
+    city = _tab_piece(person.get("city") or "")
+    first = _tab_piece(_first_name(person.get("name") or ""))
+    if city and first:
+        city_title = f"{city}_{first}_01"
+        if _fold(city_title) != _fold(titles[0]):
+            titles.append(city_title)
+    return titles
+
+
+def _same_representative_name(tab_name: str, person_name: str) -> bool:
+    rep = _fold(tab_name)
+    first = _fold(_first_name(person_name))
+    full = _fold(person_name)
+    if not rep:
         return False
-    same_state = bool(
-        _state_keys(parsed["state"])
-        & _state_keys(person.get("state_name", ""), person.get("region", ""))
-    )
-    same_name = _fold(parsed["representative"]) == _fold(_first_name(person.get("name", "")))
-    return same_state and same_name
+    if rep in {first, full}:
+        return True
+    return bool(first) and rep.startswith(first + " ")
+
+
+def tab_matches_representative(title: str, person: dict) -> bool:
+    if normalize_text(person.get("kind")) not in {"", "representante"}:
+        return False
+    parsed = parse_prospect_tab(title)
+    if parsed is not None:
+        places = _state_keys(
+            person.get("state_name", ""),
+            person.get("region", ""),
+            person.get("city", ""),
+        )
+        same_place = bool(_state_keys(parsed["state"]) & places)
+        return same_place and _same_representative_name(parsed["representative"], person.get("name", ""))
+    folded = _fold(title)
+    if not folded:
+        return False
+    full_name = _fold(person.get("name", ""))
+    expected = {_fold(item) for item in accepted_tab_examples(person)}
+    return folded == full_name or folded in expected
 
 
 def read_prospect_rows(values: list[list[str]]) -> list[dict]:
@@ -126,7 +177,11 @@ def read_prospect_rows(values: list[list[str]]) -> list[dict]:
             if alias in headers:
                 indexes[field] = headers.index(alias)
                 break
+    body = values[1:]
     if "empresa" not in indexes or "cnpj" not in indexes:
+        has_data = any(any(normalize_text(cell) for cell in row) for row in body)
+        if not has_data:
+            return []
         raise RepresentativeSheetError(
             "A aba precisa das colunas Nome da empresa e CNPJ."
         )
@@ -316,26 +371,73 @@ def _service_account_email() -> str:
         return ""
 
 
-def _matching_worksheets(person: dict):
+PROSPECT_HEADERS = ["Nome da empresa", "CNPJ", "Telefone", "UF"]
+
+
+def _missing_tab_message(person: dict) -> str:
+    examples = " ou ".join(accepted_tab_examples(person))
+    return (
+        f"Não encontrei a aba {examples} na planilha de representantes "
+        "nem na planilha principal."
+    )
+
+
+def _prospect_sheet_ids() -> list[str]:
+    found = []
+    for sheet_id in (settings.representative_sheet_id, settings.sheet_id):
+        clean = normalize_text(sheet_id)
+        if clean and clean not in found:
+            found.append(clean)
+    return found
+
+
+def _open_prospect_spreadsheets():
     from app.services.legacy_core import get_gsheet_client
 
     if not settings.sheets_configured:
         raise RepresentativeSheetError("Planilha não configurada.")
-    try:
-        spreadsheet = get_gsheet_client().open_by_key(settings.representative_sheet_id)
-        worksheets = spreadsheet.worksheets()
-    except Exception as exc:
-        email = _service_account_email()
-        share = f" Compartilhe a planilha com {email}." if email else ""
-        raise RepresentativeSheetError(f"Não consegui abrir a planilha de prospecção.{share}") from exc
-    matched = [worksheet for worksheet in worksheets if tab_matches_representative(worksheet.title, person)]
-    if not matched:
-        state = normalize_text(person.get("state_name")) or normalize_text(person.get("region"))
-        name = _first_name(person.get("name", ""))
-        raise RepresentativeSheetError(
-            f"Não encontrei aba no formato {state}_{name}_01 para {person.get('name') or name}."
-        )
+    client = get_gsheet_client()
+    opened = []
+    last_error = None
+    for sheet_id in _prospect_sheet_ids():
+        try:
+            opened.append(client.open_by_key(sheet_id))
+        except Exception as exc:
+            last_error = exc
+    if opened:
+        return opened
+    email = _service_account_email()
+    share = f" Compartilhe a planilha com {email}." if email else ""
+    raise RepresentativeSheetError(f"Não consegui abrir a planilha de prospecção.{share}") from last_error
+
+
+def _matching_worksheets(person: dict):
+    matched = []
+    seen = set()
+    for spreadsheet in _open_prospect_spreadsheets():
+        for worksheet in spreadsheet.worksheets():
+            if not tab_matches_representative(worksheet.title, person):
+                continue
+            key = (_fold(getattr(spreadsheet, "id", "")), _fold(worksheet.title))
+            if key in seen:
+                continue
+            seen.add(key)
+            matched.append(worksheet)
     return matched
+
+
+def _ensure_representative_worksheet(person: dict):
+    """Cria Ceará_Nome_01 na planilha de representantes quando a aba ainda não existe."""
+    from app.services.legacy_core import get_gsheet_client
+
+    title = expected_tab_title(person)
+    spreadsheet = get_gsheet_client().open_by_key(settings.representative_sheet_id)
+    for worksheet in spreadsheet.worksheets():
+        if tab_matches_representative(worksheet.title, person):
+            return worksheet
+    worksheet = spreadsheet.add_worksheet(title, rows=300, cols=len(PROSPECT_HEADERS))
+    worksheet.update([PROSPECT_HEADERS], "A1", value_input_option="USER_ENTERED")
+    return worksheet
 
 
 def _row_dict(row) -> dict:
@@ -410,6 +512,13 @@ def link_representative_sheet(person: dict) -> dict:
     if not person_id:
         raise RepresentativeSheetError("Representante sem identificador.")
     worksheets = _matching_worksheets(person)
+    if not worksheets:
+        try:
+            worksheets = [_ensure_representative_worksheet(person)]
+        except Exception as exc:
+            email = _service_account_email()
+            share = f" Compartilhe a planilha de representantes com {email}." if email else ""
+            raise RepresentativeSheetError(f"{_missing_tab_message(person)}{share}") from exc
     incoming = []
     titles: list[str] = []
     for worksheet in worksheets:
@@ -417,6 +526,12 @@ def link_representative_sheet(person: dict) -> dict:
             values = worksheet.get_all_values() or []
         except Exception as exc:
             raise RepresentativeSheetError(f"Não consegui ler a aba {worksheet.title}.") from exc
+        if not any(normalize_text(cell) for row in values for cell in row):
+            try:
+                worksheet.update([PROSPECT_HEADERS], "A1", value_input_option="USER_ENTERED")
+                values = [PROSPECT_HEADERS]
+            except Exception:
+                values = []
         titles.append(worksheet.title)
         for row in read_prospect_rows(values):
             incoming.append({**row, "tab_title": worksheet.title})

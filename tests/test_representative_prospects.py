@@ -16,6 +16,8 @@ from app.services.representative_prospects import (
     build_prospect_board,
     closed_companies,
     merge_prospect_rows,
+    accepted_tab_examples,
+    expected_tab_title,
     parse_prospect_tab,
     read_prospect_rows,
     registration_fields_from_prospect,
@@ -46,7 +48,27 @@ class RepresentativeProspectsTest(unittest.TestCase):
         self.assertEqual(parsed["representative"], "José")
         self.assertEqual(parsed["batch"], "01")
         self.assertTrue(tab_matches_representative("São Paulo_José_01", JOSE))
+        self.assertTrue(tab_matches_representative("São Paulo - José - 01", JOSE))
         self.assertFalse(tab_matches_representative("Pará_Raul_01", JOSE))
+
+    def test_fortaleza_aceita_cidade_estado_e_o_nome_copiado(self):
+        person = {
+            "kind": "representante",
+            "name": "Lia Ferreira",
+            "state_name": "Ceará",
+            "region": "CE",
+            "city": "Fortaleza",
+        }
+        self.assertEqual(expected_tab_title(person), "Ceará_Lia_01")
+        self.assertEqual(accepted_tab_examples(person), ["Ceará_Lia_01", "Fortaleza_Lia_01"])
+        self.assertTrue(tab_matches_representative("Ceará_Lia_01", person))
+        self.assertTrue(tab_matches_representative("CE_Lia_01", person))
+        self.assertTrue(tab_matches_representative("Fortaleza_Lia_01", person))
+        self.assertTrue(tab_matches_representative("Fortaleza_Lia Ferreira_01", person))
+        self.assertTrue(tab_matches_representative("Lia Ferreira", person))
+        self.assertFalse(tab_matches_representative("São Paulo_Lia_01", person))
+        self.assertEqual(read_prospect_rows([]), [])
+        self.assertEqual(read_prospect_rows([[""]]), [])
 
     def test_le_as_quatro_colunas_da_planilha_nova(self):
         rows = read_prospect_rows(

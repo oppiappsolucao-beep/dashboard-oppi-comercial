@@ -52,6 +52,12 @@ def _page(request: Request, tab: str):
         }.get(tab, "funcionario")
         if editing and editing["kind"] != expected:
             editing = None
+    representantes = list_people("representante")
+    expected_tabs = {}
+    if tab == "representantes":
+        from app.services.representative_prospects import accepted_tab_examples
+
+        expected_tabs = {person["id"]: accepted_tab_examples(person) for person in representantes}
     return render(
         request,
         "org/index.html",
@@ -60,7 +66,8 @@ def _page(request: Request, tab: str):
             "active_tab": tab,
             "sectors": list_sectors(),
             "funcionarios": list_people("funcionario"),
-            "representantes": list_people("representante"),
+            "representantes": representantes,
+            "expected_tabs": expected_tabs,
             "prospect_links": _prospect_links(tab),
             "treinadores": list_people("treinador"),
             "training_slots": training_slot_choices(),
