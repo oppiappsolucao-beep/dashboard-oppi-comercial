@@ -320,6 +320,17 @@ def init_crm_local_db() -> None:
             ):
                 if prospect_cols and column not in prospect_cols:
                     conn.execute(f"ALTER TABLE representative_prospects ADD COLUMN {column} {definition}")
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS representative_queues (
+                    id TEXT PRIMARY KEY,
+                    person_id TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    position INTEGER NOT NULL DEFAULT 1,
+                    created_at TEXT NOT NULL
+                )
+                """
+            )
             payable_cols = {
                 row[1]
                 for row in conn.execute("PRAGMA table_info(company_payables)").fetchall()

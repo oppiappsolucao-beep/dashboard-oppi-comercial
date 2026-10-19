@@ -15,6 +15,13 @@
 .os-detail-block h3 { margin: 0 0 6px; font-size: 0.92rem; }
 .os-detail-block p { margin: 0 0 6px; }
 .os-detail-text { white-space: pre-wrap; }
+.os-queue-form { display: flex; gap: 8px; align-items: center; }
+.os-queue-form input { height: 40px; border: 1px solid var(--border); border-radius: 10px; padding: 0 10px; }
+.os-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.os-summary article { padding: 16px; min-width: 0; }
+.os-summary span { display: block; font-size: 0.78rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--purple, #7C3AED); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.os-summary strong { display: block; margin-top: 8px; font-size: 1.8rem; letter-spacing: -0.03em; }
+.os-summary p { margin: 8px 0 0; color: var(--muted); line-height: 1.45; }
 .os-detail-history { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 10px; }
 .os-detail-history li { padding: 8px 10px; border-radius: 10px; background: #F8FAFC; }
 .os-detail-history span { display: block; color: var(--muted); font-size: 0.78rem; }
@@ -27,8 +34,21 @@
     <div class="page-title">Kanban</div>
     <div class="page-subtitle">Clique na empresa para abrir a OS. Arraste até Concluído para abrir o cadastro.</div>
   </div>
+  <form method="post" action="/atividades/representante/colunas" class="os-queue-form">
+    <input type="text" name="queue_name" maxlength="40" placeholder="Nova coluna" required aria-label="Nome da nova coluna">
+    <button type="submit" class="btn">＋ Coluna</button>
+  </form>
 </div>
 {% if error %}<div class="alert-error">{{ error }}</div>{% endif %}
+<section class="os-summary" aria-label="Empresas por coluna">
+  {% for column in columns %}
+  <article class="panel">
+    <span title="{{ column.name }}">{{ column.name }}</span>
+    <strong>{{ column.cards|length }}</strong>
+    <p>Empresas nesta coluna.</p>
+  </article>
+  {% endfor %}
+</section>
 <div class="activities-kanban-board" id="rep-kanban-board">
   {% for column in columns %}
   <section class="activities-kanban-column{% if column.id == 'concluida' %} is-done{% endif %}">

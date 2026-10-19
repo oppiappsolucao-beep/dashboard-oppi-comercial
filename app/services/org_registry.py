@@ -33,7 +33,7 @@ BRAZIL_UFS = [
 ]
 DEFAULT_SECTORS = ["Comercial", "Suporte", "Financeiro", "Representação"]
 COMMERCIAL_CADASTRO_ACCESS = ("novo_cadastro", "empresas", "propostas")
-REPRESENTATIVE_ACCESS = ("kanban", "novo_cadastro", "empresas")
+REPRESENTATIVE_ACCESS = ("kanban", "novo_cadastro", "empresas", "propostas")
 TRAINING_ACCESS = ("agenda", "kanban", "empresas")
 SCHEDULE_DAYS = (
     ("seg", "Seg"),
@@ -579,7 +579,7 @@ def remove_person(person_id: str) -> None:
 
 
 def login_accesses(kind: str, sector_accesses: list[str]) -> list[str]:
-    """Representante entra no Kanban, no cadastro e nas empresas que ele fechou."""
+    """Representante entra no Kanban, no cadastro, nas empresas que fechou e na proposta."""
     if kind == "representante":
         return list(REPRESENTATIVE_ACCESS)
     return [item for item in sector_accesses if item in ACCESS_KEYS]

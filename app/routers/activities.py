@@ -221,7 +221,7 @@ def _representative_kanban_context(request: Request) -> dict:
         rows = ensure_prospect_orders(person, list_prospects(person["id"]))
     return {
         "active_page": "activities",
-        "columns": build_prospect_board(rows),
+        "columns": build_prospect_board(rows, person["id"] if person else ""),
         "error": error,
         "total": sum(1 for row in rows if not row.get("registered")),
     }
@@ -259,11 +259,65 @@ async def representative_move_prospect(request: Request):
     return JSONResponse(moved)
 
 
+@router.post("/atividades/representante/colunas")
+async def representative_add_column(request: Request, queue_name: str = Form("")):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+    if normalize_text(request.session.get("org_person_kind")) != "representante":
+        return RedirectResponse(url="/atividades", status_code=303)
+    from app.services.representative_prospects import RepresentativeSheetError, add_representative_column
+
+    try:
+        add_representative_column(normalize_text(request.session.get("org_person_id")), queue_name)
+    except RepresentativeSheetError as exc:
+        request.session["rep_board_error"] = str(exc)
+    return RedirectResponse(url="/atividades", status_code=303)
+
+
 @router.get("/proposta", response_class=HTMLResponse)
 async def proposal_page(request: Request):
     redirect = require_auth(request)
     if redirect:
         return redirect
+    if normalize_text(request.session.get("org_person_kind")) == "representante":
+        from app.services.org_registry import get_person
+        from app.services.representative_prospects import (
+            RepresentativeSheetError,
+            build_prospect_board,
+            ensure_prospect_orders,
+            link_representative_sheet,
+            list_prospects,
+        )
+
+        person = get_person(normalize_text(request.session.get("org_person_id")))
+        rows = []
+        if person is not None:
+            try:
+                link_representative_sheet(person)
+            except RepresentativeSheetError:
+                pass
+            rows = ensure_prospect_orders(person, list_prospects(person["id"]))
+        cards = []
+        for column in build_prospect_board(rows, person["id"] if person else ""):
+            if column["id"] != "proposta" and "proposta" not in (column.get("name") or "").lower():
+                continue
+            for card in column["cards"]:
+                if not card.get("order_id"):
+                    continue
+                cards.append(
+                    {
+                        "id": card["order_id"],
+                        "empresa": card.get("empresa") or "",
+                        "protocol": card.get("cnpj") or "Sem CNPJ",
+                        "subject": card.get("telefone") or "",
+                    }
+                )
+        return render(
+            request,
+            "activities/proposal_list.html",
+            {"active_page": "proposta", "sector_name": "", "cards": cards, "own_list": True},
+        )
     from app.services.org_registry import list_sectors
     from app.services.service_orders import build_sector_board, is_commercial_sector
 
@@ -639,7 +693,7 @@ def _proposal_values(order: dict, form: dict | None = None) -> dict:
     client = order.get("client") or {}
     values = {
         "razao_social": order.get("empresa") or "",
-        "cnpj": "",
+        "cnpj": order.get("cnpj") or "",
         "endereco": client.get("endereco") or "",
         "email": client.get("email") or "",
         "responsavel": client.get("contato") or "",

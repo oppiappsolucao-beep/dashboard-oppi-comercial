@@ -43,7 +43,7 @@
     {% elif order.sheet_row %}
     <a class="btn btn-small btn-secondary" href="/cadastro/todos/{{ order.sheet_row }}/editar?tab=ordens&from=activities">Abrir cadastro</a>
     {% endif %}
-    {% if 'proposta' in (order.queue_name or '')|lower %}
+    {% if 'proposta' in (order.queue_name or '')|lower or 'representa' in (order.sector or '')|lower %}
     <div class="os-detail-actions">
       <a class="btn btn-small" href="/atividades/os/{{ order.id }}/proposta">Abrir proposta</a>
     </div>

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
+import uuid
 from datetime import datetime
 from urllib.parse import urlencode
 from zoneinfo import ZoneInfo
@@ -275,7 +276,62 @@ def _cnpj_digits(value: str) -> str:
 
 def _queue_id(value: str) -> str:
     queue = normalize_text(value).lower()
-    return queue if queue in _QUEUE_IDS else "entrada"
+    if queue in _QUEUE_IDS or queue.startswith("fila_"):
+        return queue
+    return "entrada"
+
+
+def list_custom_queues(person_id: str) -> list[dict]:
+    clean = normalize_text(person_id)
+    if not clean:
+        return []
+    init_crm_local_db()
+    with _connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, name, position
+            FROM representative_queues
+            WHERE person_id = ?
+            ORDER BY position, name
+            """,
+            (clean,),
+        ).fetchall()
+    return [{"id": row["id"], "name": row["name"], "position": int(row["position"] or 0)} for row in rows]
+
+
+def prospect_column_defs(person_id: str = "") -> list[tuple[str, str]]:
+    head = [item for item in PROSPECT_QUEUES if item[0] != "concluida"]
+    tail = [item for item in PROSPECT_QUEUES if item[0] == "concluida"]
+    custom = [(row["id"], row["name"]) for row in list_custom_queues(person_id)]
+    return head + custom + tail
+
+
+def add_representative_column(person_id: str, name: str) -> dict:
+    clean_id = normalize_text(person_id)
+    clean_name = normalize_text(name)
+    if not clean_id:
+        raise RepresentativeSheetError("Representante não encontrado.")
+    if len(clean_name) < 2:
+        raise RepresentativeSheetError("Informe o nome da coluna.")
+    if len(clean_name) > 40:
+        raise RepresentativeSheetError("O nome da coluna pode ter no máximo 40 caracteres.")
+    taken = {_fold(label) for _queue, label in PROSPECT_QUEUES}
+    taken.update(_fold(row["name"]) for row in list_custom_queues(clean_id))
+    if _fold(clean_name) in taken:
+        raise RepresentativeSheetError("Essa coluna já existe.")
+    init_crm_local_db()
+    position = 1 + max((row["position"] for row in list_custom_queues(clean_id)), default=0)
+    column_id = f"fila_{uuid.uuid4().hex[:12]}"
+    with _lock, _connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO representative_queues (id, person_id, name, position, created_at)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (column_id, clean_id, clean_name, position, _now()),
+        )
+        conn.commit()
+    return {"id": column_id, "name": clean_name, "position": position}
 
 
 def _prospect_key(row: dict) -> tuple[str, int]:
@@ -342,11 +398,11 @@ def merge_prospect_rows(existing: list[dict], incoming: list[dict]) -> list[dict
     return merged
 
 
-def build_prospect_board(rows: list[dict]) -> list[dict]:
+def build_prospect_board(rows: list[dict], person_id: str = "") -> list[dict]:
     """Kanban só com empresas ainda não cadastradas."""
     open_rows = [row for row in rows if not row.get("registered")]
     columns = []
-    for queue_id, name in PROSPECT_QUEUES:
+    for queue_id, name in prospect_column_defs(person_id):
         cards = []
         for row in open_rows:
             if _queue_id(row.get("queue", "")) != queue_id:

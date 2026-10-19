@@ -9,7 +9,7 @@
 <div class="page-header">
   <div>
     <div class="page-title">Proposta</div>
-    <div class="page-subtitle">Ordens que o comercial colocou na coluna Proposta. Abra uma para preencher e gerar o PDF.</div>
+    <div class="page-subtitle">{% if own_list %}Empresas na coluna Proposta. Abra uma para preencher e gerar o PDF.{% else %}Ordens que o comercial colocou na coluna Proposta. Abra uma para preencher e gerar o PDF.{% endif %}</div>
   </div>
   <div class="page-actions">
     <a class="btn btn-secondary" href="/atividades">Abrir Kanban</a>

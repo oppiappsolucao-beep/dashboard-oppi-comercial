@@ -38,7 +38,7 @@ class RepresentativeProspectsTest(unittest.TestCase):
     def test_representante_entra_no_cadastro(self):
         self.assertEqual(
             login_accesses("representante", ["gestao", "financeiro", "empresas"]),
-            ["kanban", "novo_cadastro", "empresas"],
+            ["kanban", "novo_cadastro", "empresas", "propostas"],
         )
         self.assertEqual(login_accesses("funcionario", ["kanban", "agenda"]), ["kanban", "agenda"])
 

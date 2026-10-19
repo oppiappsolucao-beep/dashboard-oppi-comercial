@@ -177,8 +177,10 @@
     {% endif %}
   </nav>
 
+  {% if display_role != "Representante" %}
   <a href="{{ support_whatsapp_url }}" class="whatsapp-fab" target="_blank" rel="noopener" aria-label="Falar no WhatsApp Oppi {{ support_whatsapp_label }}">
     <span aria-hidden="true">💬</span>
   </a>
+  {% endif %}
 </body>
 </html>
