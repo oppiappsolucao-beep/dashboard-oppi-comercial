@@ -210,23 +210,18 @@ def _representative_kanban_context(request: Request) -> dict:
 
     person = get_person(normalize_text(request.session.get("org_person_id")))
     error = request.session.pop("rep_board_error", "")
-    notice = ""
     rows = []
     if person is None:
         error = error or "Representante não encontrado."
     else:
         try:
-            linked = link_representative_sheet(person)
-            tabs = ", ".join(linked.get("tabs") or [])
-            if tabs:
-                notice = f"Lista da aba {tabs}."
+            link_representative_sheet(person)
         except RepresentativeSheetError as exc:
             error = error or str(exc)
         rows = ensure_prospect_orders(person, list_prospects(person["id"]))
     return {
         "active_page": "activities",
         "columns": build_prospect_board(rows),
-        "notice": notice,
         "error": error,
         "total": sum(1 for row in rows if not row.get("registered")),
     }
@@ -514,7 +509,13 @@ def _oppi_tech_board(request: Request, _sector_name: str = "") -> bool:
     return _oppi_tech_login(request)
 
 
-def _order_panel_context(order: dict, sector_notice: str = "", can_delete_order: bool = False) -> dict:
+def _hide_sector_move(request: Request, order: dict) -> bool:
+    if normalize_text(request.session.get("org_person_kind")) == "representante":
+        return True
+    return "representa" in normalize_text(order.get("sector")).lower()
+
+
+def _order_panel_context(order: dict, sector_notice: str = "", can_delete_order: bool = False, hide_sector_form: bool = False) -> dict:
     from app.services.org_registry import list_sectors
     from app.services.service_orders import queue_choices
 
@@ -526,6 +527,7 @@ def _order_panel_context(order: dict, sector_notice: str = "", can_delete_order:
         "order_sector_id": sector_id,
         "order_queues": queues,
         "can_delete_order": can_delete_order,
+        "hide_sector_form": hide_sector_form,
     }
 
 
@@ -570,6 +572,7 @@ async def activities_order_detail(request: Request, order_id: str):
         _order_panel_context(
             detail,
             can_delete_order=_oppi_tech_board(request, detail.get("sector") or ""),
+            hide_sector_form=_hide_sector_move(request, detail),
         ),
     )
 
@@ -595,6 +598,7 @@ async def activities_order_update(request: Request, order_id: str, note: str = F
         _order_panel_context(
             detail,
             can_delete_order=_oppi_tech_board(request, detail.get("sector") or ""),
+            hide_sector_form=_hide_sector_move(request, detail),
         ),
     )
 
@@ -620,6 +624,7 @@ async def activities_direct_sector(request: Request, order_id: str, sector_name:
                 detail,
                 str(error),
                 can_delete_order=_oppi_tech_board(request, detail.get("sector") or ""),
+                hide_sector_form=_hide_sector_move(request, detail),
             ),
         )
     extra = ticket_card_extra(order_id) or {}

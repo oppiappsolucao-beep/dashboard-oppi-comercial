@@ -50,7 +50,7 @@
     {% endif %}
   </section>
 
-  {% if order.sector != "Representação" %}
+  {% if not hide_sector_form and "representa" not in (order.sector or "")|lower %}
   <section class="os-detail-block">
     <h3>Setor</h3>
     <p>Enviar esta ordem para outro setor. Ela entra em Análise no setor escolhido.</p>

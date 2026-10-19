@@ -29,7 +29,6 @@
   </div>
 </div>
 {% if error %}<div class="alert-error">{{ error }}</div>{% endif %}
-{% if notice %}<div class="alert-success">{{ notice }}</div>{% endif %}
 <div class="activities-kanban-board" id="rep-kanban-board">
   {% for column in columns %}
   <section class="activities-kanban-column{% if column.id == 'concluida' %} is-done{% endif %}">
