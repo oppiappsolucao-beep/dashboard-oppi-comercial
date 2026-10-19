@@ -89,6 +89,7 @@
       </nav>
 
       <div class="sidebar-footer">
+        {% if request.session.get("org_person_kind") != "representante" %}
         <a href="{{ support_whatsapp_url }}" class="sidebar-whatsapp-link" target="_blank" rel="noopener">
           <span class="sidebar-whatsapp-icon" aria-hidden="true">💬</span>
           <span>
@@ -96,6 +97,7 @@
             <span class="sidebar-whatsapp-number">{{ support_whatsapp_label }}</span>
           </span>
         </a>
+        {% endif %}
         <div class="sidebar-user">
           <div class="sidebar-user-avatar">{{ (display_username or app_username)[:2] | upper }}</div>
           <div>
@@ -177,7 +179,7 @@
     {% endif %}
   </nav>
 
-  {% if display_role != "Representante" %}
+  {% if request.session.get("org_person_kind") != "representante" %}
   <a href="{{ support_whatsapp_url }}" class="whatsapp-fab" target="_blank" rel="noopener" aria-label="Falar no WhatsApp Oppi {{ support_whatsapp_label }}">
     <span aria-hidden="true">💬</span>
   </a>
