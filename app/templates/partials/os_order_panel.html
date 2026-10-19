@@ -50,6 +50,7 @@
     {% endif %}
   </section>
 
+  {% if order.sector != "Representação" %}
   <section class="os-detail-block">
     <h3>Setor</h3>
     <p>Enviar esta ordem para outro setor. Ela entra em Análise no setor escolhido.</p>
@@ -64,6 +65,7 @@
       <button type="submit" class="btn btn-small">Enviar ao setor</button>
     </form>
   </section>
+  {% endif %}
 
   {% if order.source == 'campanha' %}
   <section class="os-detail-block">
