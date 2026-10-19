@@ -84,9 +84,18 @@ def _clean_tab_title(title: str) -> str:
     return text.strip("_ ")
 
 
+def _core_tab_title(title: str) -> str:
+    """Ceara_Raphael_01 para Raphael. continua sendo a aba Ceara_Raphael_01."""
+    text = _clean_tab_title(title).strip(" .")
+    match = re.match(r"^(.+?)_([^_\s]+)_(\d+)\b", text)
+    if match:
+        return f"{match.group(1)}_{match.group(2)}_{match.group(3)}"
+    return text
+
+
 def parse_prospect_tab(title: str) -> dict | None:
     """São Paulo_José_01 → estado, primeiro nome e lote. Também aceita hífen."""
-    parts = [normalize_text(part) for part in _clean_tab_title(title).split("_") if normalize_text(part)]
+    parts = [normalize_text(part) for part in _core_tab_title(title).split("_") if normalize_text(part)]
     if len(parts) == 3 and re.fullmatch(r"\d+", parts[2]):
         state, representative, batch = parts
     elif len(parts) == 2 and re.fullmatch(r"\d+", parts[1]):
@@ -165,6 +174,7 @@ _TAB_NOISE = {
     "do",
     "dos",
     "das",
+    "para",
 }
 
 
@@ -173,7 +183,8 @@ def _person_places(person: dict) -> set[str]:
 
 
 def _title_tokens(title: str) -> list[str]:
-    return [part for part in re.split(r"[\s_]+", _fold(_clean_tab_title(title))) if part]
+    text = re.sub(r"[^\w\s_]", " ", _fold(_clean_tab_title(title)))
+    return [part for part in re.split(r"[\s_]+", text) if part]
 
 
 def tab_matches_representative(title: str, person: dict) -> bool:
