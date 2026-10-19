@@ -514,6 +514,24 @@ def _row_dict(row) -> dict:
     }
 
 
+def prospect_by_order(order_id: str) -> dict | None:
+    """Dados da aba ligados a esta OS: empresa, CNPJ, telefone e UF."""
+    clean = normalize_text(order_id)
+    if not clean:
+        return None
+    init_crm_local_db()
+    with _connect() as conn:
+        row = conn.execute(
+            """
+            SELECT * FROM representative_prospects
+            WHERE order_id = ?
+            LIMIT 1
+            """,
+            (clean,),
+        ).fetchone()
+    return _row_dict(row) if row is not None else None
+
+
 def list_prospects(person_id: str) -> list[dict]:
     init_crm_local_db()
     with _connect() as conn:

@@ -1255,6 +1255,31 @@ def get_order_detail(order_id: str) -> dict | None:
         client["whatsapp"] = _description_line(description, "WhatsApp")
     if not client.get("telefone"):
         client["telefone"] = _description_line(description, "Telefone")
+    if not detail.get("cnpj"):
+        detail["cnpj"] = _description_line(description, "CNPJ")
+    if not client.get("uf"):
+        client["uf"] = _description_line(description, "UF")
+    try:
+        from app.services.representative_prospects import prospect_by_order
+
+        prospect = prospect_by_order(detail.get("id") or "")
+    except Exception:
+        prospect = None
+    if prospect:
+        if prospect.get("cnpj") and not detail.get("cnpj"):
+            detail["cnpj"] = prospect["cnpj"]
+        phone = prospect.get("telefone") or ""
+        if phone and not client.get("whatsapp"):
+            client["whatsapp"] = phone
+        if phone and not client.get("telefone"):
+            client["telefone"] = phone
+        if prospect.get("uf") and not client.get("uf"):
+            client["uf"] = prospect["uf"]
+        if prospect.get("empresa") and normalize_text(detail.get("empresa")).lower() in _PLACEHOLDER_EMPRESA:
+            detail["empresa"] = prospect["empresa"]
+            detail["subject"] = prospect["empresa"]
+    if not client.get("whatsapp") and client.get("telefone"):
+        client["whatsapp"] = client["telefone"]
     detail["company_links"] = company_family_links(
         sheet_row=int(detail.get("sheet_row") or 0),
         order_id=detail.get("id") or "",

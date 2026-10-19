@@ -2,7 +2,25 @@
 {% block content %}
 <link rel="stylesheet" href="/static/css/activities.css?v={{ static_version }}">
 <style>
+.activities-kanban-card { cursor: pointer; }
 .activities-kanban-column.is-done .activities-kanban-column-title { color: #166534; }
+.os-modal[hidden] { display: none; }
+.os-modal { position: fixed; inset: 0; z-index: 200; display: grid; place-items: center; padding: 16px; }
+.os-modal-backdrop { position: absolute; inset: 0; background: rgba(15, 23, 42, 0.45); }
+.os-modal-card { position: relative; width: min(440px, 100%); max-height: min(80dvh, 720px); overflow: auto; background: #fff; border-radius: 16px; padding: 18px 18px 16px; box-shadow: 0 18px 50px rgba(15, 23, 42, 0.2); }
+.os-modal-close { position: absolute; top: 10px; right: 10px; border: 0; background: transparent; font-size: 1.4rem; cursor: pointer; }
+.os-detail-protocol { margin: 0 28px 4px 0; color: var(--muted); font-size: 0.82rem; }
+.os-detail h2 { margin: 0 28px 12px 0; font-size: 1.15rem; }
+.os-detail-block { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
+.os-detail-block h3 { margin: 0 0 6px; font-size: 0.92rem; }
+.os-detail-block p { margin: 0 0 6px; }
+.os-detail-text { white-space: pre-wrap; }
+.os-detail-history { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 10px; }
+.os-detail-history li { padding: 8px 10px; border-radius: 10px; background: #F8FAFC; }
+.os-detail-history span { display: block; color: var(--muted); font-size: 0.78rem; }
+.os-detail-history p { margin: 4px 0 0; }
+#os-update-form, #os-sector-form { display: grid; gap: 8px; max-width: 280px; }
+#os-update-form textarea, #os-sector-form select { width: 100%; border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; font: inherit; }
 </style>
 <div class="page-header">
   <div>
@@ -23,7 +41,7 @@
     </header>
     <div class="activities-kanban-column-body" data-drop-queue="{{ column.id }}">
       {% for card in column.cards %}
-      <article class="activities-kanban-card" draggable="true" data-prospect="{{ card.tab_title }}|{{ card.sheet_row }}" data-order-id="{{ card.order_id }}" {% if column.id == 'concluida' %}data-cadastro-url="{{ card.cadastro_url }}"{% endif %}>
+      <article class="activities-kanban-card" draggable="true" data-prospect="{{ card.tab_title }}|{{ card.sheet_row }}" data-order-id="{{ card.order_id }}" data-empresa="{{ card.empresa }}" data-cnpj="{{ card.cnpj }}" data-telefone="{{ card.telefone }}" data-uf="{{ card.uf }}" {% if column.id == 'concluida' %}data-cadastro-url="{{ card.cadastro_url }}"{% endif %}>
         <div class="activities-kanban-card-title">{{ card.empresa }}</div>
         <div class="activities-kanban-card-meta">{{ card.cnpj or 'Sem CNPJ' }}</div>
         <div class="activities-kanban-card-meta">{{ card.telefone or 'Sem telefone' }}{% if card.uf %} · {{ card.uf }}{% endif %}</div>
@@ -45,5 +63,5 @@
     <div id="os-order-modal-body">Carregando…</div>
   </div>
 </div>
-<script src="/static/js/rep-kanban.js?v={{ static_version }}-os"></script>
+<script src="/static/js/rep-kanban.js?v={{ static_version }}-os2"></script>
 {% endblock %}

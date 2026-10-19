@@ -23,10 +23,12 @@
   <section class="os-detail-block">
     <h3>Cliente</h3>
     <p><strong>{{ order.empresa }}</strong></p>
+    {% if order.cnpj %}<p>CNPJ: {{ order.cnpj }}</p>{% endif %}
     <p>Contato: {{ order.client.contato or "Não informado" }}</p>
     <p>WhatsApp: {% if order.client.whatsapp %}<a href="tel:{{ order.client.whatsapp }}">{{ order.client.whatsapp }}</a> <button type="button" class="btn btn-small btn-secondary" data-copy-phone="{{ order.client.whatsapp }}">Copiar</button>{% else %}Não informado{% endif %}</p>
     <p>Telefone: {% if order.client.telefone %}<a href="tel:{{ order.client.telefone }}">{{ order.client.telefone }}</a>{% else %}Não informado{% endif %}</p>
     <p>E-mail: {% if order.client.email %}<a href="mailto:{{ order.client.email }}">{{ order.client.email }}</a>{% else %}Não informado{% endif %}</p>
+    {% if order.client.uf %}<p>UF: {{ order.client.uf }}</p>{% endif %}
     {% if order.client.endereco %}<p>{{ order.client.endereco }}</p>{% endif %}
     {% if order.company_links|length > 1 %}
     <div class="os-detail-actions">

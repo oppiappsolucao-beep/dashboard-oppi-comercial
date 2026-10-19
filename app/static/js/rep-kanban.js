@@ -13,8 +13,44 @@
     if (modalBody) modalBody.innerHTML = "";
   }
 
-  function openOrder(orderId) {
-    if (!modal || !modalBody || !orderId) return;
+  function line(label, value) {
+    var paragraph = document.createElement("p");
+    var strong = document.createElement("strong");
+    strong.textContent = label + ": ";
+    paragraph.appendChild(strong);
+    paragraph.appendChild(document.createTextNode(value || "Não informado"));
+    return paragraph;
+  }
+
+  function showCompany(card) {
+    if (!modal || !modalBody || !card) return;
+    modal.hidden = false;
+    modalBody.textContent = "";
+    var detail = document.createElement("div");
+    detail.className = "os-detail";
+    var title = document.createElement("h2");
+    title.id = "os-modal-title";
+    title.textContent = card.getAttribute("data-empresa") || "Empresa";
+    detail.appendChild(title);
+    var block = document.createElement("section");
+    block.className = "os-detail-block";
+    var heading = document.createElement("h3");
+    heading.textContent = "Cliente";
+    block.appendChild(heading);
+    block.appendChild(line("CNPJ", card.getAttribute("data-cnpj")));
+    block.appendChild(line("Telefone", card.getAttribute("data-telefone")));
+    block.appendChild(line("UF", card.getAttribute("data-uf")));
+    detail.appendChild(block);
+    modalBody.appendChild(detail);
+  }
+
+  function openOrder(card) {
+    if (!modal || !modalBody || !card) return;
+    var orderId = card.getAttribute("data-order-id") || "";
+    if (!orderId) {
+      showCompany(card);
+      return;
+    }
     modal.hidden = false;
     modalBody.textContent = "Carregando…";
     fetch("/atividades/os/" + encodeURIComponent(orderId))
@@ -26,7 +62,7 @@
         modalBody.innerHTML = html;
       })
       .catch(function () {
-        modalBody.textContent = "Não consegui abrir esta ordem.";
+        showCompany(card);
       });
   }
 
@@ -72,7 +108,7 @@
         return;
       }
       if (event.target.closest("a, button, textarea, input, select, label")) return;
-      openOrder(card.getAttribute("data-order-id"));
+      openOrder(card);
     });
   });
 
