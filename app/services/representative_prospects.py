@@ -86,11 +86,16 @@ def _clean_tab_title(title: str) -> str:
 
 def parse_prospect_tab(title: str) -> dict | None:
     """São Paulo_José_01 → estado, primeiro nome e lote. Também aceita hífen."""
-    parts = _clean_tab_title(title).rsplit("_", 2)
-    if len(parts) != 3:
+    parts = [normalize_text(part) for part in _clean_tab_title(title).split("_") if normalize_text(part)]
+    if len(parts) == 3 and re.fullmatch(r"\d+", parts[2]):
+        state, representative, batch = parts
+    elif len(parts) == 2 and re.fullmatch(r"\d+", parts[1]):
         return None
-    state, representative, batch = (normalize_text(part) for part in parts)
-    if len(state) < 2 or len(representative) < 2 or not re.fullmatch(r"\d+", batch):
+    elif len(parts) == 2:
+        state, representative, batch = parts[0], parts[1], "01"
+    else:
+        return None
+    if len(state) < 2 or len(representative) < 2:
         return None
     return {"state": state, "representative": representative, "batch": batch, "title": normalize_text(title)}
 
@@ -146,24 +151,48 @@ def _same_representative_name(tab_name: str, person_name: str) -> bool:
     return bool(first) and rep.startswith(first + " ")
 
 
+_TAB_NOISE = {
+    "aba",
+    "planilha",
+    "base",
+    "lista",
+    "leads",
+    "lead",
+    "rep",
+    "representante",
+    "de",
+    "da",
+    "do",
+    "dos",
+    "das",
+}
+
+
+def _person_places(person: dict) -> set[str]:
+    return _state_keys(person.get("state_name", ""), person.get("region", ""), person.get("city", ""))
+
+
+def _title_tokens(title: str) -> list[str]:
+    return [part for part in re.split(r"[\s_]+", _fold(_clean_tab_title(title))) if part]
+
+
 def tab_matches_representative(title: str, person: dict) -> bool:
     if normalize_text(person.get("kind")) not in {"", "representante"}:
         return False
+    places = _person_places(person)
     parsed = parse_prospect_tab(title)
     if parsed is not None:
-        places = _state_keys(
-            person.get("state_name", ""),
-            person.get("region", ""),
-            person.get("city", ""),
-        )
         same_place = bool(_state_keys(parsed["state"]) & places)
         return same_place and _same_representative_name(parsed["representative"], person.get("name", ""))
-    folded = _fold(title)
-    if not folded:
+    tokens = _title_tokens(title)
+    first = _fold(_first_name(person.get("name", "")))
+    full_tokens = [part for part in _fold(person.get("name", "")).split() if part]
+    if not tokens or not first or (first not in tokens and tokens != full_tokens):
         return False
-    full_name = _fold(person.get("name", ""))
-    expected = {_fold(item) for item in accepted_tab_examples(person)}
-    return folded == full_name or folded in expected
+    extras = [token for token in tokens if token not in set(full_tokens)]
+    if all(re.fullmatch(r"\d+", token) or token in places or token in _TAB_NOISE for token in extras):
+        return True
+    return False
 
 
 def read_prospect_rows(values: list[list[str]]) -> list[dict]:
@@ -411,11 +440,13 @@ def _open_prospect_spreadsheets():
     raise RepresentativeSheetError(f"Não consegui abrir a planilha de prospecção.{share}") from last_error
 
 
-def _matching_worksheets(person: dict):
+def _candidate_worksheets(person: dict) -> tuple[list, list[str]]:
     matched = []
+    titles: list[str] = []
     seen = set()
     for spreadsheet in _open_prospect_spreadsheets():
         for worksheet in spreadsheet.worksheets():
+            titles.append(worksheet.title)
             if not tab_matches_representative(worksheet.title, person):
                 continue
             key = (_fold(getattr(spreadsheet, "id", "")), _fold(worksheet.title))
@@ -423,7 +454,23 @@ def _matching_worksheets(person: dict):
                 continue
             seen.add(key)
             matched.append(worksheet)
-    return matched
+    return matched, titles
+
+
+def _nearby_tab_titles(person: dict, titles: list[str]) -> list[str]:
+    first = _fold(_first_name(person.get("name", "")))
+    if not first:
+        return []
+    found = []
+    for title in titles:
+        if first in _title_tokens(title) and title not in found:
+            found.append(title)
+    return found[:8]
+
+
+def _short_error(exc: Exception) -> str:
+    text = re.sub(r"\s+", " ", normalize_text(str(exc)))
+    return text[:180]
 
 
 def _ensure_representative_worksheet(person: dict):
@@ -511,14 +558,22 @@ def link_representative_sheet(person: dict) -> dict:
     person_id = normalize_text(person.get("id"))
     if not person_id:
         raise RepresentativeSheetError("Representante sem identificador.")
-    worksheets = _matching_worksheets(person)
+    worksheets, seen_titles = _candidate_worksheets(person)
     if not worksheets:
         try:
             worksheets = [_ensure_representative_worksheet(person)]
         except Exception as exc:
             email = _service_account_email()
-            share = f" Compartilhe a planilha de representantes com {email}." if email else ""
-            raise RepresentativeSheetError(f"{_missing_tab_message(person)}{share}") from exc
+            nearby = _nearby_tab_titles(person, seen_titles)
+            detail = _short_error(exc)
+            similar = f" Abas parecidas que encontrei: {', '.join(nearby)}." if nearby else ""
+            editor = (
+                f" Para eu criar a aba, compartilhe a planilha de representantes como editor com {email}."
+                if email
+                else ""
+            )
+            reason = f" Motivo: {detail}." if detail else ""
+            raise RepresentativeSheetError(f"{_missing_tab_message(person)}{similar}{editor}{reason}") from exc
     incoming = []
     titles: list[str] = []
     for worksheet in worksheets:

@@ -67,6 +67,20 @@ class RepresentativeProspectsTest(unittest.TestCase):
         self.assertTrue(tab_matches_representative("Fortaleza_Lia Ferreira_01", person))
         self.assertTrue(tab_matches_representative("Lia Ferreira", person))
         self.assertFalse(tab_matches_representative("São Paulo_Lia_01", person))
+        raphael = {
+            "kind": "representante",
+            "name": "Raphael Lima",
+            "state_name": "Ceará",
+            "region": "CE",
+            "city": "Fortaleza",
+        }
+        self.assertTrue(tab_matches_representative("Raphael", raphael))
+        self.assertTrue(tab_matches_representative("Raphael Lima", raphael))
+        self.assertTrue(tab_matches_representative("Ceará_Raphael", raphael))
+        self.assertTrue(tab_matches_representative("Fortaleza Raphael", raphael))
+        self.assertTrue(tab_matches_representative("Raphael_01", raphael))
+        self.assertTrue(tab_matches_representative("Raphael de Fortaleza", raphael))
+        self.assertFalse(tab_matches_representative("São Paulo_Raphael_01", raphael))
         self.assertEqual(read_prospect_rows([]), [])
         self.assertEqual(read_prospect_rows([[""]]), [])
 
