@@ -78,6 +78,9 @@
     if (!body || !countEl) return;
     var count = body.querySelectorAll(".activities-kanban-card").length;
     countEl.textContent = String(count);
+    var queue = body.getAttribute("data-drop-queue") || "";
+    var summary = document.querySelector('[data-summary-count="' + queue.replace(/"/g, "") + '"]');
+    if (summary) summary.textContent = String(count);
     var empty = body.querySelector(".activities-kanban-empty");
     if (count === 0 && !empty) {
       var note = document.createElement("div");
@@ -87,6 +90,75 @@
     } else if (count > 0 && empty) {
       empty.remove();
     }
+  }
+
+  function closeMoveMenus(except) {
+    board.querySelectorAll(".rep-move-menu").forEach(function (menu) {
+      if (menu !== except) menu.hidden = true;
+    });
+  }
+
+  function moveCard(card, queue, body) {
+    var previous = card.parentElement;
+    if (!previous || !body || previous === body) return;
+    var empty = body.querySelector(".activities-kanban-empty");
+    if (empty) empty.remove();
+    body.appendChild(card);
+    closeMoveMenus();
+    countColumn(body.closest(".activities-kanban-column"));
+    countColumn(previous.closest(".activities-kanban-column"));
+    var payload = new URLSearchParams();
+    payload.set("prospect", card.getAttribute("data-prospect") || "");
+    payload.set("queue", queue);
+    fetch("/atividades/representante/mover", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: payload.toString(),
+    })
+      .then(function (response) {
+        return response.json().then(function (data) {
+          if (!response.ok || !data.ok) throw new Error((data && data.error) || "fail");
+          return data;
+        });
+      })
+      .then(function (data) {
+        if (queue === "concluida" && data.cadastro_url) {
+          window.location.href = data.cadastro_url;
+          return;
+        }
+        if (coarse) {
+          var column = body.closest(".activities-kanban-column");
+          if (column) column.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+        }
+      })
+      .catch(function () {
+        previous.appendChild(card);
+        countColumn(body.closest(".activities-kanban-column"));
+        countColumn(previous.closest(".activities-kanban-column"));
+      });
+  }
+
+  function toggleMoveMenu(card) {
+    var menu = card.querySelector(".rep-move-menu");
+    if (!menu) return;
+    if (!menu.hidden) {
+      menu.hidden = true;
+      return;
+    }
+    closeMoveMenus();
+    var current = (card.parentElement && card.parentElement.getAttribute("data-drop-queue")) || "";
+    menu.textContent = "";
+    board.querySelectorAll("[data-drop-queue]").forEach(function (body) {
+      var id = body.getAttribute("data-drop-queue") || "";
+      if (!id || id === current) return;
+      var title = body.closest(".activities-kanban-column").querySelector(".activities-kanban-column-title");
+      var choice = document.createElement("button");
+      choice.type = "button";
+      choice.setAttribute("data-rep-queue", id);
+      choice.textContent = title ? title.textContent : id;
+      menu.appendChild(choice);
+    });
+    menu.hidden = false;
   }
 
   board.querySelectorAll(".activities-kanban-card").forEach(function (card) {
@@ -113,6 +185,19 @@
         suppressClick = false;
         return;
       }
+      if (event.target.closest("[data-rep-move]")) {
+        event.preventDefault();
+        toggleMoveMenu(card);
+        return;
+      }
+      var choice = event.target.closest("[data-rep-queue]");
+      if (choice) {
+        event.preventDefault();
+        var queue = choice.getAttribute("data-rep-queue") || "";
+        var body = board.querySelector('[data-drop-queue="' + queue.replace(/"/g, "") + '"]');
+        if (body) moveCard(card, queue, body);
+        return;
+      }
       if (event.target.closest("a, button, textarea, input, select, label")) return;
       openOrder(card);
     });
@@ -128,37 +213,8 @@
       event.preventDefault();
       var queue = body.getAttribute("data-drop-queue") || "";
       var card = dragged;
-      var previous = origin;
-      if (previous === body) return;
-      var empty = body.querySelector(".activities-kanban-empty");
-      if (empty) empty.remove();
-      body.appendChild(card);
-      countColumn(body.closest(".activities-kanban-column"));
-      countColumn(previous.closest(".activities-kanban-column"));
-      var payload = new URLSearchParams();
-      payload.set("prospect", card.getAttribute("data-prospect") || "");
-      payload.set("queue", queue);
-      fetch("/atividades/representante/mover", {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: payload.toString(),
-      })
-        .then(function (response) {
-          return response.json().then(function (data) {
-            if (!response.ok || !data.ok) throw new Error((data && data.error) || "fail");
-            return data;
-          });
-        })
-        .then(function (data) {
-          if (queue === "concluida" && data.cadastro_url) {
-            window.location.href = data.cadastro_url;
-          }
-        })
-        .catch(function () {
-          previous.appendChild(card);
-          countColumn(body.closest(".activities-kanban-column"));
-          countColumn(previous.closest(".activities-kanban-column"));
-        });
+      if (origin === body) return;
+      moveCard(card, queue, body);
     });
   });
 
