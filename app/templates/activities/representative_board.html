@@ -28,6 +28,23 @@
 .os-detail-history p { margin: 4px 0 0; }
 #os-update-form, #os-sector-form { display: grid; gap: 8px; max-width: 280px; }
 #os-update-form textarea, #os-sector-form select { width: 100%; border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; font: inherit; }
+@media (max-width: 900px), (pointer: coarse) {
+  #rep-kanban-board {
+    touch-action: pan-x pan-y;
+    -webkit-overflow-scrolling: touch;
+  }
+  #rep-kanban-board .activities-kanban-column-body {
+    max-height: calc(100dvh - 240px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
+  }
+  #rep-kanban-board .activities-kanban-card,
+  #rep-kanban-board .activities-kanban-card-grip {
+    touch-action: pan-x pan-y;
+  }
+}
 </style>
 <div class="page-header">
   <div>
@@ -82,5 +99,5 @@
     <div id="os-order-modal-body">Carregando…</div>
   </div>
 </div>
-<script src="/static/js/rep-kanban.js?v={{ static_version }}-os2"></script>
+<script src="/static/js/rep-kanban.js?v={{ static_version }}-scroll"></script>
 {% endblock %}

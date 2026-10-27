@@ -3,6 +3,12 @@
   var modal = document.getElementById("os-order-modal");
   var modalBody = document.getElementById("os-order-modal-body");
   if (!board) return;
+  var coarse = window.matchMedia("(pointer: coarse)").matches || window.matchMedia("(max-width: 900px)").matches;
+  if (coarse) {
+    board.querySelectorAll(".activities-kanban-card").forEach(function (card) {
+      card.setAttribute("draggable", "false");
+    });
+  }
   var dragged = null;
   var origin = null;
   var suppressClick = false;
