@@ -92,19 +92,12 @@
     }
   }
 
-  function closeMoveMenus(except) {
-    board.querySelectorAll(".rep-move-menu").forEach(function (menu) {
-      if (menu !== except) menu.hidden = true;
-    });
-  }
-
   function moveCard(card, queue, body) {
     var previous = card.parentElement;
     if (!previous || !body || previous === body) return;
     var empty = body.querySelector(".activities-kanban-empty");
     if (empty) empty.remove();
     body.appendChild(card);
-    closeMoveMenus();
     countColumn(body.closest(".activities-kanban-column"));
     countColumn(previous.closest(".activities-kanban-column"));
     var payload = new URLSearchParams();
@@ -138,29 +131,6 @@
       });
   }
 
-  function toggleMoveMenu(card) {
-    var menu = card.querySelector(".rep-move-menu");
-    if (!menu) return;
-    if (!menu.hidden) {
-      menu.hidden = true;
-      return;
-    }
-    closeMoveMenus();
-    var current = (card.parentElement && card.parentElement.getAttribute("data-drop-queue")) || "";
-    menu.textContent = "";
-    board.querySelectorAll("[data-drop-queue]").forEach(function (body) {
-      var id = body.getAttribute("data-drop-queue") || "";
-      if (!id || id === current) return;
-      var title = body.closest(".activities-kanban-column").querySelector(".activities-kanban-column-title");
-      var choice = document.createElement("button");
-      choice.type = "button";
-      choice.setAttribute("data-rep-queue", id);
-      choice.textContent = title ? title.textContent : id;
-      menu.appendChild(choice);
-    });
-    menu.hidden = false;
-  }
-
   board.querySelectorAll(".activities-kanban-card").forEach(function (card) {
     card.addEventListener("dragstart", function (event) {
       if (event.target.closest("a, button")) {
@@ -185,19 +155,6 @@
         suppressClick = false;
         return;
       }
-      if (event.target.closest("[data-rep-move]")) {
-        event.preventDefault();
-        toggleMoveMenu(card);
-        return;
-      }
-      var choice = event.target.closest("[data-rep-queue]");
-      if (choice) {
-        event.preventDefault();
-        var queue = choice.getAttribute("data-rep-queue") || "";
-        var body = board.querySelector('[data-drop-queue="' + queue.replace(/"/g, "") + '"]');
-        if (body) moveCard(card, queue, body);
-        return;
-      }
       if (event.target.closest("a, button, textarea, input, select, label")) return;
       openOrder(card);
     });
@@ -217,6 +174,163 @@
       moveCard(card, queue, body);
     });
   });
+
+  var pressTimer = null;
+  var pressCard = null;
+  var pressId = null;
+  var pressX = 0;
+  var pressY = 0;
+  var lastX = 0;
+  var lastY = 0;
+  var draggingTouch = false;
+  var ghost = null;
+  var ghostOffsetX = 0;
+  var ghostOffsetY = 0;
+  var scrollFrame = 0;
+
+  function columnBodyAt(x, y) {
+    if (ghost) ghost.hidden = true;
+    var under = document.elementFromPoint(x, y);
+    if (ghost) ghost.hidden = false;
+    if (!under) return null;
+    var body = under.closest("[data-drop-queue]");
+    if (body && board.contains(body)) return body;
+    var column = under.closest(".activities-kanban-column");
+    if (column && board.contains(column)) return column.querySelector("[data-drop-queue]");
+    return null;
+  }
+
+  function markDrop(x, y) {
+    board.querySelectorAll(".is-drop-target").forEach(function (item) {
+      item.classList.remove("is-drop-target");
+    });
+    var body = columnBodyAt(x, y);
+    if (body) body.classList.add("is-drop-target");
+    return body;
+  }
+
+  function placeGhost(x, y) {
+    if (!ghost) return;
+    ghost.style.left = (x - ghostOffsetX) + "px";
+    ghost.style.top = (y - ghostOffsetY) + "px";
+  }
+
+  function autoScrollBoard(x) {
+    var rect = board.getBoundingClientRect();
+    var edge = 56;
+    if (x < rect.left + edge) board.scrollLeft -= 14;
+    else if (x > rect.right - edge) board.scrollLeft += 14;
+  }
+
+  function scrollWhileDragging() {
+    if (!draggingTouch) return;
+    autoScrollBoard(lastX);
+    markDrop(lastX, lastY);
+    scrollFrame = window.requestAnimationFrame(scrollWhileDragging);
+  }
+
+  function beginTouchDrag(card, x, y, pointerId) {
+    draggingTouch = true;
+    suppressClick = true;
+    card.classList.remove("is-pressing");
+    card.classList.add("is-touch-dragging");
+    try { card.setPointerCapture(pointerId); } catch (error) { /* ignore */ }
+    var rect = card.getBoundingClientRect();
+    ghost = card.cloneNode(true);
+    ghost.removeAttribute("id");
+    ghost.classList.remove("is-touch-dragging", "is-pressing");
+    ghost.classList.add("activities-kanban-card-ghost");
+    ghost.style.position = "fixed";
+    ghost.style.width = rect.width + "px";
+    ghost.style.zIndex = "1300";
+    ghost.style.margin = "0";
+    ghostOffsetX = Math.min(Math.max(x - rect.left, 12), rect.width - 12);
+    ghostOffsetY = Math.min(Math.max(y - rect.top, 12), rect.height - 12);
+    document.body.appendChild(ghost);
+    placeGhost(x, y);
+    markDrop(x, y);
+    scrollFrame = window.requestAnimationFrame(scrollWhileDragging);
+    if (navigator.vibrate) {
+      try { navigator.vibrate(15); } catch (error) { /* ignore */ }
+    }
+  }
+
+  function endTouchDrag(x, y, dropped) {
+    var card = pressCard;
+    var wasDragging = draggingTouch;
+    clearTimeout(pressTimer);
+    pressTimer = null;
+    draggingTouch = false;
+    if (scrollFrame) window.cancelAnimationFrame(scrollFrame);
+    scrollFrame = 0;
+    if (card) card.classList.remove("is-pressing", "is-touch-dragging");
+    var body = wasDragging && dropped ? columnBodyAt(x, y) : null;
+    if (ghost) {
+      ghost.remove();
+      ghost = null;
+    }
+    board.querySelectorAll(".is-drop-target").forEach(function (item) {
+      item.classList.remove("is-drop-target");
+    });
+    pressCard = null;
+    pressId = null;
+    if (!wasDragging || !dropped || !card || !body) return;
+    suppressClick = true;
+    window.setTimeout(function () { suppressClick = false; }, 400);
+    moveCard(card, body.getAttribute("data-drop-queue") || "", body);
+  }
+
+  if (coarse) {
+    board.addEventListener("contextmenu", function (event) {
+      if (event.target.closest(".activities-kanban-card")) event.preventDefault();
+    });
+    board.addEventListener("pointerdown", function (event) {
+      if (event.pointerType === "mouse") return;
+      var card = event.target.closest(".activities-kanban-card");
+      if (!card || event.target.closest("a, button, textarea, input, select, label")) return;
+      pressCard = card;
+      pressId = event.pointerId;
+      pressX = event.clientX;
+      pressY = event.clientY;
+      lastX = pressX;
+      lastY = pressY;
+      card.classList.add("is-pressing");
+      clearTimeout(pressTimer);
+      pressTimer = setTimeout(function () {
+        if (!pressCard || draggingTouch) return;
+        beginTouchDrag(pressCard, lastX, lastY, pressId);
+      }, 280);
+    });
+    board.addEventListener("pointermove", function (event) {
+      if (!pressCard || event.pointerId !== pressId) return;
+      lastX = event.clientX;
+      lastY = event.clientY;
+      if (!draggingTouch) {
+        if (Math.abs(event.clientX - pressX) + Math.abs(event.clientY - pressY) > 12) {
+          clearTimeout(pressTimer);
+          pressCard.classList.remove("is-pressing");
+          pressCard = null;
+          pressId = null;
+        }
+        return;
+      }
+      event.preventDefault();
+      placeGhost(event.clientX, event.clientY);
+      markDrop(event.clientX, event.clientY);
+      autoScrollBoard(event.clientX);
+    }, { passive: false });
+    board.addEventListener("pointerup", function (event) {
+      if (!pressCard || event.pointerId !== pressId) return;
+      endTouchDrag(event.clientX, event.clientY, true);
+    });
+    board.addEventListener("pointercancel", function (event) {
+      if (!pressCard || event.pointerId !== pressId) return;
+      endTouchDrag(event.clientX, event.clientY, false);
+    });
+    document.addEventListener("touchmove", function (event) {
+      if (draggingTouch) event.preventDefault();
+    }, { passive: false });
+  }
 
   if (modal) {
     modal.addEventListener("click", function (event) {

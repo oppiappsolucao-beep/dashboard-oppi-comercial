@@ -28,7 +28,6 @@
 .os-detail-history p { margin: 4px 0 0; }
 #os-update-form, #os-sector-form { display: grid; gap: 8px; max-width: 280px; }
 #os-update-form textarea, #os-sector-form select { width: 100%; border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; font: inherit; }
-.rep-move-btn, .rep-move-menu { display: none; }
 @media (max-width: 900px), (pointer: coarse) {
   #rep-kanban-board {
     touch-action: pan-x pan-y;
@@ -45,40 +44,18 @@
   #rep-kanban-board .activities-kanban-card,
   #rep-kanban-board .activities-kanban-card-grip {
     touch-action: pan-x pan-y;
+    -webkit-touch-callout: none;
   }
-  .rep-move-btn {
-    display: inline-flex;
-    margin-top: 8px;
-    border: 1px solid var(--border);
-    background: #fff;
-    border-radius: 8px;
-    padding: 6px 10px;
-    font: inherit;
-    font-size: 0.82rem;
-    font-weight: 700;
-    color: var(--purple, #7C3AED);
-  }
-  .rep-move-menu {
-    display: grid;
-    gap: 6px;
-    margin-top: 6px;
-  }
-  .rep-move-menu[hidden] { display: none; }
-  .rep-move-menu button {
-    text-align: left;
-    border: 1px solid var(--border);
-    background: #F8FAFC;
-    border-radius: 8px;
-    padding: 8px 10px;
-    font: inherit;
-    font-size: 0.85rem;
+  #rep-kanban-board .activities-kanban-card.is-pressing {
+    transform: scale(0.98);
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.12);
   }
 }
 </style>
 <div class="page-header">
   <div>
     <div class="page-title">Kanban</div>
-    <div class="page-subtitle">Clique na empresa para abrir a OS. No celular, toque em Mover para trocar de coluna. Arraste até Concluído para abrir o cadastro.</div>
+    <div class="page-subtitle">Toque na empresa para abrir a OS. Pressione e arraste o card para outra coluna.</div>
   </div>
   <form method="post" action="/atividades/representante/colunas" class="os-queue-form">
     <input type="text" name="queue_name" maxlength="40" placeholder="Nova coluna" required aria-label="Nome da nova coluna">
@@ -110,8 +87,6 @@
         <div class="activities-kanban-card-title">{{ card.empresa }}</div>
         <div class="activities-kanban-card-meta">{{ card.cnpj or 'Sem CNPJ' }}</div>
         <div class="activities-kanban-card-meta">{{ card.telefone or 'Sem telefone' }}{% if card.uf %} · {{ card.uf }}{% endif %}</div>
-        <button type="button" class="rep-move-btn" data-rep-move>Mover</button>
-        <div class="rep-move-menu" hidden></div>
         {% if column.id == 'concluida' %}
         <a class="os-proposta-link" href="{{ card.cadastro_url }}">Abrir cadastro</a>
         {% endif %}
@@ -130,5 +105,5 @@
     <div id="os-order-modal-body">Carregando…</div>
   </div>
 </div>
-<script src="/static/js/rep-kanban.js?v={{ static_version }}-move"></script>
+<script src="/static/js/rep-kanban.js?v={{ static_version }}-drag"></script>
 {% endblock %}
