@@ -83,8 +83,27 @@ def _allocate_protocol(conn, year: int) -> str:
     return f"OS-{year}-{seq:06d}"
 
 
+def read_presentation(description: str) -> dict:
+    """Dia, hora e link gravados na OS. Sem os dois primeiros, não há agendamento."""
+    day = _description_line(description, "Apresentação")
+    if not re.match(r"^\d{4}-\d{2}-\d{2}$", day):
+        day = ""
+    hour_line = _description_line(description, "Horário")
+    hour_match = re.match(r"(\d{2}:\d{2})", hour_line)
+    hour = hour_match.group(1) if hour_match else ""
+    active = bool(day and hour)
+    return {
+        "date": day if active else "",
+        "hour": hour if active else "",
+        "link": _description_line(description, "Videoconferência"),
+        "active": active,
+        "label": _format_day(day) if active else "",
+    }
+
+
 def _row_to_view(row) -> dict:
     status = normalize_text(row["status"]) or "aberta"
+    presentation = read_presentation(row["description"] or "")
     return {
         "id": row["id"],
         "protocol": row["protocol"],
@@ -105,6 +124,10 @@ def _row_to_view(row) -> dict:
         "updated_at": row["updated_at"] if "updated_at" in row.keys() else "",
         "created_at_label": _format_when(row["created_at"]),
         "sheet_row": int(row["sheet_row"] or 0) if "sheet_row" in row.keys() else 0,
+        "presentation_date": presentation["date"],
+        "presentation_hour": presentation["hour"],
+        "presentation_label": presentation["label"],
+        "presentation_link": presentation["link"],
     }
 
 
@@ -193,6 +216,155 @@ def trainer_busy_hours(responsible: str, day: str) -> set[str]:
 
 def trainer_is_busy(responsible: str, day: str, hour: str) -> bool:
     return normalize_text(hour)[:5] in trainer_busy_hours(responsible, day)
+
+
+def list_presentation_appointments(responsible: str = "") -> list[dict]:
+    """Apresentações comerciais. Sem responsável, devolve todas."""
+    init_crm_local_db()
+    name = normalize_text(responsible).lower()
+    with _lock, _connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT * FROM service_orders
+            WHERE lower(sector) LIKE '%comercial%'
+            ORDER BY scheduled_date, created_at
+            """
+        ).fetchall()
+    items = []
+    for row in rows:
+        view = _row_to_view(row)
+        if view.get("status") == "cancelada" or not view.get("presentation_date"):
+            continue
+        if name and normalize_text(view.get("responsible")).lower() != name:
+            continue
+        hour = view.get("presentation_hour") or ""
+        hour_label = hour
+        if re.match(r"^\d{2}:\d{2}$", hour):
+            hour_label = f"{hour} – {int(hour[:2]) + 1:02d}:{hour[3:]}"
+        view["scheduled_date"] = view["presentation_date"]
+        view["hour"] = hour
+        view["hour_label"] = hour_label
+        view["trainee"] = _description_line(view.get("description") or "", "Contato")
+        items.append(view)
+    items.sort(key=lambda item: (item.get("scheduled_date") or "", item.get("hour") or "", item.get("empresa") or ""))
+    return items
+
+
+def presenter_busy_hours(responsible: str, day: str, ignore_order_id: str = "") -> set[str]:
+    target_day = normalize_text(day)
+    ignore = normalize_text(ignore_order_id)
+    hours: set[str] = set()
+    for item in list_presentation_appointments(responsible):
+        if ignore and item.get("id") == ignore:
+            continue
+        if item.get("scheduled_date") == target_day and item.get("hour"):
+            hours.add(item["hour"])
+    return hours
+
+
+def create_manual_lead(
+    *,
+    sector: str,
+    responsible: str,
+    contato: str,
+    whatsapp: str,
+    empresa: str = "",
+    email: str = "",
+    created_by: str = "",
+) -> dict:
+    """OS de lead digitado no Kanban, sem vir da planilha."""
+    contact = normalize_text(contato)
+    company = normalize_text(empresa) or contact
+    if len(contact) < 2:
+        raise ValueError("Informe o nome do contato.")
+    if len(company) < 2:
+        raise ValueError("Informe a empresa.")
+    phone = normalize_text(whatsapp)
+    digits = re.sub(r"\D", "", phone)
+    if len(digits) < 10:
+        raise ValueError("Informe o WhatsApp com DDD.")
+    clean_email = normalize_text(email)
+    if clean_email and not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", clean_email):
+        raise ValueError("Informe um e-mail válido.")
+    lines = [f"Contato: {contact}", f"WhatsApp: {phone}"]
+    if clean_email:
+        lines.append(f"E-mail: {clean_email}")
+    return create_service_order(
+        tenant_id=DEFAULT_TENANT_ID,
+        sheet_row=0,
+        empresa=company,
+        subject="Lead",
+        description="\n".join(lines),
+        sector=sector,
+        scheduled_date=_now().date().isoformat(),
+        responsible=responsible,
+        priority="Média",
+        created_by=created_by or responsible,
+    )
+
+
+def schedule_presentation(
+    order_id: str,
+    *,
+    day: str,
+    hour: str,
+    link: str = "",
+    responsible: str,
+    author: str = "",
+) -> None:
+    """Grava o dia e o horário da apresentação na OS do comercial."""
+    from app.services.org_registry import TRAINING_SLOT_STARTS, validate_service_assignment
+
+    clean_day = normalize_text(day)
+    if not re.match(r"^\d{4}-\d{2}-\d{2}$", clean_day):
+        raise ValueError("Informe o dia da apresentação.")
+    try:
+        chosen = datetime.fromisoformat(clean_day).date()
+    except ValueError as error:
+        raise ValueError("Informe o dia da apresentação.") from error
+    if chosen < _now().date():
+        raise ValueError("A apresentação precisa ser hoje ou em um dia futuro.")
+    clean_hour = normalize_text(hour)[:5]
+    if clean_hour not in TRAINING_SLOT_STARTS:
+        raise ValueError("Escolha um horário de 1 hora entre 08:00 e 20:00.")
+    clean_link = normalize_text(link)
+    if clean_link and not re.match(r"^https?://\S+$", clean_link):
+        raise ValueError("O link da apresentação precisa começar com http:// ou https://.")
+
+    init_crm_local_db()
+    with _lock, _connect() as conn:
+        current = conn.execute(
+            "SELECT id, sector, status, description FROM service_orders WHERE id = ?",
+            (normalize_text(order_id),),
+        ).fetchone()
+    if current is None:
+        raise ValueError("Ordem de serviço não encontrada.")
+    if not is_commercial_sector(current["sector"] or ""):
+        raise ValueError("O agendamento de apresentação é do comercial.")
+    if normalize_text(current["status"]) == "cancelada":
+        raise ValueError("Esta ordem está cancelada.")
+    clean_sector, clean_responsible = validate_service_assignment(current["sector"], responsible)
+    if clean_hour in presenter_busy_hours(clean_responsible, clean_day, ignore_order_id=current["id"]):
+        raise ValueError(f"{clean_responsible} já tem uma apresentação nesse horário.")
+    description = _upsert_labeled_line(current["description"] or "", "Apresentação", clean_day)
+    description = _upsert_labeled_line(description, "Horário", clean_hour)
+    description = _upsert_labeled_line(description, "Videoconferência", clean_link)
+    if len(description) > 2000:
+        raise ValueError("A descrição da ordem de serviço pode ter no máximo 2000 caracteres.")
+    stamp = _now().isoformat(timespec="seconds")
+    summary = f"Apresentação agendada para {_format_day(clean_day)} às {clean_hour}."
+    if clean_link:
+        summary = f"{summary} Link: {clean_link}"
+    with _lock, _connect() as conn:
+        conn.execute(
+            """
+            UPDATE service_orders
+            SET description = ?, sector = ?, responsible = ?, updated_at = ?
+            WHERE id = ?
+            """,
+            (description, clean_sector, clean_responsible, stamp, current["id"]),
+        )
+        _add_event(conn, current["id"], "atualizacao", summary, author or clean_responsible, stamp)
 
 
 def list_service_orders(tenant_id: str | None, sheet_row: int) -> list[dict]:
@@ -454,6 +626,11 @@ def _entry_visible(card: dict, start: str, end: str) -> bool:
     return start <= day <= end
 
 
+def _presentation_in_period(card: dict, start: str, end: str) -> bool:
+    day = normalize_text(card.get("presentation_date"))[:10]
+    return len(day) == 10 and start <= day <= end
+
+
 def queue_choices(sector_name: str) -> tuple[str, list[dict]]:
     """Colunas do Kanban do setor, para o status que muda o local do cliente."""
     from app.services.org_registry import list_sector_queues, list_sectors
@@ -576,13 +753,19 @@ def build_sector_board(sector_id: str, sector_name: str, inicio: str = "", fim: 
         if queue_id not in known:
             queue_id = ENTRY_QUEUE_ID
         if not busca:
-            if queue_id == CAMPAIGN_QUEUE_ID and period_start and not _campaign_visible(card, period_start, period_end):
+            if (
+                queue_id == CAMPAIGN_QUEUE_ID
+                and period_start
+                and not _campaign_visible(card, period_start, period_end)
+                and not _presentation_in_period(card, period_start, period_end)
+            ):
                 continue
             if (
                 queue_id == ENTRY_QUEUE_ID
                 and period_start
                 and _entry_follows_period(sector_name)
                 and not _entry_visible(card, period_start, period_end)
+                and not _presentation_in_period(card, period_start, period_end)
             ):
                 continue
             column = buckets[queue_id]
@@ -1045,6 +1228,8 @@ def get_order_detail(order_id: str) -> dict | None:
         client["whatsapp"] = _description_line(description, "WhatsApp")
     if not client.get("telefone"):
         client["telefone"] = _description_line(description, "Telefone")
+    if not client.get("email"):
+        client["email"] = _description_line(description, "E-mail") or _description_line(description, "Email")
     detail["company_links"] = company_family_links(
         sheet_row=int(detail.get("sheet_row") or 0),
         order_id=detail.get("id") or "",

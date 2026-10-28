@@ -1,4 +1,4 @@
-"""Agenda dos treinamentos marcados para cada treinador."""
+"""Agenda de treinamentos e de apresentações comerciais."""
 import re
 from calendar import monthrange
 from datetime import date, timedelta
@@ -92,20 +92,40 @@ def _open_items(items: list[dict]) -> list[dict]:
     return [item for item in items if item.get("status") != "cancelada"]
 
 
+def _commercial_name(request: Request) -> str:
+    if not request.session.get("org_person_id"):
+        return ""
+    sector = normalize_text(request.session.get("org_sector_name"))
+    if "comercial" not in sector.lower():
+        return ""
+    return normalize_text(request.session.get("org_person_name"))
+
+
 @router.get("/agenda", response_class=HTMLResponse)
 async def agenda_page(request: Request):
     redirect = require_auth(request)
     if redirect:
         return redirect
+    commercial_name = _commercial_name(request)
     kind = normalize_text(request.session.get("org_person_kind"))
-    name = normalize_text(request.session.get("org_person_name")) if kind == "treinador" else ""
-    own = kind == "treinador"
+    agenda_kind = "apresentacao" if commercial_name else "treinamento"
+    if commercial_name:
+        name = commercial_name
+        own = True
+    else:
+        name = normalize_text(request.session.get("org_person_name")) if kind == "treinador" else ""
+        own = kind == "treinador"
     view = normalize_text(request.query_params.get("vista")).lower()
     if view not in {"semana", "mes"}:
         view = "semana"
     anchor = _anchor(request.query_params.get("data", ""))
     today = date.today()
-    items = _open_items(list_training_appointments(name))
+    if agenda_kind == "apresentacao":
+        from app.services.service_orders import list_presentation_appointments
+
+        items = list_presentation_appointments(name)
+    else:
+        items = _open_items(list_training_appointments(name))
     by_day: dict[str, list[dict]] = {}
     for item in items:
         day = normalize_text(item.get("scheduled_date"))
@@ -113,7 +133,13 @@ async def agenda_page(request: Request):
             continue
         by_day.setdefault(day, []).append(item)
 
-    slots, work_days = _trainer_frame(request)
+    if agenda_kind == "apresentacao":
+        from app.services.org_registry import TRAINING_SLOT_STARTS
+
+        slots = list(TRAINING_SLOT_STARTS)
+        work_days = list(SCHEDULE_DAY_KEYS[:5])
+    else:
+        slots, work_days = _trainer_frame(request)
     weeks = []
     if view == "mes":
         prev_day = _shift_month(anchor.replace(day=1), -1)
@@ -133,6 +159,7 @@ async def agenda_page(request: Request):
         "agenda/index.html",
         {
             "active_page": "agenda",
+            "agenda_kind": agenda_kind,
             "own_agenda": own,
             "trainer_name": name,
             "view": view,

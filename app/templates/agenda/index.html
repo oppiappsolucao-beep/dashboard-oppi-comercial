@@ -184,7 +184,9 @@
   <div>
     <div class="page-title">Agenda</div>
     <div class="page-subtitle">
-      {% if own_agenda %}
+      {% if agenda_kind == 'apresentacao' %}
+      Apresentações de {{ trainer_name }}.
+      {% elif own_agenda %}
       Treinamentos de {{ trainer_name }}.
       {% else %}
       Treinamentos marcados com os treinadores.

@@ -2,6 +2,8 @@
   var board = document.getElementById("os-kanban-board");
   var modal = document.getElementById("os-order-modal");
   var modalBody = document.getElementById("os-order-modal-body");
+  var leadModal = document.getElementById("os-lead-modal");
+  var openLead = document.getElementById("os-new-lead");
   if (!board) return;
   var dragged = null;
   var suppressClick = false;
@@ -28,6 +30,22 @@
         if (totals[index]) totals[index].textContent = el.textContent;
       });
     }
+  }
+
+  function closeLead() {
+    if (!leadModal) return;
+    leadModal.hidden = true;
+  }
+
+  if (openLead && leadModal) {
+    openLead.addEventListener("click", function () {
+      leadModal.hidden = false;
+      var first = leadModal.querySelector("input[name=contato]");
+      if (first) first.focus();
+    });
+    leadModal.addEventListener("click", function (event) {
+      if (event.target.closest("[data-os-lead-close]")) closeLead();
+    });
   }
 
   function closeModal() {
@@ -305,8 +323,26 @@
     });
     modal.addEventListener("submit", function (event) {
       var form = event.target;
-      if (!form || (form.id !== "os-update-form" && form.id !== "os-sector-form" && form.id !== "os-queue-form")) return;
+      if (!form || (form.id !== "os-update-form" && form.id !== "os-sector-form" && form.id !== "os-queue-form" && form.id !== "os-presentation-form")) return;
       event.preventDefault();
+      if (form.id === "os-presentation-form") {
+        fetch(form.action, { method: "POST", body: new FormData(form) })
+          .then(function (response) {
+            if (!response.ok) throw new Error("fail");
+            return response.text();
+          })
+          .then(function (payload) {
+            if ((payload || "").trim() === "ok") {
+              window.location.reload();
+              return;
+            }
+            modalBody.innerHTML = payload;
+          })
+          .catch(function () {
+            window.location.reload();
+          });
+        return;
+      }
       if (form.id === "os-queue-form") {
         var queueSelect = form.querySelector("[name=queue_id]");
         var fromQueue = form.getAttribute("data-current-queue") || "";
@@ -350,7 +386,9 @@
         });
     });
     document.addEventListener("keydown", function (event) {
-      if (event.key === "Escape" && !modal.hidden) closeModal();
+      if (event.key !== "Escape") return;
+      if (leadModal && !leadModal.hidden) closeLead();
+      else if (!modal.hidden) closeModal();
     });
   }
 })();

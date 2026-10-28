@@ -48,6 +48,42 @@
     {% endif %}
   </section>
 
+  {% if can_schedule_presentation %}
+  <section class="os-detail-block">
+    <h3>Apresentação</h3>
+    {% if order.presentation_label %}
+    <p>Agendada para {{ order.presentation_label }} às {{ order.presentation_hour }} com {{ order.responsible }}.</p>
+    {% if order.presentation_link %}<p><a href="{{ order.presentation_link }}" target="_blank" rel="noopener">Entrar na chamada</a></p>{% endif %}
+    {% else %}
+    <p>Escolha o dia e o horário. A apresentação entra na agenda do responsável.</p>
+    {% endif %}
+    {% if presentation_error %}<p class="os-presentation-error">{{ presentation_error }}</p>{% endif %}
+    {% if commercial_people %}
+    <form id="os-presentation-form" method="post" action="/atividades/os/{{ order.id }}/apresentacao">
+      <label for="os-presentation-day">Dia</label>
+      <input id="os-presentation-day" type="date" name="presentation_date" min="{{ today }}" value="{{ order.presentation_date }}" required>
+      <label for="os-presentation-time">Horário</label>
+      <select id="os-presentation-time" name="presentation_time" required>
+        {% for slot in presentation_slots %}
+        <option value="{{ slot.value }}" {% if slot.value == order.presentation_hour %}selected{% endif %}>{{ slot.label }}</option>
+        {% endfor %}
+      </select>
+      <label for="os-presentation-owner">Responsável</label>
+      <select id="os-presentation-owner" name="responsible" required>
+        {% for person in commercial_people %}
+        <option value="{{ person.name }}" {% if person.name == order.responsible %}selected{% endif %}>{{ person.name }}</option>
+        {% endfor %}
+      </select>
+      <label for="os-presentation-link">Link da chamada</label>
+      <input id="os-presentation-link" type="url" name="presentation_link" maxlength="300" value="{{ order.presentation_link }}" placeholder="https://">
+      <button type="submit" class="btn btn-small">Agendar apresentação</button>
+    </form>
+    {% else %}
+    <p>Cadastre um funcionário no setor Comercial para agendar.</p>
+    {% endif %}
+  </section>
+  {% endif %}
+
   <section class="os-detail-block">
     <h3>Setor</h3>
     <p>Enviar esta ordem para outro setor. Ela entra em Análise no setor escolhido.</p>
