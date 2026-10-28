@@ -32,9 +32,9 @@ class CadastroBotPasteTest(unittest.TestCase):
         self.assertEqual(fields["responsavel_legal"], "SILVIA LETICIA REIS DA SILVA BOMFIM")
         self.assertEqual(fields["socio_1"], "SILVIA LETICIA REIS DA SILVA BOMFIM")
         self.assertEqual(fields["data_fechamento"], date.today().isoformat())
-        self.assertEqual(fields["email_login_gestor"], "silvia@example.com")
-        self.assertEqual(fields["email_confirmacao_admin"], "silvia@example.com")
-        self.assertEqual(fields["email_cobranca"], "silvia@example.com")
+        self.assertEqual(fields["email"], "silvia@example.com")
+        self.assertNotIn("email_login_gestor", fields)
+        self.assertNotIn("email_cobranca", fields)
         self.assertTrue(fields["senha_acesso"])
 
     def test_cartao_cnpj_separa_empresa_fantasia_whatsapp_e_senha(self):

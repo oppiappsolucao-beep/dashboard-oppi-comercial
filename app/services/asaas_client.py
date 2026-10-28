@@ -162,6 +162,12 @@ def create_customer(payload: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+def update_customer(customer_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    data = _post(f"customers/{customer_id}", payload)
+    invalidate_cache()
+    return data
+
+
 def create_payment(payload: dict[str, Any]) -> dict[str, Any]:
     data = _post("payments", payload)
     invalidate_cache()

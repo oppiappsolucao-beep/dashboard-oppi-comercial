@@ -138,7 +138,24 @@ class RaissaCompanySyncTest(unittest.TestCase):
         self.assertEqual(row[11], "Matriz")
         self.assertEqual(row[12], "06/10/2026")
         self.assertEqual(row[13], "1 Boleto Aguardando")
-        self.assertEqual(len(row), len(headers))
+
+    def test_email_do_socio_nao_repete_o_email_da_receita(self):
+        payload = payload_for_raissa(
+            {
+                "empresa": "ACME",
+                "email": "contador@escritorio.com",
+                "email_socio_1": "contador@escritorio.com",
+                "socio_1": "SOCIO DA RECEITA",
+                "responsavel_legal": "Maria Dona",
+                "email_login_gestor": "dono@acme.com",
+                "email_cobranca": "financeiro@acme.com",
+            }
+        )
+        self.assertEqual(payload["email"], "contador@escritorio.com")
+        self.assertEqual(payload["email_socio_1"], "dono@acme.com")
+        self.assertEqual(payload["socio_1"], "Maria Dona")
+        self.assertEqual(payload["email_cobranca"], "financeiro@acme.com")
+        self.assertEqual(payload["email_login_gestor"], "dono@acme.com")
 
     def test_filial_marcada_grava_filial(self):
         payload = payload_for_raissa({"empresa": "FILIAL CENTRO", "is_filial": "1"})

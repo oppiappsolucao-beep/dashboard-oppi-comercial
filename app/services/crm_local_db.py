@@ -137,7 +137,9 @@ def init_crm_local_db() -> None:
                     responsible TEXT NOT NULL DEFAULT '',
                     created_by TEXT NOT NULL DEFAULT '',
                     created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL
+                    updated_at TEXT NOT NULL,
+                    training_result TEXT NOT NULL DEFAULT '',
+                    training_reason TEXT NOT NULL DEFAULT ''
                 );
                 CREATE INDEX IF NOT EXISTS idx_service_orders_client
                     ON service_orders(tenant_id, sheet_row, created_at);
@@ -240,6 +242,14 @@ def init_crm_local_db() -> None:
                 conn.execute(
                     "ALTER TABLE service_orders ADD COLUMN queue_id TEXT NOT NULL DEFAULT 'analise'"
                 )
+            if order_cols and "training_result" not in order_cols:
+                conn.execute(
+                    "ALTER TABLE service_orders ADD COLUMN training_result TEXT NOT NULL DEFAULT ''"
+                )
+            if order_cols and "training_reason" not in order_cols:
+                conn.execute(
+                    "ALTER TABLE service_orders ADD COLUMN training_reason TEXT NOT NULL DEFAULT ''"
+                )
             people_cols = {
                 row[1]
                 for row in conn.execute("PRAGMA table_info(org_people)").fetchall()
@@ -282,6 +292,44 @@ def init_crm_local_db() -> None:
             )
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_company_payables_due ON company_payables(due_date)"
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS representative_prospects (
+                    person_id TEXT NOT NULL,
+                    tab_title TEXT NOT NULL,
+                    sheet_row INTEGER NOT NULL,
+                    empresa TEXT NOT NULL DEFAULT '',
+                    cnpj TEXT NOT NULL DEFAULT '',
+                    telefone TEXT NOT NULL DEFAULT '',
+                    uf TEXT NOT NULL DEFAULT '',
+                    updated_at TEXT NOT NULL,
+                    PRIMARY KEY (person_id, tab_title, sheet_row)
+                )
+                """
+            )
+            prospect_cols = {
+                row[1]
+                for row in conn.execute("PRAGMA table_info(representative_prospects)").fetchall()
+            }
+            for column, definition in (
+                ("queue", "TEXT NOT NULL DEFAULT 'entrada'"),
+                ("registered", "INTEGER NOT NULL DEFAULT 0"),
+                ("registration_row", "INTEGER NOT NULL DEFAULT 0"),
+                ("order_id", "TEXT NOT NULL DEFAULT ''"),
+            ):
+                if prospect_cols and column not in prospect_cols:
+                    conn.execute(f"ALTER TABLE representative_prospects ADD COLUMN {column} {definition}")
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS representative_queues (
+                    id TEXT PRIMARY KEY,
+                    person_id TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    position INTEGER NOT NULL DEFAULT 1,
+                    created_at TEXT NOT NULL
+                )
+                """
             )
             payable_cols = {
                 row[1]

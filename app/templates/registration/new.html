@@ -50,6 +50,7 @@
   {% if error %}<div class="alert-error">{{ error }}</div>{% endif %}
   {% if success %}<div class="alert-success">{{ success }}</div>{% endif %}
 
+  {% if not is_representative %}
   <section class="cadastro-closes" aria-label="Leads concluídos">
     <button type="button" class="cadastro-close-card" data-close-list="pending" aria-expanded="false" aria-controls="cadastro-close-pending">
       <span>Concluídos no Kanban</span>
@@ -124,6 +125,7 @@
     <p>Nenhum lead fechado neste mês.</p>
     {% endfor %}
   </div>
+  {% endif %}
 
   <form method="post" action="/cadastro/novo" class="client-edit-form" id="registration-new-form">
     <input type="hidden" name="cadastro_tipo" value="lead">
@@ -145,7 +147,7 @@
         {% set counted_ns.ok = true %}
       {% endif %}
     {% endfor %}
-    {% if values.os %}
+    {% if not is_representative and values.os %}
     <section class="cadastro-form-status panel">
       {% if lead_ns.queues %}
       <label for="cadastro-kanban-queue"><strong>Status do lead</strong></label>
@@ -165,6 +167,10 @@
     </section>
     {% endif %}
     <input type="hidden" name="vendedor" value="{{ vendedor }}">
+    {% if values.prospect_tab %}
+    <input type="hidden" name="prospect_tab" value="{{ values.prospect_tab }}">
+    <input type="hidden" name="prospect_row" value="{{ values.prospect_row }}">
+    {% endif %}
     <input type="hidden" name="data_chamado" value="{{ today }}">
     {% if from_page %}<input type="hidden" name="from" value="{{ from_page }}">{% endif %}
 

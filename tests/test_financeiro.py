@@ -80,6 +80,45 @@ class CadastroBillingMappingTest(unittest.TestCase):
         self.assertEqual(asaas_cycle("anual"), "YEARLY")
         self.assertIsNone(asaas_cycle("avulso"))
 
+    def test_asaas_usa_email_de_cobranca_e_ignora_contador(self):
+        from app.services.cadastro_billing import billing_email_from_values
+
+        email = billing_email_from_values({
+            "email_empresa": "contador@escritorio.com",
+            "email": "contador@escritorio.com",
+            "email_socio_1": "contador@escritorio.com",
+            "email_login_gestor": "dono@acme.com",
+            "email_cobranca": "financeiro@acme.com",
+        })
+        self.assertEqual(email, "financeiro@acme.com")
+
+    def test_ponto_nao_leva_email_da_receita(self):
+        from app.services.oppi_ponto_bridge import build_onboard_payload_from_crm
+
+        payload = build_onboard_payload_from_crm(
+            values={
+                "empresa": "ACME LTDA",
+                "cnpj": "18.088.253/0001-24",
+                "email": "contador@escritorio.com",
+                "email_empresa": "contador@escritorio.com",
+                "email_socio_1": "contador@escritorio.com",
+                "socio_1": "SOCIO DA RECEITA",
+                "responsavel_legal": "Maria Dona",
+                "telefone_b2b": "11988887777",
+            },
+            access={
+                "email_login_gestor": "contador@escritorio.com",
+                "email_cobranca": "financeiro@acme.com",
+                "email_confirmacao_admin": "contador@escritorio.com",
+                "senha_acesso": "Ab12cd34",
+            },
+        )
+        self.assertEqual(payload["admin_nome"], "Maria Dona")
+        self.assertEqual(payload["email_login"], "financeiro@acme.com")
+        self.assertEqual(payload["email_cobranca"], "financeiro@acme.com")
+        self.assertEqual(payload["email_verificacao"], "financeiro@acme.com")
+        self.assertNotEqual(payload["email_login"], "contador@escritorio.com")
+
     def test_payment_option_order_and_labels(self):
         from app.services.cadastro_billing import BILLING_FORM_OPTIONS, forma_label, is_recurring_forma
 

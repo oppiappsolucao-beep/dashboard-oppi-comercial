@@ -323,31 +323,6 @@
       return false;
     }
 
-    function ensureOnePartner() {
-      var count = form.querySelector("#partners-count");
-      if (!count || String(count.value || "").trim()) return;
-      count.value = "1";
-      count.dispatchEvent(new Event("change", { bubbles: true }));
-    }
-
-    function fillAccess(email, password) {
-      ensureOnePartner();
-      if (email) {
-        setIfEmpty("email", email);
-        setIfEmpty("email_socio_1", email);
-        setIfEmpty("email_login_gestor", email);
-        setIfEmpty("email_confirmacao_admin", email);
-        setIfEmpty("email_cobranca", email);
-      }
-      if (!password) return Boolean(email);
-      form.querySelectorAll('input[name="senha_acesso"]').forEach(function (field) {
-        if (field.disabled || String(field.value || "").trim()) return;
-        field.type = "text";
-        field.value = password;
-      });
-      return true;
-    }
-
     function sellerName() {
       var field = form.querySelector('[name="nome_contato"]');
       return field ? String(field.value || "").trim() : "";
@@ -440,18 +415,6 @@
       clearTimeout(timer);
       lookup();
     });
-
-    var emailInput = form.querySelector('input[name="email"]');
-    if (emailInput) {
-      emailInput.addEventListener("change", function () {
-        if (!form.dataset.generatedPassword) return;
-        var email = String(emailInput.value || "").trim();
-        if (!email || email.indexOf("@") === -1) return;
-        if (fillAccess(email, form.dataset.generatedPassword)) {
-          setStatus("1 responsável preenchido com o e-mail informado e a senha.", true);
-        }
-      });
-    }
 
     var contato = form.querySelector('[name="nome_contato"]');
     var legal = form.querySelector('[name="responsavel_legal"]');

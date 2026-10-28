@@ -474,11 +474,7 @@ def ensure_crm_link(
         )
         conversation = {**conversation, "sheet_row": None, "registration_id": None}
 
-    sheet_row = attendance_crm.resolve_or_create_lead(
-        phone=phone,
-        contact_name=contact_name or conversation.get("contact_name", ""),
-        vendedor=vendedor or conversation.get("assignee", ""),
-    )
+    sheet_row = attendance_crm.find_sheet_row_by_phone(phone)
     if sheet_row:
         registration_id = None
         try:

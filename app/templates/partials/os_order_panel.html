@@ -23,10 +23,12 @@
   <section class="os-detail-block">
     <h3>Cliente</h3>
     <p><strong>{{ order.empresa }}</strong></p>
+    {% if order.cnpj %}<p>CNPJ: {{ order.cnpj }}</p>{% endif %}
     <p>Contato: {{ order.client.contato or "Não informado" }}</p>
     <p>WhatsApp: {% if order.client.whatsapp %}<a href="tel:{{ order.client.whatsapp }}">{{ order.client.whatsapp }}</a> <button type="button" class="btn btn-small btn-secondary" data-copy-phone="{{ order.client.whatsapp }}">Copiar</button>{% else %}Não informado{% endif %}</p>
     <p>Telefone: {% if order.client.telefone %}<a href="tel:{{ order.client.telefone }}">{{ order.client.telefone }}</a>{% else %}Não informado{% endif %}</p>
     <p>E-mail: {% if order.client.email %}<a href="mailto:{{ order.client.email }}">{{ order.client.email }}</a>{% else %}Não informado{% endif %}</p>
+    {% if order.client.uf %}<p>UF: {{ order.client.uf }}</p>{% endif %}
     {% if order.client.endereco %}<p>{{ order.client.endereco }}</p>{% endif %}
     {% if order.company_links|length > 1 %}
     <div class="os-detail-actions">
@@ -41,13 +43,14 @@
     {% elif order.sheet_row %}
     <a class="btn btn-small btn-secondary" href="/cadastro/todos/{{ order.sheet_row }}/editar?tab=ordens&from=activities">Abrir cadastro</a>
     {% endif %}
-    {% if 'proposta' in (order.queue_name or '')|lower %}
+    {% if 'proposta' in (order.queue_name or '')|lower or 'representa' in (order.sector or '')|lower %}
     <div class="os-detail-actions">
       <a class="btn btn-small" href="/atividades/os/{{ order.id }}/proposta">Abrir proposta</a>
     </div>
     {% endif %}
   </section>
 
+<<<<<<< HEAD
   {% if can_schedule_presentation %}
   <section class="os-detail-block">
     <h3>Apresentação</h3>
@@ -84,6 +87,9 @@
   </section>
   {% endif %}
 
+=======
+  {% if not hide_sector_form and "representa" not in (order.sector or "")|lower %}
+>>>>>>> ec54b6c6d10a38678d055534e896684b78cac14d
   <section class="os-detail-block">
     <h3>Setor</h3>
     <p>Enviar esta ordem para outro setor. Ela entra em Análise no setor escolhido.</p>
@@ -98,6 +104,7 @@
       <button type="submit" class="btn btn-small">Enviar ao setor</button>
     </form>
   </section>
+  {% endif %}
 
   {% if order.source == 'campanha' %}
   <section class="os-detail-block">

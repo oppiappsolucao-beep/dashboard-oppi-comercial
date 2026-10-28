@@ -519,23 +519,16 @@ def formulario_dados_gerais() -> dict:
 
 
 def ensure_login_fields(fields: dict) -> None:
-    """Copia o e-mail da empresa para o login e gera a senha quando ainda estiver vazia."""
-    email = str(
-        fields.get("email")
-        or fields.get("email_socio_1")
-        or fields.get("email_login_gestor")
-        or ""
-    ).strip()
-    if email:
-        for key in (
-            "email",
-            "email_socio_1",
-            "email_login_gestor",
-            "email_confirmacao_admin",
-            "email_cobranca",
-        ):
+    """Gera a senha quando falta. O e-mail da Receita fica só na empresa.
+
+    Login, cobrança e sócio só recebem o e-mail que a mensagem marcou como do sócio.
+    """
+    partner_email = str(fields.get("email_socio_1") or "").strip()
+    company_email = str(fields.get("email") or "").strip()
+    if partner_email and partner_email.lower() != company_email.lower():
+        for key in ("email_login_gestor", "email_confirmacao_admin", "email_cobranca"):
             if not str(fields.get(key) or "").strip():
-                fields[key] = email
+                fields[key] = partner_email
     if not str(fields.get("senha_acesso") or "").strip():
         from app.services.cnpj_lookup import generate_access_password
 

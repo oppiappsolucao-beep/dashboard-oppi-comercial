@@ -266,9 +266,19 @@
       <div>
         <strong>{{ person.name }}</strong>
         <span>{{ person.city }} · {{ person.state_name }} · {{ person.region }} · {{ person.username }}</span>
+        {% set link = prospect_links.get(person.id) if prospect_links is defined else none %}
+        {% set expected = expected_tabs.get(person.id) if expected_tabs is defined else none %}
+        {% if link and link.tabs %}
+        <span>Aba {{ link.tabs|join(', ') }} · {{ link.count }} empresas. Entram na Raissa ao salvar o cadastro.</span>
+        {% elif expected %}
+        <span>Aba da planilha: {{ expected|join(' ou ') }}</span>
+        {% endif %}
       </div>
       <div class="org-card-actions">
         <a class="btn btn-secondary btn-small" href="/cadastros?tipo=representantes&editar={{ person.id }}">Editar</a>
+        <form method="post" action="/cadastros/pessoas/{{ person.id }}/planilha">
+          <button type="submit" class="btn btn-secondary btn-small">Vincular aba</button>
+        </form>
         <form method="post" action="/cadastros/pessoas/{{ person.id }}/remover">
           <input type="hidden" name="kind" value="representante">
           <button type="submit" class="btn btn-secondary btn-small">Remover</button>

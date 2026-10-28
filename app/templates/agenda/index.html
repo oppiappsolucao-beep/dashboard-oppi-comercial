@@ -127,6 +127,98 @@
     color: #6D28D9;
     font-weight: 700;
   }
+  .agenda-event.is-faltou {
+    background: #FEE2E2;
+    color: #991B1B;
+  }
+  .agenda-event.is-faltou span,
+  .agenda-event.is-faltou a {
+    color: #B91C1C;
+  }
+  .agenda-event.is-realizado {
+    background: #DCFCE7;
+    color: #166534;
+  }
+  .agenda-event.is-realizado span,
+  .agenda-event.is-realizado a {
+    color: #15803D;
+  }
+  .agenda-event.is-reagendou {
+    background: #FEF3C7;
+    color: #92400E;
+  }
+  .agenda-event.is-reagendou span,
+  .agenda-event.is-reagendou a {
+    color: #B45309;
+  }
+  .agenda-badge {
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+  }
+  .agenda-reason {
+    white-space: normal;
+  }
+  .agenda-legend {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin: -4px 0 12px;
+  }
+  .agenda-legend span {
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+  }
+  .agenda-legend .is-faltou { background: #FEE2E2; color: #991B1B; }
+  .agenda-legend .is-realizado { background: #DCFCE7; color: #166534; }
+  .agenda-legend .is-reagendou { background: #FEF3C7; color: #92400E; }
+  .agenda-edit summary {
+    cursor: pointer;
+    width: fit-content;
+    font-size: 0.72rem;
+    font-weight: 800;
+  }
+  .agenda-form {
+    display: grid;
+    gap: 6px;
+    margin-top: 6px;
+    min-width: 168px;
+  }
+  .agenda-form label {
+    display: grid;
+    gap: 2px;
+    font-size: 0.72rem;
+    font-weight: 700;
+  }
+  .agenda-form input,
+  .agenda-form select,
+  .agenda-form textarea {
+    width: 100%;
+    min-height: 32px;
+    padding: 4px 6px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font: inherit;
+    color: #1f2937;
+    background: #fff;
+  }
+  .agenda-form textarea {
+    min-height: 58px;
+    resize: vertical;
+  }
+  .agenda-form button {
+    min-height: 32px;
+  }
+  .agenda-hint {
+    margin: 0;
+    font-size: 0.7rem;
+    font-weight: 600;
+    line-height: 1.35;
+    white-space: normal;
+  }
   .agenda-empty {
     padding: 16px;
   }
@@ -177,6 +269,8 @@
     .agenda-day { min-height: 72px; padding: 4px; }
     .agenda-event { padding: 4px; overflow: hidden; }
     .agenda-event strong, .agenda-event span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .agenda-event .agenda-reason,
+    .agenda-event .agenda-hint { white-space: normal; overflow: visible; text-overflow: unset; }
   }
 </style>
 
@@ -184,12 +278,17 @@
   <div>
     <div class="page-title">Agenda</div>
     <div class="page-subtitle">
+<<<<<<< HEAD
       {% if agenda_kind == 'apresentacao' %}
       Apresentações de {{ trainer_name }}.
       {% elif own_agenda %}
       Treinamentos de {{ trainer_name }}.
+=======
+      {% if own_agenda %}
+      Treinamentos de {{ trainer_name }}. Antes do dia dá para mudar o horário e o dia.
+>>>>>>> ec54b6c6d10a38678d055534e896684b78cac14d
       {% else %}
-      Treinamentos marcados com os treinadores.
+      Treinamentos marcados com os treinadores. Antes do dia dá para mudar o horário e o dia.
       {% endif %}
     </div>
   </div>
@@ -208,6 +307,19 @@
   </div>
 </div>
 
+{% if success %}
+<div class="alert-success">{{ success }}</div>
+{% endif %}
+{% if error %}
+<div class="alert-error">{{ error }}</div>
+{% endif %}
+
+<div class="agenda-legend" aria-label="Situação do treinamento">
+  <span class="is-faltou">Faltou</span>
+  <span class="is-realizado">Realizado</span>
+  <span class="is-reagendou">Reagendou</span>
+</div>
+
 {% if view == 'semana' %}
 <section class="agenda-board panel">
   {% if hours and week_days %}
@@ -224,12 +336,7 @@
     {% for day in week_days %}
     <div class="agenda-cell {% if day.is_today %}is-today{% endif %}">
       {% for event in day.by_hour.get(hour.value, []) %}
-      <article class="agenda-event">
-        <strong>{{ event.empresa }}</strong>
-        {% if event.trainee %}<span>{{ event.trainee }}</span>{% endif %}
-        {% if event.responsible %}<span>{{ event.responsible }}</span>{% endif %}
-        {% if event.link %}<a href="{{ event.link }}" target="_blank" rel="noopener">Entrar na chamada</a>{% endif %}
-      </article>
+      {% include "partials/agenda_event.html" %}
       {% endfor %}
     </div>
     {% endfor %}
@@ -250,12 +357,7 @@
       <article class="agenda-day {% if day.is_today %}is-today{% endif %} {% if not day.in_month %}is-out{% endif %}">
         <strong>{{ day.number }}</strong>
         {% for event in day.events %}
-        <article class="agenda-event">
-          <strong>{{ event.empresa }}</strong>
-          {% if event.hour_label %}<span>{{ event.hour_label }}</span>{% endif %}
-          {% if event.trainee %}<span>{{ event.trainee }}</span>{% endif %}
-          {% if event.responsible %}<span>{{ event.responsible }}</span>{% endif %}
-        </article>
+        {% include "partials/agenda_event.html" %}
         {% endfor %}
       </article>
       {% endfor %}
@@ -263,4 +365,34 @@
   </div>
 </section>
 {% endif %}
+<script>
+  document.querySelectorAll(".agenda-form").forEach(function (form) {
+    var select = form.querySelector(".agenda-result");
+    var when = form.querySelector(".agenda-when");
+    if (!select || !when) return;
+    var canEdit = select.getAttribute("data-can-edit") === "1";
+    var day = form.querySelector("[name=day]");
+    var hour = form.querySelector("[name=hour]");
+    function sync() {
+      var move = select.value === "reagendou";
+      when.hidden = !(canEdit || move);
+      when.querySelectorAll("input, select").forEach(function (field) {
+        field.disabled = !(canEdit || move);
+        field.required = move;
+      });
+    }
+    select.addEventListener("change", sync);
+    function moved() {
+      var dayChanged = day && day.value !== day.defaultValue;
+      var hourChanged = hour && hour.value !== (hour.getAttribute("data-current") || "");
+      if ((dayChanged || hourChanged) && select.value !== "reagendou") {
+        select.value = "reagendou";
+      }
+      sync();
+    }
+    if (day) day.addEventListener("change", moved);
+    if (hour) hour.addEventListener("change", moved);
+    sync();
+  });
+</script>
 {% endblock %}

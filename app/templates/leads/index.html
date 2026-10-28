@@ -2,6 +2,7 @@
 {% block content %}
 <link rel="stylesheet" href="/static/css/leads.css?v=19">
 <link rel="stylesheet" href="/static/css/next-action-picker.css?v=1">
+{% if success %}<div class="alert-success">{{ success }}</div>{% endif %}
 <div class="page-header">
   <div>
     <div class="page-title">Empresas</div>

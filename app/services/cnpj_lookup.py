@@ -279,10 +279,10 @@ def registration_from_cnpj_payload(raw: dict, *, password: str | None = None) ->
         "quantidade_socios": "1",
         "socio_1": owner,
         "cpf_socio_1": partner.get("cpf", "") if owner else "",
-        "email_socio_1": email,
-        "email_login_gestor": email,
-        "email_confirmacao_admin": email,
-        "email_cobranca": email,
+        "email_socio_1": "",
+        "email_login_gestor": "",
+        "email_confirmacao_admin": "",
+        "email_cobranca": "",
         "senha_acesso": generated,
     }
     return payload

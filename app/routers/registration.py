@@ -311,7 +311,12 @@ def _registration_page_context(request: Request, df, *, error: str = "", values:
         "billing_form_options": BILLING_FORM_OPTIONS,
         "error": error or request.session.pop("registration_error", ""),
         "success": request.session.pop("registration_success", ""),
-        "registration_closes": _registration_closes(),
+        "is_representative": request.session.get("org_person_kind") == "representante",
+        "registration_closes": (
+            {"pending": [], "pending_total": 0, "registered": [], "registered_total": 0, "month_label": ""}
+            if request.session.get("org_person_kind") == "representante"
+            else _registration_closes()
+        ),
         **page_ctx,
     }
 
@@ -535,7 +540,12 @@ async def new_registration_submit(request: Request):
     form = await request.form()
     form_dict = dict(form)
     form_dict["email_empresa"] = form_dict.pop("email", form_dict.get("email_empresa", ""))
-    if not normalize_text(form_dict.get("vendedor")):
+    from app.services.representative_prospects import seller_for_representative
+
+    representative_name = seller_for_representative(request.session)
+    if representative_name:
+        form_dict["vendedor"] = representative_name
+    elif not normalize_text(form_dict.get("vendedor")):
         from app.dependencies import get_session_user
         from app.services.registration import seller_from_session_user
 
@@ -611,6 +621,24 @@ async def new_registration_submit(request: Request):
 
         empresa = normalize_text(form_dict.get("empresa"))
         status = normalize_text(form_dict.get("status"))
+
+        from app.services.representative_prospects import remember_closed_company, seller_for_representative
+
+        if seller_for_representative(request.session):
+            remember_closed_company(
+                request.session.get("org_person_id", ""),
+                empresa=empresa,
+                cnpj=form_dict.get("cnpj", ""),
+                telefone=form_dict.get("telefone_b2b", ""),
+                uf=form_dict.get("uf", ""),
+                registration_row=int(sheet_row or 0),
+                tab_title=form_dict.get("prospect_tab", ""),
+                sheet_row=form_dict.get("prospect_row", 0),
+            )
+            request.session["company_registration_success"] = (
+                f'"{empresa}" cadastrado com sucesso.{raissa_note}'
+            )
+            return RedirectResponse(url="/leads-e-empresas", status_code=303)
 
         order_warning = ""
         if int(sheet_row or 0) != 0:

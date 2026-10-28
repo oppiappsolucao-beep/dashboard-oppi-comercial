@@ -487,6 +487,7 @@ def _raissa_table_row(item: dict) -> dict:
     telefone = normalize_text(item.get("telefone")) or "—"
     email = normalize_text(item.get("email")) or "—"
     contato = normalize_text(item.get("contato")) or "—"
+    vendedor = normalize_text(item.get("vendedor")) or "Raissa"
     return {
         "nome": empresa,
         "empresa": empresa,
@@ -496,8 +497,8 @@ def _raissa_table_row(item: dict) -> dict:
         "meta_label": meta,
         "telefone": telefone,
         "email": email,
-        "vendedor": "Raissa",
-        "vendedor_initials": "RA",
+        "vendedor": vendedor,
+        "vendedor_initials": _initials(vendedor),
         "etapa": kind,
         "etapa_class": "ganho" if kind == "Matriz" else "novo-lead",
         "status": kind,

@@ -35,6 +35,10 @@ def is_employee(request: Request) -> bool:
 def allowed_accesses(request: Request) -> set[str]:
     if not is_employee(request):
         return set(FULL_ACCESS)
+    if request.session.get("org_person_kind") == "representante":
+        from app.services.org_registry import REPRESENTATIVE_ACCESS
+
+        return set(REPRESENTATIVE_ACCESS)
     raw = request.session.get("org_accesses") or []
     if isinstance(raw, str):
         raw = [item for item in raw.split(",") if item]

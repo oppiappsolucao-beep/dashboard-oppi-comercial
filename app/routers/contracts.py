@@ -538,9 +538,14 @@ async def contract_edit_submit(request: Request, sheet_row: int):
                         values["cnpj"] = normalize_text(pg.get("cnpj")) or values["cnpj"]
                         values["telefone_b2b"] = normalize_text(pg.get("telefone_b2b")) or values["telefone_b2b"]
                         values["email_empresa"] = normalize_text(pg.get("email_empresa")) or values["email"]
+                        values["email_socio_1"] = normalize_text(pg.get("email_socio_1"))
+                        values["responsavel_legal"] = normalize_text(pg.get("responsavel_legal"))
                         values["nome_contato"] = normalize_text(pg.get("nome_contato")) or values["nome_contato"]
             except Exception:
                 pass
+            from app.services.registration import load_access_fields
+
+            values.update(load_access_fields(DEFAULT_TENANT_ID, sheet_row))
             try:
                 result = generate_asaas_invoice(DEFAULT_TENANT_ID, sheet_row, values, plan)
                 request.session["edit_success"] = result.get("message") or "Fatura gerada no Asaas."
@@ -765,7 +770,7 @@ async def contract_update_tipo(request: Request, sheet_row: int, cadastro_tipo: 
         if row is not None:
             values = {key: _contract_edit_value(row, columns, key) for key in [
                 "empresa", "cnpj", "email", "telefone_b2b", "telefone_fixo",
-                "socio_1", "email_socio_1", "telefone_socio_1",
+                "responsavel_legal", "socio_1", "email_socio_1", "telefone_socio_1",
                 "servico", "valor_proposta", "colaboradores",
             ]}
             values["email_empresa"] = values.get("email", "")
@@ -814,7 +819,7 @@ async def contract_oppi_ponto_action(
 
     values = {key: _contract_edit_value(row, columns, key) for key in [
         "empresa", "cnpj", "email", "telefone_b2b", "telefone_fixo",
-        "socio_1", "email_socio_1", "telefone_socio_1",
+        "responsavel_legal", "socio_1", "email_socio_1", "telefone_socio_1",
         "servico", "valor_proposta", "colaboradores",
     ]}
     values["email_empresa"] = values.get("email", "")

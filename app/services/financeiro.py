@@ -16,7 +16,7 @@ from app.services.asaas_client import (
     fetch_statement,
     is_configured,
 )
-from app.services.company_payables import list_payables, list_suppliers, payable_calendar, total_launched
+from app.services.company_payables import list_payables, list_suppliers, payable_calendar
 from app.services.internal_finance import build_internal_forecast, resolve_period
 from app.services.legacy_core import (
     normalize_cnpj_for_duplicate,
@@ -548,7 +548,7 @@ def _payables_view(start: date, end: date, search: str, status: str = "", today:
                 "status_tone": {"pago": "green", "atrasado": "red", "a_pagar": "blue"}.get(row.get("status"), "blue"),
             }
         )
-    dividas = total_launched()
+    dividas = round(saida, 2)
     return {
         "rows": listed,
         "days": [
@@ -625,13 +625,10 @@ def attach_cash_compare(payables: dict[str, Any], start: date, end: date, today:
             logger.exception("Falha ao ler o valor a receber")
             note = note or "Não foi possível ler o valor a receber."
     saldo = entrada - saida
-    dividas = total_launched()
     payables["entrada"] = entrada
     payables["entrada_label"] = format_brl(entrada)
     payables["a_receber"] = a_receber
     payables["a_receber_label"] = format_brl(a_receber)
-    payables["dividas"] = dividas
-    payables["dividas_label"] = format_brl(dividas)
     payables["saldo"] = saldo
     payables["saldo_label"] = format_brl(saldo)
     payables["compare_note"] = note
@@ -1109,7 +1106,7 @@ def _with_tab_kpis(ctx: dict[str, Any], tab: str) -> dict[str, Any]:
             {
                 "label": "Entrada − saída",
                 "value": payables.get("saldo_label") or format_brl(0),
-                "note": f"Entrou {payables.get('entrada_label') or format_brl(0)} · saiu {payables.get('saida_label') or format_brl(0)}",
+                "note": f"{payables.get('month_label') or 'Período'} · entrou {payables.get('entrada_label') or format_brl(0)} · saiu {payables.get('saida_label') or format_brl(0)}",
                 "tone": "purple",
                 "icon": "↔",
             },

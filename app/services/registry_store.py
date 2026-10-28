@@ -117,6 +117,18 @@ def _ensure_postgres_tables() -> None:
                 "ADD COLUMN IF NOT EXISTS schedule_json TEXT NOT NULL DEFAULT '{}'"
             )
         )
+        conn.execute(
+            text(
+                "ALTER TABLE service_orders "
+                "ADD COLUMN IF NOT EXISTS training_result TEXT NOT NULL DEFAULT ''"
+            )
+        )
+        conn.execute(
+            text(
+                "ALTER TABLE service_orders "
+                "ADD COLUMN IF NOT EXISTS training_reason TEXT NOT NULL DEFAULT ''"
+            )
+        )
 
 
 def _cell(row: sqlite3.Row, key: str, default=""):

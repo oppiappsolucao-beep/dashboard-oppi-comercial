@@ -10,6 +10,7 @@ APP_BUILD = os.getenv("APP_BUILD", "20261005-nome-fantasia-login").strip() or "2
 
 class Settings:
     sheet_id: str = "1GAbrca0NSiJfPXaSte1qGxXCsGkQPacoRsm0PVB51gE"
+    representative_sheet_id: str = "1XO3Vjtd26HeMoRJdGOZ16jfIhtvS8sTHOHHnRdyWs2I"
     worksheet_name: str = "Folha1"
     cache_ttl_seconds: int = int(os.getenv("SHEET_CACHE_TTL_SECONDS", "300"))
     proposal_template_doc_id: str = "1iTBG1ZUMCVB-aS7QoYiC4Sym6Dgn9Z7gMN-LGLgyprI"
@@ -39,6 +40,10 @@ class Settings:
 
     def __init__(self) -> None:
         self.sheet_id = os.getenv("GOOGLE_SHEET_ID", self.sheet_id).strip() or self.sheet_id
+        self.representative_sheet_id = (
+            os.getenv("REPRESENTATIVE_SHEET_ID", self.representative_sheet_id).strip()
+            or self.representative_sheet_id
+        )
         self.worksheet_name = (
             os.getenv("GOOGLE_WORKSHEET_NAME", self.worksheet_name).strip() or self.worksheet_name
         )

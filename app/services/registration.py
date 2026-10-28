@@ -410,6 +410,9 @@ def build_registration_payload(form: dict) -> dict:
         payload["responsavel_legal"] = seller_name
     if seller_name and not payload.get("socio_1"):
         payload["socio_1"] = seller_name
+    from app.services.raissa_company_sync import prefer_responsible_contacts
+
+    payload.update(prefer_responsible_contacts(payload))
     return payload
 
 
@@ -707,6 +710,9 @@ def save_access_fields(tenant_id: str | None, sheet_row: int, form: dict, *, mir
     if not sheet_row:
         return
     payload = {field: normalize_text(form.get(field)) for field in ACCESS_FIELDS}
+    login = payload.get("email_login_gestor")
+    if login:
+        payload["email_confirmacao_admin"] = login
     save_lead_action(tenant_id, sheet_row, payload, mirror_sheet=mirror_sheet)
 
 
