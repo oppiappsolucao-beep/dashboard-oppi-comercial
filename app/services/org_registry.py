@@ -32,12 +32,8 @@ BRAZIL_UFS = [
     "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO",
 ]
 DEFAULT_SECTORS = ["Comercial", "Suporte", "Financeiro", "Representação"]
-<<<<<<< HEAD
 COMMERCIAL_CADASTRO_ACCESS = ("novo_cadastro", "empresas", "propostas", "agenda")
-=======
-COMMERCIAL_CADASTRO_ACCESS = ("novo_cadastro", "empresas", "propostas")
 REPRESENTATIVE_ACCESS = ("kanban", "novo_cadastro", "empresas", "propostas")
->>>>>>> ec54b6c6d10a38678d055534e896684b78cac14d
 TRAINING_ACCESS = ("agenda", "kanban", "empresas")
 SCHEDULE_DAYS = (
     ("seg", "Seg"),

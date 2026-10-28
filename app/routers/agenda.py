@@ -176,7 +176,6 @@ async def agenda_page(request: Request):
             continue
         by_day.setdefault(day, []).append(item)
 
-<<<<<<< HEAD
     if agenda_kind == "apresentacao":
         from app.services.org_registry import TRAINING_SLOT_STARTS
 
@@ -184,10 +183,7 @@ async def agenda_page(request: Request):
         work_days = list(SCHEDULE_DAY_KEYS[:5])
     else:
         slots, work_days = _trainer_frame(request)
-=======
-    slots, work_days = _trainer_frame(request)
     trainer_slots = _slots_by_trainer()
->>>>>>> ec54b6c6d10a38678d055534e896684b78cac14d
     weeks = []
     if view == "mes":
         prev_day = _shift_month(anchor.replace(day=1), -1)

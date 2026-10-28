@@ -130,15 +130,12 @@ def _row_to_view(row) -> dict:
         "updated_at": row["updated_at"] if "updated_at" in row.keys() else "",
         "created_at_label": _format_when(row["created_at"]),
         "sheet_row": int(row["sheet_row"] or 0) if "sheet_row" in row.keys() else 0,
-<<<<<<< HEAD
         "presentation_date": presentation["date"],
         "presentation_hour": presentation["hour"],
         "presentation_label": presentation["label"],
         "presentation_link": presentation["link"],
-=======
         "training_result": normalize_text(row["training_result"]) if "training_result" in row.keys() else "",
         "training_reason": normalize_text(row["training_reason"]) if "training_reason" in row.keys() else "",
->>>>>>> ec54b6c6d10a38678d055534e896684b78cac14d
     }
 
 
@@ -1441,10 +1438,8 @@ def get_order_detail(order_id: str) -> dict | None:
         client["whatsapp"] = _description_line(description, "WhatsApp")
     if not client.get("telefone"):
         client["telefone"] = _description_line(description, "Telefone")
-<<<<<<< HEAD
     if not client.get("email"):
         client["email"] = _description_line(description, "E-mail") or _description_line(description, "Email")
-=======
     if not detail.get("cnpj"):
         detail["cnpj"] = _description_line(description, "CNPJ")
     if not client.get("uf"):
@@ -1470,7 +1465,6 @@ def get_order_detail(order_id: str) -> dict | None:
             detail["subject"] = prospect["empresa"]
     if not client.get("whatsapp") and client.get("telefone"):
         client["whatsapp"] = client["telefone"]
->>>>>>> ec54b6c6d10a38678d055534e896684b78cac14d
     detail["company_links"] = company_family_links(
         sheet_row=int(detail.get("sheet_row") or 0),
         order_id=detail.get("id") or "",

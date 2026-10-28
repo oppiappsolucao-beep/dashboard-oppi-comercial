@@ -241,7 +241,6 @@ async def activities_page(request: Request):
     return render(request, "activities/os_board.html", _os_board_context(request))
 
 
-<<<<<<< HEAD
 @router.post("/atividades/leads")
 async def activities_create_lead(
     request: Request,
@@ -305,7 +304,8 @@ async def activities_create_lead(
     else:
         request.session["os_board_success"] = "Lead criado. Abra a OS para agendar a apresentação."
     return _board_redirect(target, bool(employee_sector), inicio, fim)
-=======
+
+
 @router.post("/atividades/representante/mover")
 async def representative_move_prospect(request: Request):
     redirect = require_auth(request)
@@ -342,7 +342,6 @@ async def representative_add_column(request: Request, queue_name: str = Form("")
     except RepresentativeSheetError as exc:
         request.session["rep_board_error"] = str(exc)
     return RedirectResponse(url="/atividades", status_code=303)
->>>>>>> ec54b6c6d10a38678d055534e896684b78cac14d
 
 
 @router.get("/proposta", response_class=HTMLResponse)
@@ -633,7 +632,6 @@ def _oppi_tech_board(request: Request, _sector_name: str = "") -> bool:
     return _oppi_tech_login(request)
 
 
-<<<<<<< HEAD
 def _commercial_staff(sector_name: str) -> list[dict]:
     from app.services.org_registry import list_people
     from app.services.service_orders import is_commercial_sector
@@ -663,16 +661,19 @@ def _default_lead_responsible(request: Request, sector_name: str) -> str:
     return names.get(logged.lower(), "")
 
 
-def _order_panel_context(order: dict, sector_notice: str = "", can_delete_order: bool = False, presentation_error: str = "") -> dict:
-=======
 def _hide_sector_move(request: Request, order: dict) -> bool:
     if normalize_text(request.session.get("org_person_kind")) == "representante":
         return True
     return "representa" in normalize_text(order.get("sector")).lower()
 
 
-def _order_panel_context(order: dict, sector_notice: str = "", can_delete_order: bool = False, hide_sector_form: bool = False) -> dict:
->>>>>>> ec54b6c6d10a38678d055534e896684b78cac14d
+def _order_panel_context(
+    order: dict,
+    sector_notice: str = "",
+    can_delete_order: bool = False,
+    presentation_error: str = "",
+    hide_sector_form: bool = False,
+) -> dict:
     from app.services.org_registry import list_sectors
     from app.services.service_orders import queue_choices
 
@@ -687,15 +688,12 @@ def _order_panel_context(order: dict, sector_notice: str = "", can_delete_order:
         "order_sector_id": sector_id,
         "order_queues": queues,
         "can_delete_order": can_delete_order,
-<<<<<<< HEAD
         "can_schedule_presentation": is_commercial_sector(sector_name),
         "commercial_people": _commercial_staff(sector_name),
         "presentation_slots": _presentation_slots(sector_name),
         "presentation_error": presentation_error,
         "today": date.today().isoformat(),
-=======
         "hide_sector_form": hide_sector_form,
->>>>>>> ec54b6c6d10a38678d055534e896684b78cac14d
     }
 
 
