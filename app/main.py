@@ -298,13 +298,6 @@ async def startup_maintenance() -> None:
                 ).cleanup_service_account_proposal_files(),
             ),
             (
-                "fake_company",
-                lambda: __import__(
-                    "app.services.seed_fake_company",
-                    fromlist=["ensure_fake_test_company_on_startup"],
-                ).ensure_fake_test_company_on_startup(),
-            ),
-            (
                 "evolution_webhooks",
                 lambda: __import__(
                     "app.services.evolution_client",

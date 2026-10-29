@@ -263,6 +263,13 @@ def apply_raissa_values(row: list[str], headers: list[str], payload: dict, *, on
         for index in indexes:
             if index < len(values):
                 values[index] = incoming
+    # Letras da aba Raissa: AC, AF, AG, AH, AI e AJ. Só grava se o nome já estiver lá.
+    _put_exact(values, headers, payload.get("status_whatsapp"), ("status whatsapp",), 28)
+    _put_exact(values, headers, payload.get("servico_coluna"), ("servico", "servicos"), 31)
+    _put_exact(values, headers, payload.get("valor_coluna"), ("valor do servico",), 32)
+    _put_exact(values, headers, payload.get("forma_coluna") or payload.get("forma"), ("forma de pagamento",), 33)
+    _put_exact(values, headers, payload.get("situacao_ai"), ("ai", "ativo", "ativo/inativo", "ativo inativo"), 34)
+    _put_exact(values, headers, payload.get("data_treinamento"), ("data",), 35)
     return values[: max(len(headers), 1)]
 
 
@@ -304,6 +311,9 @@ def _billing_labels(billing: dict | None) -> dict[str, str]:
         "vencimento": _sheet_date(data.get("vencimento")),
         "forma": forma_label(data.get("forma")) if normalize_text(data.get("forma")) else "",
         "ciclo": cycle_label(data.get("ciclo")) if normalize_text(data.get("ciclo")) else "",
+        "servico_coluna": normalize_text(data.get("servico") or data.get("plano")),
+        "valor_coluna": normalize_text(data.get("valor")),
+        "forma_coluna": forma_label(data.get("forma")) if normalize_text(data.get("forma")) else "",
     }
 
 
@@ -351,6 +361,16 @@ def payload_for_raissa(form: dict, billing: dict | None = None) -> dict:
         finance["vencimento"] = _sheet_date(form.get("billing_vencimento"))
     if not finance["forma"] and normalize_text(form.get("billing_forma")):
         finance["forma"] = _FORMA_LABELS.get(normalize_text(form.get("billing_forma")).lower(), normalize_text(form.get("billing_forma")))
+    closed_forma = normalize_text(form.get("forma_pagamento"))
+    if closed_forma:
+        finance["forma"] = closed_forma
+        finance["forma_coluna"] = closed_forma
+    elif finance["forma"]:
+        finance["forma_coluna"] = finance["forma"]
+    if normalize_text(form.get("servico") or form.get("billing_servico")):
+        finance["servico_coluna"] = normalize_text(form.get("servico") or form.get("billing_servico"))
+    if normalize_text(form.get("valor_proposta") or form.get("billing_valor")):
+        finance["valor_coluna"] = normalize_text(form.get("valor_proposta") or form.get("billing_valor"))
     if not finance["ciclo"] and normalize_text(form.get("billing_ciclo")):
         finance["ciclo"] = _CYCLE_LABELS.get(normalize_text(form.get("billing_ciclo")).lower(), normalize_text(form.get("billing_ciclo")))
     filial = normalize_text(form.get("is_filial")).lower() in {"1", "on", "true", "yes", "sim"}
@@ -389,8 +409,49 @@ def payload_for_raissa(form: dict, billing: dict | None = None) -> dict:
         "observacoes": normalize_text(form.get("observacoes")),
         "filial": "Filial" if filial else "Matriz",
         "matriz": normalize_text(form.get("empresa_matriz_search") or form.get("empresa_matriz_nome")),
+        "status_whatsapp": "Fechado",
+        "situacao_ai": _situacao_label(form.get("situacao_ai")),
+        "data_treinamento": _training_sheet_date(form),
         **finance,
     }
+
+
+def _training_sheet_date(form: dict) -> str:
+    scheduled = normalize_text(form.get("create_training")).lower() in {"1", "on", "true", "yes", "sim"}
+    if not scheduled and not normalize_text(form.get("data_treinamento")):
+        return ""
+    return _sheet_date(form.get("training_date") or form.get("data_treinamento"))
+
+
+def _situacao_label(value) -> str:
+    text = normalize_search_text(value)
+    if text in {"0", "inativo", "desativado", "false", "nao", "off", "no"}:
+        return "Inativo"
+    if text in {"1", "ativo", "true", "sim", "on", "yes"}:
+        return "Ativo"
+    return ""
+
+
+def _exact_column(headers: list[str], names: tuple[str, ...], preferred: int | None = None) -> int | None:
+    """Usa a coluna que já existe. Não cria cabeçalho novo."""
+    normalized = [normalize_search_text(header) for header in headers]
+    wanted = {normalize_search_text(name) for name in names}
+    if preferred is not None and preferred < len(normalized) and normalized[preferred] in wanted:
+        return preferred
+    for index, header in enumerate(normalized):
+        if header in wanted:
+            return index
+    return None
+
+
+def _put_exact(values: list[str], headers: list[str], value, names: tuple[str, ...], preferred: int | None) -> None:
+    incoming = normalize_text(value)
+    if not incoming:
+        return
+    index = _exact_column(headers, names, preferred)
+    if index is None or index >= len(values):
+        return
+    values[index] = incoming
 
 
 def _header_at(values: list[list[str]]) -> int:
@@ -669,6 +730,7 @@ def save_registration_on_raissa(
     *,
     crm_sheet_row: int | None = None,
     update_only: bool = False,
+    only_fields: tuple[str, ...] | None = None,
 ) -> dict:
     """Cria ou atualiza o cliente na aba Raissa. Não levanta: devolve ok/aviso."""
     form, remembered_row = _merge_saved_registration(form, crm_sheet_row)
@@ -692,12 +754,6 @@ def save_registration_on_raissa(
         header_at = _header_at(values)
         headers = [normalize_text(cell) for cell in (values[header_at] if values else [])]
         headers = ensure_raissa_columns(headers)
-        if headers != [normalize_text(cell) for cell in (values[header_at] if values else [])]:
-            worksheet.update(
-                [headers],
-                f"A{header_at + 1}",
-                value_input_option="USER_ENTERED",
-            )
         row_number = _row_on_sheet(remembered_row, values, header_at)
         if not row_number:
             row_number = _find_row(values, header_at, headers, payload)
@@ -710,9 +766,14 @@ def save_registration_on_raissa(
             from app.services.representative_prospects import RAISSA_NEW_STATUS
 
             payload["status_cadastro"] = RAISSA_NEW_STATUS
+            if not payload.get("situacao_ai"):
+                payload["situacao_ai"] = "Ativo"
         existing = []
         if row_number and row_number - 1 < len(values):
             existing = values[row_number - 1]
+        if only_fields is not None:
+            allowed = set(only_fields) | {"empresa", "cnpj"}
+            payload = {key: value for key, value in payload.items() if key in allowed}
         row_values = apply_raissa_values(existing, headers, payload, only_filled=bool(row_number))
         if not row_number:
             row_number = max(len(values), header_at + 1) + 1
@@ -726,3 +787,22 @@ def save_registration_on_raissa(
     except Exception as exc:
         log.warning("Falha ao gravar cadastro na aba Raissa: %s", exc)
         return {"ok": False, "aviso": "Não consegui gravar na aba Raissa agora. O cadastro no sistema foi salvo."}
+
+
+def write_raissa_fields(
+    form: dict,
+    fields: dict,
+    *,
+    crm_sheet_row: int | None = None,
+    only_fields: tuple[str, ...],
+) -> dict:
+    """Atualiza só as colunas pedidas, numa linha que já existe. Não cria coluna."""
+    data = dict(form or {})
+    data.update(fields or {})
+    return save_registration_on_raissa(
+        data,
+        None,
+        crm_sheet_row=crm_sheet_row,
+        update_only=True,
+        only_fields=only_fields,
+    )

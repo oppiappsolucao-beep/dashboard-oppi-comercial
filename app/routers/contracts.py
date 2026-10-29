@@ -484,10 +484,15 @@ async def contract_edit_submit(request: Request, sheet_row: int):
                 sync_sheet=False,
                 mirror_sheet=False,
             )
-            if normalize_text(primary_closed.get("servico")):
-                form_dict["servico"] = primary_closed.get("servico", "")
-            if normalize_text(primary_closed.get("valor")):
-                form_dict["valor_proposta"] = primary_closed.get("valor", "")
+            from app.services.closed_services import closed_services_sheet_values
+
+            mirror = closed_services_sheet_values(closed_items)
+            if normalize_text(mirror.get("servico")):
+                form_dict["servico"] = mirror.get("servico", "")
+            if normalize_text(mirror.get("valor_proposta")):
+                form_dict["valor_proposta"] = mirror.get("valor_proposta", "")
+            if normalize_text(primary_closed.get("forma_pagamento")):
+                form_dict["forma_pagamento"] = primary_closed.get("forma_pagamento", "")
             previous_plan = load_billing_plan(DEFAULT_TENANT_ID, sheet_row)
             saved_plan = save_billing_plan(
                 DEFAULT_TENANT_ID,
@@ -743,9 +748,26 @@ async def contract_toggle_ativo(
     from_page = _resolve_edit_from_page(from_)
     enabled = normalize_text(ativo).lower() in {"1", "true", "sim", "ativo", "on", "yes"}
     save_cadastro_ativo(DEFAULT_TENANT_ID, sheet_row, enabled)
-    request.session["edit_success"] = (
-        "Cadastro ativado com sucesso." if enabled else "Cadastro desativado com sucesso."
-    )
+    label = "Ativo" if enabled else "Inativo"
+    sheet_note = ""
+    try:
+        from app.services.raissa_company_sync import write_raissa_fields
+
+        df, columns = get_prepared_data()
+        row = _get_row_by_sheet(df, sheet_row)
+        empresa = _contract_edit_value(row, columns, "empresa") if row is not None else ""
+        cnpj = _contract_edit_value(row, columns, "cnpj") if row is not None else ""
+        result = write_raissa_fields(
+            {"empresa": empresa, "cnpj": cnpj},
+            {"situacao_ai": label},
+            crm_sheet_row=sheet_row,
+            only_fields=("situacao_ai",),
+        )
+        if not result.get("ok"):
+            sheet_note = " " + (normalize_text(result.get("aviso")) or "Não atualizei a coluna AI agora.")
+    except Exception:
+        sheet_note = " Não atualizei a coluna AI agora."
+    request.session["edit_success"] = f"Cliente marcado como {label} na aba Raissa.{sheet_note}"
     return RedirectResponse(
         url=_edit_page_url(sheet_row, tab=normalize_text(tab) or "dados", from_page=from_page),
         status_code=303,

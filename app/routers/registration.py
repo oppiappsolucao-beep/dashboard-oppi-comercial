@@ -133,6 +133,17 @@ def schedule_training(form_dict: dict, sheet_row: int, empresa: str, created_by:
         priority="Média",
         created_by=created_by,
     )
+    try:
+        from app.services.raissa_company_sync import write_raissa_fields
+
+        write_raissa_fields(
+            {"empresa": empresa, "cnpj": form_dict.get("cnpj", ""), "create_training": "1"},
+            {"training_date": day},
+            crm_sheet_row=sheet_row,
+            only_fields=("data_treinamento",),
+        )
+    except Exception:
+        pass
 
 
 def _creator_assignment(request: Request, vendedor: str) -> tuple[str, str] | None:
@@ -561,6 +572,8 @@ async def new_registration_submit(request: Request):
             mirror = closed_services_sheet_values(closed_items)
             form_dict["servico"] = mirror.get("servico", "")
             form_dict["valor_proposta"] = mirror.get("valor_proposta", "")
+            if closed_items and normalize_text(closed_items[0].get("forma_pagamento")):
+                form_dict["forma_pagamento"] = closed_items[0].get("forma_pagamento", "")
         _apply_lead_status(form_dict, user)
         sheet_row = save_new_company(form_dict, mirror_sheet=False)
         if int(sheet_row or 0) != 0 and normalize_text(form_dict.get("os")):

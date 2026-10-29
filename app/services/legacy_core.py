@@ -1441,24 +1441,10 @@ def _worksheet_has_header(headers: list[str], aliases: list[str]) -> bool:
 
 
 def ensure_registration_sheet_columns(worksheet) -> list[str]:
-    """Garante colunas de serviços, valores e endereço detalhado na planilha."""
+    """Lê os cabeçalhos que já existem. Não acrescenta coluna na planilha."""
     headers = worksheet.row_values(1)
     if not headers:
         raise RuntimeError("A primeira linha da planilha precisa conter os cabeçalhos.")
-
-    cells: list[gspread.Cell] = []
-    next_col = len(headers) + 1
-    for column_name, aliases in REGISTRATION_OPTIONAL_COLUMNS:
-        if _worksheet_has_header(headers, aliases):
-            continue
-        cells.append(gspread.Cell(1, next_col, column_name))
-        headers.append(column_name)
-        next_col += 1
-
-    if cells:
-        worksheet.update_cells(cells, value_input_option="USER_ENTERED")
-        invalidate_sheet_cache()
-
     return headers
 
 

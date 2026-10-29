@@ -142,7 +142,6 @@ def create_lead_from_whatsapp(
         "data_chamado": date.today().strftime("%d/%m/%Y"),
         "cadastro_tipo": "lead",
         "vendedor": seller,
-        "observacoes": "Lead criado automaticamente pelo Atendimento WhatsApp.",
     }
     sheet_row = save_new_company(form)
     if sheet_row:
