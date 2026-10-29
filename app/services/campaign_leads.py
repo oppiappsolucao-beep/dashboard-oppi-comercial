@@ -222,6 +222,14 @@ def read_raissa_companies() -> dict:
     empty = {"aba": "", "total": 0, "empresas": [], "aviso": ""}
     sheet = read_raissa_sheet()
     if sheet.get("aviso") and not sheet.get("clientes"):
+        fallback = _empresas_from_registrations()
+        if fallback:
+            return {
+                "aba": sheet.get("aba") or "",
+                "total": len(fallback),
+                "empresas": fallback,
+                "aviso": "",
+            }
         empty["aviso"] = sheet["aviso"]
         empty["aba"] = sheet.get("aba") or ""
         return empty
@@ -305,12 +313,61 @@ def read_raissa_companies() -> dict:
             empresas[duplicate_at] = row_item
             continue
         empresas.append(row_item)
+    if not empresas:
+        fallback = _empresas_from_registrations()
+        if fallback:
+            empresas = fallback
     return {
         "aba": sheet.get("aba") or "",
         "total": len(empresas),
         "empresas": empresas,
-        "aviso": "" if empresas else "A aba Raissa não trouxe empresas.",
+        "aviso": "" if empresas else (sheet.get("aviso") or "A aba Raissa não trouxe empresas."),
     }
+
+
+def _empresas_from_registrations() -> list[dict]:
+    """Quando o Google recusa a aba Raissa, a lista usa os cadastros já salvos no sistema."""
+    try:
+        from database.connection import SessionLocal
+        from database.models import CrmRegistration
+        from app.services.raissa_company_sync import company_hidden_on_raissa_list
+    except Exception:
+        return []
+    db = SessionLocal()
+    try:
+        rows = (
+            db.query(CrmRegistration)
+            .filter(CrmRegistration.cadastro_ativo.is_(True))
+            .order_by(CrmRegistration.empresa.asc())
+            .all()
+        )
+        items = []
+        for row in rows:
+            empresa = normalize_text(row.empresa)
+            if not empresa:
+                continue
+            cnpj = normalize_text(row.cnpj)
+            if company_hidden_on_raissa_list(empresa, cnpj):
+                continue
+            items.append(
+                {
+                    "linha": 0,
+                    "empresa": empresa,
+                    "tipo": "Filial" if row.is_filial else "Matriz",
+                    "matriz": "",
+                    "telefone": normalize_text(row.telefone_b2b or row.telefone_fixo or row.telefone_alternativo),
+                    "email": normalize_text(row.email_empresa),
+                    "cnpj": cnpj,
+                    "contato": normalize_text(row.nome_contato or row.socio_1),
+                    "sheet_row": int(row.sheet_row or 0),
+                    "vendedor": normalize_text(row.vendedor) or "Raissa",
+                }
+            )
+        return items
+    except Exception:
+        return []
+    finally:
+        db.close()
 
 
 def _find_raissa_worksheet(spreadsheet):
@@ -333,6 +390,12 @@ def _find_raissa_worksheet(spreadsheet):
 _raissa_last_values: list[list[str]] | None = None
 _raissa_last_title = "Raissa"
 _raissa_quota_until = 0.0
+
+
+def clear_raissa_read_limit() -> None:
+    """O botão Atualizar pode tentar a planilha de novo, sem esperar o minuto do Google."""
+    global _raissa_quota_until
+    _raissa_quota_until = 0.0
 
 
 def _raissa_snapshot_path():
