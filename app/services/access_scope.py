@@ -45,7 +45,7 @@ def allowed_accesses(request: Request) -> set[str]:
     allowed = {str(item) for item in raw if item}
     sector = str(request.session.get("org_sector_name") or "").lower()
     if "comercial" in sector:
-        allowed.update({"novo_cadastro", "empresas", "propostas"})
+        allowed.update({"novo_cadastro", "empresas", "propostas", "agenda"})
     return allowed
 
 

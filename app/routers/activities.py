@@ -192,6 +192,10 @@ def _os_board_context(request: Request) -> dict:
         "search_count": sum(len(column["cards"]) for column in columns) if busca else 0,
         "summary": summary,
         "is_commercial": "comercial" in sector_name.lower(),
+        "commercial_people": _commercial_staff(sector_name),
+        "presentation_slots": _presentation_slots(sector_name),
+        "lead_responsible": _default_lead_responsible(request, sector_name),
+        "today": date.today().isoformat(),
         "can_delete_orders": _oppi_tech_board(request, sector_name),
         "success": request.session.pop("os_board_success", ""),
         "error": request.session.pop("os_board_error", ""),
@@ -235,6 +239,71 @@ async def activities_page(request: Request):
     if normalize_text(request.session.get("org_person_kind")) == "representante":
         return render(request, "activities/representative_board.html", _representative_kanban_context(request))
     return render(request, "activities/os_board.html", _os_board_context(request))
+
+
+@router.post("/atividades/leads")
+async def activities_create_lead(
+    request: Request,
+    sector_id: str = Form(""),
+    contato: str = Form(""),
+    empresa: str = Form(""),
+    whatsapp: str = Form(""),
+    email: str = Form(""),
+    responsible: str = Form(""),
+    presentation_date: str = Form(""),
+    presentation_time: str = Form(""),
+    presentation_link: str = Form(""),
+    inicio: str = Form(""),
+    fim: str = Form(""),
+):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+    from app.services.org_registry import list_sectors
+    from app.services.service_orders import create_manual_lead, is_commercial_sector, schedule_presentation
+
+    employee_sector = normalize_text(request.session.get("org_sector_id"))
+    target = employee_sector or normalize_text(sector_id)
+    sector = next((item for item in list_sectors() if item["id"] == target), None)
+    if sector is None or not is_commercial_sector(sector.get("name") or ""):
+        request.session["os_board_error"] = "O lead manual é do setor comercial."
+        return _board_redirect(target, bool(employee_sector), inicio, fim)
+    day = normalize_text(presentation_date)
+    hour = normalize_text(presentation_time)
+    link = normalize_text(presentation_link)
+    if (day or hour or link) and not (day and hour):
+        request.session["os_board_error"] = "Para agendar a apresentação, informe o dia e o horário."
+        return _board_redirect(target, bool(employee_sector), inicio, fim)
+    try:
+        order = create_manual_lead(
+            sector=sector["name"],
+            responsible=responsible,
+            contato=contato,
+            empresa=empresa,
+            whatsapp=whatsapp,
+            email=email,
+            created_by=_os_actor(request),
+        )
+    except ValueError as error:
+        request.session["os_board_error"] = str(error)
+        return _board_redirect(target, bool(employee_sector), inicio, fim)
+    if day and hour:
+        try:
+            schedule_presentation(
+                order["id"],
+                day=day,
+                hour=hour,
+                link=link,
+                responsible=responsible,
+                author=_os_actor(request),
+            )
+        except ValueError as error:
+            request.session["os_board_error"] = f"Lead criado, mas a apresentação não foi agendada: {error}"
+            return _board_redirect(target, bool(employee_sector), inicio, fim)
+        request.session["os_board_success"] = "Lead criado e apresentação agendada."
+    else:
+        request.session["os_board_success"] = "Lead criado. Abra a OS para agendar a apresentação."
+    return _board_redirect(target, bool(employee_sector), inicio, fim)
 
 
 @router.post("/atividades/representante/mover")
@@ -563,17 +632,55 @@ def _oppi_tech_board(request: Request, _sector_name: str = "") -> bool:
     return _oppi_tech_login(request)
 
 
+def _commercial_staff(sector_name: str) -> list[dict]:
+    from app.services.org_registry import list_people
+    from app.services.service_orders import is_commercial_sector
+
+    if not is_commercial_sector(sector_name):
+        return []
+    target = normalize_text(sector_name).lower()
+    return [
+        {"name": person["name"]}
+        for person in list_people()
+        if normalize_text(person.get("sector_name")).lower() == target and person.get("name")
+    ]
+
+
+def _presentation_slots(sector_name: str) -> list[dict]:
+    from app.services.org_registry import training_slot_choices
+    from app.services.service_orders import is_commercial_sector
+
+    if not is_commercial_sector(sector_name):
+        return []
+    return training_slot_choices()
+
+
+def _default_lead_responsible(request: Request, sector_name: str) -> str:
+    logged = normalize_text(request.session.get("org_person_name"))
+    names = {person["name"].lower(): person["name"] for person in _commercial_staff(sector_name)}
+    return names.get(logged.lower(), "")
+
+
 def _hide_sector_move(request: Request, order: dict) -> bool:
     if normalize_text(request.session.get("org_person_kind")) == "representante":
         return True
     return "representa" in normalize_text(order.get("sector")).lower()
 
 
-def _order_panel_context(order: dict, sector_notice: str = "", can_delete_order: bool = False, hide_sector_form: bool = False) -> dict:
+def _order_panel_context(
+    order: dict,
+    sector_notice: str = "",
+    can_delete_order: bool = False,
+    presentation_error: str = "",
+    hide_sector_form: bool = False,
+) -> dict:
     from app.services.org_registry import list_sectors
     from app.services.service_orders import queue_choices
 
-    sector_id, queues = queue_choices(order.get("sector") or "")
+    sector_name = order.get("sector") or ""
+    sector_id, queues = queue_choices(sector_name)
+    from app.services.service_orders import is_commercial_sector
+
     return {
         "order": order,
         "order_sectors": list_sectors(),
@@ -581,6 +688,11 @@ def _order_panel_context(order: dict, sector_notice: str = "", can_delete_order:
         "order_sector_id": sector_id,
         "order_queues": queues,
         "can_delete_order": can_delete_order,
+        "can_schedule_presentation": is_commercial_sector(sector_name),
+        "commercial_people": _commercial_staff(sector_name),
+        "presentation_slots": _presentation_slots(sector_name),
+        "presentation_error": presentation_error,
+        "today": date.today().isoformat(),
         "hide_sector_form": hide_sector_form,
     }
 
@@ -629,6 +741,53 @@ async def activities_order_detail(request: Request, order_id: str):
             hide_sector_form=_hide_sector_move(request, detail),
         ),
     )
+
+
+@router.post("/atividades/os/{order_id}/apresentacao", response_class=HTMLResponse)
+async def activities_schedule_presentation(
+    request: Request,
+    order_id: str,
+    presentation_date: str = Form(""),
+    presentation_time: str = Form(""),
+    presentation_link: str = Form(""),
+    responsible: str = Form(""),
+):
+    redirect = require_auth(request)
+    if redirect:
+        return redirect
+    from app.services.service_orders import get_order_detail, is_commercial_sector, schedule_presentation
+
+    detail = get_order_detail(order_id)
+    if not detail or not _order_visible(request, detail):
+        return HTMLResponse("Ordem de serviço não encontrada.", status_code=404)
+    if not is_commercial_sector(detail.get("sector") or ""):
+        return HTMLResponse("O agendamento de apresentação é do comercial.", status_code=400)
+    try:
+        schedule_presentation(
+            order_id,
+            day=presentation_date,
+            hour=presentation_time,
+            link=presentation_link,
+            responsible=responsible or detail.get("responsible") or "",
+            author=_os_actor(request),
+        )
+    except ValueError as error:
+        failed = dict(detail)
+        failed["presentation_date"] = normalize_text(presentation_date)
+        failed["presentation_hour"] = normalize_text(presentation_time)[:5]
+        failed["presentation_link"] = normalize_text(presentation_link)
+        if normalize_text(responsible):
+            failed["responsible"] = normalize_text(responsible)
+        return render(
+            request,
+            "partials/os_order_panel.html",
+            _order_panel_context(
+                failed,
+                presentation_error=str(error),
+                can_delete_order=_oppi_tech_board(request, detail.get("sector") or ""),
+            ),
+        )
+    return HTMLResponse("ok")
 
 
 @router.post("/atividades/os/{order_id}/atualizacao", response_class=HTMLResponse)

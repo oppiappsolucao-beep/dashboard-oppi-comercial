@@ -32,7 +32,7 @@ BRAZIL_UFS = [
     "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO",
 ]
 DEFAULT_SECTORS = ["Comercial", "Suporte", "Financeiro", "Representação"]
-COMMERCIAL_CADASTRO_ACCESS = ("novo_cadastro", "empresas", "propostas")
+COMMERCIAL_CADASTRO_ACCESS = ("novo_cadastro", "empresas", "propostas", "agenda")
 REPRESENTATIVE_ACCESS = ("kanban", "novo_cadastro", "empresas", "propostas")
 TRAINING_ACCESS = ("agenda", "kanban", "empresas")
 SCHEDULE_DAYS = (
@@ -122,7 +122,7 @@ def _ensure_training_sector(conn) -> None:
 
 
 def _ensure_commercial_cadastro(conn) -> None:
-    """Comercial cadastra cliente como o acesso administrativo."""
+    """Comercial cadastra cliente e abre a agenda de apresentações."""
     rows = conn.execute(
         "SELECT id, name, accesses_json FROM org_sectors WHERE active = 1"
     ).fetchall()

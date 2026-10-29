@@ -278,7 +278,9 @@
   <div>
     <div class="page-title">Agenda</div>
     <div class="page-subtitle">
-      {% if own_agenda %}
+      {% if agenda_kind == 'apresentacao' %}
+      Apresentações de {{ trainer_name }}.
+      {% elif own_agenda %}
       Treinamentos de {{ trainer_name }}. Antes do dia dá para mudar o horário e o dia.
       {% else %}
       Treinamentos marcados com os treinadores. Antes do dia dá para mudar o horário e o dia.

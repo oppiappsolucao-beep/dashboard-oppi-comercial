@@ -61,6 +61,12 @@
 .os-detail-history li { padding: 8px 10px; border-radius: 10px; background: #F8FAFC; }
 .os-detail-history span { display: block; color: var(--muted); font-size: 0.78rem; }
 .os-detail-history p { margin: 4px 0 0; }
+#os-lead-form, #os-presentation-form { display: grid; gap: 8px; }
+#os-lead-form label, #os-presentation-form label { display: grid; gap: 4px; font-size: 0.84rem; font-weight: 600; color: var(--muted); }
+#os-lead-form input, #os-lead-form select, #os-presentation-form input, #os-presentation-form select { width: 100%; min-height: 40px; border: 1px solid var(--border); border-radius: 10px; padding: 0 10px; font: inherit; background: #fff; }
+.os-lead-note { margin: 0; color: var(--muted); font-size: 0.82rem; line-height: 1.4; }
+#os-lead-title { margin: 0 28px 8px 0; font-size: 1.15rem; }
+.os-presentation-error { margin: 0; color: #B91C1C; font-size: 0.84rem; }
 #os-update-form { display: grid; gap: 8px; }
 #os-update-form textarea { width: 100%; border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; font: inherit; }
 </style>
@@ -69,7 +75,7 @@
     <div class="page-title">Kanban</div>
     <div class="page-subtitle">
       {% if is_commercial %}
-      Comercial: o lead da campanha entra na coluna Campanha. Ao concluir, o cadastro abre com os dados da planilha.
+      Comercial: a planilha entra em Campanha. Novo lead abre uma OS manual. Na OS, agende a apresentação para a agenda.
       {% elif sector_name %}
       {{ sector_name }}: as ordens entram em Análise e terminam em Concluída. Clique no card para ver o cliente e o histórico.
       {% else %}
@@ -79,6 +85,9 @@
   </div>
   {% if can_manage_queues and sector_id %}
   <div class="page-actions">
+    {% if is_commercial %}
+    <button type="button" class="btn" id="os-new-lead">＋ Novo lead</button>
+    {% endif %}
     <form method="post" action="/atividades/filas" class="os-queue-form">
       <input type="hidden" name="sector_id" value="{{ sector_id }}">
       <input type="hidden" name="inicio" value="{{ inicio }}">
@@ -200,7 +209,11 @@
         </div>
         <div class="activities-kanban-card-when">
           <span aria-hidden="true">📅</span>
+          {% if card.presentation_label %}
+          <span>Apresentação {{ card.presentation_label }}{% if card.presentation_hour %} às {{ card.presentation_hour }}{% endif %}</span>
+          {% else %}
           <span>{{ card.scheduled_date_label }}</span>
+          {% endif %}
         </div>
         {% if delete_os %}
         <button type="button" class="btn btn-secondary btn-small os-card-delete" draggable="false" data-delete-order="{{ card.id }}">Excluir</button>
@@ -220,5 +233,56 @@
     <div id="os-order-modal-body">Carregando…</div>
   </div>
 </div>
-<script src="/static/js/os-kanban.js?v=17"></script>
+<div id="os-lead-modal" class="os-modal" hidden>
+  <div class="os-modal-backdrop" data-os-lead-close></div>
+  <div class="os-modal-card" role="dialog" aria-modal="true" aria-labelledby="os-lead-title">
+    <button type="button" class="os-modal-close" data-os-lead-close aria-label="Fechar">×</button>
+    <h2 id="os-lead-title">Novo lead</h2>
+    <p class="os-lead-note">Cria uma OS no comercial, sem usar a planilha. A apresentação pode ser agora ou depois, abrindo a OS.</p>
+    {% if commercial_people %}
+    <form id="os-lead-form" method="post" action="/atividades/leads">
+      <input type="hidden" name="sector_id" value="{{ sector_id }}">
+      <input type="hidden" name="inicio" value="{{ inicio }}">
+      <input type="hidden" name="fim" value="{{ fim }}">
+      <label>Contato
+        <input type="text" name="contato" maxlength="120" required autocomplete="off">
+      </label>
+      <label>Empresa
+        <input type="text" name="empresa" maxlength="160" autocomplete="off">
+      </label>
+      <label>WhatsApp
+        <input type="tel" name="whatsapp" maxlength="20" required autocomplete="off" placeholder="DDD + número">
+      </label>
+      <label>E-mail
+        <input type="email" name="email" maxlength="160" autocomplete="off">
+      </label>
+      <label>Responsável
+        <select name="responsible" required>
+          {% for person in commercial_people %}
+          <option value="{{ person.name }}" {% if person.name == lead_responsible %}selected{% endif %}>{{ person.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Dia da apresentação
+        <input type="date" name="presentation_date" min="{{ today }}">
+      </label>
+      <label>Horário
+        <select name="presentation_time">
+          <option value="">Agendar depois</option>
+          {% for slot in presentation_slots %}
+          <option value="{{ slot.value }}">{{ slot.label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Link da chamada
+        <input type="url" name="presentation_link" maxlength="300" placeholder="https://">
+      </label>
+      <button type="submit" class="btn">Criar OS</button>
+    </form>
+    {% else %}
+    <p class="os-lead-note">Cadastre um funcionário no setor Comercial para criar o lead.</p>
+    {% endif %}
+  </div>
+</div>
+<script src="/static/js/os-kanban.js?v=18"></script>
 {% endblock %}
