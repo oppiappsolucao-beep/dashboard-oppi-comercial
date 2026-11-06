@@ -157,7 +157,11 @@ def _with_cadastro_sheet_rows(empresas: list[dict]) -> list[dict]:
                     "telefones": [phone for phone in phones if phone],
                 }
             )
-        return match_cadastro_sheet_rows(empresas, cadastros)
+        linked = match_cadastro_sheet_rows(empresas, cadastros)
+        for original, item in zip(empresas, linked):
+            if not item.get("sheet_row") and original.get("sheet_row"):
+                item["sheet_row"] = original.get("sheet_row")
+        return linked
     except Exception:
         log.exception("Não liguei a lista de Empresas ao cadastro")
         return empresas
@@ -436,5 +440,8 @@ async def leads_refresh(request: Request):
     redirect = require_auth(request)
     if redirect:
         return redirect
+    from app.services.campaign_leads import clear_raissa_read_limit
+
+    clear_raissa_read_limit()
     invalidate_sheet_cache()
     return RedirectResponse(url="/leads-e-empresas", status_code=303)

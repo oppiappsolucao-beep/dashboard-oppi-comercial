@@ -1583,6 +1583,18 @@
   justify-content: center;
 }
 
+.client-edit-flag.is-current {
+  background: #166534;
+  border-color: #166534;
+  color: #fff;
+}
+
+.client-edit-flag.is-inactive {
+  background: #9A3412;
+  border-color: #9A3412;
+  color: #fff;
+}
+
 .client-edit-inactive-banner,
 .alert-warning {
   background: #FFF7ED;

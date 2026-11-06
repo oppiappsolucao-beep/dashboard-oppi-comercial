@@ -99,7 +99,7 @@
       </button>
       {% endfor %}
     </nav>
-    {% if raissa_aviso %}
+    {% if raissa_aviso and table.rows %}
     <p class="leads-alphabet-hint">{{ raissa_aviso }}</p>
     {% endif %}
     {% if filters.search %}

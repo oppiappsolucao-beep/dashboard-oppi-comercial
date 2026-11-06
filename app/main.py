@@ -3,7 +3,7 @@ import threading
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import HTTPException
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -298,13 +298,6 @@ async def startup_maintenance() -> None:
                 ).cleanup_service_account_proposal_files(),
             ),
             (
-                "fake_company",
-                lambda: __import__(
-                    "app.services.seed_fake_company",
-                    fromlist=["ensure_fake_test_company_on_startup"],
-                ).ensure_fake_test_company_on_startup(),
-            ),
-            (
                 "evolution_webhooks",
                 lambda: __import__(
                     "app.services.evolution_client",
@@ -523,6 +516,14 @@ async def health_pdf_engine():
     if not payload.get("libreoffice_installed"):
         payload["status"] = "missing_libreoffice"
     return JSONResponse(payload)
+
+
+@app.get("/manifest.webmanifest", include_in_schema=False)
+async def web_app_manifest():
+    return FileResponse(
+        static_dir / "manifest.webmanifest",
+        media_type="application/manifest+json",
+    )
 
 
 @app.get("/")

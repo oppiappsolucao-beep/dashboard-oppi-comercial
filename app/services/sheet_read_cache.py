@@ -37,6 +37,10 @@ def get_cached_worksheet_values(tab_name: str, loader, *, force_refresh: bool = 
     except Exception as exc:
         text = str(exc).lower()
         if "429" in text or "quota" in text:
+            with _lock:
+                previous = _last_good.get(key)
+            if previous is not None:
+                return [row[:] for row in previous]
             raise
         with _lock:
             previous = _last_good.get(key)

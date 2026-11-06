@@ -193,5 +193,54 @@ class RaissaCompanySyncTest(unittest.TestCase):
         self.assertEqual(unique[0]["sheet_row"], 3)
 
 
+    def test_grava_fechado_ativo_financeiro_e_data_sem_criar_coluna(self):
+        headers = [""] * 36
+        headers[0] = "Empresa"
+        headers[2] = "Serviço"
+        headers[4] = "Data de abertura"
+        headers[5] = "Valor"
+        headers[13] = "Status"
+        headers[28] = "Status WhatsApp"
+        headers[31] = "Serviço"
+        headers[32] = "Valor do serviço"
+        headers[33] = "Forma de pagamento"
+        headers[34] = "AI"
+        headers[35] = "Data"
+        payload = payload_for_raissa(
+            {
+                "empresa": "OFICINA SOL",
+                "servico": "Oppi Ponto",
+                "valor_proposta": "R$ 100,00",
+                "forma_pagamento": "Boleto",
+                "situacao_ai": "0",
+                "create_training": "1",
+                "training_date": "2026-11-02",
+                "data_abertura": "01/01/2020",
+            }
+        )
+        payload["status_cadastro"] = "1 Boleto Aguardando"
+        row = apply_raissa_values([""] * len(headers), headers, payload, only_filled=False)
+        self.assertEqual(len(row), len(headers))
+        self.assertEqual(row[13], "1 Boleto Aguardando")
+        self.assertEqual(row[28], "Fechado")
+        self.assertEqual(row[31], "Oppi Ponto")
+        self.assertEqual(row[32], "R$ 100,00")
+        self.assertEqual(row[33], "Boleto")
+        self.assertEqual(row[34], "Inativo")
+        self.assertEqual(row[35], "02/11/2026")
+        self.assertEqual(row[4], "01/01/2020")
+
+    def test_data_do_treinamento_so_entra_quando_o_agendamento_existe(self):
+        payload = payload_for_raissa(
+            {"empresa": "ACME", "training_date": "2026-11-02", "create_training": "0"}
+        )
+        self.assertEqual(payload["data_treinamento"], "")
+        self.assertEqual(payload["status_whatsapp"], "Fechado")
+        self.assertEqual(payload["situacao_ai"], "")
+        headers = ["Empresa", "Status"]
+        row = apply_raissa_values(["", ""], headers, payload, only_filled=False)
+        self.assertEqual(row, ["ACME", ""])
+
+
 if __name__ == "__main__":
     unittest.main()
