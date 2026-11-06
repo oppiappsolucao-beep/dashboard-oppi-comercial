@@ -870,6 +870,11 @@ def finance_columns(headers: list[str]) -> dict[str, Any]:
     if not fechamento and len(headers) > 3:
         fechamento = [3]
     ciclo = _column_hits(headers, lambda name: name in {"ciclo", "ciclo do plano"} or name.startswith("ciclo"))
+    # Coluna AH da planilha (índice 33): forma de pagamento. Anual ou recorrente.
+    if len(headers) > 33:
+        forma = [33]
+    else:
+        forma = _column_hits(headers, lambda name: name in {"forma de pagamento", "forma pagamento", "pagamento"})
     # Coluna AI da planilha (índice 34). Inativo nessa coluna é cancelado.
     if len(headers) > 34:
         situacao = [34]
@@ -880,7 +885,6 @@ def finance_columns(headers: list[str]) -> dict[str, Any]:
             or ("ativo" in name and "inativ" in name),
         )
     status = _column_hits(headers, lambda name: name in {"status", "status 1"})
-    forma = _column_hits(headers, lambda name: name in {"forma de pagamento", "forma pagamento", "pagamento"})
     plano = None
     if valor_servico and servicos:
         anchor = valor_servico[0]
@@ -1036,8 +1040,14 @@ def _bucket_view(label: str, bucket: dict[str, float], *, extra: dict | None = N
     return view
 
 
-def _is_annual(*parts: str) -> bool:
-    return "anual" in normalize_search_text(" ".join(parts))
+def _is_annual(plano: str = "", forma: str = "", ciclo: str = "") -> bool:
+    """A coluna AH define a forma. Anual renova no mês do fechamento; recorrente cobra todo mês."""
+    payment = normalize_search_text(forma)
+    if "anual" in payment:
+        return True
+    if "recorrent" in payment or "mensal" in payment:
+        return False
+    return "anual" in normalize_search_text(f"{plano} {ciclo}")
 
 
 def _shift_month(year: int, month: int, offset: int) -> tuple[int, int]:
@@ -1100,47 +1110,97 @@ def _pie_path(start: float, sweep: float) -> str:
     return f"M 100 100 L {x1:.2f} {y1:.2f} A 80 80 0 {large} 1 {x2:.2f} {y2:.2f} Z"
 
 
-def _year_pizzas(months: dict[tuple[int, int], dict[str, float]], today: date) -> list[dict]:
-    """Uma pizza por ano. A fatia é o valor cheio dos ativos naquele mês."""
-    pizzas = []
-    for year in (today.year, today.year + 1):
-        first_month = today.month if year == today.year else 1
-        fatias = []
-        total = 0.0
-        for month in range(first_month, 13):
-            bucket = months.get((year, month))
-            if not bucket:
-                continue
-            valor = float(bucket["vai_pagar"] + bucket["ja_pagou"] + bucket["pendente"])
-            if valor <= 0:
-                continue
-            total += valor
-            month_start = date(year, month, 1)
-            fatias.append(
-                {
-                    "mes": _MESES[month],
-                    "valor": round(valor, 2),
-                    "valor_label": format_brl(valor),
-                    "n": int(bucket["n_vai"] + bucket["n_pago"] + bucket["n_pendente"]),
-                    "cor": _PIE_COLORS[month - 1],
-                    "period_start": month_start.isoformat(),
-                    "period_end": _month_last(year, month).isoformat(),
-                }
-            )
-        cursor = 0.0
-        for fatia in fatias:
-            sweep = 360 * fatia["valor"] / total if total else 0
-            fatia["d"] = _pie_path(cursor, sweep)
-            fatia["pct"] = round(100 * fatia["valor"] / total, 1) if total else 0
-            cursor += sweep
-        pizzas.append(
+def _pie_from_months(
+    months: dict[tuple[int, int], dict[str, float]],
+    year: int,
+    today: date,
+    *,
+    titulo: str,
+    nota: str,
+) -> dict:
+    """Fatia = valor cheio dos ativos naquele mês. O ano corrente começa no mês de hoje."""
+    first_month = today.month if year == today.year else 1
+    fatias = []
+    total = 0.0
+    for month in range(first_month, 13):
+        bucket = months.get((year, month))
+        if not bucket:
+            continue
+        valor = float(bucket["vai_pagar"] + bucket["ja_pagou"] + bucket["pendente"])
+        if valor <= 0:
+            continue
+        total += valor
+        month_start = date(year, month, 1)
+        fatias.append(
             {
-                "ano": year,
-                "total": round(total, 2),
-                "total_label": format_brl(total),
-                "fatias": fatias,
+                "mes": _MESES[month],
+                "valor": round(valor, 2),
+                "valor_label": format_brl(valor),
+                "n": int(bucket["n_vai"] + bucket["n_pago"] + bucket["n_pendente"]),
+                "cor": _PIE_COLORS[month - 1],
+                "period_start": month_start.isoformat(),
+                "period_end": _month_last(year, month).isoformat(),
             }
         )
+    cursor = 0.0
+    for fatia in fatias:
+        sweep = 360 * fatia["valor"] / total if total else 0
+        fatia["d"] = _pie_path(cursor, sweep)
+        fatia["pct"] = round(100 * fatia["valor"] / total, 1) if total else 0
+        cursor += sweep
+    return {
+        "ano": year,
+        "titulo": titulo,
+        "nota": nota,
+        "total": round(total, 2),
+        "total_label": format_brl(total),
+        "fatias": fatias,
+    }
+
+
+def _year_pizzas(
+    recorrente: dict[tuple[int, int], dict[str, float]],
+    anuais: dict[tuple[int, int], dict[str, float]],
+    today: date,
+) -> list[dict]:
+    """Recorrente de cada ano e a renovação anual no mês do fechamento."""
+    pizzas = [
+        _pie_from_months(
+            recorrente,
+            today.year,
+            today,
+            titulo=f"{today.year} · Recorrente",
+            nota="Quem paga todo mês. Os meses que ainda vêm.",
+        )
+    ]
+    anuais_agora = _pie_from_months(
+        anuais,
+        today.year,
+        today,
+        titulo=f"{today.year} · Anuais",
+        nota="Renovação no mês do fechamento. Só entra quem já fechou em ano anterior.",
+    )
+    if anuais_agora["fatias"]:
+        pizzas.append(anuais_agora)
+    proximo = today.year + 1
+    pizzas.append(
+        _pie_from_months(
+            recorrente,
+            proximo,
+            today,
+            titulo=f"{proximo} · Recorrente",
+            nota="A mesma base mensal, projetada o ano inteiro.",
+        )
+    )
+    pizzas.append(
+        _pie_from_months(
+            anuais,
+            proximo,
+            today,
+            titulo=f"{proximo} · Anuais",
+            nota="Planos anuais que renovam neste ano, no mês da coluna D.",
+        )
+    )
     return pizzas
 
 
@@ -1222,6 +1282,8 @@ def summarize_raissa_entrada(
     period = _empty_bucket()
     listed: list[dict] = []
     months: dict[tuple[int, int], dict[str, float]] = {}
+    months_recorrente: dict[tuple[int, int], dict[str, float]] = {}
+    months_anuais: dict[tuple[int, int], dict[str, float]] = {}
     recorrente = _empty_bucket()
     sem_data = _empty_bucket()
     prices: dict[float, dict[str, float]] = {}
@@ -1250,14 +1312,23 @@ def summarize_raissa_entrada(
         if classified["key"] == "cancelado":
             continue
         if isinstance(row.get("fechamento"), date):
+            fechamento = row["fechamento"]
             for year, month in projection:
                 shown = _due_in_month(row, year, month)
                 if not shown:
                     continue
                 projected = _status_for_projection(row, shown, today)
                 _add_bucket(months.setdefault((year, month), _empty_bucket()), projected["key"], valor)
+                if row.get("anual"):
+                    # O ano do fechamento é a primeira cobrança. A pizza anual mostra a renovação.
+                    if shown.year > fechamento.year:
+                        _add_bucket(months_anuais.setdefault((year, month), _empty_bucket()), projected["key"], valor)
+                else:
+                    _add_bucket(months_recorrente.setdefault((year, month), _empty_bucket()), projected["key"], valor)
         elif due:
             _add_bucket(months.setdefault((due.year, due.month), _empty_bucket()), classified["key"], valor)
+            destino = months_anuais if row.get("anual") else months_recorrente
+            _add_bucket(destino.setdefault((due.year, due.month), _empty_bucket()), classified["key"], valor)
         elif day:
             _add_bucket(recorrente, classified["key"], valor)
         else:
@@ -1344,7 +1415,7 @@ def summarize_raissa_entrada(
         "cancelados_n": cancelados_n,
         "sem_data_n": int(sem_data["n_vai"] + sem_data["n_pago"] + sem_data["n_pendente"]),
         "meses": month_rows,
-        "pizzas": _year_pizzas(months, today),
+        "pizzas": _year_pizzas(months_recorrente, months_anuais, today),
         "valores": valor_rows,
         "linhas": listed,
         "error": "",

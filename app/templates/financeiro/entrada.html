@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
-<link rel="stylesheet" href="/static/css/financeiro.css?v={{ static_version }}-entrada7">
+<link rel="stylesheet" href="/static/css/financeiro.css?v={{ static_version }}-entrada8">
 <div class="page-header">
   <div>
     <div class="page-title">Entrada</div>
@@ -75,18 +75,19 @@
 
 <div class="panel fin-table-card">
   <div class="section-heading">Por mês</div>
-  <div class="section-subtitle">Valor cheio dos ativos já cadastrados. Cada fatia é um mês. 2026 mostra os meses que ainda vêm. 2027 repete essa mesma base. Passe o mouse na fatia para ver o valor. Clique para abrir a relação.</div>
+  <div class="section-subtitle">Valor cheio dos ativos. Recorrente cobra todo mês. Plano anual, pela coluna AH, renova só no mês do fechamento (coluna D). Passe o mouse na fatia para ver o valor. Clique para abrir a relação.</div>
   {% if controle.pizzas %}
   <div class="fin-pies">
     {% for pizza in controle.pizzas %}
     <div class="fin-pie">
       <div class="fin-pie-head">
-        <div class="fin-pie-year">{{ pizza.ano }}</div>
+        <div class="fin-pie-year">{{ pizza.titulo }}</div>
         <div class="fin-pie-total">{{ pizza.total_label }}</div>
+        {% if pizza.nota %}<div class="fin-pie-note">{{ pizza.nota }}</div>{% endif %}
       </div>
       {% if pizza.fatias %}
       <div class="fin-pie-body">
-        <svg class="fin-pie-svg" viewBox="0 0 200 200" role="img" aria-label="Valor dos ativos em {{ pizza.ano }}">
+        <svg class="fin-pie-svg" viewBox="0 0 200 200" role="img" aria-label="{{ pizza.titulo }}">
           {% for fatia in pizza.fatias %}
           <a href="/financeiro/entrada?period_start={{ fatia.period_start }}&period_end={{ fatia.period_end }}{% if filters.status %}&status={{ filters.status }}{% endif %}">
             <path d="{{ fatia.d }}" fill="{{ fatia.cor }}">
@@ -108,7 +109,7 @@
         </ul>
       </div>
       {% else %}
-      <p class="fin-empty">Nenhum valor de ativo em {{ pizza.ano }}.</p>
+      <p class="fin-empty">Nenhum valor em {{ pizza.titulo }}.</p>
       {% endif %}
     </div>
     {% endfor %}

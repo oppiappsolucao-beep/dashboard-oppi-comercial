@@ -530,14 +530,17 @@ class RaissaEntradaTest(unittest.TestCase):
         meses = {row["label"]: row for row in novembro["meses"]}
         self.assertEqual(meses["Novembro 2026"]["pago_n"], 1)
         self.assertEqual(meses["Dezembro 2026"]["vai_n"], 2)
-        pizzas = {pizza["ano"]: pizza for pizza in novembro["pizzas"]}
-        fatias_2026 = {fatia["mes"]: fatia["valor"] for fatia in pizzas[2026]["fatias"]}
-        fatias_2027 = {fatia["mes"]: fatia["valor"] for fatia in pizzas[2027]["fatias"]}
+        pizzas = {pizza["titulo"]: pizza for pizza in novembro["pizzas"]}
+        fatias_2026 = {fatia["mes"]: fatia["valor"] for fatia in pizzas["2026 · Recorrente"]["fatias"]}
+        fatias_2027 = {fatia["mes"]: fatia["valor"] for fatia in pizzas["2027 · Recorrente"]["fatias"]}
+        anuais_2027 = {fatia["mes"]: fatia["valor"] for fatia in pizzas["2027 · Anuais"]["fatias"]}
+        self.assertNotIn("2026 · Anuais", pizzas)
         self.assertEqual(fatias_2026, {"Novembro": 59.9, "Dezembro": 119.8})
         self.assertEqual(fatias_2027["Janeiro"], 119.8)
-        self.assertEqual(fatias_2027["Março"], 319.8)
+        self.assertEqual(fatias_2027["Março"], 119.8)
         self.assertEqual(fatias_2027["Dezembro"], 119.8)
         self.assertEqual(len(fatias_2027), 12)
+        self.assertEqual(anuais_2027, {"Março": 200.0})
         self.assertNotIn("Anual", [row["cliente"] for row in novembro["linhas"]])
         marco = summarize_raissa_entrada(rows, start=date(2027, 3, 1), end=date(2027, 3, 31), today=today)
         self.assertEqual([row["cliente"] for row in marco["linhas"]], ["Anual", "Mensal", "Futuro"])
@@ -545,6 +548,86 @@ class RaissaEntradaTest(unittest.TestCase):
             {row["cliente"]: row["status_key"] for row in marco["linhas"]},
             {"Anual": "vai_pagar", "Mensal": "vai_pagar", "Futuro": "vai_pagar"},
         )
+
+    def test_coluna_ah_separa_recorrente_e_renovacao_anual(self):
+        from app.services.financeiro import raissa_rows_from_sheet, summarize_raissa_entrada
+
+        headers = [f"Coluna {index}" for index in range(36)]
+        headers[0] = "Empresa"
+        headers[3] = "Fechamento"
+        headers[31] = "Serviço"
+        headers[32] = "Valor do serviço"
+        headers[33] = "Outro nome"
+        headers[34] = "AI"
+        sheet = {
+            "aba": "Raissa",
+            "colunas": headers,
+            "clientes": [
+                {
+                    "Empresa": "Todo mes",
+                    "Fechamento": "10/08/2026",
+                    "Valor do serviço": "59,90",
+                    "Outro nome": "Boleto recorrente",
+                    "AI": "Ativo",
+                },
+                {
+                    "Empresa": "Nome engana",
+                    "Fechamento": "10/08/2026",
+                    "Serviço": "Oppi Anual",
+                    "Valor do serviço": "10,00",
+                    "Outro nome": "Cartão recorrente",
+                    "AI": "Ativo",
+                },
+                {
+                    "Empresa": "Fecha agora",
+                    "Fechamento": "10/11/2026",
+                    "Valor do serviço": "200,00",
+                    "Outro nome": "Anual",
+                    "AI": "Ativo",
+                },
+                {
+                    "Empresa": "Desde julho",
+                    "Fechamento": "15/07/2026",
+                    "Valor do serviço": "400,00",
+                    "Outro nome": "Plano anual",
+                    "AI": "Ativo",
+                },
+                {
+                    "Empresa": "Renova agora",
+                    "Fechamento": "05/12/2025",
+                    "Valor do serviço": "100,00",
+                    "Outro nome": "Anual",
+                    "AI": "Ativo",
+                },
+                {
+                    "Empresa": "Parou",
+                    "Fechamento": "10/11/2025",
+                    "Valor do serviço": "80,00",
+                    "Outro nome": "Anual",
+                    "AI": "Inativo",
+                },
+            ],
+        }
+        today = date(2026, 11, 6)
+        rows = raissa_rows_from_sheet(sheet, today=today)
+        por_nome = {row["empresa"]: row["anual"] for row in rows}
+        self.assertFalse(por_nome["Todo mes"])
+        self.assertFalse(por_nome["Nome engana"])
+        self.assertTrue(por_nome["Fecha agora"])
+        out = summarize_raissa_entrada(rows, start=date(2026, 11, 1), end=date(2026, 11, 30), today=today)
+        pizzas = {pizza["titulo"]: pizza for pizza in out["pizzas"]}
+        recorrente_2026 = {fatia["mes"]: fatia["valor"] for fatia in pizzas["2026 · Recorrente"]["fatias"]}
+        recorrente_2027 = {fatia["mes"]: fatia["valor"] for fatia in pizzas["2027 · Recorrente"]["fatias"]}
+        anuais_2026 = {fatia["mes"]: fatia["valor"] for fatia in pizzas["2026 · Anuais"]["fatias"]}
+        anuais_2027 = {fatia["mes"]: fatia["valor"] for fatia in pizzas["2027 · Anuais"]["fatias"]}
+        self.assertEqual(recorrente_2026, {"Novembro": 69.9, "Dezembro": 69.9})
+        self.assertEqual(recorrente_2027["Janeiro"], 69.9)
+        self.assertEqual(len(recorrente_2027), 12)
+        self.assertEqual(anuais_2026, {"Dezembro": 100.0})
+        self.assertEqual(anuais_2027["Julho"], 400.0)
+        self.assertEqual(anuais_2027["Novembro"], 200.0)
+        self.assertEqual(anuais_2027["Dezembro"], 100.0)
+        self.assertIn("Fecha agora", [row["cliente"] for row in out["linhas"]])
 
     def test_nao_pago_nao_vira_pago_e_data_passada_fica_pendente(self):
         from app.services.financeiro import classify_raissa_entry

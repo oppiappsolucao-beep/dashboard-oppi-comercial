@@ -1216,6 +1216,14 @@ button.fin-delete-cancel {
   color: var(--muted);
 }
 
+.fin-pie-note {
+  max-width: 280px;
+  font-size: 12px;
+  line-height: 1.35;
+  text-align: center;
+  color: var(--muted);
+}
+
 .fin-pie-body {
   display: flex;
   flex-direction: column;
@@ -1260,7 +1268,7 @@ button.fin-delete-cancel {
   font-size: 13px;
 }
 
-.fin-pie + .fin-pie {
+.fin-pie:nth-child(even) {
   border-left: 1px solid var(--border);
   padding-left: 28px;
 }
@@ -1280,10 +1288,14 @@ button.fin-delete-cancel {
     grid-template-columns: 1fr;
   }
 
+  .fin-pie:nth-child(even),
   .fin-pie + .fin-pie {
     border-left: 0;
-    border-top: 1px solid var(--border);
     padding-left: 0;
+  }
+
+  .fin-pie + .fin-pie {
+    border-top: 1px solid var(--border);
     padding-top: 20px;
   }
 }
