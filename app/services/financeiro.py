@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import math
 import re
 from datetime import date, datetime, timedelta
 from typing import Any
@@ -1044,14 +1045,33 @@ def _shift_month(year: int, month: int, offset: int) -> tuple[int, int]:
     return index // 12, index % 12 + 1
 
 
+_PIE_COLORS = (
+    "#7C3AED",
+    "#DB2777",
+    "#2563EB",
+    "#059669",
+    "#D97706",
+    "#DC2626",
+    "#0891B2",
+    "#4F46E5",
+    "#65A30D",
+    "#EA580C",
+    "#0F766E",
+    "#BE185D",
+)
+
+
 def _months_ahead(today: date, start: date, end: date, horizon: int = 12) -> list[tuple[int, int]]:
-    """Mês atual e os seguintes, mais qualquer mês que o filtro peça."""
+    """Do mês atual até dezembro do ano seguinte, mais qualquer mês que o filtro peça."""
+    del horizon
     found: list[tuple[int, int]] = []
     seen: set[tuple[int, int]] = set()
-    for offset in range(horizon):
-        key = _shift_month(today.year, today.month, offset)
+    year, month = today.year, today.month
+    while (year, month) <= (today.year + 1, 12):
+        key = (year, month)
         seen.add(key)
         found.append(key)
+        year, month = _shift_month(year, month, 1)
     cursor = date(start.year, start.month, 1)
     limit = date(end.year, end.month, 1)
     while cursor <= limit:
@@ -1064,6 +1084,64 @@ def _months_ahead(today: date, start: date, end: date, horizon: int = 12) -> lis
         else:
             cursor = date(cursor.year, cursor.month + 1, 1)
     return found
+
+
+def _pie_point(deg: float, radius: float = 80, cx: float = 100, cy: float = 100) -> tuple[float, float]:
+    rad = math.radians(deg - 90)
+    return cx + radius * math.sin(rad), cy - radius * math.cos(rad)
+
+
+def _pie_path(start: float, sweep: float) -> str:
+    if sweep >= 359.999:
+        return "M 100 20 A 80 80 0 1 1 99.98 20 Z"
+    x1, y1 = _pie_point(start)
+    x2, y2 = _pie_point(start + sweep)
+    large = 1 if sweep > 180 else 0
+    return f"M 100 100 L {x1:.2f} {y1:.2f} A 80 80 0 {large} 1 {x2:.2f} {y2:.2f} Z"
+
+
+def _year_pizzas(months: dict[tuple[int, int], dict[str, float]], today: date) -> list[dict]:
+    """Uma pizza por ano. A fatia é o valor cheio dos ativos naquele mês."""
+    pizzas = []
+    for year in (today.year, today.year + 1):
+        first_month = today.month if year == today.year else 1
+        fatias = []
+        total = 0.0
+        for month in range(first_month, 13):
+            bucket = months.get((year, month))
+            if not bucket:
+                continue
+            valor = float(bucket["vai_pagar"] + bucket["ja_pagou"] + bucket["pendente"])
+            if valor <= 0:
+                continue
+            total += valor
+            month_start = date(year, month, 1)
+            fatias.append(
+                {
+                    "mes": _MESES[month],
+                    "valor": round(valor, 2),
+                    "valor_label": format_brl(valor),
+                    "n": int(bucket["n_vai"] + bucket["n_pago"] + bucket["n_pendente"]),
+                    "cor": _PIE_COLORS[month - 1],
+                    "period_start": month_start.isoformat(),
+                    "period_end": _month_last(year, month).isoformat(),
+                }
+            )
+        cursor = 0.0
+        for fatia in fatias:
+            sweep = 360 * fatia["valor"] / total if total else 0
+            fatia["d"] = _pie_path(cursor, sweep)
+            fatia["pct"] = round(100 * fatia["valor"] / total, 1) if total else 0
+            cursor += sweep
+        pizzas.append(
+            {
+                "ano": year,
+                "total": round(total, 2),
+                "total_label": format_brl(total),
+                "fatias": fatias,
+            }
+        )
+    return pizzas
 
 
 def _due_in_month(row: dict, year: int, month: int) -> date | None:
@@ -1266,6 +1344,7 @@ def summarize_raissa_entrada(
         "cancelados_n": cancelados_n,
         "sem_data_n": int(sem_data["n_vai"] + sem_data["n_pago"] + sem_data["n_pendente"]),
         "meses": month_rows,
+        "pizzas": _year_pizzas(months, today),
         "valores": valor_rows,
         "linhas": listed,
         "error": "",

@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
-<link rel="stylesheet" href="/static/css/financeiro.css?v={{ static_version }}-entrada6">
+<link rel="stylesheet" href="/static/css/financeiro.css?v={{ static_version }}-entrada7">
 <div class="page-header">
   <div>
     <div class="page-title">Entrada</div>
@@ -75,41 +75,47 @@
 
 <div class="panel fin-table-card">
   <div class="section-heading">Por mês</div>
-  <div class="section-subtitle">Projeção dos próximos 12 meses a partir do fechamento. Pago e pendente valem para o mês atual. Os meses seguintes mostram quem vai pagar. Clique no mês para ver a relação.</div>
-  <div class="table-wrap">
-    <table class="data-table fin-table fin-stack fin-cols-mes">
-      <thead>
-        <tr>
-          <th>Mês</th>
-          <th>Clientes</th>
-          <th>Vai pagar</th>
-          <th>Já pagou</th>
-          <th>Pendentes</th>
-          <th>Total</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for row in controle.meses %}
-        <tr>
-          <td>
-            {% if row.period_start %}
-            <a href="/financeiro/entrada?period_start={{ row.period_start }}&period_end={{ row.period_end }}{% if filters.status %}&status={{ filters.status }}{% endif %}">{{ row.label }}</a>{% if row.selected %} · neste período{% endif %}
-            {% else %}
-            {{ row.label }}
-            {% endif %}
-          </td>
-          <td class="fin-cell-num">{{ row.n }}</td>
-          <td class="fin-cell-num">{{ row.vai_n }} · {{ row.vai_pagar_label }}</td>
-          <td class="fin-cell-num fin-money-in">{{ row.pago_n }} · {{ row.ja_pagou_label }}</td>
-          <td class="fin-cell-num fin-money-out">{{ row.pendente_n }} · {{ row.pendente_label }}</td>
-          <td class="fin-cell-num">{{ row.total_label }}</td>
-        </tr>
-        {% else %}
-        <tr><td colspan="6" class="fin-empty">Nenhum vencimento na base Raissa.</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
+  <div class="section-subtitle">Valor cheio dos ativos já cadastrados. Cada fatia é um mês. 2026 mostra os meses que ainda vêm. 2027 repete essa mesma base. Passe o mouse na fatia para ver o valor. Clique para abrir a relação.</div>
+  {% if controle.pizzas %}
+  <div class="fin-pies">
+    {% for pizza in controle.pizzas %}
+    <div class="fin-pie">
+      <div class="fin-pie-head">
+        <div class="fin-pie-year">{{ pizza.ano }}</div>
+        <div class="fin-pie-total">{{ pizza.total_label }}</div>
+      </div>
+      {% if pizza.fatias %}
+      <div class="fin-pie-body">
+        <svg class="fin-pie-svg" viewBox="0 0 200 200" role="img" aria-label="Valor dos ativos em {{ pizza.ano }}">
+          {% for fatia in pizza.fatias %}
+          <a href="/financeiro/entrada?period_start={{ fatia.period_start }}&period_end={{ fatia.period_end }}{% if filters.status %}&status={{ filters.status }}{% endif %}">
+            <path d="{{ fatia.d }}" fill="{{ fatia.cor }}">
+              <title>{{ fatia.mes }} · {{ fatia.valor_label }}</title>
+            </path>
+          </a>
+          {% endfor %}
+        </svg>
+        <ul class="fin-pie-legend">
+          {% for fatia in pizza.fatias %}
+          <li>
+            <a href="/financeiro/entrada?period_start={{ fatia.period_start }}&period_end={{ fatia.period_end }}{% if filters.status %}&status={{ filters.status }}{% endif %}">
+              <span class="fin-pie-swatch" style="background: {{ fatia.cor }}"></span>
+              <span>{{ fatia.mes }}</span>
+              <strong>{{ fatia.valor_label }}</strong>
+            </a>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% else %}
+      <p class="fin-empty">Nenhum valor de ativo em {{ pizza.ano }}.</p>
+      {% endif %}
+    </div>
+    {% endfor %}
   </div>
+  {% else %}
+  <p class="fin-empty">Nenhum vencimento na base Raissa.</p>
+  {% endif %}
 </div>
 
 <div class="panel fin-table-card">

@@ -530,6 +530,14 @@ class RaissaEntradaTest(unittest.TestCase):
         meses = {row["label"]: row for row in novembro["meses"]}
         self.assertEqual(meses["Novembro 2026"]["pago_n"], 1)
         self.assertEqual(meses["Dezembro 2026"]["vai_n"], 2)
+        pizzas = {pizza["ano"]: pizza for pizza in novembro["pizzas"]}
+        fatias_2026 = {fatia["mes"]: fatia["valor"] for fatia in pizzas[2026]["fatias"]}
+        fatias_2027 = {fatia["mes"]: fatia["valor"] for fatia in pizzas[2027]["fatias"]}
+        self.assertEqual(fatias_2026, {"Novembro": 59.9, "Dezembro": 119.8})
+        self.assertEqual(fatias_2027["Janeiro"], 119.8)
+        self.assertEqual(fatias_2027["Março"], 319.8)
+        self.assertEqual(fatias_2027["Dezembro"], 119.8)
+        self.assertEqual(len(fatias_2027), 12)
         self.assertNotIn("Anual", [row["cliente"] for row in novembro["linhas"]])
         marco = summarize_raissa_entrada(rows, start=date(2027, 3, 1), end=date(2027, 3, 31), today=today)
         self.assertEqual([row["cliente"] for row in marco["linhas"]], ["Anual", "Mensal", "Futuro"])
