@@ -1891,6 +1891,28 @@ def build_raissa_entrada_context(
     }
 
 
+def build_contas_a_pagar_context(params: dict, start: date, end: date, today: date) -> dict[str, Any]:
+    """Contas a pagar lê o lançamento local e a Entrada. Não consulta o Asaas."""
+    payables = _payables_view(
+        start,
+        end,
+        normalize_text(params.get("search")),
+        normalize_text(params.get("status")),
+        today,
+    )
+    payables = attach_cash_compare(payables, start, end, today)
+    _apply_week_choice(payables, params, start, end, today)
+    return _with_tab_kpis(
+        {
+            "payables": payables,
+            "filters": params,
+            "tab": TAB_PAGAR,
+            "kpi_cards": [],
+        },
+        TAB_PAGAR,
+    )
+
+
 def build_financeiro_context(
     params: dict | None = None,
     *,
@@ -1910,19 +1932,17 @@ def build_financeiro_context(
         tab = TAB_VISAO
     if tab == TAB_ENTRADAS and use_raissa:
         return build_raissa_entrada_context(params, period_start, period_end, today, force=force_sync)
+    if tab == TAB_PAGAR:
+        return build_contas_a_pagar_context(params, period_start, period_end, today)
 
     forecast = build_internal_forecast(period_start, period_end)
-    payable_status = normalize_text(params.get("status")) if tab == TAB_PAGAR else ""
     payables = _payables_view(
         period_start,
         period_end,
         normalize_text(params.get("search")),
-        payable_status,
+        "",
         today,
     )
-    if tab == TAB_PAGAR:
-        payables = attach_cash_compare(payables, period_start, period_end, today, force=force_sync)
-        _apply_week_choice(payables, params, period_start, period_end, today)
     boletos = (
         apply_boleto_status(
             load_boleto_entrada(today, period_start, period_end, force=force_sync),

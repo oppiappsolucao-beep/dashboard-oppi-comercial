@@ -952,6 +952,30 @@ class RaissaEntradaTest(unittest.TestCase):
         self.assertEqual(ctx["controle"]["aba"], "Raissa")
         self.assertEqual(ctx["filters"]["period_start"], "2026-11-01")
 
+    def test_contas_a_pagar_nao_consulta_o_asaas(self):
+        from unittest.mock import patch
+
+        from app.services.financeiro import build_financeiro_context
+
+        with (
+            patch("app.services.financeiro.fetch_dashboard_payload") as asaas,
+            patch("app.services.financeiro.build_internal_forecast") as previsao,
+            patch("app.services.financeiro.list_payables", return_value=[]),
+            patch("app.services.financeiro.list_suppliers", return_value=[]),
+            patch("app.services.campaign_leads.read_raissa_sheet", return_value={"aba": "Raissa", "colunas": [], "clientes": []}),
+            patch("app.services.financeiro.load_inactive_companies", return_value=(set(), set())),
+            patch("app.services.crm_local_db.load_entrada_statuses", return_value={}),
+        ):
+            ctx = build_financeiro_context(
+                {"tab": "pagar", "period_start": "2026-11-01", "period_end": "2026-11-30"},
+            )
+        asaas.assert_not_called()
+        previsao.assert_not_called()
+        self.assertEqual(ctx["tab"], "pagar")
+        self.assertEqual(ctx["kpi_cards"][0]["label"], "A pagar")
+        self.assertEqual(ctx["payables"]["semanas_opcoes"][0]["label"], "Mês inteiro")
+        self.assertEqual(ctx["filters"]["period_start"], "2026-11-01")
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
