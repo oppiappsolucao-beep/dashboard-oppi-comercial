@@ -702,6 +702,18 @@ def _row_on_sheet(row_number: int, values: list[list[str]], header_at: int) -> i
     return number
 
 
+def trim_empty_raissa_rows(worksheet, values: list[list[str]]) -> int:
+    """Tira do fim da aba as linhas sem nenhum texto. Não mexe em cliente preenchido."""
+    last = 1
+    for index, row in enumerate(values or [], start=1):
+        if any(normalize_text(cell) for cell in (row or [])):
+            last = index
+    limit = int(getattr(worksheet, "row_count", 0) or 0)
+    if limit > last:
+        worksheet.resize(rows=last)
+    return last
+
+
 def next_raissa_append_row(values: list[list[str]], header_at: int) -> int:
     """Primeira linha livre no fim da aba. Reusa linha vazia que já ficou sobrando."""
     row_number = max(len(values), header_at + 1) + 1
@@ -719,13 +731,13 @@ def _write_raissa_row(worksheet, row_number: int, row_values: list[str]) -> None
         raise RuntimeError("Linha da aba Raissa sem conteúdo para gravar.")
     limit = int(worksheet.row_count or 0)
     if limit and int(row_number) > limit:
-        # Só abre as linhas que vão receber o cliente. Nada de linha vazia embaixo.
+        # Abre só a linha do cliente. A planilha não ganha linha vazia embaixo.
         missing = int(row_number) - limit
-        if missing > 3:
+        if missing > 1:
             raise RuntimeError(
                 f"A aba {worksheet.title} tem {limit} linhas e o cliente não foi encontrado nelas."
             )
-        worksheet.add_rows(missing)
+        worksheet.resize(rows=int(row_number))
     from gspread.utils import rowcol_to_a1
 
     end = rowcol_to_a1(int(row_number), width)
@@ -763,6 +775,7 @@ def save_registration_on_raissa(
         if worksheet is None:
             return {"ok": False, "aviso": "Aba Raissa não encontrada na planilha."}
         values = worksheet.get_all_values() or [[]]
+        trim_empty_raissa_rows(worksheet, values)
         header_at = _header_at(values)
         headers = [normalize_text(cell) for cell in (values[header_at] if values else [])]
         headers = ensure_raissa_columns(headers)

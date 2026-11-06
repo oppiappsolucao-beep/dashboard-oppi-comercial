@@ -14,6 +14,7 @@ from app.services.raissa_company_sync import (
     match_cadastro_sheet_rows,
     next_raissa_append_row,
     payload_for_raissa,
+    trim_empty_raissa_rows,
     _write_raissa_row,
 )
 
@@ -257,19 +258,20 @@ class RaissaCompanySyncTest(unittest.TestCase):
 
         class Sheet:
             title = "Raissa"
-            row_count = 4
-            added = 0
+            row_count = 139
 
-            def add_rows(self, count):
-                self.added = count
-                self.row_count += count
+            def resize(self, rows=None, cols=None):
+                if rows is not None:
+                    self.row_count = rows
 
             def update(self, rows, range_name, value_input_option=""):
                 self.updated = (rows, range_name, value_input_option)
 
         sheet = Sheet()
+        self.assertEqual(trim_empty_raissa_rows(sheet, values[:4]), 4)
+        self.assertEqual(sheet.row_count, 4)
         _write_raissa_row(sheet, 5, ["NOVA EMPRESA", "Oppi Ponto"])
-        self.assertEqual(sheet.added, 1)
+        self.assertEqual(sheet.row_count, 5)
         self.assertEqual(sheet.updated[0], [["NOVA EMPRESA", "Oppi Ponto"]])
         self.assertEqual(sheet.updated[1], "A5:B5")
 
