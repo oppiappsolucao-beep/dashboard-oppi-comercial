@@ -128,6 +128,23 @@ async def financeiro_entrada_situacao(
     return RedirectResponse(url=f"/financeiro/entrada?{query}", status_code=303)
 
 
+@router.get("/financeiro/contas-a-pagar/nova", response_class=HTMLResponse)
+async def financeiro_payable_new_page(request: Request):
+    denied = require_auth(request)
+    if denied:
+        return denied
+    params = _params(request)
+    params["tab"] = "pagar"
+    flash = normalize_text(request.query_params.get("flash"))
+    return _screen(
+        request,
+        params,
+        "financeiro/contas_a_pagar_nova.html",
+        "contas_pagar",
+        flash=flash,
+    )
+
+
 @router.get("/financeiro/contas-a-pagar", response_class=HTMLResponse)
 async def financeiro_pagar_page(request: Request):
     denied = require_auth(request)
@@ -216,6 +233,25 @@ async def financeiro_sync(
     return _page(request, params, force_sync=True, flash="Dados sincronizados com o Asaas.")
 
 
+def _payable_form_back(
+    period_start: str,
+    period_end: str,
+    flash: str,
+    status: str = "",
+    semana: str = "",
+) -> RedirectResponse:
+    query = urlencode(
+        {
+            "period_start": period_start,
+            "period_end": period_end,
+            "status": status,
+            "semana": semana,
+            "flash": flash,
+        }
+    )
+    return RedirectResponse(url=f"/financeiro/contas-a-pagar/nova?{query}", status_code=303)
+
+
 def _payable_back(
     period_start: str,
     period_end: str,
@@ -271,7 +307,7 @@ async def financeiro_payable_create(
     back_status = normalize_text(status)
     back_semana = normalize_text(semana)
     if not name or value is None or due is None:
-        return _payable_back(back_start, back_end, "Informe descrição, valor e vencimento.", back_status, back_semana)
+        return _payable_form_back(back_start, back_end, "Informe descrição, valor e vencimento.", back_status, back_semana)
     times = 1
     if normalize_text(repeat_mode).lower() == "vezes":
         try:
@@ -279,7 +315,7 @@ async def financeiro_payable_create(
         except ValueError:
             times = 1
         if times < 2:
-            return _payable_back(back_start, back_end, "Informe quantas vezes, a partir de 2.", back_status, back_semana)
+            return _payable_form_back(back_start, back_end, "Informe quantas vezes, a partir de 2.", back_status, back_semana)
     create_payable(name, value, due, supplier=supplier, category=category, repeat_count=times)
     start, end = _month_bounds(due)
     if times > 1:

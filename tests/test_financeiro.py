@@ -290,6 +290,21 @@ class EntradasEContasTest(unittest.TestCase):
         _apply_week_choice(inteiro, {"semana": "0"}, start, end, today)
         self.assertEqual(len(inteiro["semanas"]), 3)
 
+    def test_grafico_compara_entrada_e_saida_por_semana(self):
+        from app.services.financeiro import _montar_grafico_caixa
+
+        grafico = _montar_grafico_caixa(
+            {(2026, 11, 0): 10.0, (2026, 11, 1): 30.0},
+            [{"ano": 2026, "mes": 11, "indice": 0, "valor": 40.0}],
+            date(2026, 11, 1),
+            date(2026, 11, 30),
+        )
+        self.assertEqual([ponto["label"] for ponto in grafico["pontos"]], ["1–7", "8–14", "15–21", "22–28", "29–31"])
+        self.assertEqual([ponto["entrada"] for ponto in grafico["pontos"]], [10.0, 30.0, 0.0, 0.0, 0.0])
+        self.assertEqual(grafico["pontos"][0]["saida"], 40.0)
+        self.assertIn(",", grafico["entrada_pontos"])
+        self.assertIn(",", grafico["saida_pontos"])
+
     def test_status_e_repeticao_mensal(self):
         from app.services.company_payables import add_months, payable_status
 

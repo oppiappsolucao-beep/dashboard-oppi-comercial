@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
-<link rel="stylesheet" href="/static/css/financeiro.css?v={{ static_version }}-card2">
+<link rel="stylesheet" href="/static/css/financeiro.css?v={{ static_version }}-pagar4">
 {% macro payable_edit(item) %}
 <div class="fin-edit">
   <button type="button" class="fin-action fin-edit-ask">Editar</button>
@@ -61,9 +61,10 @@
 <div class="page-header">
   <div>
     <div class="page-title">Contas a pagar</div>
-    <div class="page-subtitle">{{ payables.month_label }}. Use De e Até para ver outros meses. Pagamento único lança uma vez; quantas vezes repete o mesmo valor, mês a mês.</div>
+    <div class="page-subtitle">{{ payables.month_label }}</div>
   </div>
   <div class="page-actions">
+    <a class="btn" href="/financeiro/contas-a-pagar/nova?period_start={{ filters.period_start }}&period_end={{ filters.period_end }}&status={{ filters.status or '' }}&semana={{ filters.semana }}">Nova conta</a>
     <a class="btn btn-secondary" href="/financeiro/entrada">Entrada</a>
   </div>
 </div>
@@ -85,320 +86,108 @@
   {% endfor %}
 </div>
 
-<form class="toolbar-card fin-toolbar" method="get" action="/financeiro/contas-a-pagar">
-  <div class="filters-row filters-row-main">
-    <div class="filter-field filter-field-sm">
-      <label>De</label>
+{% if payables.compare_note %}
+<p class="fin-empty">{{ payables.compare_note }}</p>
+{% endif %}
+
+<div class="panel fin-table-card">
+  <div class="section-heading">Entrada e saída</div>
+  {% if payables.grafico and payables.grafico.pontos %}
+  <svg class="fin-line" viewBox="0 0 {{ payables.grafico.width }} {{ payables.grafico.height }}" role="img" aria-label="Entrada e saída no período">
+    <line x1="12" y1="{{ payables.grafico.topo }}" x2="628" y2="{{ payables.grafico.topo }}" stroke="#E5E7EB" />
+    <line x1="12" y1="{{ payables.grafico.meio }}" x2="628" y2="{{ payables.grafico.meio }}" stroke="#E5E7EB" />
+    <line x1="12" y1="{{ payables.grafico.base }}" x2="628" y2="{{ payables.grafico.base }}" stroke="#E5E7EB" />
+    <polyline points="{{ payables.grafico.entrada_pontos }}" fill="none" stroke="#15803D" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" />
+    <polyline points="{{ payables.grafico.saida_pontos }}" fill="none" stroke="#B91C1C" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" />
+    {% for ponto in payables.grafico.pontos %}
+    <circle cx="{{ ponto.x }}" cy="{{ ponto.y_entrada }}" r="4" fill="#15803D"><title>{{ ponto.label }} · Entrada {{ ponto.entrada_label }}</title></circle>
+    <circle cx="{{ ponto.x }}" cy="{{ ponto.y_saida }}" r="4" fill="#B91C1C"><title>{{ ponto.label }} · Saída {{ ponto.saida_label }}</title></circle>
+    <text x="{{ ponto.x }}" y="{{ payables.grafico.height - 8 }}" text-anchor="middle">{{ ponto.label }}</text>
+    {% endfor %}
+  </svg>
+  <div class="fin-line-legend">
+    <span><i class="fin-line-swatch is-in"></i>Entrada <strong class="fin-money-in">{{ payables.entrada_label }}</strong></span>
+    <span><i class="fin-line-swatch is-out"></i>Saída <strong class="fin-money-out">{{ payables.saida_label }}</strong></span>
+    <span>A receber <strong>{{ payables.a_receber_label }}</strong></span>
+  </div>
+  {% else %}
+  <p class="fin-empty">Sem valores neste período.</p>
+  {% endif %}
+</div>
+
+<div class="panel fin-table-card">
+  <form class="fin-period-form fin-bill-filters" method="get" action="/financeiro/contas-a-pagar">
+    <label>De
       <input type="date" name="period_start" value="{{ filters.period_start }}">
-    </div>
-    <div class="filter-field filter-field-sm">
-      <label>Até</label>
+    </label>
+    <label>Até
       <input type="date" name="period_end" value="{{ filters.period_end }}">
-    </div>
-    <div class="filter-field filter-field-sm">
-      <label>Semana</label>
+    </label>
+    <label>Semana
       <select name="semana">
         {% for opcao in payables.semanas_opcoes %}
         <option value="{{ opcao.value }}" {% if filters.semana == opcao.value %}selected{% endif %}>{{ opcao.label }}</option>
         {% endfor %}
       </select>
-    </div>
-    <div class="filter-field filter-field-sm">
-      <label>Status</label>
+    </label>
+    <label>Status
       <select name="status">
         <option value="" {% if not filters.status %}selected{% endif %}>Todos</option>
         <option value="a_pagar" {% if filters.status == 'a_pagar' %}selected{% endif %}>A pagar</option>
         <option value="atrasado" {% if filters.status == 'atrasado' %}selected{% endif %}>Atrasado</option>
         <option value="pago" {% if filters.status == 'pago' %}selected{% endif %}>Pago</option>
       </select>
-    </div>
-    <div class="filter-field fin-search">
-      <label>Buscar</label>
-      <input type="search" name="search" value="{{ filters.search }}" placeholder="Conta, fornecedor ou classificação">
-    </div>
-    <div class="filter-field filter-field-sm">
-      <label>&nbsp;</label>
-      <button type="submit" class="btn">Filtrar</button>
-    </div>
-  </div>
-</form>
-
-<div class="panel fin-payable-form-card">
-  <div class="section-heading">Nova conta</div>
-  <form method="post" action="/financeiro/contas-a-pagar" class="fin-payable-form" id="payable-form">
-    <input type="hidden" name="period_start" value="{{ filters.period_start }}">
-    <input type="hidden" name="period_end" value="{{ filters.period_end }}">
-    <input type="hidden" name="status" value="{{ filters.status or '' }}">
-    <input type="hidden" name="semana" value="{{ filters.semana }}">
-    <div class="filter-field">
-      <label>Descrição</label>
-      <input type="text" name="description" required placeholder="Ex.: aluguel, energia, contador">
-    </div>
-    <div class="filter-field">
-      <label>Fornecedor</label>
-      <input type="text" name="supplier" list="payable-suppliers" placeholder="Quem recebe" autocomplete="off">
-      <datalist id="payable-suppliers">
-        {% for name in payables.suppliers %}
-        <option value="{{ name }}"></option>
-        {% endfor %}
-      </datalist>
-    </div>
-    <div class="filter-field filter-field-sm">
-      <label>Classificação</label>
-      <select name="category">
-        <option value="fixa">Fixa</option>
-        <option value="emprestimo">Empréstimo</option>
-        <option value="variavel">Variável</option>
-        <option value="imposto">Imposto</option>
-        <option value="servico">Serviço</option>
-        <option value="outra" selected>Outra</option>
-      </select>
-    </div>
-    <div class="filter-field filter-field-sm">
-      <label>Valor</label>
-      <input type="text" name="amount" required inputmode="decimal" placeholder="0,00">
-    </div>
-    <div class="filter-field filter-field-sm">
-      <label>Vencimento</label>
-      <input type="date" name="due_date" required value="{{ filters.period_start }}">
-    </div>
-    <div class="filter-field filter-field-sm">
-      <label>Este pagamento é</label>
-      <select name="repeat_mode" id="payable-repeat-mode">
-        <option value="unico">Único</option>
-        <option value="vezes">Quantas vezes</option>
-      </select>
-    </div>
-    <div class="filter-field filter-field-sm fin-times is-off" id="payable-times-field">
-      <label>Quantas vezes</label>
-      <input type="number" name="repeat_count" id="payable-repeat-count" min="2" max="36" value="2" disabled>
-    </div>
-    <div class="filter-field filter-field-sm">
-      <label>&nbsp;</label>
-      <button type="button" class="btn" id="payable-preview">Lançar</button>
-    </div>
-    <div class="fin-fixed" id="payable-fixed" hidden>
-      <div class="fin-fixed-title">Conferência antes de salvar</div>
-      <p class="fin-fixed-note">Estes dados ficam gravados assim. Nada é apagado, a não ser que você peça para excluir.</p>
-      <dl id="payable-fixed-list"></dl>
-      <div class="fin-fixed-actions">
-        <button type="button" class="btn btn-secondary" id="payable-edit">Corrigir</button>
-        <button type="submit" class="btn" id="payable-save">Salvar</button>
+    </label>
+    <label>Buscar
+      <input type="search" name="search" value="{{ filters.search }}" placeholder="Conta ou fornecedor">
+    </label>
+    <button type="submit" class="btn">Ver</button>
+  </form>
+  {% for semana in payables.semanas %}
+  {% if payables.semanas|length > 1 %}
+  <p class="fin-bill-week">{{ semana.faixa }} · {{ semana.mes }}</p>
+  {% endif %}
+  {% for item in semana.linhas %}
+  <article class="fin-bill">
+    <div class="fin-bill-top">
+      <div>
+        <strong>{{ item.description }}</strong>
+        <span class="fin-bill-meta">{{ item.due_label }}{% if item.supplier %} · {{ item.supplier }}{% endif %} · {{ item.category_label }}</span>
+      </div>
+      <div class="fin-bill-money">
+        <strong class="{% if item.paid %}fin-money-in{% else %}fin-money-out{% endif %}">{{ item.valor_label }}</strong>
+        <span class="fin-badge tone-{{ item.status_tone }}">{{ item.status_label }}</span>
       </div>
     </div>
-  </form>
-</div>
-
-{% if payables.compare_note %}
-<p class="fin-empty">{{ payables.compare_note }}</p>
-{% endif %}
-
-<div class="panel fin-table-card">
-  <div class="section-heading">Contas a pagar</div>
-  <div class="section-subtitle">Semanas do vencimento neste período. Os totais de cima continuam do De e Até inteiro.</div>
-  <div class="fin-payable-totals">
-    <span>A pagar <strong class="fin-money-out">{{ payables.lista_a_pagar_label }}</strong></span>
-    <span>Pago <strong class="fin-money-in">{{ payables.lista_pago_label }}</strong></span>
-    <span>Entrada <strong class="fin-money-in">{{ payables.entrada_label }}</strong></span>
-    <span>A receber <strong class="fin-money-in">{{ payables.a_receber_label }}</strong></span>
-    <span>Saída <strong class="fin-money-out">{{ payables.saida_label }}</strong></span>
-    <span>Total das dívidas <strong class="fin-money-out">{{ payables.dividas_label }}</strong></span>
-  </div>
-  {% for semana in payables.semanas %}
-  <section class="fin-week{% if semana.atual %} is-current{% endif %}">
-    <div class="fin-week-head">
-      <div class="fin-week-title">{{ semana.label }}{% if semana.atual %} · esta semana{% endif %}</div>
-      <div class="fin-week-meta">{{ semana.n }} conta{{ 's' if semana.n != 1 else '' }} · a pagar {{ semana.a_pagar_label }} · pago {{ semana.pago_label }}</div>
+    <div class="fin-payable-actions">
+      {% if item.paid %}
+      <form method="post" action="/financeiro/contas-a-pagar/{{ item.id }}/reabrir" class="fin-inline-form">
+        <input type="hidden" name="period_start" value="{{ filters.period_start }}">
+        <input type="hidden" name="period_end" value="{{ filters.period_end }}">
+        <input type="hidden" name="status" value="{{ filters.status or '' }}">
+        <input type="hidden" name="semana" value="{{ filters.semana }}">
+        <button type="submit" class="fin-action">Reabrir</button>
+      </form>
+      {% else %}
+      <form method="post" action="/financeiro/contas-a-pagar/{{ item.id }}/pagar" class="fin-inline-form">
+        <input type="hidden" name="period_start" value="{{ filters.period_start }}">
+        <input type="hidden" name="period_end" value="{{ filters.period_end }}">
+        <input type="hidden" name="status" value="{{ filters.status or '' }}">
+        <input type="hidden" name="semana" value="{{ filters.semana }}">
+        <button type="submit" class="fin-action">Pago</button>
+      </form>
+      {% endif %}
+      {{ payable_edit(item) }}
+      {{ payable_delete(item) }}
     </div>
-    <div class="table-wrap">
-      <table class="data-table fin-table fin-stack fin-cols-conta">
-        <thead>
-          <tr>
-            <th>Vencimento</th>
-            <th>Conta</th>
-            <th>Fornecedor</th>
-            <th>Classificação</th>
-            <th>Valor</th>
-            <th>Status</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for item in semana.linhas %}
-          <tr>
-            <td>{{ item.due_label }}</td>
-            <td>{{ item.description }}</td>
-            <td>{{ item.supplier or "—" }}</td>
-            <td>{{ item.category_label }}</td>
-            <td class="fin-cell-num {% if item.paid %}fin-money-in{% else %}fin-money-out{% endif %}">{{ item.valor_label }}</td>
-            <td><span class="fin-badge tone-{{ item.status_tone }}">{{ item.status_label }}</span></td>
-            <td>
-              <div class="fin-payable-actions">
-                {% if item.paid %}
-                <form method="post" action="/financeiro/contas-a-pagar/{{ item.id }}/reabrir" class="fin-inline-form">
-                  <input type="hidden" name="period_start" value="{{ filters.period_start }}">
-                  <input type="hidden" name="period_end" value="{{ filters.period_end }}">
-                  <input type="hidden" name="status" value="{{ filters.status or '' }}">
-                  <input type="hidden" name="semana" value="{{ filters.semana }}">
-                  <button type="submit" class="fin-action">Reabrir</button>
-                </form>
-                {% else %}
-                <form method="post" action="/financeiro/contas-a-pagar/{{ item.id }}/pagar" class="fin-inline-form">
-                  <input type="hidden" name="period_start" value="{{ filters.period_start }}">
-                  <input type="hidden" name="period_end" value="{{ filters.period_end }}">
-                  <input type="hidden" name="status" value="{{ filters.status or '' }}">
-                  <input type="hidden" name="semana" value="{{ filters.semana }}">
-                  <button type="submit" class="fin-action">Pago</button>
-                </form>
-                {% endif %}
-                {{ payable_edit(item) }}
-                {{ payable_delete(item) }}
-              </div>
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </section>
+  </article>
+  {% endfor %}
   {% else %}
   <p class="fin-empty">{% if filters.semana and filters.semana != '0' %}Nenhuma conta nesta semana.{% else %}Nenhuma conta neste período.{% endif %}</p>
   {% endfor %}
 </div>
 <script>
 (function () {
-  var form = document.getElementById("payable-form");
-  var mode = document.getElementById("payable-repeat-mode");
-  var times = document.getElementById("payable-times-field");
-  var input = document.getElementById("payable-repeat-count");
-  var preview = document.getElementById("payable-preview");
-  var panel = document.getElementById("payable-fixed");
-  var list = document.getElementById("payable-fixed-list");
-  var edit = document.getElementById("payable-edit");
-  var save = document.getElementById("payable-save");
-  var ready = false;
-
-  function syncTimes() {
-    if (!mode || !times) return;
-    var on = mode.value === "vezes";
-    times.classList.toggle("is-off", !on);
-    if (input) input.disabled = !on;
-  }
-
-  function field(name) {
-    return form ? form.elements[name] : null;
-  }
-
-  function dateBR(iso) {
-    var parts = String(iso || "").split("-");
-    if (parts.length !== 3) return iso || "";
-    return parts[2] + "/" + parts[1] + "/" + parts[0];
-  }
-
-  function addMonthsLabel(iso, step) {
-    var parts = String(iso || "").split("-").map(Number);
-    if (parts.length !== 3 || !parts[0]) return "";
-    var cursor = new Date(parts[0], parts[1] - 1 + step, 1);
-    var last = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0).getDate();
-    var day = Math.min(parts[2], last);
-    var due = new Date(cursor.getFullYear(), cursor.getMonth(), day);
-    var month = String(due.getMonth() + 1).padStart(2, "0");
-    var shown = String(due.getDate()).padStart(2, "0");
-    return shown + "/" + month + "/" + due.getFullYear();
-  }
-
-  function selectedText(select) {
-    if (!select || select.selectedIndex < 0) return "";
-    return select.options[select.selectedIndex].text;
-  }
-
-  function lock(on) {
-    if (!form) return;
-    Array.prototype.forEach.call(form.querySelectorAll("input, select"), function (el) {
-      if (el.type === "hidden" || el === save) return;
-      if (el === input && mode && mode.value !== "vezes") {
-        el.disabled = true;
-        return;
-      }
-      if (el.tagName === "SELECT") el.disabled = on;
-      else el.readOnly = on;
-    });
-    if (preview) preview.disabled = on;
-  }
-
-  function text(value) {
-    return String(value)
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;");
-  }
-
-  function line(label, value) {
-    return "<dt>" + text(label) + "</dt><dd>" + text(value) + "</dd>";
-  }
-
-  if (mode) mode.addEventListener("change", syncTimes);
-  syncTimes();
-
-  if (form) {
-    form.addEventListener("submit", function (event) {
-      if (!ready) event.preventDefault();
-    });
-  }
-
-  if (preview && form && panel && list) {
-    preview.addEventListener("click", function () {
-      if (!form.reportValidity()) return;
-      var description = (field("description").value || "").trim();
-      var supplier = (field("supplier").value || "").trim() || "Não informado";
-      var category = selectedText(field("category"));
-      var amount = (field("amount").value || "").trim();
-      var due = field("due_date").value;
-      var payment = "Único, em " + dateBR(due);
-      if (mode && mode.value === "vezes") {
-        var count = parseInt(input && input.value, 10) || 0;
-        if (count < 2) {
-          if (input) input.reportValidity();
-          return;
-        }
-        var dates = [];
-        for (var step = 0; step < count; step += 1) dates.push(addMonthsLabel(due, step));
-        payment = count + " vezes: " + dates.join(", ");
-      }
-      list.innerHTML = [
-        line("Descrição", description),
-        line("Fornecedor", supplier),
-        line("Classificação", category),
-        line("Valor", amount),
-        line("Pagamento", payment)
-      ].join("");
-      ready = false;
-      lock(true);
-      panel.hidden = false;
-    });
-  }
-
-  if (edit) {
-    edit.addEventListener("click", function () {
-      ready = false;
-      lock(false);
-      syncTimes();
-      if (panel) panel.hidden = true;
-    });
-  }
-
-  if (save) {
-    save.addEventListener("click", function () {
-      ready = true;
-      if (!form) return;
-      Array.prototype.forEach.call(form.querySelectorAll("select"), function (el) {
-        el.disabled = false;
-      });
-      if (mode && mode.value === "vezes" && input) input.disabled = false;
-    });
-  }
-
   function closeEdit(wrap) {
     if (!wrap) return;
     var opened = wrap.querySelector(".fin-edit-box");

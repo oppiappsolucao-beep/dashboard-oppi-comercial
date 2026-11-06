@@ -1435,3 +1435,106 @@ button.fin-delete-cancel {
     padding-top: 20px;
   }
 }
+
+.fin-line {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.fin-line text {
+  font-size: 11px;
+  fill: #6B7280;
+}
+
+.fin-line-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 18px;
+  margin-top: 8px;
+  font-size: 13px;
+}
+
+.fin-line-swatch {
+  display: inline-block;
+  width: 18px;
+  height: 3px;
+  margin-right: 6px;
+  border-radius: 99px;
+  vertical-align: middle;
+}
+
+.fin-line-swatch.is-in { background: #15803D; }
+.fin-line-swatch.is-out { background: #B91C1C; }
+
+.fin-bill-filters {
+  margin-bottom: 4px;
+}
+
+.fin-period-form input[type="search"] {
+  display: block;
+  width: 180px;
+  height: 44px;
+  box-sizing: border-box;
+  background: var(--soft);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 12px;
+  padding: 0 12px;
+  font-size: 16px;
+}
+
+.fin-bill-week {
+  margin: 16px 0 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.fin-bill {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: #fff;
+}
+
+.fin-bill-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.fin-bill-top strong {
+  display: block;
+  font-size: 15px;
+}
+
+.fin-bill-meta {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.fin-bill-money {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.fin-bill .fin-payable-actions {
+  justify-content: flex-start;
+}
+
+@media (max-width: 900px) {
+  .fin-period-form input[type="search"] {
+    width: 100%;
+  }
+}

@@ -528,6 +528,14 @@ def _payables_view(start: date, end: date, search: str, status: str = "", today:
     atrasados = [row for row in rows if row.get("status") == "atrasado"]
     atraso_total = sum(float(row["amount"]) for row in atrasados)
     saida = sum(float(row["amount"]) for row in rows)
+    saida_por_semana: dict[tuple[int, int, int], float] = {}
+    for row in rows:
+        due = row.get("due")
+        if not isinstance(due, date):
+            continue
+        index, _ = _week_band(due.day)
+        key = (due.year, due.month, index)
+        saida_por_semana[key] = saida_por_semana.get(key, 0.0) + float(row.get("amount") or 0)
     periodo_a_pagar = sum(float(row["amount"]) for row in rows if not row.get("paid"))
     periodo_pago = sum(float(row["amount"]) for row in rows if row.get("paid"))
     needle = normalize_text(search).lower()
@@ -597,6 +605,10 @@ def _payables_view(start: date, end: date, search: str, status: str = "", today:
         "suppliers": list_suppliers(),
         "month_label": month_label(start, end),
         "semanas": _group_payable_weeks(listed, today, start, end),
+        "saida_por_semana": [
+            {"ano": ano, "mes": mes, "indice": index, "valor": round(valor, 2)}
+            for (ano, mes, index), valor in saida_por_semana.items()
+        ],
     }
 
 
@@ -644,6 +656,55 @@ def soma_marcado_ja_pagou(
             if saved == "ja_pagou":
                 total += valor
     return round(total, 2)
+
+
+def entrada_por_semana(
+    rows: list[dict],
+    *,
+    start: date,
+    end: date,
+    overrides: dict[str, str] | None = None,
+    inactive_names: set[str] | None = None,
+    inactive_cnpjs: set[str] | None = None,
+) -> dict[tuple[int, int, int], float]:
+    """Já pagou da Entrada, separado pela semana do vencimento."""
+    manual = overrides or {}
+    off_names = inactive_names or set()
+    off_cnpjs = inactive_cnpjs or set()
+    months: list[tuple[int, int]] = []
+    cursor = date(start.year, start.month, 1)
+    limit = date(end.year, end.month, 1)
+    while cursor <= limit:
+        months.append((cursor.year, cursor.month))
+        cursor = date(cursor.year + (1 if cursor.month == 12 else 0), 1 if cursor.month == 12 else cursor.month + 1, 1)
+    buckets: dict[tuple[int, int, int], float] = {}
+    for row in rows:
+        if row.get("filial") or _locally_inactive(row, off_names, off_cnpjs):
+            continue
+        if _entry_status(row, row.get("fechamento") if isinstance(row.get("fechamento"), date) else None, end).get("key") == "cancelado":
+            continue
+        valor = float(row.get("valor") or 0)
+        if valor <= 0:
+            continue
+        for year, month in months:
+            shown = _due_in_month(row, year, month)
+            if not shown or shown < start or shown > end:
+                continue
+            chave = entrada_status_key(
+                int(row.get("linha") or 0),
+                shown,
+                row.get("empresa") or "",
+                row.get("plano") or "",
+                row.get("cnpj") or "",
+            )
+            legacy = entrada_status_legacy_key(int(row.get("linha") or 0), shown)
+            saved = manual.get(chave) or (manual.get(legacy) if legacy else None)
+            if saved != "ja_pagou":
+                continue
+            index, _ = _week_band(shown.day)
+            key = (shown.year, shown.month, index)
+            buckets[key] = buckets.get(key, 0.0) + valor
+    return {key: round(valor, 2) for key, valor in buckets.items()}
 
 
 def _situacao_entrada_no_mes(row: dict, shown: date, today: date, manual: dict[str, str]) -> str:
@@ -746,6 +807,93 @@ def entrada_vai_pagar(start: date, end: date, today: date) -> float:
         return 0.0
 
 
+def _semanas_no_periodo(start: date, end: date) -> list[tuple[int, int, int]]:
+    found: list[tuple[int, int, int]] = []
+    seen: set[tuple[int, int, int]] = set()
+    cursor = start
+    while cursor <= end:
+        index, _ = _week_band(cursor.day)
+        key = (cursor.year, cursor.month, index)
+        if key not in seen:
+            seen.add(key)
+            found.append(key)
+        cursor += timedelta(days=1)
+    return found
+
+
+def _montar_grafico_caixa(
+    entrada: dict[tuple[int, int, int], float],
+    saida_rows: list[dict],
+    start: date,
+    end: date,
+) -> dict[str, Any]:
+    """Pontos do gráfico: entrada (já pagou) e saída (contas) no período."""
+    saida: dict[tuple[int, int, int], float] = {}
+    for item in saida_rows:
+        key = (int(item["ano"]), int(item["mes"]), int(item["indice"]))
+        saida[key] = float(item.get("valor") or 0)
+    faixas = ("1–7", "8–14", "15–21", "22–28", "29–31")
+    por_mes = (end - start).days > 45
+    pontos: list[dict[str, Any]] = []
+    if por_mes:
+        cursor = date(start.year, start.month, 1)
+        limit = date(end.year, end.month, 1)
+        while cursor <= limit:
+            ent = sum(valor for (ano, mes, _), valor in entrada.items() if ano == cursor.year and mes == cursor.month)
+            sai = sum(valor for (ano, mes, _), valor in saida.items() if ano == cursor.year and mes == cursor.month)
+            pontos.append({
+                "label": _MESES[cursor.month][:3],
+                "entrada": round(ent, 2),
+                "saida": round(sai, 2),
+            })
+            cursor = date(cursor.year + (1 if cursor.month == 12 else 0), 1 if cursor.month == 12 else cursor.month + 1, 1)
+    else:
+        meses = {(ano, mes) for ano, mes, _ in _semanas_no_periodo(start, end)}
+        for ano, mes, index in _semanas_no_periodo(start, end):
+            label = faixas[index] if 0 <= index < len(faixas) else str(index + 1)
+            if len(meses) > 1:
+                label = f"{label} {_MESES[mes][:3].lower()}"
+            pontos.append({
+                "label": label,
+                "entrada": round(float(entrada.get((ano, mes, index), 0)), 2),
+                "saida": round(float(saida.get((ano, mes, index), 0)), 2),
+            })
+    for ponto in pontos:
+        ponto["entrada_label"] = format_brl(ponto["entrada"])
+        ponto["saida_label"] = format_brl(ponto["saida"])
+    real_max = max([ponto["entrada"] for ponto in pontos] + [ponto["saida"] for ponto in pontos] + [0])
+    max_v = real_max if real_max > 0 else 1.0
+    width, height = 640, 220
+    pad_l, pad_r, pad_t, pad_b = 12, 12, 16, 28
+    inner_w = width - pad_l - pad_r
+    inner_h = height - pad_t - pad_b
+    count = max(len(pontos), 1)
+
+    def x_at(index: int) -> float:
+        if count == 1:
+            return pad_l + inner_w / 2
+        return pad_l + inner_w * index / (count - 1)
+
+    def y_at(value: float) -> float:
+        return pad_t + inner_h * (1 - (value / max_v))
+
+    for index, ponto in enumerate(pontos):
+        ponto["x"] = round(x_at(index), 1)
+        ponto["y_entrada"] = round(y_at(ponto["entrada"]), 1)
+        ponto["y_saida"] = round(y_at(ponto["saida"]), 1)
+    return {
+        "pontos": pontos,
+        "entrada_pontos": " ".join(f"{ponto['x']},{ponto['y_entrada']}" for ponto in pontos),
+        "saida_pontos": " ".join(f"{ponto['x']},{ponto['y_saida']}" for ponto in pontos),
+        "topo": pad_t,
+        "meio": round(pad_t + inner_h / 2, 1),
+        "base": round(pad_t + inner_h, 1),
+        "max_label": format_brl(real_max),
+        "width": width,
+        "height": height,
+    }
+
+
 def attach_cash_compare(payables: dict[str, Any], start: date, end: date, today: date, *, force: bool = False) -> dict[str, Any]:
     """Entrada e A receber vêm do painel de Entrada, no período escolhido."""
     del force
@@ -770,10 +918,19 @@ def attach_cash_compare(payables: dict[str, Any], start: date, end: date, today:
             inactive_cnpjs=inactive_cnpjs,
         )
         note = ""
+        entrada_semanas = entrada_por_semana(
+            rows,
+            start=start,
+            end=end,
+            overrides=overrides,
+            inactive_names=inactive_names,
+            inactive_cnpjs=inactive_cnpjs,
+        )
     except Exception:
         logger.exception("Falha ao ler Entrada e A receber do painel")
         entrada = 0.0
         a_receber = 0.0
+        entrada_semanas = {}
         note = "Não consegui ler os valores da Entrada agora."
     saldo = entrada - saida
     payables["entrada"] = entrada
@@ -783,6 +940,12 @@ def attach_cash_compare(payables: dict[str, Any], start: date, end: date, today:
     payables["saldo"] = saldo
     payables["saldo_label"] = format_brl(saldo)
     payables["compare_note"] = note
+    payables["grafico"] = _montar_grafico_caixa(
+        entrada_semanas,
+        payables.get("saida_por_semana") or [],
+        start,
+        end,
+    )
     return payables
 
 
@@ -1514,6 +1677,8 @@ def _group_payable_weeks(listed: list[dict], today: date, start: date, end: date
             groups[key] = {
                 "indice": index + 1,
                 "label": f"{label} de {_MESES[due.month].lower()}",
+                "faixa": _WEEK_OPTIONS[index][2],
+                "mes": _MESES[due.month].lower(),
                 "atual": current is not None and due.year == today.year and due.month == today.month and index == current,
                 "n": 0,
                 "total": 0.0,
