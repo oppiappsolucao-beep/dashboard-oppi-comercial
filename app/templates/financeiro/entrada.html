@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
-<link rel="stylesheet" href="/static/css/financeiro.css?v={{ static_version }}-entrada5">
+<link rel="stylesheet" href="/static/css/financeiro.css?v={{ static_version }}-entrada6">
 <div class="page-header">
   <div>
     <div class="page-title">Entrada</div>
@@ -40,33 +40,37 @@
 
 <div class="panel fin-table-card">
   <div class="section-heading">Contagem por valor</div>
-  <div class="section-subtitle">Quantos clientes a base tem em cada preço, com ativos e cancelados. Vale para a planilha inteira.</div>
-  <div class="table-wrap">
-    <table class="data-table fin-table fin-stack fin-cols-valor">
-      <thead>
-        <tr>
-          <th>Valor</th>
-          <th>Clientes</th>
-          <th>Ativos</th>
-          <th>Cancelados</th>
-          <th>Total</th>
-        </tr>
-      </thead>
-      <tbody>
+  <div class="section-subtitle">Quantidade de clientes em cada valor. Passe o mouse na barra para ver o número.</div>
+  {% if controle.valores %}
+  {% set ns = namespace(max_n=1) %}
+  {% for row in controle.valores %}
+    {% if row.n > ns.max_n %}{% set ns.max_n = row.n %}{% endif %}
+  {% endfor %}
+  <div class="fin-bar-chart" role="img" aria-label="Quantidade de clientes por valor">
+    <div class="fin-bar-y-name">Quantidade</div>
+    <div class="fin-bar-y" aria-hidden="true">
+      <span>{{ ns.max_n }}</span>
+      <span>{{ (ns.max_n / 2)|round|int }}</span>
+      <span>0</span>
+    </div>
+    <div class="fin-bar-plot">
+      <div class="fin-bar-row">
         {% for row in controle.valores %}
-        <tr>
-          <td>{{ row.label }}</td>
-          <td class="fin-cell-num">{{ row.n }}</td>
-          <td class="fin-cell-num">{{ row.ativos }}</td>
-          <td class="fin-cell-num">{{ row.cancelados }}</td>
-          <td class="fin-cell-num">{{ row.total_label }}</td>
-        </tr>
-        {% else %}
-        <tr><td colspan="5" class="fin-empty">Nenhum valor na base Raissa.</td></tr>
+        <div class="fin-bar-col">
+          <div class="fin-bar-stack">
+            <div class="fin-bar{% if row.n %} is-on{% endif %}" style="height: {{ (row.n / ns.max_n * 100)|round(1) }}%">
+              <span class="fin-bar-tip">{{ row.n }} cliente{{ 's' if row.n != 1 else '' }}</span>
+            </div>
+          </div>
+          <div class="fin-bar-label">{{ row.label }}</div>
+        </div>
         {% endfor %}
-      </tbody>
-    </table>
+      </div>
+    </div>
   </div>
+  {% else %}
+  <p class="fin-empty">Nenhum valor na base Raissa.</p>
+  {% endif %}
 </div>
 
 <div class="panel fin-table-card">
