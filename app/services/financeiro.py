@@ -1282,14 +1282,24 @@ _WEEK_BANDS = (
 )
 
 
-def entrada_status_key(linha: int, due: date, empresa: str, plano: str) -> str:
-    """Uma situação por cliente e por mês. A linha da Raissa identifica o cadastro."""
+def entrada_status_key(linha: int, due: date, empresa: str, plano: str, cnpj: str = "") -> str:
+    """Situação do mês presa ao cliente e ao plano, não ao número da linha da planilha."""
+    del linha
+    from app.services.legacy_core import normalize_cnpj_for_duplicate
+
+    parts = (
+        normalize_search_text(empresa),
+        normalize_cnpj_for_duplicate(cnpj or ""),
+        normalize_search_text(plano),
+        f"{due:%Y-%m}",
+    )
+    return "pag:" + "|".join(parts)
+
+
+def entrada_status_legacy_key(linha: int, due: date) -> str:
     if int(linha or 0) > 0:
         return f"linha:{int(linha)}:{due:%Y-%m}"
-    return (
-        f"nome:{normalize_search_text(empresa)}:"
-        f"{normalize_search_text(plano)}:{due:%Y-%m}"
-    )
+    return ""
 
 
 def _week_band(day: int) -> tuple[int, str]:
@@ -1504,8 +1514,15 @@ def summarize_raissa_entrada(
             if isinstance(row.get("fechamento"), date)
             else _entry_status(row, shown_due, today)
         )
-        chave = entrada_status_key(int(row.get("linha") or 0), shown_due, row.get("empresa") or "", row.get("plano") or "")
-        saved = manual.get(chave)
+        chave = entrada_status_key(
+            int(row.get("linha") or 0),
+            shown_due,
+            row.get("empresa") or "",
+            row.get("plano") or "",
+            row.get("cnpj") or "",
+        )
+        legacy = entrada_status_legacy_key(int(row.get("linha") or 0), shown_due)
+        saved = manual.get(chave) or (manual.get(legacy) if legacy else None)
         if saved in _MANUAL_STATUS:
             period_status = _MANUAL_STATUS[saved]
         if period_status["key"] == "cancelado":

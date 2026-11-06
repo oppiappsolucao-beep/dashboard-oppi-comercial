@@ -115,7 +115,11 @@ async def financeiro_entrada_situacao(
                 "period_end": period_end,
                 "status": filtro,
                 "semana": semana,
-                "flash": "Situação salva neste painel. A planilha Raissa não foi alterada." if saved else "",
+                "flash": (
+                    "Situação salva neste painel. A planilha Raissa não foi alterada."
+                    if saved
+                    else "Não consegui salvar a situação. Tente de novo."
+                ),
             }.items()
             if value
         }

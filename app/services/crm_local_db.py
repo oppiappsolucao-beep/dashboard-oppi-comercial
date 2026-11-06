@@ -748,8 +748,7 @@ def _ensure_entrada_status(conn) -> None:
     )
 
 
-def load_entrada_statuses() -> dict[str, str]:
-    """Situação marcada na Entrada. Não vem da planilha Raissa."""
+def _load_entrada_statuses_sqlite() -> dict[str, str]:
     init_crm_local_db()
     with _lock, _connect() as conn:
         _ensure_entrada_status(conn)
@@ -761,14 +760,7 @@ def load_entrada_statuses() -> dict[str, str]:
     }
 
 
-def save_entrada_status(chave: str, situacao: str) -> bool:
-    """Grava a situação só no painel. Não escreve na aba Raissa."""
-    from datetime import datetime
-
-    key = _normalize_text(chave)
-    status = _normalize_text(situacao)
-    if not key or status not in _ENTRADA_STATUS:
-        return False
+def _save_entrada_status_sqlite(chave: str, situacao: str, updated_at: str) -> bool:
     init_crm_local_db()
     with _lock, _connect() as conn:
         _ensure_entrada_status(conn)
@@ -780,7 +772,105 @@ def save_entrada_status(chave: str, situacao: str) -> bool:
                 situacao = excluded.situacao,
                 updated_at = excluded.updated_at
             """,
-            (key, status, datetime.now().isoformat(timespec="seconds")),
+            (chave, situacao, updated_at),
         )
         conn.commit()
     return True
+
+
+def _load_entrada_statuses_postgres() -> dict[str, str]:
+    try:
+        from sqlalchemy import text
+
+        from database.connection import engine
+    except Exception:
+        return {}
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE IF NOT EXISTS entrada_pagamento (
+                        chave VARCHAR(500) PRIMARY KEY,
+                        situacao VARCHAR(40) NOT NULL,
+                        updated_at VARCHAR(40) NOT NULL
+                    )
+                    """
+                )
+            )
+            rows = conn.execute(text("SELECT chave, situacao FROM entrada_pagamento")).fetchall()
+    except Exception:
+        return {}
+    found = {}
+    for chave, situacao in rows:
+        key = _normalize_text(chave)
+        status = _normalize_text(situacao)
+        if key and status in _ENTRADA_STATUS:
+            found[key] = status
+    return found
+
+
+def _save_entrada_status_postgres(chave: str, situacao: str, updated_at: str) -> bool:
+    try:
+        from sqlalchemy import text
+
+        from database.connection import engine
+    except Exception:
+        return False
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE IF NOT EXISTS entrada_pagamento (
+                        chave VARCHAR(500) PRIMARY KEY,
+                        situacao VARCHAR(40) NOT NULL,
+                        updated_at VARCHAR(40) NOT NULL
+                    )
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    """
+                    INSERT INTO entrada_pagamento (chave, situacao, updated_at)
+                    VALUES (:chave, :situacao, :updated_at)
+                    ON CONFLICT (chave) DO UPDATE SET
+                        situacao = excluded.situacao,
+                        updated_at = excluded.updated_at
+                    """
+                ),
+                {"chave": chave, "situacao": situacao, "updated_at": updated_at},
+            )
+        return True
+    except Exception:
+        return False
+
+
+def load_entrada_statuses() -> dict[str, str]:
+    """Situação marcada na Entrada. Não vem da planilha Raissa."""
+    found = {}
+    try:
+        found.update(_load_entrada_statuses_sqlite())
+    except Exception:
+        found = {}
+    found.update(_load_entrada_statuses_postgres())
+    return found
+
+
+def save_entrada_status(chave: str, situacao: str) -> bool:
+    """Grava a situação no banco do painel. Não escreve na aba Raissa."""
+    from datetime import datetime
+
+    key = _normalize_text(chave)
+    status = _normalize_text(situacao)
+    if not key or status not in _ENTRADA_STATUS:
+        return False
+    updated_at = datetime.now().isoformat(timespec="seconds")
+    saved = False
+    try:
+        saved = _save_entrada_status_sqlite(key, status, updated_at) or saved
+    except Exception:
+        saved = saved
+    saved = _save_entrada_status_postgres(key, status, updated_at) or saved
+    return saved

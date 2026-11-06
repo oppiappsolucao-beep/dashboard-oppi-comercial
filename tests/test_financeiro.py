@@ -747,6 +747,54 @@ class RaissaEntradaTest(unittest.TestCase):
         self.assertEqual([row["cliente"] for row in out["linhas"]], ["Escola Matriz"])
         self.assertEqual(out["total_n"], 1)
 
+    def test_situacao_salva_continua_no_cliente(self):
+        import os
+        import tempfile
+
+        from app.services.crm_local_db import load_entrada_statuses, save_entrada_status
+        from app.services.financeiro import entrada_status_key, raissa_rows_from_sheet, summarize_raissa_entrada
+
+        sheet = {
+            "aba": "Raissa",
+            "colunas": ["Empresa", "CNPJ", "Plano", "Fechamento", "Valor do serviço", "Status", "AI"],
+            "clientes": [
+                {
+                    "Empresa": "Pago",
+                    "CNPJ": "18.088.253/0001-24",
+                    "Plano": "Oppi RH",
+                    "Fechamento": "10/08/2026",
+                    "Valor do serviço": "20,00",
+                    "Status": "",
+                    "AI": "Ativo",
+                    "linha": 8,
+                },
+            ],
+        }
+        today = date(2026, 11, 6)
+        rows = raissa_rows_from_sheet(sheet, today=today)
+        chave = entrada_status_key(8, date(2026, 11, 10), "Pago", "Oppi RH", "18.088.253/0001-24")
+        self.assertTrue(chave.startswith("pag:"))
+        previous = os.environ.get("APP_STORAGE_DIR")
+        os.environ["APP_STORAGE_DIR"] = tempfile.mkdtemp()
+        try:
+            self.assertTrue(save_entrada_status(chave, "ja_pagou"))
+            self.assertEqual(load_entrada_statuses().get(chave), "ja_pagou")
+            out = summarize_raissa_entrada(
+                rows,
+                start=date(2026, 11, 1),
+                end=date(2026, 11, 30),
+                today=today,
+                overrides=load_entrada_statuses(),
+            )
+        finally:
+            if previous is None:
+                os.environ.pop("APP_STORAGE_DIR", None)
+            else:
+                os.environ["APP_STORAGE_DIR"] = previous
+        self.assertEqual(out["linhas"][0]["status_key"], "ja_pagou")
+        self.assertEqual(out["linhas"][0]["chave"], chave)
+        self.assertTrue(out["linhas"][0]["manual"])
+
     def test_nao_pago_nao_vira_pago_e_data_passada_fica_pendente(self):
         from app.services.financeiro import classify_raissa_entry
 
