@@ -12,7 +12,9 @@ from app.services.raissa_company_sync import (
     apply_raissa_values,
     ensure_raissa_columns,
     match_cadastro_sheet_rows,
+    next_raissa_append_row,
     payload_for_raissa,
+    _write_raissa_row,
 )
 
 
@@ -240,6 +242,36 @@ class RaissaCompanySyncTest(unittest.TestCase):
         headers = ["Empresa", "Status"]
         row = apply_raissa_values(["", ""], headers, payload, only_filled=False)
         self.assertEqual(row, ["ACME", ""])
+
+    def test_servico_novo_nao_deixa_linha_vazia_embaixo(self):
+        values = [
+            ["Empresa"],
+            ["BEPPU & ALMEIDA LTDA"],
+            ["GERACAO DIESEL"],
+            ["CORTAZI SOLUCOES EM MARCENARIA"],
+            ["", ""],
+            ["", ""],
+        ]
+        self.assertEqual(next_raissa_append_row(values, 0), 5)
+        self.assertEqual(next_raissa_append_row(values[:4], 0), 5)
+
+        class Sheet:
+            title = "Raissa"
+            row_count = 4
+            added = 0
+
+            def add_rows(self, count):
+                self.added = count
+                self.row_count += count
+
+            def update(self, rows, range_name, value_input_option=""):
+                self.updated = (rows, range_name, value_input_option)
+
+        sheet = Sheet()
+        _write_raissa_row(sheet, 5, ["NOVA EMPRESA", "Oppi Ponto"])
+        self.assertEqual(sheet.added, 1)
+        self.assertEqual(sheet.updated[0], [["NOVA EMPRESA", "Oppi Ponto"]])
+        self.assertEqual(sheet.updated[1], "A5:B5")
 
 
 if __name__ == "__main__":
