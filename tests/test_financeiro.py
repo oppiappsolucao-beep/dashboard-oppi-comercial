@@ -303,6 +303,16 @@ class EntradasEContasTest(unittest.TestCase):
         )
         self.assertAlmostEqual(novembro, 50.0)
         self.assertAlmostEqual(dois_meses, 100.0)
+        from app.services.financeiro import soma_vai_pagar
+
+        a_receber = soma_vai_pagar(
+            [pago, aberto],
+            start=date(2026, 11, 1),
+            end=date(2026, 11, 30),
+            today=date(2026, 11, 6),
+            overrides=marcado,
+        )
+        self.assertAlmostEqual(a_receber, 20.0)
 
     def test_reajuste_vale_no_mes_ou_em_todos(self):
         import os

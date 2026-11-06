@@ -645,20 +645,80 @@ def soma_marcado_ja_pagou(
     return round(total, 2)
 
 
+def _situacao_entrada_no_mes(row: dict, shown: date, today: date, manual: dict[str, str]) -> str:
+    chave = entrada_status_key(
+        int(row.get("linha") or 0),
+        shown,
+        row.get("empresa") or "",
+        row.get("plano") or "",
+        row.get("cnpj") or "",
+    )
+    legacy = entrada_status_legacy_key(int(row.get("linha") or 0), shown)
+    saved = manual.get(chave) or (manual.get(legacy) if legacy else None)
+    if saved in _MANUAL_STATUS:
+        return saved
+    if isinstance(row.get("fechamento"), date):
+        return _status_for_projection(row, shown, today)["key"]
+    return _entry_status(row, shown, today)["key"]
+
+
+def soma_vai_pagar(
+    rows: list[dict],
+    *,
+    start: date,
+    end: date,
+    today: date,
+    overrides: dict[str, str] | None = None,
+    inactive_names: set[str] | None = None,
+    inactive_cnpjs: set[str] | None = None,
+) -> float:
+    """Soma quem ainda está em Vai pagar na Entrada, no período."""
+    manual = overrides or {}
+    off_names = inactive_names or set()
+    off_cnpjs = inactive_cnpjs or set()
+    months: list[tuple[int, int]] = []
+    cursor = date(start.year, start.month, 1)
+    limit = date(end.year, end.month, 1)
+    while cursor <= limit:
+        months.append((cursor.year, cursor.month))
+        cursor = date(cursor.year + (1 if cursor.month == 12 else 0), 1 if cursor.month == 12 else cursor.month + 1, 1)
+    total = 0.0
+    for row in rows:
+        if row.get("filial") or _locally_inactive(row, off_names, off_cnpjs):
+            continue
+        if _entry_status(row, row.get("fechamento") if isinstance(row.get("fechamento"), date) else None, today).get("key") == "cancelado":
+            continue
+        valor = float(row.get("valor") or 0)
+        if valor <= 0:
+            continue
+        for year, month in months:
+            shown = _due_in_month(row, year, month)
+            if not shown or shown < start or shown > end:
+                continue
+            if _situacao_entrada_no_mes(row, shown, today, manual) == "vai_pagar":
+                total += valor
+    return round(total, 2)
+
+
+def _linhas_da_entrada(start: date, end: date, today: date) -> tuple[list[dict], dict[str, str], set[str], set[str]]:
+    from app.services.campaign_leads import read_raissa_sheet
+    from app.services.crm_local_db import load_entrada_statuses
+
+    sheet = read_raissa_sheet()
+    rows = raissa_rows_from_sheet(sheet, today=today)
+    inactive_names, inactive_cnpjs = load_inactive_companies()
+    return rows, load_entrada_statuses(), inactive_names, inactive_cnpjs
+
+
 def entrada_marcada_paga(start: date, end: date, today: date) -> float:
     """Valor marcado como Já pagou no painel de Entrada. Não usa o Asaas."""
     try:
-        from app.services.campaign_leads import read_raissa_sheet
-        from app.services.crm_local_db import load_entrada_statuses
-
-        sheet = read_raissa_sheet()
-        rows = raissa_rows_from_sheet(sheet, today=today)
-        inactive_names, inactive_cnpjs = load_inactive_companies()
+        rows, overrides, inactive_names, inactive_cnpjs = _linhas_da_entrada(start, end, today)
         return soma_marcado_ja_pagou(
             rows,
             start=start,
             end=end,
-            overrides=load_entrada_statuses(),
+            overrides=overrides,
             inactive_names=inactive_names,
             inactive_cnpjs=inactive_cnpjs,
         )
@@ -667,27 +727,53 @@ def entrada_marcada_paga(start: date, end: date, today: date) -> float:
         return 0.0
 
 
+def entrada_vai_pagar(start: date, end: date, today: date) -> float:
+    """Valor de quem ainda está em Vai pagar no painel de Entrada."""
+    try:
+        rows, overrides, inactive_names, inactive_cnpjs = _linhas_da_entrada(start, end, today)
+        return soma_vai_pagar(
+            rows,
+            start=start,
+            end=end,
+            today=today,
+            overrides=overrides,
+            inactive_names=inactive_names,
+            inactive_cnpjs=inactive_cnpjs,
+        )
+    except Exception:
+        logger.exception("Falha ao somar quem ainda vai pagar na Entrada")
+        return 0.0
+
+
 def attach_cash_compare(payables: dict[str, Any], start: date, end: date, today: date, *, force: bool = False) -> dict[str, Any]:
-    """Entrada é o que foi marcado como pago no painel. A receber continua no Asaas."""
+    """Entrada e A receber vêm do painel de Entrada, no período escolhido."""
+    del force
     saida = float(payables.get("saida") or 0)
-    entrada = entrada_marcada_paga(start, end, today)
-    a_receber = 0.0
-    note = ""
-    if not is_configured():
-        note = "Asaas não configurado para ler o valor a receber."
-    else:
-        try:
-            due_raw = fetch_payments_due(start, end, billing_type="BOLETO", force=force)
-            abertos = [
-                row for row in (summarize_boletos([], due_raw, today).get("mes") or [])
-                if row.get("status_key") != "pago"
-            ]
-            a_receber = sum(float(row["valor"]) for row in abertos)
-        except AsaasError as exc:
-            note = note or str(exc)
-        except Exception:
-            logger.exception("Falha ao ler o valor a receber")
-            note = note or "Não foi possível ler o valor a receber."
+    try:
+        rows, overrides, inactive_names, inactive_cnpjs = _linhas_da_entrada(start, end, today)
+        entrada = soma_marcado_ja_pagou(
+            rows,
+            start=start,
+            end=end,
+            overrides=overrides,
+            inactive_names=inactive_names,
+            inactive_cnpjs=inactive_cnpjs,
+        )
+        a_receber = soma_vai_pagar(
+            rows,
+            start=start,
+            end=end,
+            today=today,
+            overrides=overrides,
+            inactive_names=inactive_names,
+            inactive_cnpjs=inactive_cnpjs,
+        )
+        note = ""
+    except Exception:
+        logger.exception("Falha ao ler Entrada e A receber do painel")
+        entrada = 0.0
+        a_receber = 0.0
+        note = "Não consegui ler os valores da Entrada agora."
     saldo = entrada - saida
     payables["entrada"] = entrada
     payables["entrada_label"] = format_brl(entrada)
