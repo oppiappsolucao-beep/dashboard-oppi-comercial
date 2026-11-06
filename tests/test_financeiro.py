@@ -689,6 +689,24 @@ class RaissaEntradaTest(unittest.TestCase):
         semanas = {semana["label"]: [row["cliente"] for row in semana["linhas"]] for semana in out["semanas"]}
         self.assertEqual(semanas["Semana 2 · dias 8 a 14 de novembro"], ["Pago"])
         self.assertEqual(semanas["Semana 3 · dias 15 a 21 de novembro"], ["Aberto"])
+        from app.services.financeiro import _apply_week_choice
+
+        _apply_week_choice(out, {}, date(2026, 11, 1), date(2026, 11, 30), today)
+        self.assertEqual(out["semana"], 1)
+        self.assertEqual(out["semanas"], [])
+        opcoes = [item["label"] for item in out["semanas_opcoes"]]
+        self.assertEqual(opcoes[1], "Primeira · 1 a 7")
+        self.assertEqual(opcoes[2], "Segunda · 8 a 14")
+        de_novo = summarize_raissa_entrada(
+            rows,
+            start=date(2026, 11, 1),
+            end=date(2026, 11, 30),
+            today=today,
+            overrides={chave: "ja_pagou"},
+            inactive_names={normalize_search_text("Saiu")},
+        )
+        _apply_week_choice(de_novo, {"semana": "2"}, date(2026, 11, 1), date(2026, 11, 30), today)
+        self.assertEqual([row["cliente"] for semana in de_novo["semanas"] for row in semana["linhas"]], ["Pago"])
         pizzas = {pizza["titulo"]: pizza for pizza in out["pizzas"]}
         novembro = {fatia["mes"]: fatia["valor"] for fatia in pizzas["2026 · Recorrente"]["fatias"]}
         self.assertEqual(novembro["Novembro"], 50.0)

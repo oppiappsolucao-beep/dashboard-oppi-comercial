@@ -1289,6 +1289,39 @@ def _week_band(day: int) -> tuple[int, str]:
     return 0, _WEEK_BANDS[0][3]
 
 
+_WEEK_OPTIONS = (
+    (1, "Primeira", "1 a 7"),
+    (2, "Segunda", "8 a 14"),
+    (3, "Terceira", "15 a 21"),
+    (4, "Quarta", "22 a 28"),
+    (5, "Quinta", "29 a 31"),
+)
+
+
+def _chosen_week(raw: str, start: date, end: date, today: date) -> int:
+    """Sem escolha, o mês atual abre na semana de hoje. Outro mês abre inteiro."""
+    text = normalize_text(raw).lower()
+    if text in {"0", "todas", "mes"}:
+        return 0
+    if text in {"1", "2", "3", "4", "5"}:
+        return int(text)
+    if start <= today <= end:
+        return _week_band(today.day)[0] + 1
+    return 0
+
+
+def _apply_week_choice(controle: dict, params: dict, start: date, end: date, today: date) -> None:
+    semana = _chosen_week(params.get("semana") or "", start, end, today)
+    params["semana"] = str(semana)
+    controle["semana"] = semana
+    controle["semanas_opcoes"] = [{"value": "0", "label": "Mês inteiro"}]
+    controle["semanas_opcoes"].extend(
+        {"value": str(number), "label": f"{name} · {days}"} for number, name, days in _WEEK_OPTIONS
+    )
+    if semana:
+        controle["semanas"] = [item for item in controle["semanas"] if item.get("indice") == semana]
+
+
 def _locally_inactive(row: dict, names: set[str], cnpjs: set[str]) -> bool:
     from app.services.legacy_core import normalize_cnpj_for_duplicate
 
@@ -1309,6 +1342,7 @@ def _group_weeks(listed: list[dict], today: date, start: date, end: date) -> lis
         key = (due.year, due.month, index)
         if key not in groups:
             groups[key] = {
+                "indice": index + 1,
                 "label": f"{label} de {_MESES[due.month].lower()}",
                 "atual": current is not None and due.year == today.year and due.month == today.month and index == current,
                 "n": 0,
@@ -1628,6 +1662,7 @@ def build_raissa_entrada_context(
             "A coluna D (fechamento) está vazia. A contagem por valor continua na base inteira. "
             "A projeção do mês começa quando essa data está preenchida."
         )
+    _apply_week_choice(controle, params, start, end, today)
     return {
         "kpi_cards": _raissa_kpi_cards(controle),
         "controle": controle,

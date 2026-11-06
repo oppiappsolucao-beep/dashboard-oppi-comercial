@@ -32,6 +32,7 @@ def _params(request: Request, form: dict | None = None) -> dict:
         "search": normalize_text(data.get("search")),
         "period_start": normalize_text(data.get("period_start")),
         "period_end": normalize_text(data.get("period_end")),
+        "semana": normalize_text(data.get("semana")),
     }
 
 
@@ -98,6 +99,7 @@ async def financeiro_entrada_situacao(
     period_start: str = Form(""),
     period_end: str = Form(""),
     filtro: str = Form(""),
+    semana: str = Form(""),
 ):
     denied = require_auth(request)
     if denied:
@@ -112,6 +114,7 @@ async def financeiro_entrada_situacao(
                 "period_start": period_start,
                 "period_end": period_end,
                 "status": filtro,
+                "semana": semana,
                 "flash": "Situação salva neste painel. A planilha Raissa não foi alterada." if saved else "",
             }.items()
             if value
@@ -179,6 +182,7 @@ async def financeiro_sync(
     period_end: str = Form(""),
     status: str = Form(""),
     search: str = Form(""),
+    semana: str = Form(""),
 ):
     denied = require_auth(request)
     if denied:
@@ -190,6 +194,7 @@ async def financeiro_sync(
         "search": search,
         "period_start": period_start,
         "period_end": period_end,
+        "semana": semana,
     }
     if normalize_text(destino) == "entrada":
         params["tab"] = "entradas"

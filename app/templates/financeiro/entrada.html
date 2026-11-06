@@ -13,6 +13,7 @@
       <input type="hidden" name="period_start" value="{{ filters.period_start }}">
       <input type="hidden" name="period_end" value="{{ filters.period_end }}">
       <input type="hidden" name="status" value="{{ filters.status }}">
+      <input type="hidden" name="semana" value="{{ filters.semana }}">
       <button type="submit" class="btn">Atualizar base</button>
     </form>
   </div>
@@ -129,6 +130,13 @@
       <label>Até
         <input type="date" name="period_end" value="{{ filters.period_end }}">
       </label>
+      <label>Semana
+        <select name="semana">
+          {% for opcao in controle.semanas_opcoes %}
+          <option value="{{ opcao.value }}" {% if filters.semana == opcao.value %}selected{% endif %}>{{ opcao.label }}</option>
+          {% endfor %}
+        </select>
+      </label>
       <label>Situação
         <select name="status">
           <option value="" {% if not filters.status %}selected{% endif %}>Todas</option>
@@ -177,6 +185,7 @@
                 <input type="hidden" name="period_start" value="{{ filters.period_start }}">
                 <input type="hidden" name="period_end" value="{{ filters.period_end }}">
                 <input type="hidden" name="filtro" value="{{ filters.status }}">
+                <input type="hidden" name="semana" value="{{ filters.semana }}">
                 <select name="situacao" aria-label="Situação de {{ row.cliente }}">
                   <option value="vai_pagar" {% if row.status_key == 'vai_pagar' %}selected{% endif %}>Vai pagar</option>
                   <option value="ja_pagou" {% if row.status_key == 'ja_pagou' %}selected{% endif %}>Já pagou</option>
@@ -192,7 +201,7 @@
     </div>
   </section>
   {% else %}
-  <p class="fin-empty">Nenhum cliente com vencimento neste mês.</p>
+  <p class="fin-empty">{% if filters.semana and filters.semana != '0' %}Nenhum cliente nesta semana.{% else %}Nenhum cliente com vencimento neste mês.{% endif %}</p>
   {% endfor %}
 </div>
 {% endblock %}
