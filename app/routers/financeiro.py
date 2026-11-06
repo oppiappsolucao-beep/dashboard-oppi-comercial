@@ -15,7 +15,7 @@ from app.services.company_payables import (
     reopen_payable,
     update_payable,
 )
-from app.services.financeiro import build_financeiro_context
+from app.services.financeiro import _week_band, build_financeiro_context
 from app.services.legacy_core import normalize_text
 from app.templating import render
 
@@ -216,12 +216,19 @@ async def financeiro_sync(
     return _page(request, params, force_sync=True, flash="Dados sincronizados com o Asaas.")
 
 
-def _payable_back(period_start: str, period_end: str, flash: str, status: str = "") -> RedirectResponse:
+def _payable_back(
+    period_start: str,
+    period_end: str,
+    flash: str,
+    status: str = "",
+    semana: str = "",
+) -> RedirectResponse:
     query = urlencode(
         {
             "period_start": period_start,
             "period_end": period_end,
             "status": status,
+            "semana": semana,
             "flash": flash,
         }
     )
@@ -248,6 +255,7 @@ async def financeiro_payable_create(
     period_start: str = Form(""),
     period_end: str = Form(""),
     status: str = Form(""),
+    semana: str = Form(""),
 ):
     denied = require_auth(request)
     if denied:
@@ -261,8 +269,9 @@ async def financeiro_payable_create(
     back_start = normalize_text(period_start)
     back_end = normalize_text(period_end)
     back_status = normalize_text(status)
+    back_semana = normalize_text(semana)
     if not name or value is None or due is None:
-        return _payable_back(back_start, back_end, "Informe descrição, valor e vencimento.", back_status)
+        return _payable_back(back_start, back_end, "Informe descrição, valor e vencimento.", back_status, back_semana)
     times = 1
     if normalize_text(repeat_mode).lower() == "vezes":
         try:
@@ -270,14 +279,14 @@ async def financeiro_payable_create(
         except ValueError:
             times = 1
         if times < 2:
-            return _payable_back(back_start, back_end, "Informe quantas vezes, a partir de 2.", back_status)
+            return _payable_back(back_start, back_end, "Informe quantas vezes, a partir de 2.", back_status, back_semana)
     create_payable(name, value, due, supplier=supplier, category=category, repeat_count=times)
     start, end = _month_bounds(due)
     if times > 1:
         flash = f"Conta lançada {times} vezes, uma por mês. Use De e Até para ver os outros meses."
     else:
         flash = "Conta a pagar lançada."
-    return _payable_back(start, end, flash, back_status)
+    return _payable_back(start, end, flash, back_status, str(_week_band(due.day)[0] + 1))
 
 
 @router.post("/financeiro/contas-a-pagar/{payable_id}/editar")
@@ -293,6 +302,7 @@ async def financeiro_payable_edit(
     period_start: str = Form(""),
     period_end: str = Form(""),
     status: str = Form(""),
+    semana: str = Form(""),
 ):
     denied = require_auth(request)
     if denied:
@@ -305,13 +315,14 @@ async def financeiro_payable_edit(
         due = None
     chosen = normalize_text(scope).lower()
     if not name or value is None or due is None:
-        return _payable_back(period_start, period_end, "Informe descrição, valor e vencimento.", status)
+        return _payable_back(period_start, period_end, "Informe descrição, valor e vencimento.", status, semana)
     if chosen not in {"mes", "todos"}:
         return _payable_back(
             period_start,
             period_end,
             "Escolha se a correção vale só neste mês ou em todos.",
             status,
+            semana,
         )
     changed = update_payable(
         payable_id,
@@ -323,12 +334,12 @@ async def financeiro_payable_edit(
         scope=chosen,
     )
     if not changed:
-        return _payable_back(period_start, period_end, "Não encontrei essa conta.", status)
+        return _payable_back(period_start, period_end, "Não encontrei essa conta.", status, semana)
     if chosen == "todos" and changed > 1:
         flash = f"Valor corrigido em {changed} meses."
     else:
         flash = "Valor corrigido neste mês."
-    return _payable_back(period_start, period_end, flash, status)
+    return _payable_back(period_start, period_end, flash, status, str(_week_band(due.day)[0] + 1))
 
 
 @router.post("/financeiro/contas-a-pagar/{payable_id}/pagar")
@@ -338,12 +349,13 @@ async def financeiro_payable_pay(
     period_start: str = Form(""),
     period_end: str = Form(""),
     status: str = Form(""),
+    semana: str = Form(""),
 ):
     denied = require_auth(request)
     if denied:
         return denied
     mark_payable_paid(payable_id)
-    return _payable_back(period_start, period_end, "Conta marcada como paga.", status)
+    return _payable_back(period_start, period_end, "Conta marcada como paga.", status, semana)
 
 
 @router.post("/financeiro/contas-a-pagar/{payable_id}/reabrir")
@@ -353,12 +365,13 @@ async def financeiro_payable_reopen(
     period_start: str = Form(""),
     period_end: str = Form(""),
     status: str = Form(""),
+    semana: str = Form(""),
 ):
     denied = require_auth(request)
     if denied:
         return denied
     reopen_payable(payable_id)
-    return _payable_back(period_start, period_end, "Conta voltou para a pagar.", status)
+    return _payable_back(period_start, period_end, "Conta voltou para a pagar.", status, semana)
 
 
 @router.post("/financeiro/contas-a-pagar/{payable_id}/excluir")
@@ -368,12 +381,13 @@ async def financeiro_payable_delete(
     period_start: str = Form(""),
     period_end: str = Form(""),
     status: str = Form(""),
+    semana: str = Form(""),
     confirm_text: str = Form(""),
 ):
     denied = require_auth(request)
     if denied:
         return denied
     if normalize_text(confirm_text).lower() != "excluir":
-        return _payable_back(period_start, period_end, "A conta continua salva. Digite excluir para apagar.", status)
+        return _payable_back(period_start, period_end, "A conta continua salva. Digite excluir para apagar.", status, semana)
     delete_payable(payable_id)
-    return _payable_back(period_start, period_end, "Conta excluída.", status)
+    return _payable_back(period_start, period_end, "Conta excluída.", status, semana)

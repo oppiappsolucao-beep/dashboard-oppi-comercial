@@ -596,6 +596,7 @@ def _payables_view(start: date, end: date, search: str, status: str = "", today:
         "compare_note": "",
         "suppliers": list_suppliers(),
         "month_label": month_label(start, end),
+        "semanas": _group_payable_weeks(listed, today, start, end),
     }
 
 
@@ -1498,6 +1499,49 @@ def _locally_inactive(row: dict, names: set[str], cnpjs: set[str]) -> bool:
     return bool(name and name in names)
 
 
+def _group_payable_weeks(listed: list[dict], today: date, start: date, end: date) -> list[dict]:
+    """Contas a pagar agrupadas pela semana do vencimento."""
+    groups: dict[tuple[int, int, int], dict] = {}
+    order: list[tuple[int, int, int]] = []
+    current = _week_band(today.day)[0] if start <= today <= end else None
+    for item in listed:
+        due = item.get("due")
+        if not isinstance(due, date):
+            continue
+        index, label = _week_band(due.day)
+        key = (due.year, due.month, index)
+        if key not in groups:
+            groups[key] = {
+                "indice": index + 1,
+                "label": f"{label} de {_MESES[due.month].lower()}",
+                "atual": current is not None and due.year == today.year and due.month == today.month and index == current,
+                "n": 0,
+                "total": 0.0,
+                "a_pagar": 0.0,
+                "pago": 0.0,
+                "linhas": [],
+            }
+            order.append(key)
+        bucket = groups[key]
+        amount = float(item.get("amount") or 0)
+        bucket["linhas"].append(item)
+        bucket["n"] += 1
+        bucket["total"] += amount
+        if item.get("paid"):
+            bucket["pago"] += amount
+        else:
+            bucket["a_pagar"] += amount
+    weeks = []
+    for key in order:
+        bucket = groups[key]
+        bucket["linhas"].sort(key=lambda row: (row.get("due") or date.min, row.get("description") or ""))
+        bucket["total_label"] = format_brl(bucket["total"])
+        bucket["a_pagar_label"] = format_brl(bucket["a_pagar"])
+        bucket["pago_label"] = format_brl(bucket["pago"])
+        weeks.append(bucket)
+    return weeks
+
+
 def _group_weeks(listed: list[dict], today: date, start: date, end: date) -> list[dict]:
     groups: dict[tuple[int, int, int], dict] = {}
     order: list[tuple[int, int, int]] = []
@@ -1878,6 +1922,7 @@ def build_financeiro_context(
     )
     if tab == TAB_PAGAR:
         payables = attach_cash_compare(payables, period_start, period_end, today, force=force_sync)
+        _apply_week_choice(payables, params, period_start, period_end, today)
     boletos = (
         apply_boleto_status(
             load_boleto_entrada(today, period_start, period_end, force=force_sync),

@@ -260,6 +260,36 @@ class EntradasEContasTest(unittest.TestCase):
         self.assertAlmostEqual(calendar["days"][6]["a_pagar"], 6.0)
         self.assertTrue(calendar["days"][0]["empty"])
 
+    def test_contas_a_pagar_separa_por_semana(self):
+        from app.services.financeiro import _apply_week_choice, _group_payable_weeks
+
+        listed = [
+            {"due": date(2026, 11, 3), "amount": 10.0, "paid": False, "description": "Luz", "due_label": "03/11/2026"},
+            {"due": date(2026, 11, 10), "amount": 40.0, "paid": True, "description": "Aluguel", "due_label": "10/11/2026"},
+            {"due": date(2026, 11, 30), "amount": 5.0, "paid": False, "description": "Internet", "due_label": "30/11/2026"},
+        ]
+        today = date(2026, 11, 6)
+        start, end = date(2026, 11, 1), date(2026, 11, 30)
+        semanas = _group_payable_weeks(listed, today, start, end)
+        nomes = {semana["indice"]: [item["description"] for item in semana["linhas"]] for semana in semanas}
+        self.assertEqual(nomes[1], ["Luz"])
+        self.assertEqual(nomes[2], ["Aluguel"])
+        self.assertEqual(nomes[5], ["Internet"])
+        self.assertAlmostEqual(next(item["a_pagar"] for item in semanas if item["indice"] == 1), 10.0)
+        self.assertAlmostEqual(next(item["pago"] for item in semanas if item["indice"] == 2), 40.0)
+        self.assertTrue(next(item["atual"] for item in semanas if item["indice"] == 1))
+
+        view = {"semanas": list(semanas)}
+        params = {}
+        _apply_week_choice(view, params, start, end, today)
+        self.assertEqual(params["semana"], "1")
+        self.assertEqual([item["description"] for semana in view["semanas"] for item in semana["linhas"]], ["Luz"])
+        self.assertEqual(view["semanas_opcoes"][0]["label"], "Mês inteiro")
+
+        inteiro = {"semanas": list(semanas)}
+        _apply_week_choice(inteiro, {"semana": "0"}, start, end, today)
+        self.assertEqual(len(inteiro["semanas"]), 3)
+
     def test_status_e_repeticao_mensal(self):
         from app.services.company_payables import add_months, payable_status
 
