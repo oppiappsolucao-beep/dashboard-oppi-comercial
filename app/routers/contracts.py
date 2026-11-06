@@ -633,7 +633,7 @@ async def contract_edit_submit(request: Request, sheet_row: int):
             pass
 
         request.session["edit_success"] = (
-            f"Cadastro salvo com sucesso.{_raissa_save_note(form_dict, load_billing_plan(DEFAULT_TENANT_ID, sheet_row), sheet_row=sheet_row)}{onboard_note}"
+            f"Cadastro salvo com sucesso.{_raissa_save_note(form_dict, load_billing_plan(DEFAULT_TENANT_ID, sheet_row), sheet_row=sheet_row, update_only=True)}{onboard_note}"
         )
         return RedirectResponse(url=_edit_page_url(sheet_row, from_page=from_page), status_code=303)
     except DuplicateRegistrationError as error:

@@ -775,7 +775,6 @@ def save_registration_on_raissa(
         if worksheet is None:
             return {"ok": False, "aviso": "Aba Raissa não encontrada na planilha."}
         values = worksheet.get_all_values() or [[]]
-        trim_empty_raissa_rows(worksheet, values)
         header_at = _header_at(values)
         headers = [normalize_text(cell) for cell in (values[header_at] if values else [])]
         headers = ensure_raissa_columns(headers)

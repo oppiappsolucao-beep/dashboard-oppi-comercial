@@ -1983,9 +1983,10 @@ def _folha1_next_row(worksheet, cached_values: list[list[str]] | None = None) ->
 def _write_folha1_row(worksheet, row_number: int, row_values: list[str]) -> int:
     """Grava uma linha na Folha1 por update explícito (mais confiável que append_row + row_count)."""
     row_number = max(int(row_number), 2)
-    if row_number > int(worksheet.row_count or 0):
+    limit = int(worksheet.row_count or 0)
+    if limit and row_number > limit:
         try:
-            worksheet.add_rows(row_number - int(worksheet.row_count) + 20)
+            worksheet.resize(rows=row_number)
         except Exception:
             pass
     # Garante largura mínima das colunas
