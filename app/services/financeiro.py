@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from datetime import date, datetime, timedelta
 from typing import Any
 from urllib.parse import quote
@@ -21,7 +22,9 @@ from app.services.internal_finance import build_internal_forecast, resolve_perio
 from app.services.legacy_core import (
     normalize_cnpj_for_duplicate,
     normalize_phone_for_duplicate,
+    normalize_search_text,
     normalize_text,
+    parse_money,
     phones_match_for_duplicate,
 )
 
@@ -778,7 +781,388 @@ def _filter_invoices(rows: list[dict], params: dict) -> list[dict]:
     return out
 
 
-def build_financeiro_context(params: dict | None = None, *, force_sync: bool = False) -> dict[str, Any]:
+_DATE_FULL = re.compile(r"^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$")
+_DATE_DM = re.compile(r"^(\d{1,2})[/-](\d{1,2})$")
+_DAY_ONLY = re.compile(r"^(?:dia\s*)?(\d{1,2})$")
+
+
+def parse_sheet_due(value: str, *, today: date) -> tuple[date | None, int | None]:
+    """Data cheia da planilha, ou só o dia quando a célula não tem mês e ano."""
+    raw = normalize_text(value)
+    if not raw:
+        return None, None
+    head = raw.split()[0]
+    parsed = _parse_date(head)
+    if parsed:
+        return parsed, None
+    full = _DATE_FULL.match(head)
+    if full:
+        day, month, year = (int(part) for part in full.groups())
+        if year < 100:
+            year += 2000
+        try:
+            return date(year, month, day), None
+        except ValueError:
+            return None, None
+    short = _DATE_DM.match(head)
+    if short:
+        day, month = (int(part) for part in short.groups())
+        try:
+            return date(today.year, month, day), None
+        except ValueError:
+            return None, None
+    day_only = _DAY_ONLY.match(normalize_search_text(raw))
+    if day_only:
+        day = int(day_only.group(1))
+        if 1 <= day <= 31:
+            return None, day
+    return None, None
+
+
+def classify_raissa_entry(status: str, due: date | None, today: date) -> dict[str, str]:
+    """Pago, vencido ou a entrar a partir do texto e da data da base Raissa."""
+    text = normalize_search_text(status)
+    if any(token in text for token in ("cancel", "inativ", "distrat", "encerr", "churn")):
+        return {"key": "fora", "label": "Fora", "tone": "muted"}
+    if "nao pago" in text or "em aberto" in text:
+        paid = False
+    else:
+        paid = any(token in text for token in ("pago", "recebid", "quitad", "confirmad", "liquidad"))
+    if paid:
+        return {"key": "pago", "label": "Pago", "tone": "green"}
+    if any(token in text for token in ("vencid", "atras", "inadimpl")):
+        return {"key": "vencido", "label": "Vencido", "tone": "red"}
+    if due and due < today:
+        return {"key": "vencido", "label": "Vencido", "tone": "red"}
+    if due == today:
+        return {"key": "a_entrar", "label": "Vence hoje", "tone": "yellow"}
+    return {"key": "a_entrar", "label": normalize_text(status) or "A entrar", "tone": "blue"}
+
+
+def _month_last(year: int, month: int) -> date:
+    if month == 12:
+        return date(year, 12, 31)
+    return date(year, month + 1, 1) - timedelta(days=1)
+
+
+def _first_day_in_period(day: int, start: date, end: date) -> date | None:
+    cursor = date(start.year, start.month, 1)
+    limit = date(end.year, end.month, 1)
+    while cursor <= limit:
+        last = _month_last(cursor.year, cursor.month).day
+        if day <= last:
+            candidate = date(cursor.year, cursor.month, day)
+            if start <= candidate <= end:
+                return candidate
+        if cursor.month == 12:
+            cursor = date(cursor.year + 1, 1, 1)
+        else:
+            cursor = date(cursor.year, cursor.month + 1, 1)
+    return None
+
+
+def _sheet_cell(item: dict, headers: list[str], index: int | None) -> str:
+    if index is None or index >= len(headers):
+        return ""
+    return normalize_text(item.get(headers[index]))
+
+
+def _payment_status_index(headers: list[str], mapping: dict[str, int]) -> int | None:
+    for index, header in enumerate(headers):
+        plain = normalize_search_text(header)
+        has_status = "status" in plain or "situacao" in plain
+        has_bill = any(word in plain for word in ("pagamento", "financeiro", "boleto", "cobranca"))
+        if has_status and has_bill:
+            return index
+    return mapping.get("status_cadastro")
+
+
+def raissa_rows_from_sheet(sheet: dict, *, today: date) -> list[dict]:
+    """Uma linha financeira por empresa/plano da aba Raissa."""
+    from app.services.raissa_company_sync import _header_map, company_hidden_on_raissa_list
+
+    headers = list(sheet.get("colunas") or [])
+    mapping = _header_map(headers)
+    status_index = _payment_status_index(headers, mapping)
+    ordered: list[dict] = []
+    index_by_key: dict[tuple, int] = {}
+    for item in sheet.get("clientes") or []:
+        if not isinstance(item, dict):
+            continue
+        empresa = _sheet_cell(item, headers, mapping.get("empresa"))
+        if not empresa:
+            continue
+        cnpj = _sheet_cell(item, headers, mapping.get("cnpj"))
+        if company_hidden_on_raissa_list(empresa, cnpj):
+            continue
+        plano = _sheet_cell(item, headers, mapping.get("plano"))
+        status = _sheet_cell(item, headers, status_index)
+        forma = _sheet_cell(item, headers, mapping.get("forma"))
+        valor = parse_money(_sheet_cell(item, headers, mapping.get("valor")))
+        due, day = parse_sheet_due(_sheet_cell(item, headers, mapping.get("vencimento")), today=today)
+        if valor <= 0 and not plano and not status and due is None and day is None:
+            continue
+        row = {
+            "empresa": empresa,
+            "cnpj": cnpj,
+            "plano": plano or "Sem plano",
+            "valor": round(max(valor, 0.0), 2),
+            "vencimento": due,
+            "dia": day,
+            "status": status,
+            "forma": forma,
+        }
+        key = (
+            normalize_search_text(empresa),
+            normalize_search_text(row["plano"]),
+            row["valor"],
+            due.isoformat() if due else "",
+            day or 0,
+        )
+        if key in index_by_key:
+            ordered[index_by_key[key]] = row
+        else:
+            index_by_key[key] = len(ordered)
+            ordered.append(row)
+    return ordered
+
+
+def _empty_bucket() -> dict[str, float]:
+    return {"a_entrar": 0.0, "pago": 0.0, "vencido": 0.0, "n_entrar": 0, "n_pago": 0, "n_vencido": 0}
+
+
+def _add_bucket(bucket: dict[str, float], key: str, valor: float) -> None:
+    if key not in {"a_entrar", "pago", "vencido"}:
+        return
+    bucket[key] += valor
+    count_key = {"a_entrar": "n_entrar", "pago": "n_pago", "vencido": "n_vencido"}[key]
+    bucket[count_key] += 1
+
+
+def _bucket_view(label: str, bucket: dict[str, float], *, extra: dict | None = None) -> dict:
+    total = bucket["a_entrar"] + bucket["pago"] + bucket["vencido"]
+    view = {
+        "label": label,
+        "a_entrar_label": format_brl(bucket["a_entrar"]),
+        "pago_label": format_brl(bucket["pago"]),
+        "vencido_label": format_brl(bucket["vencido"]),
+        "total_label": format_brl(total),
+        "total": total,
+        "n": int(bucket["n_entrar"] + bucket["n_pago"] + bucket["n_vencido"]),
+    }
+    if extra:
+        view.update(extra)
+    return view
+
+
+def _period_due(row: dict, start: date, end: date) -> date | None:
+    due = row.get("vencimento")
+    if isinstance(due, date):
+        return due if start <= due <= end else None
+    day = row.get("dia")
+    if isinstance(day, int):
+        return _first_day_in_period(day, start, end)
+    return None
+
+
+def summarize_raissa_entrada(
+    rows: list[dict],
+    *,
+    start: date,
+    end: date,
+    today: date,
+    status: str = "",
+    search: str = "",
+) -> dict[str, Any]:
+    """Resumo do período, a grade por mês da base inteira e a divisão por plano."""
+    wanted = normalize_search_text(status)
+    aliases = {"atrasado": "vencido", "vencidos": "vencido", "receber": "a_entrar", "a entrar": "a_entrar"}
+    wanted = aliases.get(wanted, wanted)
+    needle = normalize_search_text(search)
+    period = _empty_bucket()
+    listed: list[dict] = []
+    months: dict[tuple[int, int], dict[str, float]] = {}
+    recorrente = _empty_bucket()
+    sem_data = _empty_bucket()
+    plans: dict[str, dict[str, float]] = {}
+    fora_n = 0
+
+    for row in rows:
+        due = row.get("vencimento") if isinstance(row.get("vencimento"), date) else None
+        day = row.get("dia") if isinstance(row.get("dia"), int) else None
+        classify_due = due
+        if classify_due is None and day:
+            classify_due = _first_day_in_period(day, date(today.year, today.month, 1), _month_last(today.year, today.month))
+        classified = classify_raissa_entry(row.get("status") or "", classify_due, today)
+        if classified["key"] == "fora":
+            fora_n += 1
+            continue
+        valor = float(row.get("valor") or 0)
+        if due:
+            bucket = months.setdefault((due.year, due.month), _empty_bucket())
+            _add_bucket(bucket, classified["key"], valor)
+        elif day:
+            _add_bucket(recorrente, classified["key"], valor)
+        else:
+            _add_bucket(sem_data, classified["key"], valor)
+
+        shown_due = _period_due(row, start, end)
+        if shown_due is None:
+            continue
+        period_status = classify_raissa_entry(row.get("status") or "", shown_due, today)
+        if period_status["key"] == "fora":
+            continue
+        if wanted and period_status["key"] != wanted:
+            continue
+        blob = normalize_search_text(f"{row.get('empresa') or ''} {row.get('plano') or ''} {row.get('forma') or ''}")
+        if needle and needle not in blob:
+            continue
+        _add_bucket(period, period_status["key"], valor)
+        plan_name = normalize_text(row.get("plano")) or "Sem plano"
+        _add_bucket(plans.setdefault(plan_name, _empty_bucket()), period_status["key"], valor)
+        listed.append(
+            {
+                "cliente": row.get("empresa") or "—",
+                "plano": plan_name,
+                "forma": normalize_text(row.get("forma")) or "—",
+                "valor": valor,
+                "valor_label": format_brl(valor),
+                "vencimento": shown_due,
+                "vencimento_label": format_date_br(shown_due),
+                "status_key": period_status["key"],
+                "status_label": period_status["label"],
+                "status_tone": period_status["tone"],
+            }
+        )
+
+    listed.sort(key=lambda item: ({"vencido": 0, "a_entrar": 1, "pago": 2}.get(item["status_key"], 3), item["vencimento"], item["cliente"]))
+    month_rows = []
+    for (year, month), bucket in sorted(months.items()):
+        month_start = date(year, month, 1)
+        month_end = _month_last(year, month)
+        month_rows.append(
+            _bucket_view(
+                f"{_MESES[month]} {year}",
+                bucket,
+                extra={
+                    "period_start": month_start.isoformat(),
+                    "period_end": month_end.isoformat(),
+                    "selected": not (month_end < start or month_start > end),
+                },
+            )
+        )
+    if recorrente["n_entrar"] or recorrente["n_pago"] or recorrente["n_vencido"]:
+        month_rows.append(_bucket_view("Todo mês (dia fixo)", recorrente))
+    if sem_data["n_entrar"] or sem_data["n_pago"] or sem_data["n_vencido"]:
+        month_rows.append(_bucket_view("Sem vencimento", sem_data))
+    plan_rows = [
+        _bucket_view(name, bucket)
+        for name, bucket in sorted(plans.items(), key=lambda item: item[1]["a_entrar"] + item[1]["pago"] + item[1]["vencido"], reverse=True)
+    ]
+    total = period["a_entrar"] + period["pago"] + period["vencido"]
+    return {
+        "a_entrar": period["a_entrar"],
+        "a_entrar_n": int(period["n_entrar"]),
+        "a_entrar_label": format_brl(period["a_entrar"]),
+        "pago": period["pago"],
+        "pago_n": int(period["n_pago"]),
+        "pago_label": format_brl(period["pago"]),
+        "vencido": period["vencido"],
+        "vencido_n": int(period["n_vencido"]),
+        "vencido_label": format_brl(period["vencido"]),
+        "total": total,
+        "total_n": int(period["n_entrar"] + period["n_pago"] + period["n_vencido"]),
+        "total_label": format_brl(total),
+        "meses": month_rows,
+        "planos": plan_rows,
+        "linhas": listed,
+        "fora_n": fora_n,
+        "error": "",
+        "aviso": "",
+        "aba": "Raissa",
+        "month_label": month_label(start, end),
+    }
+
+
+def _raissa_kpi_cards(controle: dict) -> list[dict]:
+    def empresas(count: int) -> str:
+        return f"{count} empresa" if count == 1 else f"{count} empresas"
+
+    return [
+        {
+            "label": "A entrar",
+            "value": controle.get("a_entrar_label") or format_brl(0),
+            "note": f"{empresas(int(controle.get('a_entrar_n') or 0))} no período",
+            "tone": "blue",
+            "icon": "📅",
+        },
+        {
+            "label": "Pago",
+            "value": controle.get("pago_label") or format_brl(0),
+            "note": f"{empresas(int(controle.get('pago_n') or 0))} no período",
+            "tone": "green",
+            "icon": "✓",
+        },
+        {
+            "label": "Vencidos",
+            "value": controle.get("vencido_label") or format_brl(0),
+            "note": f"{empresas(int(controle.get('vencido_n') or 0))} no período",
+            "tone": "orange",
+            "icon": "!",
+        },
+        {
+            "label": "Total do período",
+            "value": controle.get("total_label") or format_brl(0),
+            "note": controle.get("month_label") or "Período",
+            "tone": "purple",
+            "icon": "↓",
+        },
+    ]
+
+
+def build_raissa_entrada_context(
+    params: dict,
+    start: date,
+    end: date,
+    today: date,
+    *,
+    force: bool = False,
+) -> dict[str, Any]:
+    """Entrada lê só a aba Raissa. Não consulta o Asaas."""
+    from app.services.campaign_leads import read_raissa_sheet
+
+    sheet = read_raissa_sheet(force=force)
+    rows = raissa_rows_from_sheet(sheet, today=today)
+    controle = summarize_raissa_entrada(
+        rows,
+        start=start,
+        end=end,
+        today=today,
+        status=normalize_text(params.get("status")),
+        search=normalize_text(params.get("search")),
+    )
+    controle["aba"] = sheet.get("aba") or "Raissa"
+    controle["aviso"] = normalize_text(sheet.get("aviso"))
+    controle["month_label"] = month_label(start, end)
+    if not rows and controle["aviso"]:
+        controle["error"] = controle["aviso"]
+    elif not rows:
+        controle["aviso"] = "A aba Raissa não trouxe plano, valor ou vencimento."
+    return {
+        "kpi_cards": _raissa_kpi_cards(controle),
+        "controle": controle,
+        "filters": params,
+        "tab": TAB_ENTRADAS,
+        "boletos": {"error": controle.get("error") or ""},
+    }
+
+
+def build_financeiro_context(
+    params: dict | None = None,
+    *,
+    force_sync: bool = False,
+    use_raissa: bool = False,
+) -> dict[str, Any]:
     params = params or {}
     today = _today()
     period_start, period_end = resolve_period(params.get("period_start"), params.get("period_end"), today=today)
@@ -790,6 +1174,8 @@ def build_financeiro_context(params: dict | None = None, *, force_sync: bool = F
     tab = normalize_text(params.get("tab")).lower() or TAB_VISAO
     if tab not in {TAB_VISAO, TAB_FATURAS, TAB_RECORRENCIAS, TAB_ATRASO, TAB_ENTRADAS, TAB_PAGAR}:
         tab = TAB_VISAO
+    if tab == TAB_ENTRADAS and use_raissa:
+        return build_raissa_entrada_context(params, period_start, period_end, today, force=force_sync)
 
     forecast = build_internal_forecast(period_start, period_end)
     payable_status = normalize_text(params.get("status")) if tab == TAB_PAGAR else ""

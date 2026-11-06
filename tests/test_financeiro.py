@@ -293,5 +293,127 @@ class InternalFinanceTest(unittest.TestCase):
         self.assertEqual(items[1]["quantidade"], 2)
 
 
+class RaissaEntradaTest(unittest.TestCase):
+    def _sheet(self):
+        return {
+            "aba": "Raissa",
+            "aviso": "",
+            "colunas": ["Empresa", "CNPJ", "Plano", "Valor", "Data de vencimento", "Status", "Forma de pagamento"],
+            "clientes": [
+                {
+                    "Empresa": "Alfa",
+                    "CNPJ": "",
+                    "Plano": "Oppi RH",
+                    "Valor": "R$ 59,90",
+                    "Data de vencimento": "10/11/2026",
+                    "Status": "1 Boleto Aguardando",
+                    "Forma de pagamento": "Boleto recorrente",
+                },
+                {
+                    "Empresa": "Beta",
+                    "CNPJ": "",
+                    "Plano": "Oppi RH",
+                    "Valor": "49,90",
+                    "Data de vencimento": "03/11/2026",
+                    "Status": "Pago",
+                    "Forma de pagamento": "PIX",
+                },
+                {
+                    "Empresa": "Gama",
+                    "CNPJ": "",
+                    "Plano": "Oppi Ponto",
+                    "Valor": "119,80",
+                    "Data de vencimento": "01/11/2026",
+                    "Status": "Vencido",
+                    "Forma de pagamento": "Boleto",
+                },
+                {
+                    "Empresa": "Delta",
+                    "CNPJ": "",
+                    "Plano": "Oppi Ponto",
+                    "Valor": "80,00",
+                    "Data de vencimento": "02/10/2026",
+                    "Status": "Pago",
+                    "Forma de pagamento": "Cartão",
+                },
+                {
+                    "Empresa": "Eco",
+                    "CNPJ": "",
+                    "Plano": "Oppi RH",
+                    "Valor": "59,90",
+                    "Data de vencimento": "dia 15",
+                    "Status": "Aguardando",
+                    "Forma de pagamento": "Boleto",
+                },
+                {
+                    "Empresa": "Fora",
+                    "CNPJ": "",
+                    "Plano": "Oppi RH",
+                    "Valor": "10,00",
+                    "Data de vencimento": "10/11/2026",
+                    "Status": "Cancelado",
+                    "Forma de pagamento": "",
+                },
+            ],
+        }
+
+    def test_resumo_separa_a_entrar_pago_vencido_e_plano(self):
+        from app.services.financeiro import raissa_rows_from_sheet, summarize_raissa_entrada
+
+        today = date(2026, 11, 6)
+        rows = raissa_rows_from_sheet(self._sheet(), today=today)
+        out = summarize_raissa_entrada(
+            rows,
+            start=date(2026, 11, 1),
+            end=date(2026, 11, 30),
+            today=today,
+        )
+        self.assertEqual(out["a_entrar_n"], 2)
+        self.assertEqual(out["pago_n"], 1)
+        self.assertEqual(out["vencido_n"], 1)
+        self.assertEqual(out["fora_n"], 1)
+        self.assertAlmostEqual(out["a_entrar"], 119.8)
+        self.assertAlmostEqual(out["pago"], 49.9)
+        self.assertAlmostEqual(out["vencido"], 119.8)
+        planos = {row["label"]: row for row in out["planos"]}
+        self.assertEqual(planos["Oppi RH"]["n"], 3)
+        self.assertEqual(planos["Oppi Ponto"]["n"], 1)
+        meses = {row["label"]: row for row in out["meses"]}
+        self.assertEqual(meses["Novembro 2026"]["n"], 3)
+        self.assertEqual(meses["Outubro 2026"]["n"], 1)
+        self.assertTrue(meses["Novembro 2026"]["selected"])
+        self.assertIn("Todo mês (dia fixo)", meses)
+        self.assertEqual([row["cliente"] for row in out["linhas"]], ["Gama", "Alfa", "Eco", "Beta"])
+
+    def test_nao_pago_nao_vira_pago_e_data_passada_vence(self):
+        from app.services.financeiro import classify_raissa_entry
+
+        today = date(2026, 11, 6)
+        self.assertEqual(classify_raissa_entry("Não pago", date(2026, 11, 1), today)["key"], "vencido")
+        self.assertEqual(classify_raissa_entry("Pago", date(2026, 11, 1), today)["key"], "pago")
+        self.assertEqual(classify_raissa_entry("1 Boleto Aguardando", date(2026, 11, 20), today)["key"], "a_entrar")
+
+    def test_entrada_nao_consulta_o_asaas(self):
+        from unittest.mock import patch
+
+        from app.services.financeiro import build_financeiro_context
+
+        sheet = self._sheet()
+        with (
+            patch("app.services.campaign_leads.read_raissa_sheet", return_value=sheet),
+            patch("app.services.financeiro.fetch_dashboard_payload") as asaas,
+            patch("app.services.financeiro.load_boleto_entrada") as boletos,
+        ):
+            ctx = build_financeiro_context(
+                {"tab": "entradas", "period_start": "2026-11-01", "period_end": "2026-11-30"},
+                use_raissa=True,
+            )
+        asaas.assert_not_called()
+        boletos.assert_not_called()
+        self.assertEqual(ctx["kpi_cards"][0]["label"], "A entrar")
+        self.assertEqual(ctx["controle"]["aba"], "Raissa")
+        self.assertEqual(ctx["filters"]["period_start"], "2026-11-01")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -43,8 +43,9 @@ def _screen(
     *,
     force_sync: bool = False,
     flash: str = "",
+    use_raissa: bool = False,
 ):
-    ctx = build_financeiro_context(params, force_sync=force_sync)
+    ctx = build_financeiro_context(params, force_sync=force_sync, use_raissa=use_raissa)
     ctx["flash"] = flash
     ctx["active_page"] = active_page
     return render(request, template, ctx)
@@ -85,6 +86,7 @@ async def financeiro_entrada_page(request: Request):
         "financeiro/entrada.html",
         "entrada",
         flash=flash,
+        use_raissa=True,
     )
 
 
@@ -151,7 +153,6 @@ async def financeiro_sync(
     denied = require_auth(request)
     if denied:
         return denied
-    invalidate_cache()
     params = {
         "tab": "visao",
         "status": status,
@@ -160,7 +161,6 @@ async def financeiro_sync(
         "period_start": period_start,
         "period_end": period_end,
     }
-    flash = "Dados sincronizados com o Asaas."
     if normalize_text(destino) == "entrada":
         params["tab"] = "entradas"
         return _screen(
@@ -169,9 +169,11 @@ async def financeiro_sync(
             "financeiro/entrada.html",
             "entrada",
             force_sync=True,
-            flash=flash,
+            flash="Base Raissa atualizada.",
+            use_raissa=True,
         )
-    return _page(request, params, force_sync=True, flash=flash)
+    invalidate_cache()
+    return _page(request, params, force_sync=True, flash="Dados sincronizados com o Asaas.")
 
 
 def _payable_back(period_start: str, period_end: str, flash: str, status: str = "") -> RedirectResponse:
