@@ -934,6 +934,24 @@ class RaissaEntradaTest(unittest.TestCase):
         self.assertEqual(out["linhas"][0]["chave"], chave)
         self.assertTrue(out["linhas"][0]["manual"])
 
+    def test_situacao_no_postgres_nao_aceita_so_o_arquivo_local(self):
+        from unittest.mock import patch
+
+        from app.services.crm_local_db import save_entrada_status
+
+        with (
+            patch("app.services.crm_local_db._postgres_configured", return_value=True),
+            patch("app.services.crm_local_db._save_entrada_status_sqlite", return_value=True),
+            patch("app.services.crm_local_db._save_entrada_status_postgres", return_value=False),
+        ):
+            self.assertFalse(save_entrada_status("pag:empresa||plano|2026-11", "ja_pagou"))
+        with (
+            patch("app.services.crm_local_db._postgres_configured", return_value=True),
+            patch("app.services.crm_local_db._save_entrada_status_sqlite", return_value=False),
+            patch("app.services.crm_local_db._save_entrada_status_postgres", return_value=True),
+        ):
+            self.assertTrue(save_entrada_status("pag:empresa||plano|2026-11", "ja_pagou"))
+
     def test_nao_pago_nao_vira_pago_e_data_passada_fica_pendente(self):
         from app.services.financeiro import classify_raissa_entry
 

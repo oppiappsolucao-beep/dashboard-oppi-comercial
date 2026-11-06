@@ -2,9 +2,12 @@
 from __future__ import annotations
 
 import json
+import logging
 import sqlite3
 import threading
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 from app.services.storage_paths import get_storage_dir
 
@@ -816,6 +819,8 @@ def _save_entrada_status_postgres(chave: str, situacao: str, updated_at: str) ->
 
         from database.connection import engine
     except Exception:
+        if _postgres_configured():
+            logger.exception("Não abri o banco para gravar a Entrada")
         return False
     try:
         with engine.begin() as conn:
@@ -844,6 +849,16 @@ def _save_entrada_status_postgres(chave: str, situacao: str, updated_at: str) ->
             )
         return True
     except Exception:
+        logger.exception("Não gravei a situação da Entrada no banco")
+        return False
+
+
+def _postgres_configured() -> bool:
+    try:
+        from config.settings import settings
+
+        return (settings.database_url or "").lower().startswith("postgresql")
+    except Exception:
         return False
 
 
@@ -867,10 +882,12 @@ def save_entrada_status(chave: str, situacao: str) -> bool:
     if not key or status not in _ENTRADA_STATUS:
         return False
     updated_at = datetime.now().isoformat(timespec="seconds")
-    saved = False
+    sqlite_ok = False
     try:
-        saved = _save_entrada_status_sqlite(key, status, updated_at) or saved
+        sqlite_ok = _save_entrada_status_sqlite(key, status, updated_at)
     except Exception:
-        saved = saved
-    saved = _save_entrada_status_postgres(key, status, updated_at) or saved
-    return saved
+        logger.exception("Não gravei a situação da Entrada no arquivo local")
+    postgres_ok = _save_entrada_status_postgres(key, status, updated_at)
+    if _postgres_configured():
+        return postgres_ok
+    return sqlite_ok or postgres_ok

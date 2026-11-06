@@ -755,6 +755,16 @@ class CompanyPayable(Base):
     series_id = Column(String(64), nullable=False, default="")
 
 
+class EntradaPagamento(Base):
+    """Situação marcada na Entrada. Não altera a planilha Raissa."""
+
+    __tablename__ = "entrada_pagamento"
+
+    chave = Column(String(500), primary_key=True)
+    situacao = Column(String(40), nullable=False, default="")
+    updated_at = Column(String(40), nullable=False, default="")
+
+
 class ServiceOrderEvent(Base):
     """Histórico da ordem: criação, fila, conclusão, reabertura e atualizações."""
 
