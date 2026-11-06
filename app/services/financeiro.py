@@ -599,23 +599,83 @@ def _payables_view(start: date, end: date, search: str, status: str = "", today:
     }
 
 
+def soma_marcado_ja_pagou(
+    rows: list[dict],
+    *,
+    start: date,
+    end: date,
+    overrides: dict[str, str] | None = None,
+    inactive_names: set[str] | None = None,
+    inactive_cnpjs: set[str] | None = None,
+) -> float:
+    """Soma o que foi marcado como Já pagou na Entrada, mês a mês, dentro do período."""
+    manual = overrides or {}
+    off_names = inactive_names or set()
+    off_cnpjs = inactive_cnpjs or set()
+    months: list[tuple[int, int]] = []
+    cursor = date(start.year, start.month, 1)
+    limit = date(end.year, end.month, 1)
+    while cursor <= limit:
+        months.append((cursor.year, cursor.month))
+        cursor = date(cursor.year + (1 if cursor.month == 12 else 0), 1 if cursor.month == 12 else cursor.month + 1, 1)
+    total = 0.0
+    for row in rows:
+        if row.get("filial") or _locally_inactive(row, off_names, off_cnpjs):
+            continue
+        if _entry_status(row, row.get("fechamento") if isinstance(row.get("fechamento"), date) else None, end).get("key") == "cancelado":
+            continue
+        valor = float(row.get("valor") or 0)
+        if valor <= 0:
+            continue
+        for year, month in months:
+            shown = _due_in_month(row, year, month)
+            if not shown or shown < start or shown > end:
+                continue
+            chave = entrada_status_key(
+                int(row.get("linha") or 0),
+                shown,
+                row.get("empresa") or "",
+                row.get("plano") or "",
+                row.get("cnpj") or "",
+            )
+            legacy = entrada_status_legacy_key(int(row.get("linha") or 0), shown)
+            saved = manual.get(chave) or (manual.get(legacy) if legacy else None)
+            if saved == "ja_pagou":
+                total += valor
+    return round(total, 2)
+
+
+def entrada_marcada_paga(start: date, end: date, today: date) -> float:
+    """Valor marcado como Já pagou no painel de Entrada. Não usa o Asaas."""
+    try:
+        from app.services.campaign_leads import read_raissa_sheet
+        from app.services.crm_local_db import load_entrada_statuses
+
+        sheet = read_raissa_sheet()
+        rows = raissa_rows_from_sheet(sheet, today=today)
+        inactive_names, inactive_cnpjs = load_inactive_companies()
+        return soma_marcado_ja_pagou(
+            rows,
+            start=start,
+            end=end,
+            overrides=load_entrada_statuses(),
+            inactive_names=inactive_names,
+            inactive_cnpjs=inactive_cnpjs,
+        )
+    except Exception:
+        logger.exception("Falha ao somar o que foi marcado como pago na Entrada")
+        return 0.0
+
+
 def attach_cash_compare(payables: dict[str, Any], start: date, end: date, today: date, *, force: bool = False) -> dict[str, Any]:
-    """Compara o que entrou no Asaas com a saída das contas do período."""
+    """Entrada é o que foi marcado como pago no painel. A receber continua no Asaas."""
     saida = float(payables.get("saida") or 0)
-    entrada = 0.0
+    entrada = entrada_marcada_paga(start, end, today)
     a_receber = 0.0
     note = ""
     if not is_configured():
-        note = "Asaas não configurado para ler a entrada."
+        note = "Asaas não configurado para ler o valor a receber."
     else:
-        try:
-            raw, _truncated = fetch_payments_received(start, end, force=force)
-            entrada = sum(float(row["valor"]) for row in received_entries(raw, start, end, today))
-        except AsaasError as exc:
-            note = str(exc)
-        except Exception:
-            logger.exception("Falha ao comparar entrada e saída")
-            note = "Não foi possível ler as entradas do Asaas."
         try:
             due_raw = fetch_payments_due(start, end, billing_type="BOLETO", force=force)
             abertos = [

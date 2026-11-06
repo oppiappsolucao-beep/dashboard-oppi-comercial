@@ -270,6 +270,40 @@ class EntradasEContasTest(unittest.TestCase):
         self.assertEqual(add_months(date(2026, 1, 31), 1), date(2026, 2, 28))
         self.assertEqual(add_months(date(2026, 10, 9), 3), date(2027, 1, 9))
 
+    def test_entrada_soma_o_que_foi_marcado_como_pago(self):
+        from app.services.financeiro import entrada_status_key, soma_marcado_ja_pagou
+
+        pago = {
+            "empresa": "Pago",
+            "plano": "Oppi RH",
+            "cnpj": "",
+            "linha": 4,
+            "filial": False,
+            "fechamento": date(2026, 8, 10),
+            "valor": 50.0,
+            "status": "",
+            "situacao": "Ativo",
+            "anual": False,
+        }
+        aberto = {**pago, "empresa": "Aberto", "linha": 5, "valor": 20.0}
+        chave_nov = entrada_status_key(4, date(2026, 11, 10), "Pago", "Oppi RH")
+        chave_dez = entrada_status_key(4, date(2026, 12, 10), "Pago", "Oppi RH")
+        marcado = {chave_nov: "ja_pagou", chave_dez: "ja_pagou"}
+        novembro = soma_marcado_ja_pagou(
+            [pago, aberto],
+            start=date(2026, 11, 1),
+            end=date(2026, 11, 30),
+            overrides=marcado,
+        )
+        dois_meses = soma_marcado_ja_pagou(
+            [pago, aberto],
+            start=date(2026, 11, 1),
+            end=date(2026, 12, 31),
+            overrides=marcado,
+        )
+        self.assertAlmostEqual(novembro, 50.0)
+        self.assertAlmostEqual(dois_meses, 100.0)
+
     def test_reajuste_vale_no_mes_ou_em_todos(self):
         import os
         import tempfile
