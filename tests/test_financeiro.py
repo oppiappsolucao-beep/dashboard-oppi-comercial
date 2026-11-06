@@ -436,6 +436,43 @@ class RaissaEntradaTest(unittest.TestCase):
         self.assertEqual([row["cliente"] for row in out["linhas"]], ["Alfa"])
         self.assertEqual(out["linhas"][0]["status_key"], "pendente")
 
+    def test_coluna_ai_inativo_conta_como_cancelado(self):
+        from app.services.financeiro import raissa_rows_from_sheet, summarize_raissa_entrada
+
+        headers = [f"Coluna {index}" for index in range(35)]
+        headers[0] = "Empresa"
+        headers[3] = "Fechamento"
+        headers[4] = "Valor do serviço"
+        headers[10] = "Ativo"
+        headers[34] = "Observação interna"
+        sheet = {
+            "aba": "Raissa",
+            "colunas": headers,
+            "clientes": [
+                {
+                    "Empresa": "Viva",
+                    "Fechamento": "10/11/2026",
+                    "Valor do serviço": "59,90",
+                    "Ativo": "Ativo",
+                    "Observação interna": "Ativo",
+                },
+                {
+                    "Empresa": "Parou",
+                    "Fechamento": "10/11/2026",
+                    "Valor do serviço": "59,90",
+                    "Ativo": "Ativo",
+                    "Observação interna": "Inativo",
+                },
+            ],
+        }
+        today = date(2026, 11, 6)
+        rows = raissa_rows_from_sheet(sheet, today=today)
+        self.assertEqual(rows[1]["situacao"], "Inativo")
+        out = summarize_raissa_entrada(rows, start=date(2026, 11, 1), end=date(2026, 11, 30), today=today)
+        self.assertEqual(out["ativos_n"], 1)
+        self.assertEqual(out["cancelados_n"], 1)
+        self.assertEqual([row["cliente"] for row in out["linhas"]], ["Viva"])
+
     def test_coluna_d_projeta_todo_mes_e_anual_so_no_aniversario(self):
         from app.services.financeiro import raissa_rows_from_sheet, summarize_raissa_entrada
 
@@ -510,6 +547,8 @@ class RaissaEntradaTest(unittest.TestCase):
         self.assertEqual(classify_raissa_entry("1 Boleto Aguardando", date(2026, 11, 20), today)["key"], "pendente")
         self.assertEqual(classify_raissa_entry("", date(2026, 11, 20), today, "Ativo")["key"], "vai_pagar")
         self.assertEqual(classify_raissa_entry("Pago", date(2026, 11, 20), today, "Inativo")["key"], "cancelado")
+        self.assertEqual(classify_raissa_entry("", None, today, "INATIVO")["key"], "cancelado")
+        self.assertEqual(classify_raissa_entry("", None, today, "Ativo")["key"], "pendente")
 
     def test_entrada_nao_consulta_o_asaas(self):
         from unittest.mock import patch

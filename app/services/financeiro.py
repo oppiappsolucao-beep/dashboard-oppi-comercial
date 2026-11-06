@@ -828,9 +828,10 @@ def classify_raissa_entry(
     """Já pagou, pendente, vai pagar ou cancelado, pelo status e pelo Ativo/Inativo da base."""
     life = normalize_search_text(situacao)
     text = normalize_search_text(status)
-    if any(token in life for token in ("inativ", "cancel")) or any(
-        token in text for token in ("cancel", "inativ", "distrat", "encerr", "churn")
-    ):
+    inactive = life in {"0", "nao", "n", "i", "off", "false", "inativo", "inativa"} or any(
+        token in life for token in ("inativ", "cancel", "desativ")
+    )
+    if inactive or any(token in text for token in ("cancel", "inativ", "distrat", "encerr", "churn")):
         return {"key": "cancelado", "label": "Cancelado", "tone": "muted"}
     if "nao pago" not in text and "em aberto" not in text and any(
         token in text for token in ("pago", "recebid", "quitad", "confirmad", "liquidad")
@@ -868,11 +869,15 @@ def finance_columns(headers: list[str]) -> dict[str, Any]:
     if not fechamento and len(headers) > 3:
         fechamento = [3]
     ciclo = _column_hits(headers, lambda name: name in {"ciclo", "ciclo do plano"} or name.startswith("ciclo"))
-    situacao = _column_hits(
-        headers,
-        lambda name: name in {"ai", "ativo", "ativo/inativo", "ativo inativo", "situacao"}
-        or ("ativo" in name and "inativ" in name),
-    )
+    # Coluna AI da planilha (índice 34). Inativo nessa coluna é cancelado.
+    if len(headers) > 34:
+        situacao = [34]
+    else:
+        situacao = _column_hits(
+            headers,
+            lambda name: name in {"ai", "ativo", "ativo/inativo", "ativo inativo", "situacao"}
+            or ("ativo" in name and "inativ" in name),
+        )
     status = _column_hits(headers, lambda name: name in {"status", "status 1"})
     forma = _column_hits(headers, lambda name: name in {"forma de pagamento", "forma pagamento", "pagamento"})
     plano = None
@@ -1287,7 +1292,7 @@ def _raissa_kpi_cards(controle: dict) -> list[dict]:
         {
             "label": "Cancelados",
             "value": str(int(controle.get("cancelados_n") or 0)),
-            "note": "Inativo ou cancelado na planilha",
+            "note": "Inativo na coluna AI",
             "tone": "orange",
             "icon": "!",
         },
