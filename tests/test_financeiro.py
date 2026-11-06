@@ -711,6 +711,42 @@ class RaissaEntradaTest(unittest.TestCase):
         novembro = {fatia["mes"]: fatia["valor"] for fatia in pizzas["2026 · Recorrente"]["fatias"]}
         self.assertEqual(novembro["Novembro"], 50.0)
 
+    def test_coluna_g_filial_nao_entra_na_relacao(self):
+        from app.services.financeiro import raissa_rows_from_sheet, summarize_raissa_entrada
+
+        sheet = {
+            "aba": "Raissa",
+            "colunas": ["Empresa", "CNPJ", "Plano", "Fechamento", "Valor do serviço", "Status", "É filial", "AI"],
+            "clientes": [
+                {
+                    "Empresa": "Escola Matriz",
+                    "CNPJ": "",
+                    "Plano": "Oppi RH",
+                    "Fechamento": "10/08/2026",
+                    "Valor do serviço": "59,90",
+                    "Status": "",
+                    "É filial": "Matriz",
+                    "AI": "Ativo",
+                },
+                {
+                    "Empresa": "Escola Loja",
+                    "CNPJ": "",
+                    "Plano": "Oppi RH",
+                    "Fechamento": "10/08/2026",
+                    "Valor do serviço": "59,90",
+                    "Status": "",
+                    "É filial": "Filial",
+                    "AI": "Ativo",
+                },
+            ],
+        }
+        today = date(2026, 11, 6)
+        rows = raissa_rows_from_sheet(sheet, today=today)
+        self.assertEqual([row["empresa"] for row in rows if row["filial"]], ["Escola Loja"])
+        out = summarize_raissa_entrada(rows, start=date(2026, 11, 1), end=date(2026, 11, 30), today=today)
+        self.assertEqual([row["cliente"] for row in out["linhas"]], ["Escola Matriz"])
+        self.assertEqual(out["total_n"], 1)
+
     def test_nao_pago_nao_vira_pago_e_data_passada_fica_pendente(self):
         from app.services.financeiro import classify_raissa_entry
 

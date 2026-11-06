@@ -963,6 +963,7 @@ def raissa_rows_from_sheet(sheet: dict, *, today: date) -> list[dict]:
         situacao = _sheet_cell(item, headers, columns.get("situacao"))
         forma = _sheet_cell(item, headers, columns.get("forma"))
         ciclo = _sheet_cell(item, headers, columns.get("ciclo"))
+        vinculo = _sheet_cell(item, headers, 6 if len(headers) > 6 else None)
         valor = parse_money(_sheet_cell(item, headers, columns.get("valor_servico")))
         if valor <= 0:
             valor = parse_money(_sheet_cell(item, headers, columns.get("valor")))
@@ -988,6 +989,7 @@ def raissa_rows_from_sheet(sheet: dict, *, today: date) -> list[dict]:
             "status": status,
             "situacao": situacao,
             "forma": forma,
+            "filial": _cell_is_filial(vinculo),
             "linha": int(item.get("linha") or 0),
         }
         key = (
@@ -1039,6 +1041,14 @@ def _bucket_view(label: str, bucket: dict[str, float], *, extra: dict | None = N
     if extra:
         view.update(extra)
     return view
+
+
+def _cell_is_filial(value: str) -> bool:
+    """Coluna G. Filial não paga; a matriz é quem entra na relação."""
+    text = normalize_search_text(value)
+    if not text or text.startswith("nao") or text in {"matriz", "sede", "principal", "n", "0"}:
+        return False
+    return "filial" in text
 
 
 def _is_annual(plano: str = "", forma: str = "", ciclo: str = "") -> bool:
@@ -1438,6 +1448,8 @@ def summarize_raissa_entrada(
     cancelados_n = 0
 
     for row in rows:
+        if row.get("filial"):
+            continue
         due = row.get("vencimento") if isinstance(row.get("vencimento"), date) else None
         day = row.get("dia") if isinstance(row.get("dia"), int) else None
         classify_due = due or (
