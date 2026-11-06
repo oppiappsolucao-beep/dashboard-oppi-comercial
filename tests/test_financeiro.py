@@ -368,16 +368,15 @@ class RaissaEntradaTest(unittest.TestCase):
             end=date(2026, 11, 30),
             today=today,
         )
-        self.assertEqual(out["a_entrar_n"], 2)
-        self.assertEqual(out["pago_n"], 1)
-        self.assertEqual(out["vencido_n"], 1)
-        self.assertEqual(out["fora_n"], 1)
-        self.assertAlmostEqual(out["a_entrar"], 119.8)
-        self.assertAlmostEqual(out["pago"], 49.9)
-        self.assertAlmostEqual(out["vencido"], 119.8)
-        planos = {row["label"]: row for row in out["planos"]}
-        self.assertEqual(planos["Oppi RH"]["n"], 3)
-        self.assertEqual(planos["Oppi Ponto"]["n"], 1)
+        self.assertEqual(out["pendente_n"], 3)
+        self.assertEqual(out["ja_pagou_n"], 1)
+        self.assertEqual(out["vai_pagar_n"], 0)
+        self.assertEqual(out["ativos_n"], 5)
+        self.assertEqual(out["cancelados_n"], 1)
+        self.assertAlmostEqual(out["ja_pagou_label"] and 49.9, 49.9)
+        precos = {row["label"]: row for row in out["valores"]}
+        self.assertEqual(precos["R$ 59,90"]["n"], 2)
+        self.assertEqual(precos["R$ 59,90"]["ativos"], 2)
         meses = {row["label"]: row for row in out["meses"]}
         self.assertEqual(meses["Novembro 2026"]["n"], 3)
         self.assertEqual(meses["Outubro 2026"]["n"], 1)
@@ -385,13 +384,67 @@ class RaissaEntradaTest(unittest.TestCase):
         self.assertIn("Todo mês (dia fixo)", meses)
         self.assertEqual([row["cliente"] for row in out["linhas"]], ["Gama", "Alfa", "Eco", "Beta"])
 
-    def test_nao_pago_nao_vira_pago_e_data_passada_vence(self):
+    def test_valor_do_servico_vence_valor_generico_e_separa_ativo(self):
+        from app.services.financeiro import raissa_rows_from_sheet, summarize_raissa_entrada
+
+        headers = [""] * 36
+        headers[0] = "Empresa"
+        headers[2] = "Serviço"
+        headers[5] = "Valor"
+        headers[13] = "Status"
+        headers[31] = "Serviço 2"
+        headers[32] = "Valor do serviço"
+        headers[34] = "AI"
+        headers[35] = "Data"
+        sheet = {
+            "aba": "Raissa",
+            "colunas": headers,
+            "clientes": [
+                {
+                    "Empresa": "Alfa",
+                    "Serviço": "",
+                    "Valor": "R$ 999,00",
+                    "Status": "1 Boleto Aguardando",
+                    "Serviço 2": "Oppi RH",
+                    "Valor do serviço": "R$ 59,90",
+                    "AI": "Ativo",
+                    "Data": "10/11/2026",
+                },
+                {
+                    "Empresa": "Beta",
+                    "Serviço": "",
+                    "Valor": "R$ 10,00",
+                    "Status": "Pago",
+                    "Serviço 2": "Oppi Ponto",
+                    "Valor do serviço": "R$ 59,90",
+                    "AI": "Inativo",
+                    "Data": "03/11/2026",
+                },
+            ],
+        }
+        today = date(2026, 11, 6)
+        rows = raissa_rows_from_sheet(sheet, today=today)
+        self.assertEqual(rows[0]["valor"], 59.9)
+        self.assertEqual(rows[0]["plano"], "Oppi RH")
+        out = summarize_raissa_entrada(rows, start=date(2026, 11, 1), end=date(2026, 11, 30), today=today)
+        self.assertEqual(out["ativos_n"], 1)
+        self.assertEqual(out["cancelados_n"], 1)
+        self.assertEqual(out["valores"][0]["label"], "R$ 59,90")
+        self.assertEqual(out["valores"][0]["n"], 2)
+        self.assertEqual(out["valores"][0]["ativos"], 1)
+        self.assertEqual(out["valores"][0]["cancelados"], 1)
+        self.assertEqual([row["cliente"] for row in out["linhas"]], ["Alfa"])
+        self.assertEqual(out["linhas"][0]["status_key"], "pendente")
+
+    def test_nao_pago_nao_vira_pago_e_data_passada_fica_pendente(self):
         from app.services.financeiro import classify_raissa_entry
 
         today = date(2026, 11, 6)
-        self.assertEqual(classify_raissa_entry("Não pago", date(2026, 11, 1), today)["key"], "vencido")
-        self.assertEqual(classify_raissa_entry("Pago", date(2026, 11, 1), today)["key"], "pago")
-        self.assertEqual(classify_raissa_entry("1 Boleto Aguardando", date(2026, 11, 20), today)["key"], "a_entrar")
+        self.assertEqual(classify_raissa_entry("Não pago", date(2026, 11, 1), today)["key"], "pendente")
+        self.assertEqual(classify_raissa_entry("Pago", date(2026, 11, 1), today)["key"], "ja_pagou")
+        self.assertEqual(classify_raissa_entry("1 Boleto Aguardando", date(2026, 11, 20), today)["key"], "pendente")
+        self.assertEqual(classify_raissa_entry("", date(2026, 11, 20), today, "Ativo")["key"], "vai_pagar")
+        self.assertEqual(classify_raissa_entry("Pago", date(2026, 11, 20), today, "Inativo")["key"], "cancelado")
 
     def test_entrada_nao_consulta_o_asaas(self):
         from unittest.mock import patch
@@ -410,7 +463,7 @@ class RaissaEntradaTest(unittest.TestCase):
             )
         asaas.assert_not_called()
         boletos.assert_not_called()
-        self.assertEqual(ctx["kpi_cards"][0]["label"], "A entrar")
+        self.assertEqual(ctx["kpi_cards"][0]["label"], "Ativos")
         self.assertEqual(ctx["controle"]["aba"], "Raissa")
         self.assertEqual(ctx["filters"]["period_start"], "2026-11-01")
 

@@ -1,10 +1,10 @@
 {% extends "base.html" %}
 {% block content %}
-<link rel="stylesheet" href="/static/css/financeiro.css?v={{ static_version }}-entrada3">
+<link rel="stylesheet" href="/static/css/financeiro.css?v={{ static_version }}-entrada4">
 <div class="page-header">
   <div>
     <div class="page-title">Entrada</div>
-    <div class="page-subtitle">Controle pela base Raissa{% if controle.aba %} ({{ controle.aba }}){% endif %}: a entrar, pago, vencidos e a divisão por plano. O período usa a data de vencimento da planilha.</div>
+    <div class="page-subtitle">Contagem da base Raissa{% if controle.aba %} ({{ controle.aba }}){% endif %}: quantos em cada valor, ativos, cancelados e, no mês, quem vai pagar, já pagou e está pendente.{% if controle.data_coluna %} O mês usa a coluna {{ controle.data_coluna }}.{% endif %}</div>
   </div>
   <div class="page-actions">
     <a class="btn btn-secondary" href="/financeiro/contas-a-pagar">Contas a pagar</a>
@@ -24,9 +24,6 @@
 {% if controle.aviso %}
 <div class="fin-banner">{{ controle.aviso }}</div>
 {% endif %}
-{% if controle.fora_n %}
-<div class="fin-banner">{{ controle.fora_n }} empresa{{ 's' if controle.fora_n != 1 else '' }} fora do controle (cancelada ou inativa na planilha).</div>
-{% endif %}
 
 <div class="metric-grid metric-grid-fin metric-grid-fin-4">
   {% for card in kpi_cards %}
@@ -42,17 +39,48 @@
 </div>
 
 <div class="panel fin-table-card">
+  <div class="section-heading">Contagem por valor</div>
+  <div class="section-subtitle">Quantos clientes a base tem em cada preço, com ativos e cancelados. Vale para a planilha inteira.</div>
+  <div class="table-wrap">
+    <table class="data-table fin-table fin-stack fin-cols-valor">
+      <thead>
+        <tr>
+          <th>Valor</th>
+          <th>Clientes</th>
+          <th>Ativos</th>
+          <th>Cancelados</th>
+          <th>Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in controle.valores %}
+        <tr>
+          <td>{{ row.label }}</td>
+          <td class="fin-cell-num">{{ row.n }}</td>
+          <td class="fin-cell-num">{{ row.ativos }}</td>
+          <td class="fin-cell-num">{{ row.cancelados }}</td>
+          <td class="fin-cell-num">{{ row.total_label }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="fin-empty">Nenhum valor na base Raissa.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="panel fin-table-card">
   <div class="section-heading">Por mês</div>
-  <div class="section-subtitle">Toda a base, pelo mês do vencimento. Quem tem só o dia (sem mês) fica em Todo mês e entra no card do período aberto.</div>
+  <div class="section-subtitle">Só quem tem vencimento. Clique no mês para ver a relação.</div>
   <div class="table-wrap">
     <table class="data-table fin-table fin-stack fin-cols-mes">
       <thead>
         <tr>
           <th>Mês</th>
-          <th>Empresas</th>
-          <th>A entrar</th>
-          <th>Pago</th>
-          <th>Vencidos</th>
+          <th>Clientes</th>
+          <th>Vai pagar</th>
+          <th>Já pagou</th>
+          <th>Pendentes</th>
           <th>Total</th>
         </tr>
       </thead>
@@ -67,9 +95,9 @@
             {% endif %}
           </td>
           <td class="fin-cell-num">{{ row.n }}</td>
-          <td class="fin-cell-num">{{ row.a_entrar_label }}</td>
-          <td class="fin-cell-num fin-money-in">{{ row.pago_label }}</td>
-          <td class="fin-cell-num fin-money-out">{{ row.vencido_label }}</td>
+          <td class="fin-cell-num">{{ row.vai_n }} · {{ row.vai_pagar_label }}</td>
+          <td class="fin-cell-num fin-money-in">{{ row.pago_n }} · {{ row.ja_pagou_label }}</td>
+          <td class="fin-cell-num fin-money-out">{{ row.pendente_n }} · {{ row.pendente_label }}</td>
           <td class="fin-cell-num">{{ row.total_label }}</td>
         </tr>
         {% else %}
@@ -81,40 +109,8 @@
 </div>
 
 <div class="panel fin-table-card">
-  <div class="section-heading">Divisão por plano em {{ controle.month_label }}</div>
-  <div class="table-wrap">
-    <table class="data-table fin-table fin-stack fin-cols-plano">
-      <thead>
-        <tr>
-          <th>Plano</th>
-          <th>Empresas</th>
-          <th>A entrar</th>
-          <th>Pago</th>
-          <th>Vencidos</th>
-          <th>Total</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for row in controle.planos %}
-        <tr>
-          <td>{{ row.label }}</td>
-          <td class="fin-cell-num">{{ row.n }}</td>
-          <td class="fin-cell-num">{{ row.a_entrar_label }}</td>
-          <td class="fin-cell-num fin-money-in">{{ row.pago_label }}</td>
-          <td class="fin-cell-num fin-money-out">{{ row.vencido_label }}</td>
-          <td class="fin-cell-num">{{ row.total_label }}</td>
-        </tr>
-        {% else %}
-        <tr><td colspan="6" class="fin-empty">Nenhum plano neste período.</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</div>
-
-<div class="panel fin-table-card">
   <div class="fin-period-head">
-    <div class="section-heading">Empresas em {{ controle.month_label }}</div>
+    <div class="section-heading">Clientes de {{ controle.month_label }}</div>
     <form method="get" action="/financeiro/entrada" class="fin-period-form">
       <label>De
         <input type="date" name="period_start" value="{{ filters.period_start }}">
@@ -122,22 +118,22 @@
       <label>Até
         <input type="date" name="period_end" value="{{ filters.period_end }}">
       </label>
-      <label>Status
+      <label>Situação
         <select name="status">
-          <option value="" {% if not filters.status %}selected{% endif %}>Todos</option>
-          <option value="a_entrar" {% if filters.status == 'a_entrar' %}selected{% endif %}>A entrar</option>
-          <option value="pago" {% if filters.status == 'pago' %}selected{% endif %}>Pago</option>
-          <option value="vencido" {% if filters.status == 'vencido' %}selected{% endif %}>Vencidos</option>
+          <option value="" {% if not filters.status %}selected{% endif %}>Todas</option>
+          <option value="vai_pagar" {% if filters.status == 'vai_pagar' %}selected{% endif %}>Vai pagar</option>
+          <option value="ja_pagou" {% if filters.status == 'ja_pagou' %}selected{% endif %}>Já pagou</option>
+          <option value="pendente" {% if filters.status == 'pendente' %}selected{% endif %}>Pendentes</option>
         </select>
       </label>
       <button type="submit" class="btn">Ver período</button>
     </form>
   </div>
   <div class="fin-entradas-total">
-    <span>{{ controle.total_n }} empresa{{ 's' if controle.total_n != 1 else '' }} <strong>{{ controle.total_label }}</strong></span>
-    <span>A entrar <strong>{{ controle.a_entrar_label }}</strong></span>
-    <span>Pago <strong class="fin-money-in">{{ controle.pago_label }}</strong></span>
-    <span>Vencidos <strong class="fin-money-out">{{ controle.vencido_label }}</strong></span>
+    <span>{{ controle.total_n }} cliente{{ 's' if controle.total_n != 1 else '' }} <strong>{{ controle.total_label }}</strong></span>
+    <span>Vai pagar <strong>{{ controle.vai_pagar_n }}</strong></span>
+    <span>Já pagou <strong class="fin-money-in">{{ controle.ja_pagou_n }}</strong></span>
+    <span>Pendentes <strong class="fin-money-out">{{ controle.pendente_n }}</strong></span>
   </div>
   <div class="table-wrap">
     <table class="data-table fin-table fin-stack fin-cols-base">
@@ -147,7 +143,7 @@
           <th>Plano</th>
           <th>Valor</th>
           <th>Vencimento</th>
-          <th>Status</th>
+          <th>Situação</th>
         </tr>
       </thead>
       <tbody>
@@ -160,7 +156,7 @@
           <td><span class="fin-badge tone-{{ row.status_tone }}">{{ row.status_label }}</span></td>
         </tr>
         {% else %}
-        <tr><td colspan="5" class="fin-empty">Nenhuma empresa da base Raissa neste período.</td></tr>
+        <tr><td colspan="5" class="fin-empty">Nenhum cliente com vencimento neste mês.</td></tr>
         {% endfor %}
       </tbody>
     </table>

@@ -829,17 +829,16 @@ button.fin-delete-cancel {
   }
 
   .fin-cols-mes td:nth-child(1)::before { content: "Mês"; }
-  .fin-cols-plano td:nth-child(1)::before { content: "Plano"; }
+  .fin-cols-valor td:nth-child(1)::before { content: "Valor"; }
   .fin-cols-mes td:nth-child(2)::before,
-  .fin-cols-plano td:nth-child(2)::before { content: "Empresas"; }
-  .fin-cols-mes td:nth-child(3)::before,
-  .fin-cols-plano td:nth-child(3)::before { content: "A entrar"; }
-  .fin-cols-mes td:nth-child(4)::before,
-  .fin-cols-plano td:nth-child(4)::before { content: "Pago"; }
-  .fin-cols-mes td:nth-child(5)::before,
-  .fin-cols-plano td:nth-child(5)::before { content: "Vencidos"; }
-  .fin-cols-mes td:nth-child(6)::before,
-  .fin-cols-plano td:nth-child(6)::before { content: "Total"; display: block; }
+  .fin-cols-valor td:nth-child(2)::before { content: "Clientes"; }
+  .fin-cols-mes td:nth-child(3)::before { content: "Vai pagar"; }
+  .fin-cols-valor td:nth-child(3)::before { content: "Ativos"; }
+  .fin-cols-mes td:nth-child(4)::before { content: "Já pagou"; }
+  .fin-cols-valor td:nth-child(4)::before { content: "Cancelados"; }
+  .fin-cols-mes td:nth-child(5)::before { content: "Pendentes"; }
+  .fin-cols-valor td:nth-child(5)::before,
+  .fin-cols-mes td:nth-child(6)::before { content: "Total"; display: block; }
 
   .fin-cols-base td:nth-child(1)::before { content: "Cliente"; }
   .fin-cols-base td:nth-child(2)::before { content: "Plano"; }
