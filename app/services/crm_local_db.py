@@ -295,6 +295,15 @@ def init_crm_local_db() -> None:
             )
             conn.execute(
                 """
+                CREATE TABLE IF NOT EXISTS entrada_status (
+                    chave TEXT PRIMARY KEY,
+                    situacao TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+                """
+            )
+            conn.execute(
+                """
                 CREATE TABLE IF NOT EXISTS representative_prospects (
                     person_id TEXT NOT NULL,
                     tab_title TEXT NOT NULL,
@@ -722,3 +731,56 @@ def upsert_lead_action(tenant_id: str | None, sheet_row: int, record: dict) -> N
             ),
         )
         conn.commit()
+
+
+_ENTRADA_STATUS = {"vai_pagar", "ja_pagou", "pendente"}
+
+
+def _ensure_entrada_status(conn) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS entrada_status (
+            chave TEXT PRIMARY KEY,
+            situacao TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+        """
+    )
+
+
+def load_entrada_statuses() -> dict[str, str]:
+    """Situação marcada na Entrada. Não vem da planilha Raissa."""
+    init_crm_local_db()
+    with _lock, _connect() as conn:
+        _ensure_entrada_status(conn)
+        rows = conn.execute("SELECT chave, situacao FROM entrada_status").fetchall()
+    return {
+        _normalize_text(row["chave"]): _normalize_text(row["situacao"])
+        for row in rows
+        if _normalize_text(row["situacao"]) in _ENTRADA_STATUS
+    }
+
+
+def save_entrada_status(chave: str, situacao: str) -> bool:
+    """Grava a situação só no painel. Não escreve na aba Raissa."""
+    from datetime import datetime
+
+    key = _normalize_text(chave)
+    status = _normalize_text(situacao)
+    if not key or status not in _ENTRADA_STATUS:
+        return False
+    init_crm_local_db()
+    with _lock, _connect() as conn:
+        _ensure_entrada_status(conn)
+        conn.execute(
+            """
+            INSERT INTO entrada_status (chave, situacao, updated_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT(chave) DO UPDATE SET
+                situacao = excluded.situacao,
+                updated_at = excluded.updated_at
+            """,
+            (key, status, datetime.now().isoformat(timespec="seconds")),
+        )
+        conn.commit()
+    return True

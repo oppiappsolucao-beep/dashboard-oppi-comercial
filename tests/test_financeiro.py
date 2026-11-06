@@ -629,6 +629,70 @@ class RaissaEntradaTest(unittest.TestCase):
         self.assertEqual(anuais_2027["Dezembro"], 100.0)
         self.assertIn("Fecha agora", [row["cliente"] for row in out["linhas"]])
 
+    def test_semana_situacao_manual_e_inativo_da_empresa(self):
+        from app.services.financeiro import entrada_status_key, raissa_rows_from_sheet, summarize_raissa_entrada
+        from app.services.legacy_core import normalize_search_text
+
+        sheet = {
+            "aba": "Raissa",
+            "colunas": ["Empresa", "CNPJ", "Plano", "Fechamento", "Valor do serviço", "Status", "AI"],
+            "clientes": [
+                {
+                    "Empresa": "Saiu",
+                    "CNPJ": "",
+                    "Plano": "Oppi RH",
+                    "Fechamento": "02/08/2026",
+                    "Valor do serviço": "10,00",
+                    "Status": "",
+                    "AI": "Ativo",
+                    "linha": 2,
+                },
+                {
+                    "Empresa": "Pago",
+                    "CNPJ": "",
+                    "Plano": "Oppi RH",
+                    "Fechamento": "10/08/2026",
+                    "Valor do serviço": "20,00",
+                    "Status": "",
+                    "AI": "Ativo",
+                    "linha": 3,
+                },
+                {
+                    "Empresa": "Aberto",
+                    "CNPJ": "",
+                    "Plano": "Oppi RH",
+                    "Fechamento": "20/08/2026",
+                    "Valor do serviço": "30,00",
+                    "Status": "",
+                    "AI": "Ativo",
+                    "linha": 4,
+                },
+            ],
+        }
+        today = date(2026, 11, 6)
+        rows = raissa_rows_from_sheet(sheet, today=today)
+        chave = entrada_status_key(3, date(2026, 11, 10), "Pago", "Oppi RH")
+        out = summarize_raissa_entrada(
+            rows,
+            start=date(2026, 11, 1),
+            end=date(2026, 11, 30),
+            today=today,
+            overrides={chave: "ja_pagou"},
+            inactive_names={normalize_search_text("Saiu")},
+        )
+        self.assertEqual([row["cliente"] for row in out["linhas"]], ["Aberto", "Pago"])
+        pago = next(row for row in out["linhas"] if row["cliente"] == "Pago")
+        self.assertEqual(pago["status_key"], "ja_pagou")
+        self.assertTrue(pago["manual"])
+        self.assertEqual(out["ja_pagou_n"], 1)
+        self.assertEqual(out["vai_pagar_n"], 1)
+        semanas = {semana["label"]: [row["cliente"] for row in semana["linhas"]] for semana in out["semanas"]}
+        self.assertEqual(semanas["Semana 2 · dias 8 a 14 de novembro"], ["Pago"])
+        self.assertEqual(semanas["Semana 3 · dias 15 a 21 de novembro"], ["Aberto"])
+        pizzas = {pizza["titulo"]: pizza for pizza in out["pizzas"]}
+        novembro = {fatia["mes"]: fatia["valor"] for fatia in pizzas["2026 · Recorrente"]["fatias"]}
+        self.assertEqual(novembro["Novembro"], 50.0)
+
     def test_nao_pago_nao_vira_pago_e_data_passada_fica_pendente(self):
         from app.services.financeiro import classify_raissa_entry
 

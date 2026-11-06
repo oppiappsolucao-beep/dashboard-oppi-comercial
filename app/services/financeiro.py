@@ -988,6 +988,7 @@ def raissa_rows_from_sheet(sheet: dict, *, today: date) -> list[dict]:
             "status": status,
             "situacao": situacao,
             "forma": forma,
+            "linha": int(item.get("linha") or 0),
         }
         key = (
             normalize_search_text(empresa),
@@ -1256,6 +1257,112 @@ def _entry_status(row: dict, due: date | None, today: date) -> dict[str, str]:
     return classify_raissa_entry(row.get("status") or "", due, today, row.get("situacao") or "")
 
 
+_MANUAL_STATUS = {
+    "vai_pagar": {"key": "vai_pagar", "label": "Vai pagar", "tone": "blue"},
+    "ja_pagou": {"key": "ja_pagou", "label": "Já pagou", "tone": "green"},
+    "pendente": {"key": "pendente", "label": "Pendente", "tone": "orange"},
+}
+
+_WEEK_BANDS = (
+    (0, 1, 7, "Semana 1 · dias 1 a 7"),
+    (1, 8, 14, "Semana 2 · dias 8 a 14"),
+    (2, 15, 21, "Semana 3 · dias 15 a 21"),
+    (3, 22, 28, "Semana 4 · dias 22 a 28"),
+    (4, 29, 31, "Semana 5 · dias 29 a 31"),
+)
+
+
+def entrada_status_key(linha: int, due: date, empresa: str, plano: str) -> str:
+    """Uma situação por cliente e por mês. A linha da Raissa identifica o cadastro."""
+    if int(linha or 0) > 0:
+        return f"linha:{int(linha)}:{due:%Y-%m}"
+    return (
+        f"nome:{normalize_search_text(empresa)}:"
+        f"{normalize_search_text(plano)}:{due:%Y-%m}"
+    )
+
+
+def _week_band(day: int) -> tuple[int, str]:
+    for index, first, last, label in _WEEK_BANDS:
+        if first <= day <= last:
+            return index, label
+    return 0, _WEEK_BANDS[0][3]
+
+
+def _locally_inactive(row: dict, names: set[str], cnpjs: set[str]) -> bool:
+    from app.services.legacy_core import normalize_cnpj_for_duplicate
+
+    cnpj = normalize_cnpj_for_duplicate(row.get("cnpj") or "")
+    if cnpj and cnpj in cnpjs:
+        return True
+    name = normalize_search_text(row.get("empresa") or "")
+    return bool(name and name in names)
+
+
+def _group_weeks(listed: list[dict], today: date, start: date, end: date) -> list[dict]:
+    groups: dict[tuple[int, int, int], dict] = {}
+    order: list[tuple[int, int, int]] = []
+    current = _week_band(today.day)[0] if start <= today <= end else None
+    for item in listed:
+        due = item["vencimento"]
+        index, label = _week_band(due.day)
+        key = (due.year, due.month, index)
+        if key not in groups:
+            groups[key] = {
+                "label": f"{label} de {_MESES[due.month].lower()}",
+                "atual": current is not None and due.year == today.year and due.month == today.month and index == current,
+                "n": 0,
+                "total": 0.0,
+                "vai_n": 0,
+                "pago_n": 0,
+                "pendente_n": 0,
+                "linhas": [],
+            }
+            order.append(key)
+        bucket = groups[key]
+        bucket["linhas"].append(item)
+        bucket["n"] += 1
+        bucket["total"] += float(item["valor"])
+        if item["status_key"] == "ja_pagou":
+            bucket["pago_n"] += 1
+        elif item["status_key"] == "pendente":
+            bucket["pendente_n"] += 1
+        else:
+            bucket["vai_n"] += 1
+    weeks = []
+    for key in order:
+        bucket = groups[key]
+        bucket["linhas"].sort(key=lambda item: (item["vencimento"], item["cliente"]))
+        bucket["total_label"] = format_brl(bucket["total"])
+        weeks.append(bucket)
+    return weeks
+
+
+def load_inactive_companies() -> tuple[set[str], set[str]]:
+    """Empresas marcadas inativas no cadastro. Vale na hora, sem esperar a planilha."""
+    try:
+        from database.connection import SessionLocal
+        from database.models import CrmRegistration
+
+        from app.services.legacy_core import normalize_cnpj_for_duplicate
+
+        db = SessionLocal()
+        try:
+            found = (
+                db.query(CrmRegistration.empresa, CrmRegistration.cnpj)
+                .filter(CrmRegistration.cadastro_ativo.is_(False))
+                .all()
+            )
+        finally:
+            db.close()
+    except Exception as exc:
+        logger.warning("Entrada não leu os inativos do cadastro: %s", exc)
+        return set(), set()
+    names = {normalize_search_text(empresa) for empresa, _cnpj in found if normalize_search_text(empresa)}
+    cnpjs = {normalize_cnpj_for_duplicate(cnpj) for _empresa, cnpj in found if normalize_cnpj_for_duplicate(cnpj)}
+    return names, cnpjs
+
+
 def summarize_raissa_entrada(
     rows: list[dict],
     *,
@@ -1264,6 +1371,9 @@ def summarize_raissa_entrada(
     today: date,
     status: str = "",
     search: str = "",
+    overrides: dict[str, str] | None = None,
+    inactive_names: set[str] | None = None,
+    inactive_cnpjs: set[str] | None = None,
 ) -> dict[str, Any]:
     """Contagem da base por valor e a lista do mês: vai pagar, já pagou e pendente."""
     wanted = normalize_search_text(status)
@@ -1278,6 +1388,9 @@ def summarize_raissa_entrada(
     }
     wanted = aliases.get(wanted, wanted)
     needle = normalize_search_text(search)
+    manual = overrides or {}
+    off_names = inactive_names or set()
+    off_cnpjs = inactive_cnpjs or set()
     projection = _months_ahead(today, start, end)
     period = _empty_bucket()
     listed: list[dict] = []
@@ -1298,7 +1411,10 @@ def summarize_raissa_entrada(
             if day
             else None
         )
-        classified = _entry_status(row, classify_due, today)
+        if _locally_inactive(row, off_names, off_cnpjs):
+            classified = {"key": "cancelado", "label": "Cancelado", "tone": "muted"}
+        else:
+            classified = _entry_status(row, classify_due, today)
         valor = float(row.get("valor") or 0)
         price = prices.setdefault(round(valor, 2), {"n": 0, "ativos": 0, "cancelados": 0, "total": 0.0})
         price["n"] += 1
@@ -1342,6 +1458,10 @@ def summarize_raissa_entrada(
             if isinstance(row.get("fechamento"), date)
             else _entry_status(row, shown_due, today)
         )
+        chave = entrada_status_key(int(row.get("linha") or 0), shown_due, row.get("empresa") or "", row.get("plano") or "")
+        saved = manual.get(chave)
+        if saved in _MANUAL_STATUS:
+            period_status = _MANUAL_STATUS[saved]
         if period_status["key"] == "cancelado":
             continue
         if wanted and period_status["key"] != wanted:
@@ -1362,6 +1482,8 @@ def summarize_raissa_entrada(
                 "status_key": period_status["key"],
                 "status_label": period_status["label"],
                 "status_tone": period_status["tone"],
+                "chave": chave,
+                "manual": saved in _MANUAL_STATUS,
             }
         )
 
@@ -1418,6 +1540,7 @@ def summarize_raissa_entrada(
         "pizzas": _year_pizzas(months_recorrente, months_anuais, today),
         "valores": valor_rows,
         "linhas": listed,
+        "semanas": _group_weeks(listed, today, start, end),
         "error": "",
         "aviso": "",
         "aba": "Raissa",
@@ -1474,8 +1597,11 @@ def build_raissa_entrada_context(
     """Entrada lê só a aba Raissa. Não consulta o Asaas."""
     from app.services.campaign_leads import read_raissa_sheet
 
+    from app.services.crm_local_db import load_entrada_statuses
+
     sheet = read_raissa_sheet(force=force)
     rows = raissa_rows_from_sheet(sheet, today=today)
+    inactive_names, inactive_cnpjs = load_inactive_companies()
     controle = summarize_raissa_entrada(
         rows,
         start=start,
@@ -1483,6 +1609,9 @@ def build_raissa_entrada_context(
         today=today,
         status=normalize_text(params.get("status")),
         search=normalize_text(params.get("search")),
+        overrides=load_entrada_statuses(),
+        inactive_names=inactive_names,
+        inactive_cnpjs=inactive_cnpjs,
     )
     columns = finance_columns(list(sheet.get("colunas") or []))
     has_close = any(isinstance(row.get("fechamento"), date) for row in rows)

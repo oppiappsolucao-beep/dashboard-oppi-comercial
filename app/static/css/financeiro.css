@@ -215,6 +215,29 @@
 .fin-badge.tone-red { background: #FEE2E2; color: #B91C1C; }
 .fin-badge.tone-purple { background: #F3E8FF; color: #6D28D9; }
 .fin-badge.tone-muted { background: #F3F4F6; color: #6B7280; }
+.fin-badge.tone-orange { background: #FFEDD5; color: #C2410C; }
+
+.fin-week { margin-top: 18px; }
+.fin-week-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.fin-week-title { font-weight: 800; }
+.fin-week.is-current .fin-week-title { color: #7c3aed; }
+.fin-week-meta { font-size: 12px; color: var(--muted); text-align: right; }
+.fin-status-form { display: flex; align-items: center; gap: 6px; }
+.fin-status-form select {
+  height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0 8px;
+  background: #fff;
+  font-size: 12px;
+}
 
 .fin-badge-box {
   border: 1.5px solid #7C3AED;

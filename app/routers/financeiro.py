@@ -90,6 +90,36 @@ async def financeiro_entrada_page(request: Request):
     )
 
 
+@router.post("/financeiro/entrada/situacao")
+async def financeiro_entrada_situacao(
+    request: Request,
+    chave: str = Form(""),
+    situacao: str = Form(""),
+    period_start: str = Form(""),
+    period_end: str = Form(""),
+    filtro: str = Form(""),
+):
+    denied = require_auth(request)
+    if denied:
+        return denied
+    from app.services.crm_local_db import save_entrada_status
+
+    saved = save_entrada_status(chave, situacao)
+    query = urlencode(
+        {
+            key: value
+            for key, value in {
+                "period_start": period_start,
+                "period_end": period_end,
+                "status": filtro,
+                "flash": "Situação salva neste painel. A planilha Raissa não foi alterada." if saved else "",
+            }.items()
+            if value
+        }
+    )
+    return RedirectResponse(url=f"/financeiro/entrada?{query}", status_code=303)
+
+
 @router.get("/financeiro/contas-a-pagar", response_class=HTMLResponse)
 async def financeiro_pagar_page(request: Request):
     denied = require_auth(request)
