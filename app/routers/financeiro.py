@@ -13,6 +13,7 @@ from app.services.company_payables import (
     mark_payable_paid,
     parse_money,
     reopen_payable,
+    update_payable,
 )
 from app.services.financeiro import build_financeiro_context
 from app.services.legacy_core import normalize_text
@@ -277,6 +278,57 @@ async def financeiro_payable_create(
     else:
         flash = "Conta a pagar lançada."
     return _payable_back(start, end, flash, back_status)
+
+
+@router.post("/financeiro/contas-a-pagar/{payable_id}/editar")
+async def financeiro_payable_edit(
+    request: Request,
+    payable_id: int,
+    description: str = Form(""),
+    amount: str = Form(""),
+    due_date: str = Form(""),
+    supplier: str = Form(""),
+    category: str = Form("outra"),
+    scope: str = Form("mes"),
+    period_start: str = Form(""),
+    period_end: str = Form(""),
+    status: str = Form(""),
+):
+    denied = require_auth(request)
+    if denied:
+        return denied
+    name = normalize_text(description)
+    value = parse_money(amount)
+    try:
+        due = date.fromisoformat(normalize_text(due_date)[:10])
+    except ValueError:
+        due = None
+    chosen = normalize_text(scope).lower()
+    if not name or value is None or due is None:
+        return _payable_back(period_start, period_end, "Informe descrição, valor e vencimento.", status)
+    if chosen not in {"mes", "todos"}:
+        return _payable_back(
+            period_start,
+            period_end,
+            "Escolha se a correção vale só neste mês ou em todos.",
+            status,
+        )
+    changed = update_payable(
+        payable_id,
+        description=name,
+        amount=value,
+        due=due,
+        supplier=supplier,
+        category=category,
+        scope=chosen,
+    )
+    if not changed:
+        return _payable_back(period_start, period_end, "Não encontrei essa conta.", status)
+    if chosen == "todos" and changed > 1:
+        flash = f"Valor corrigido em {changed} meses."
+    else:
+        flash = "Valor corrigido neste mês."
+    return _payable_back(period_start, period_end, flash, status)
 
 
 @router.post("/financeiro/contas-a-pagar/{payable_id}/pagar")

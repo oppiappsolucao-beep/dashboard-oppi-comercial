@@ -270,6 +270,56 @@ class EntradasEContasTest(unittest.TestCase):
         self.assertEqual(add_months(date(2026, 1, 31), 1), date(2026, 2, 28))
         self.assertEqual(add_months(date(2026, 10, 9), 3), date(2027, 1, 9))
 
+    def test_reajuste_vale_no_mes_ou_em_todos(self):
+        import os
+        import tempfile
+        from unittest.mock import patch
+
+        import app.services.crm_local_db as local_db
+        from app.services.company_payables import create_payable, list_payables, update_payable
+
+        previous = os.environ.get("APP_STORAGE_DIR")
+        was_ready = local_db._initialized
+        os.environ["APP_STORAGE_DIR"] = tempfile.mkdtemp()
+        local_db._initialized = False
+        try:
+            with patch("app.services.company_payables._uses_postgres", return_value=False):
+                create_payable("Aluguel", 1000, date(2026, 11, 10), repeat_count=3)
+                rows = list_payables(date(2026, 11, 1), date(2027, 1, 31))
+                self.assertEqual(len(rows), 3)
+                self.assertTrue(rows[0]["repete"])
+                update_payable(
+                    rows[0]["id"],
+                    description="Aluguel",
+                    amount=1100,
+                    due=date(2026, 11, 10),
+                    category="fixa",
+                    scope="mes",
+                )
+                after_month = list_payables(date(2026, 11, 1), date(2027, 1, 31))
+                self.assertEqual([row["amount"] for row in after_month], [1100.0, 1000.0, 1000.0])
+                update_payable(
+                    after_month[1]["id"],
+                    description="Aluguel reajustado",
+                    amount=1200,
+                    due=date(2026, 12, 15),
+                    category="fixa",
+                    scope="todos",
+                )
+                after_all = list_payables(date(2026, 11, 1), date(2027, 1, 31))
+        finally:
+            if previous is None:
+                os.environ.pop("APP_STORAGE_DIR", None)
+            else:
+                os.environ["APP_STORAGE_DIR"] = previous
+            local_db._initialized = was_ready
+        self.assertEqual([row["amount"] for row in after_all], [1200.0, 1200.0, 1200.0])
+        self.assertEqual([row["description"] for row in after_all], ["Aluguel reajustado"] * 3)
+        self.assertEqual(
+            [row["due"] for row in after_all],
+            [date(2026, 11, 15), date(2026, 12, 15), date(2027, 1, 15)],
+        )
+
 
 class InternalFinanceTest(unittest.TestCase):
     def test_monthly_occurrences_in_august(self):

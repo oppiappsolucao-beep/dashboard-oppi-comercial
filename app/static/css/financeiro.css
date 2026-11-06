@@ -521,9 +521,115 @@ button.fin-action:disabled {
   gap: 8px;
 }
 
+.fin-edit,
 .fin-delete {
   display: inline-flex;
   align-items: center;
+}
+
+.fin-edit {
+  flex-wrap: wrap;
+}
+
+.fin-edit.is-open {
+  flex: 1 0 100%;
+  width: 100%;
+}
+
+.fin-edit-ask[hidden],
+.fin-edit-box[hidden] {
+  display: none !important;
+}
+
+.fin-edit-box {
+  display: none;
+  margin: 0;
+}
+
+.fin-edit-box.is-open {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  margin-top: 8px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fff;
+}
+
+.fin-edit-label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.fin-edit-label input,
+.fin-edit-label select {
+  height: 36px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0 8px;
+  background: #fff;
+  color: #111827;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.fin-edit-scope {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid #DDD6FE;
+  border-radius: 10px;
+  background: #F8F5FF;
+}
+
+.fin-edit-scope legend {
+  padding: 0 4px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.fin-edit-scope label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.fin-edit-actions {
+  display: flex;
+  gap: 8px;
+}
+
+button.fin-edit-go,
+button.fin-edit-cancel {
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  box-shadow: none;
+  text-decoration: none;
+}
+
+button.fin-edit-go {
+  background: #7C3AED;
+  color: #fff;
+  border: 0;
+}
+
+button.fin-edit-cancel {
+  background: #fff;
+  color: #374151;
+  border: 1px solid var(--border);
 }
 
 .fin-delete-ask[hidden],
@@ -870,7 +976,9 @@ button.fin-delete-cancel {
   .fin-cols-base td:nth-child(5)::before { content: "Status"; display: block; }
 
   .fin-payable-actions,
+  .fin-edit,
   .fin-delete,
+  .fin-edit-box.is-open,
   .fin-delete-box.is-open {
     justify-content: flex-start;
     width: 100%;
@@ -977,10 +1085,15 @@ button.fin-delete-cancel {
     border-top: 1px solid var(--border);
   }
 
+  .fin-day-grid .fin-edit,
   .fin-day-grid .fin-delete,
   .fin-day-grid .fin-inline-form {
     display: inline-flex;
     width: auto;
+  }
+
+  .fin-day-grid .fin-edit.is-open {
+    width: 100%;
   }
 
   .fin-day-grid button.fin-action {
