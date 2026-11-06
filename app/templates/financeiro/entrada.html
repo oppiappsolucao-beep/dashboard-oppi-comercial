@@ -1,10 +1,10 @@
 {% extends "base.html" %}
 {% block content %}
-<link rel="stylesheet" href="/static/css/financeiro.css?v={{ static_version }}-entrada4">
+<link rel="stylesheet" href="/static/css/financeiro.css?v={{ static_version }}-entrada5">
 <div class="page-header">
   <div>
     <div class="page-title">Entrada</div>
-    <div class="page-subtitle">Contagem da base Raissa{% if controle.aba %} ({{ controle.aba }}){% endif %}: quantos em cada valor, ativos, cancelados e, no mês, quem vai pagar, já pagou e está pendente.{% if controle.data_coluna %} O mês usa a coluna {{ controle.data_coluna }}.{% endif %}</div>
+    <div class="page-subtitle">Contagem da base Raissa{% if controle.aba %} ({{ controle.aba }}){% endif %}. O dia da coluna D, o fechamento{% if controle.data_coluna %} ({{ controle.data_coluna }}){% endif %}, cobra todo mês. Plano anual cobra só no mês do aniversário.</div>
   </div>
   <div class="page-actions">
     <a class="btn btn-secondary" href="/financeiro/contas-a-pagar">Contas a pagar</a>
@@ -71,7 +71,7 @@
 
 <div class="panel fin-table-card">
   <div class="section-heading">Por mês</div>
-  <div class="section-subtitle">Só quem tem vencimento. Clique no mês para ver a relação.</div>
+  <div class="section-subtitle">Projeção dos próximos 12 meses a partir do fechamento. Pago e pendente valem para o mês atual. Os meses seguintes mostram quem vai pagar. Clique no mês para ver a relação.</div>
   <div class="table-wrap">
     <table class="data-table fin-table fin-stack fin-cols-mes">
       <thead>

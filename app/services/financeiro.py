@@ -862,8 +862,12 @@ def finance_columns(headers: list[str]) -> dict[str, Any]:
     )
     valor_plain = _column_hits(headers, lambda name: name == "valor")
     servicos = _column_hits(headers, lambda name: name in {"servico", "servicos", "plano", "plano / servico"})
-    vencimento = _column_hits(headers, lambda name: "venc" in name and "abertura" not in name)
+    vencimento = _column_hits(headers, lambda name: "venc" in name and "abertura" not in name and "fechamento" not in name)
     data_only = _column_hits(headers, lambda name: name == "data")
+    fechamento = _column_hits(headers, lambda name: "fechamento" in name)
+    if not fechamento and len(headers) > 3:
+        fechamento = [3]
+    ciclo = _column_hits(headers, lambda name: name in {"ciclo", "ciclo do plano"} or name.startswith("ciclo"))
     situacao = _column_hits(
         headers,
         lambda name: name in {"ai", "ativo", "ativo/inativo", "ativo inativo", "situacao"}
@@ -885,6 +889,9 @@ def finance_columns(headers: list[str]) -> dict[str, Any]:
         "planos": servicos,
         "vencimento": date_index,
         "data_coluna": headers[date_index] if date_index is not None else "",
+        "fechamento": fechamento[0] if fechamento else None,
+        "fechamento_nome": headers[fechamento[0]] if fechamento else "",
+        "ciclo": ciclo[0] if ciclo else None,
         "situacao": situacao[0] if situacao else None,
         "status": status[0] if status else None,
         "forma": forma[0] if forma else None,
@@ -945,17 +952,27 @@ def raissa_rows_from_sheet(sheet: dict, *, today: date) -> list[dict]:
         status = _sheet_cell(item, headers, columns.get("status"))
         situacao = _sheet_cell(item, headers, columns.get("situacao"))
         forma = _sheet_cell(item, headers, columns.get("forma"))
+        ciclo = _sheet_cell(item, headers, columns.get("ciclo"))
         valor = parse_money(_sheet_cell(item, headers, columns.get("valor_servico")))
         if valor <= 0:
             valor = parse_money(_sheet_cell(item, headers, columns.get("valor")))
-        due, day = parse_sheet_due(_sheet_cell(item, headers, columns.get("vencimento")), today=today)
-        if valor <= 0 and not plano and not status and not situacao and due is None and day is None:
+        fechamento, _ignored_day = parse_sheet_due(
+            _sheet_cell(item, headers, columns.get("fechamento")),
+            today=today,
+        )
+        if fechamento:
+            due, day = None, None
+        else:
+            due, day = parse_sheet_due(_sheet_cell(item, headers, columns.get("vencimento")), today=today)
+        if valor <= 0 and not plano and not status and not situacao and due is None and day is None and fechamento is None:
             continue
         row = {
             "empresa": empresa,
             "cnpj": cnpj,
             "plano": plano or "Sem plano",
             "valor": round(max(valor, 0.0), 2),
+            "fechamento": fechamento,
+            "anual": _is_annual(plano, forma, ciclo),
             "vencimento": due,
             "dia": day,
             "status": status,
@@ -966,6 +983,7 @@ def raissa_rows_from_sheet(sheet: dict, *, today: date) -> list[dict]:
             normalize_search_text(empresa),
             normalize_search_text(row["plano"]),
             row["valor"],
+            fechamento.isoformat() if fechamento else "",
             due.isoformat() if due else "",
             day or 0,
         )
@@ -1012,7 +1030,76 @@ def _bucket_view(label: str, bucket: dict[str, float], *, extra: dict | None = N
     return view
 
 
+def _is_annual(*parts: str) -> bool:
+    return "anual" in normalize_search_text(" ".join(parts))
+
+
+def _shift_month(year: int, month: int, offset: int) -> tuple[int, int]:
+    index = year * 12 + (month - 1) + offset
+    return index // 12, index % 12 + 1
+
+
+def _months_ahead(today: date, start: date, end: date, horizon: int = 12) -> list[tuple[int, int]]:
+    """Mês atual e os seguintes, mais qualquer mês que o filtro peça."""
+    found: list[tuple[int, int]] = []
+    seen: set[tuple[int, int]] = set()
+    for offset in range(horizon):
+        key = _shift_month(today.year, today.month, offset)
+        seen.add(key)
+        found.append(key)
+    cursor = date(start.year, start.month, 1)
+    limit = date(end.year, end.month, 1)
+    while cursor <= limit:
+        key = (cursor.year, cursor.month)
+        if key not in seen:
+            seen.add(key)
+            found.append(key)
+        if cursor.month == 12:
+            cursor = date(cursor.year + 1, 1, 1)
+        else:
+            cursor = date(cursor.year, cursor.month + 1, 1)
+    return found
+
+
+def _due_in_month(row: dict, year: int, month: int) -> date | None:
+    """Vencimento projetado. O dia é o do fechamento; anual só repete nesse mês."""
+    fechamento = row.get("fechamento")
+    if isinstance(fechamento, date):
+        if (year, month) < (fechamento.year, fechamento.month):
+            return None
+        if row.get("anual") and month != fechamento.month:
+            return None
+        last = _month_last(year, month).day
+        return date(year, month, min(fechamento.day, last))
+    due = row.get("vencimento")
+    if isinstance(due, date) and (due.year, due.month) == (year, month):
+        return due
+    return None
+
+
+def _status_for_projection(row: dict, due: date, today: date) -> dict[str, str]:
+    """Pago e pendente descrevem o mês corrente. Os outros meses são projeção."""
+    classified = _entry_status(row, due, today)
+    if classified["key"] == "cancelado":
+        return classified
+    if (due.year, due.month) != (today.year, today.month):
+        return {"key": "vai_pagar", "label": "Vai pagar", "tone": "blue"}
+    return classified
+
+
 def _period_due(row: dict, start: date, end: date) -> date | None:
+    if isinstance(row.get("fechamento"), date):
+        cursor = date(start.year, start.month, 1)
+        limit = date(end.year, end.month, 1)
+        while cursor <= limit:
+            shown = _due_in_month(row, cursor.year, cursor.month)
+            if shown and start <= shown <= end:
+                return shown
+            if cursor.month == 12:
+                cursor = date(cursor.year + 1, 1, 1)
+            else:
+                cursor = date(cursor.year, cursor.month + 1, 1)
+        return None
     due = row.get("vencimento")
     if isinstance(due, date):
         return due if start <= due <= end else None
@@ -1048,6 +1135,7 @@ def summarize_raissa_entrada(
     }
     wanted = aliases.get(wanted, wanted)
     needle = normalize_search_text(search)
+    projection = _months_ahead(today, start, end)
     period = _empty_bucket()
     listed: list[dict] = []
     months: dict[tuple[int, int], dict[str, float]] = {}
@@ -1078,7 +1166,14 @@ def summarize_raissa_entrada(
             price["ativos"] += 1
         if classified["key"] == "cancelado":
             continue
-        if due:
+        if isinstance(row.get("fechamento"), date):
+            for year, month in projection:
+                shown = _due_in_month(row, year, month)
+                if not shown:
+                    continue
+                projected = _status_for_projection(row, shown, today)
+                _add_bucket(months.setdefault((year, month), _empty_bucket()), projected["key"], valor)
+        elif due:
             _add_bucket(months.setdefault((due.year, due.month), _empty_bucket()), classified["key"], valor)
         elif day:
             _add_bucket(recorrente, classified["key"], valor)
@@ -1088,7 +1183,11 @@ def summarize_raissa_entrada(
         shown_due = _period_due(row, start, end)
         if shown_due is None:
             continue
-        period_status = _entry_status(row, shown_due, today)
+        period_status = (
+            _status_for_projection(row, shown_due, today)
+            if isinstance(row.get("fechamento"), date)
+            else _entry_status(row, shown_due, today)
+        )
         if period_status["key"] == "cancelado":
             continue
         if wanted and period_status["key"] != wanted:
@@ -1230,18 +1329,20 @@ def build_raissa_entrada_context(
         status=normalize_text(params.get("status")),
         search=normalize_text(params.get("search")),
     )
+    columns = finance_columns(list(sheet.get("colunas") or []))
+    has_close = any(isinstance(row.get("fechamento"), date) for row in rows)
     controle["aba"] = sheet.get("aba") or "Raissa"
-    controle["data_coluna"] = finance_columns(list(sheet.get("colunas") or [])).get("data_coluna") or ""
+    controle["data_coluna"] = (columns.get("fechamento_nome") or "Coluna D") if has_close else ""
     controle["aviso"] = normalize_text(sheet.get("aviso"))
     controle["month_label"] = month_label(start, end)
     if not rows and controle["aviso"]:
         controle["error"] = controle["aviso"]
     elif not rows:
         controle["aviso"] = "A aba Raissa não trouxe plano, valor ou vencimento."
-    elif controle.get("sem_data_n") and not controle["data_coluna"]:
+    elif not has_close and controle.get("sem_data_n"):
         controle["aviso"] = (
-            "A base não tem data de vencimento. A contagem por valor e os ativos valem para a planilha inteira. "
-            "A lista de baixo só entra quando o vencimento do mês está preenchido."
+            "A coluna D (fechamento) está vazia. A contagem por valor continua na base inteira. "
+            "A projeção do mês começa quando essa data está preenchida."
         )
     return {
         "kpi_cards": _raissa_kpi_cards(controle),

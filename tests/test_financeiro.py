@@ -436,6 +436,71 @@ class RaissaEntradaTest(unittest.TestCase):
         self.assertEqual([row["cliente"] for row in out["linhas"]], ["Alfa"])
         self.assertEqual(out["linhas"][0]["status_key"], "pendente")
 
+    def test_coluna_d_projeta_todo_mes_e_anual_so_no_aniversario(self):
+        from app.services.financeiro import raissa_rows_from_sheet, summarize_raissa_entrada
+
+        sheet = {
+            "aba": "Raissa",
+            "colunas": ["Empresa", "CNPJ", "Plano", "Fechamento", "Valor do serviço", "Status", "AI"],
+            "clientes": [
+                {
+                    "Empresa": "Mensal",
+                    "CNPJ": "",
+                    "Plano": "Oppi RH",
+                    "Fechamento": "10/08/2026",
+                    "Valor do serviço": "R$ 59,90",
+                    "Status": "Pago",
+                    "AI": "Ativo",
+                },
+                {
+                    "Empresa": "Anual",
+                    "CNPJ": "",
+                    "Plano": "Oppi Anual",
+                    "Fechamento": "10/03/2026",
+                    "Valor do serviço": "R$ 200,00",
+                    "Status": "",
+                    "AI": "Ativo",
+                },
+                {
+                    "Empresa": "Futuro",
+                    "CNPJ": "",
+                    "Plano": "Oppi RH",
+                    "Fechamento": "20/12/2026",
+                    "Valor do serviço": "R$ 59,90",
+                    "Status": "",
+                    "AI": "Ativo",
+                },
+                {
+                    "Empresa": "Parou",
+                    "CNPJ": "",
+                    "Plano": "Oppi RH",
+                    "Fechamento": "05/01/2026",
+                    "Valor do serviço": "R$ 59,90",
+                    "Status": "",
+                    "AI": "Inativo",
+                },
+            ],
+        }
+        today = date(2026, 11, 6)
+        rows = raissa_rows_from_sheet(sheet, today=today)
+        self.assertEqual(rows[0]["fechamento"], date(2026, 8, 10))
+        self.assertFalse(rows[0]["anual"])
+        self.assertTrue(rows[1]["anual"])
+        novembro = summarize_raissa_entrada(rows, start=date(2026, 11, 1), end=date(2026, 11, 30), today=today)
+        self.assertEqual([row["cliente"] for row in novembro["linhas"]], ["Mensal"])
+        self.assertEqual(novembro["linhas"][0]["vencimento_label"], "10/11/2026")
+        self.assertEqual(novembro["linhas"][0]["status_key"], "ja_pagou")
+        meses = {row["label"]: row for row in novembro["meses"]}
+        self.assertEqual(meses["Novembro 2026"]["pago_n"], 1)
+        self.assertEqual(meses["Dezembro 2026"]["vai_n"], 2)
+        self.assertNotIn("Anual", [row["cliente"] for row in novembro["linhas"]])
+        marco = summarize_raissa_entrada(rows, start=date(2027, 3, 1), end=date(2027, 3, 31), today=today)
+        self.assertEqual([row["cliente"] for row in marco["linhas"]], ["Anual", "Mensal", "Futuro"])
+        self.assertEqual(
+            {row["cliente"]: row["status_key"] for row in marco["linhas"]},
+            {"Anual": "vai_pagar", "Mensal": "vai_pagar", "Futuro": "vai_pagar"},
+        )
+
     def test_nao_pago_nao_vira_pago_e_data_passada_fica_pendente(self):
         from app.services.financeiro import classify_raissa_entry
 
