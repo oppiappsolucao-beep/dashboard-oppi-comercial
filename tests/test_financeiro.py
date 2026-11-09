@@ -72,6 +72,7 @@ class CadastroBillingMappingTest(unittest.TestCase):
         from app.services.cadastro_billing import asaas_billing_type, asaas_cycle
 
         self.assertEqual(asaas_billing_type("pix"), "PIX")
+        self.assertEqual(asaas_billing_type("pix_recorrente"), "PIX")
         self.assertEqual(asaas_billing_type("cartao_recorrente"), "CREDIT_CARD")
         self.assertEqual(asaas_billing_type("cartao_avulso"), "CREDIT_CARD")
         self.assertEqual(asaas_billing_type("boleto_recorrente"), "BOLETO")
@@ -124,20 +125,29 @@ class CadastroBillingMappingTest(unittest.TestCase):
 
         self.assertEqual(
             [key for key, _ in BILLING_FORM_OPTIONS],
-            ["cartao_recorrente", "boleto_recorrente", "cartao_avulso", "pix_boleto"],
+            ["cartao_recorrente", "boleto_recorrente", "pix_recorrente", "cartao_avulso", "pix_boleto"],
         )
         self.assertEqual(
             [label for _, label in BILLING_FORM_OPTIONS],
             [
                 "Cartão recorrente",
                 "Boleto recorrente",
+                "Pix recorrente",
                 "Cartão de crédito (Avulso)",
                 "Pix/Boleto (Avulso)",
             ],
         )
         self.assertTrue(is_recurring_forma("cartao_recorrente"))
+        self.assertTrue(is_recurring_forma("pix_recorrente"))
         self.assertFalse(is_recurring_forma("cartao_avulso"))
         self.assertFalse(is_recurring_forma("pix_boleto"))
+        from app.services.cadastro_billing import asaas_subscription_fields
+
+        self.assertEqual(
+            asaas_subscription_fields("pix_recorrente"),
+            {"pixAutomaticAuthorizationMode": "REQUIRED"},
+        )
+        self.assertEqual(asaas_subscription_fields("boleto_recorrente"), {})
 
     def test_parse_billing_plan_from_form_keeps_selected_option(self):
         from app.services.cadastro_billing import parse_billing_plan_from_form

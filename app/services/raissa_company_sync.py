@@ -288,6 +288,7 @@ _CYCLE_LABELS = {"mensal": "Mensal", "anual": "Anual", "avulso": "Avulso"}
 _FORMA_LABELS = {
     "cartao_recorrente": "Cartão recorrente",
     "boleto_recorrente": "Boleto recorrente",
+    "pix_recorrente": "Pix recorrente",
     "cartao_avulso": "Cartão de crédito (Avulso)",
     "pix_boleto": "Pix/Boleto (Avulso)",
     "pix": "PIX Avulso",

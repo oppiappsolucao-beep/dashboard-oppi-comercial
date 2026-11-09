@@ -33,6 +33,7 @@ PLAN_CYCLE_OPTIONS = [
 BILLING_FORM_OPTIONS = [
     ("cartao_recorrente", "Cartão recorrente"),
     ("boleto_recorrente", "Boleto recorrente"),
+    ("pix_recorrente", "Pix recorrente"),
     ("cartao_avulso", "Cartão de crédito (Avulso)"),
     ("pix_boleto", "Pix/Boleto (Avulso)"),
 ]
@@ -105,6 +106,8 @@ def load_billing_plan(tenant_id: str | None, sheet_row: int) -> dict[str, Any]:
             forma = "pix_boleto"
         elif "boleto" in forma_closed:
             forma = "boleto_recorrente"
+        elif "pix" in forma_closed and "recorrente" in forma_closed:
+            forma = "pix_recorrente"
         elif "pix" in forma_closed:
             forma = "pix"
         return _normalize_plan({
@@ -154,18 +157,25 @@ def save_billing_plan(
 
 
 def is_recurring_forma(forma: str) -> bool:
-    return normalize_text(forma).lower() in {"cartao_recorrente", "boleto_recorrente"}
+    return normalize_text(forma).lower() in {"cartao_recorrente", "boleto_recorrente", "pix_recorrente"}
 
 
 def asaas_billing_type(forma: str) -> str:
     key = normalize_text(forma).lower()
-    if key == "pix":
+    if key in {"pix", "pix_recorrente"}:
         return "PIX"
     if key in {"cartao_recorrente", "cartao_avulso"}:
         return "CREDIT_CARD"
     if key == "boleto_recorrente":
         return "BOLETO"
     return "UNDEFINED"
+
+
+def asaas_subscription_fields(forma: str) -> dict[str, str]:
+    """Pix recorrente pede a autorização do Pix Automático na primeira cobrança."""
+    if normalize_text(forma).lower() == "pix_recorrente":
+        return {"pixAutomaticAuthorizationMode": "REQUIRED"}
+    return {}
 
 
 def asaas_cycle(ciclo: str) -> str | None:
@@ -346,6 +356,8 @@ def generate_asaas_invoice(
     customer_id = normalize_text(customer.get("id"))
     billing_type = asaas_billing_type(normalized["forma"])
     cycle = asaas_cycle(normalized["ciclo"]) if is_recurring_forma(normalized["forma"]) else None
+    if normalized["forma"] == "pix_recorrente" and not cycle:
+        raise AsaasError("Pix recorrente precisa da periodicidade Mensal ou Anual.")
     created: dict[str, Any]
     if cycle:
         created = create_subscription({
@@ -356,6 +368,7 @@ def generate_asaas_invoice(
             "nextDueDate": due,
             "description": description,
             "externalReference": f"crm-{sheet_row}",
+            **asaas_subscription_fields(normalized["forma"]),
         })
         normalized["asaas_subscription_id"] = normalize_text(created.get("id"))
     else:
