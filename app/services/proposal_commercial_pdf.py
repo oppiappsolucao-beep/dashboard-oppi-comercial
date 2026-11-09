@@ -511,7 +511,7 @@ def generate_commercial_proposal_pdf(
     if negotiation["active"]:
         plan_lines = (
             ("Plano Mensal no Boleto", negotiation["valor_boleto"], f"por mês{headcount}"),
-            ("Plano Mensal Recorrente no Cartão", negotiation["valor_cartao"], f"por mês{headcount}"),
+            ("Plano Mensal Pix recorrente ou cartão", negotiation["valor_cartao"], f"por mês{headcount}"),
         )
         for title, amount, suffix in plan_lines:
             if amount is None:
@@ -574,7 +574,7 @@ def generate_commercial_proposal_pdf(
             )
         )
         story.append(Spacer(1, 6))
-        story.append(Paragraph("<b>Plano Mensal Recorrente no Cartão</b>", body_left))
+        story.append(Paragraph("<b>Plano Mensal Pix recorrente ou cartão</b>", body_left))
         story.append(
             Paragraph(
                 _escape(f"{format_money_br(planos.total_mensal_cartao)} por mês"),
