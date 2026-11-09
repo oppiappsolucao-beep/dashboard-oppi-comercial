@@ -229,6 +229,10 @@ def build_onboard_payload_from_crm(
         email_login = _pick_email(values.get("email_socio_1"), ignore=company_email)
         if not email_cobranca:
             email_cobranca = email_login
+    if not email_login:
+        email_login = _pick_email(company_email)
+    if not email_cobranca:
+        email_cobranca = email_login
     email_verificacao = _pick_email(email_login, email_cobranca)
     admin_nome = (
         normalize_text(values.get("responsavel_legal"))

@@ -90,6 +90,53 @@ def _get_row_by_sheet(df, sheet_row: int):
     return matches.iloc[0]
 
 
+_GESTOR_EMAIL_HEADERS = (
+    "e-mail de login do gestor",
+    "email de login do gestor",
+    "e-mail login do gestor",
+    "email login do gestor",
+)
+_BILLING_EMAIL_HEADERS = (
+    "e-mail para cobranca",
+    "email para cobranca",
+    "e-mail de cobranca",
+    "email de cobranca",
+    "e-mail cobranca",
+    "email cobranca",
+    "cobranca / e-mail",
+    "cobranca / email",
+    "cobranca/e-mail",
+    "cobranca/email",
+)
+
+
+def _emails_from_sheet_row(row) -> dict[str, str]:
+    """E-mails de gestor e cobrança gravados na planilha, fora do cadastro de acesso."""
+    found = {"email_login_gestor": "", "email_cobranca": ""}
+    if row is None:
+        return found
+    for column in row.index:
+        label = normalize_search_text(column)
+        text = normalize_text(row.get(column))
+        if not text or "@" not in text:
+            continue
+        if label in _GESTOR_EMAIL_HEADERS and not found["email_login_gestor"]:
+            found["email_login_gestor"] = text
+        elif label in _BILLING_EMAIL_HEADERS and not found["email_cobranca"]:
+            found["email_cobranca"] = text
+    return found
+
+
+def _ponto_company_values(row, columns) -> dict[str, str]:
+    values = {key: _contract_edit_value(row, columns, key) for key in [
+        "empresa", "cnpj", "email", "telefone_b2b", "telefone_fixo",
+        "responsavel_legal", "socio_1", "email_socio_1", "telefone_socio_1",
+        "servico", "valor_proposta", "colaboradores",
+    ]} if row is not None else {}
+    values["email_empresa"] = values.get("email", "")
+    return values
+
+
 def _resolve_edit_from_page(value: str) -> str:
     normalized = normalize_text(value).lower()
     if normalized in {"leads", "activities", "funnel", "attendances", "overview", "contracts"}:
@@ -197,6 +244,9 @@ async def contract_edit_page(request: Request, sheet_row: int):
             ]}
     values.update(resolve_address_form_values(row, columns))
     values.update(load_access_fields(DEFAULT_TENANT_ID, sheet_row))
+    for field, email in _emails_from_sheet_row(row).items():
+        if email and not normalize_text(values.get(field)):
+            values[field] = email
     values["nicho"] = resolve_nicho(
         DEFAULT_TENANT_ID,
         sheet_row,
@@ -562,6 +612,51 @@ async def contract_edit_submit(request: Request, sheet_row: int):
                 status_code=303,
             )
 
+        if action == "sync_ponto":
+            access = load_access_fields(DEFAULT_TENANT_ID, sheet_row)
+            if not normalize_text(form_dict.get("senha_acesso")):
+                form_dict["senha_acesso"] = access.get("senha_acesso", "")
+            for field in ("email_login_gestor", "email_cobranca", "senha_acesso"):
+                typed = normalize_text(form_dict.get(field))
+                if typed:
+                    access[field] = typed
+            df, columns = get_prepared_data()
+            row = _get_row_by_sheet(df, sheet_row)
+            for field, email in _emails_from_sheet_row(row).items():
+                if email and not normalize_text(access.get(field)):
+                    access[field] = email
+            save_access_fields(DEFAULT_TENANT_ID, sheet_row, access, mirror_sheet=False)
+            values = _ponto_company_values(row, columns)
+            values.update(access)
+            try:
+                from app.services.oppi_ponto_bridge import sync_or_onboard_company
+                from app.services.oppi_ponto_client import OppiPontoError
+
+                closed = load_closed_services(
+                    DEFAULT_TENANT_ID,
+                    sheet_row,
+                    servico=values.get("servico", ""),
+                    valor_proposta=values.get("valor_proposta", ""),
+                )
+                result = sync_or_onboard_company(
+                    sheet_row,
+                    values=values,
+                    access=access,
+                    closed_services=closed,
+                )
+                msg = result.get("message") or "Oppi Ponto sincronizado."
+                if result.get("password"):
+                    msg += f" Senha gerada: {result['password']}"
+                request.session["edit_success"] = msg
+            except OppiPontoError as error:
+                request.session["edit_error"] = str(error)
+            except Exception as error:
+                request.session["edit_error"] = f"Falha Oppi Ponto: {error}"
+            return RedirectResponse(
+                url=_edit_page_url(sheet_row, tab="acesso", from_page=from_page),
+                status_code=303,
+            )
+
         if action == "save_acesso":
             # Mantém senha atual se o campo vier vazio.
             current_access = load_access_fields(DEFAULT_TENANT_ID, sheet_row)
@@ -621,6 +716,10 @@ async def contract_edit_submit(request: Request, sheet_row: int):
                 for field in ("email_login_gestor", "email_cobranca", "senha_acesso"):
                     if not normalize_text(access.get(field)):
                         access[field] = normalize_text(form_dict.get(field))
+                df, columns = get_prepared_data()
+                for field, email in _emails_from_sheet_row(_get_row_by_sheet(df, sheet_row)).items():
+                    if email and not normalize_text(access.get(field)):
+                        access[field] = email
                 closed = load_closed_services(
                     DEFAULT_TENANT_ID,
                     sheet_row,
@@ -835,6 +934,9 @@ async def contract_update_tipo(request: Request, sheet_row: int, cadastro_tipo: 
             ]}
             values["email_empresa"] = values.get("email", "")
             values.update(load_access_fields(DEFAULT_TENANT_ID, sheet_row))
+            for field, email in _emails_from_sheet_row(row).items():
+                if email and not normalize_text(values.get(field)):
+                    values[field] = email
         result = maybe_auto_onboard_on_empresa(
             sheet_row,
             values=values,
@@ -884,6 +986,9 @@ async def contract_oppi_ponto_action(
     ]}
     values["email_empresa"] = values.get("email", "")
     values.update(load_access_fields(DEFAULT_TENANT_ID, sheet_row))
+    for field, email in _emails_from_sheet_row(row).items():
+        if email and not normalize_text(values.get(field)):
+            values[field] = email
     from app.services.lead_actions_storage import get_lead_action
 
     lead_extra = get_lead_action(DEFAULT_TENANT_ID, sheet_row) or {}
