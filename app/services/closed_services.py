@@ -57,6 +57,31 @@ def closed_services_has_data(items: list[dict]) -> bool:
     return any(_has_data(item) for item in items if isinstance(item, dict))
 
 
+def require_registration_closed_services(items: list[dict]) -> None:
+    """O cadastro novo só conclui com serviço, quantidade, valor e forma de pagamento."""
+    filled = [item for item in items if isinstance(item, dict) and _has_data(item)]
+    if not filled:
+        raise ValueError(
+            "Preencha os serviços contratados na aba Financeiro antes de salvar o cadastro."
+        )
+    from app.services.legacy_core import parse_money
+
+    for item in filled:
+        if not normalize_text(item.get("servico")):
+            raise ValueError("Selecione o serviço contratado na aba Financeiro.")
+        forma = normalize_text(item.get("forma_pagamento"))
+        if forma not in PAYMENT_METHOD_OPTIONS:
+            raise ValueError("Selecione a forma de pagamento do serviço contratado.")
+        try:
+            quantity = int(float(normalize_text(item.get("quantidade")).replace(",", ".")))
+        except (TypeError, ValueError):
+            quantity = 0
+        if quantity < 1:
+            raise ValueError("Informe a quantidade do serviço contratado.")
+        if parse_money(item.get("valor")) <= 0:
+            raise ValueError("Informe o valor do serviço contratado.")
+
+
 def _items_from_sheet_mirror(servico: str, valor_proposta: str, lead_action: dict) -> list[dict]:
     servicos = [part.strip() for part in normalize_text(servico).split("|") if part.strip()]
     valores = [part.strip() for part in normalize_text(valor_proposta).split("|") if part.strip()]

@@ -6,7 +6,15 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from app.dependencies import get_prepared_data, require_auth
 from app.services.activities_storage import DEFAULT_TENANT_ID
-from app.services.closed_services import PAYMENT_METHOD_OPTIONS, closed_services_has_data, closed_services_sheet_values, load_closed_services, parse_closed_services_from_form, save_closed_services
+from app.services.closed_services import (
+    PAYMENT_METHOD_OPTIONS,
+    closed_services_has_data,
+    closed_services_sheet_values,
+    load_closed_services,
+    parse_closed_services_from_form,
+    require_registration_closed_services,
+    save_closed_services,
+)
 from app.services.commercial_services import get_commercial_service_catalog, get_commercial_service_options
 from app.services.crm_validation_service import get_actions_for_stage, normalize_legacy_stage
 from app.services.legacy_core import DuplicateRegistrationError, STATUS_OPTIONS, get_colaborador_options, normalize_text
@@ -245,7 +253,42 @@ def _normalize_registration_values(values: dict) -> dict:
     return normalized
 
 
-def _registration_page_context(request: Request, df, *, error: str = "", values: dict | None = None) -> dict:
+def _remember_registration_draft(request: Request, form) -> None:
+    draft: dict = {}
+    for key in form.keys():
+        items = [normalize_text(item) for item in form.getlist(key)]
+        if key.startswith("closed_"):
+            draft[key] = items
+        else:
+            draft[key] = items[-1] if items else ""
+    request.session["registration_draft"] = draft
+
+
+def _closed_services_from_draft(draft: dict | None) -> list[dict] | None:
+    if not isinstance(draft, dict):
+        return None
+    if not any(draft.get(key) for key in ("closed_servico", "closed_valor")):
+        return None
+
+    class _DraftForm:
+        def getlist(self, key: str) -> list:
+            value = draft.get(key, [])
+            if isinstance(value, list):
+                return value
+            text = normalize_text(value)
+            return [text] if text else []
+
+    return parse_closed_services_from_form(_DraftForm())
+
+
+def _registration_page_context(
+    request: Request,
+    df,
+    *,
+    error: str = "",
+    values: dict | None = None,
+    closed_services: list | None = None,
+) -> dict:
     values = _normalize_registration_values(values or {})
     default_stage = normalize_legacy_stage(values.get("status")) or "Novo Lead"
     activity_actions = get_actions_for_stage(default_stage)
@@ -313,7 +356,7 @@ def _registration_page_context(request: Request, df, *, error: str = "", values:
         "trainers": _training_trainers(),
         "cadastro_tipo": cadastro_tipo,
         "cadastro_tipo_options": CADASTRO_TIPO_OPTIONS,
-        "closed_services": load_closed_services(DEFAULT_TENANT_ID, 0),
+        "closed_services": closed_services if closed_services is not None else load_closed_services(DEFAULT_TENANT_ID, 0),
         "billing_plan": {
             "ciclo": normalize_text(values.get("billing_ciclo")).lower(),
             "forma": normalize_text(values.get("billing_forma")).lower(),
@@ -541,8 +584,20 @@ async def new_registration_page(request: Request):
         import pandas as pd
 
         df = pd.DataFrame()
+    draft = request.session.pop("registration_draft", None)
     values = {key: normalize_text(value) for key, value in request.query_params.items()}
-    return render(request, "registration/new.html", _registration_page_context(request, df, values=values))
+    closed_services = None
+    if isinstance(draft, dict):
+        for key, value in draft.items():
+            if isinstance(value, list) or key in values:
+                continue
+            values[key] = normalize_text(value)
+        closed_services = _closed_services_from_draft(draft)
+    return render(
+        request,
+        "registration/new.html",
+        _registration_page_context(request, df, values=values, closed_services=closed_services),
+    )
 
 
 @router.post("/cadastro/novo")
@@ -571,6 +626,7 @@ async def new_registration_submit(request: Request):
         if normalize_text(form_dict.get("create_training")) in {"1", "on", "true", "yes"}:
             _validate_training(form_dict)
         closed_items = parse_closed_services_from_form(form)
+        require_registration_closed_services(closed_items)
         if closed_services_has_data(closed_items):
             mirror = closed_services_sheet_values(closed_items)
             form_dict["servico"] = mirror.get("servico", "")
@@ -733,5 +789,6 @@ async def new_registration_submit(request: Request):
                 "Não consegui cadastrar agora. Aguarde alguns segundos e tente salvar novamente."
             )
 
+    _remember_registration_draft(request, form)
     redirect_params = f"?from={from_page}" if from_page else ""
     return RedirectResponse(url=f"/cadastro/novo{redirect_params}", status_code=303)

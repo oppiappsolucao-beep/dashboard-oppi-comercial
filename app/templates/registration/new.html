@@ -4,13 +4,20 @@
 <style>
   .client-edit-tabs-new {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     width: 100%;
   }
   .client-edit-tabs-new .client-edit-tab {
     align-items: center;
     justify-content: center;
     text-align: center;
+  }
+  .client-edit-tabs-new button.client-edit-tab {
+    font: inherit;
+    cursor: pointer;
+    border-left: 0;
+    border-right: 0;
+    border-top: 0;
   }
   .client-edit-tabs-new .client-edit-tab-title,
   .client-edit-tabs-new .client-edit-tab-sub {
@@ -174,6 +181,17 @@
     <input type="hidden" name="data_chamado" value="{{ today }}">
     {% if from_page %}<input type="hidden" name="from" value="{{ from_page }}">{% endif %}
 
+    <nav class="client-edit-tabs client-edit-tabs-new panel" aria-label="Abas do cadastro">
+      <button type="button" class="client-edit-tab is-active" data-registration-tab="dados">
+        <span class="client-edit-tab-title"><span class="client-edit-tab-icon" aria-hidden="true">🏢</span> Dados gerais</span>
+        <span class="client-edit-tab-sub">Informações da empresa</span>
+      </button>
+      <button type="button" class="client-edit-tab" data-registration-tab="financeiro">
+        <span class="client-edit-tab-title"><span class="client-edit-tab-icon" aria-hidden="true">💳</span> Financeiro</span>
+        <span class="client-edit-tab-sub">Serviços contratados</span>
+      </button>
+    </nav>
+
     <div class="client-edit-tab-panel" data-registration-panel="dados">
       <section class="cadastro-bot panel" id="cadastro-bot" {% if not values.empresa %}hidden{% endif %}>
         <h2>Ler mensagem do cliente</h2>
@@ -185,6 +203,11 @@
         </div>
       </section>
       {% include "partials/registration_edit_dados_tab.html" %}
+    </div>
+
+    <div class="client-edit-tab-panel is-hidden" data-registration-panel="financeiro">
+      {% set contracted_required = true %}
+      {% include "partials/registration_contracted_services.html" %}
     </div>
 
     <footer class="client-edit-footer panel">
@@ -303,5 +326,5 @@
 </script>
 <script src="/static/js/partners-form.js?v={{ static_version }}" defer></script>
 <script src="/static/js/registration-edit.js?v={{ static_version }}-seller1" defer></script>
-<script src="/static/js/registration-new.js?v={{ static_version }}-save1" defer></script>
+<script src="/static/js/registration-new.js?v={{ static_version }}-financeiro1" defer></script>
 {% endblock %}
