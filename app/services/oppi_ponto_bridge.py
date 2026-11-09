@@ -211,19 +211,24 @@ def build_onboard_payload_from_crm(
     primary = closed[0] if closed else {}
     password = password or normalize_text(access.get("senha_acesso")) or generate_access_password()
     company_email = normalize_text(values.get("email_empresa") or values.get("email"))
-    email_login = _pick_email(
+    explicit_login = _pick_email(
         access.get("email_login_gestor"),
         values.get("email_login_gestor"),
-        values.get("email_socio_1"),
-        ignore=company_email,
     )
-    email_cobranca = _pick_email(
+    explicit_billing = _pick_email(
         access.get("email_cobranca"),
         values.get("email_cobranca"),
-        ignore=company_email,
-    ) or email_login
+    )
+    email_login = _pick_email(explicit_login, ignore=company_email)
+    email_cobranca = _pick_email(explicit_billing, ignore=company_email)
     if not email_login:
-        email_login = email_cobranca
+        email_login = email_cobranca or explicit_login
+    if not email_cobranca:
+        email_cobranca = explicit_billing or email_login
+    if not email_login:
+        email_login = _pick_email(values.get("email_socio_1"), ignore=company_email)
+        if not email_cobranca:
+            email_cobranca = email_login
     email_verificacao = _pick_email(email_login, email_cobranca)
     admin_nome = (
         normalize_text(values.get("responsavel_legal"))

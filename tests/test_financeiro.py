@@ -120,6 +120,23 @@ class CadastroBillingMappingTest(unittest.TestCase):
         self.assertEqual(payload["email_verificacao"], "financeiro@acme.com")
         self.assertNotEqual(payload["email_login"], "contador@escritorio.com")
 
+    def test_ponto_aceita_email_do_gestor_preenchido(self):
+        from app.services.oppi_ponto_bridge import build_onboard_payload_from_crm
+
+        payload = build_onboard_payload_from_crm(
+            values={
+                "empresa": "BEPPU & ALMEIDA LTDA",
+                "email": "gestor@beppu.com",
+                "email_empresa": "gestor@beppu.com",
+            },
+            access={
+                "email_login_gestor": "gestor@beppu.com",
+                "email_cobranca": "gestor@beppu.com",
+            },
+        )
+        self.assertEqual(payload["email_login"], "gestor@beppu.com")
+        self.assertEqual(payload["email_cobranca"], "gestor@beppu.com")
+
     def test_payment_option_order_and_labels(self):
         from app.services.cadastro_billing import BILLING_FORM_OPTIONS, forma_label, is_recurring_forma
 

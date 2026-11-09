@@ -548,7 +548,6 @@ async def contract_edit_submit(request: Request, sheet_row: int):
                         values["nome_contato"] = normalize_text(pg.get("nome_contato")) or values["nome_contato"]
             except Exception:
                 pass
-            from app.services.registration import load_access_fields
 
             values.update(load_access_fields(DEFAULT_TENANT_ID, sheet_row))
             try:
@@ -614,23 +613,54 @@ async def contract_edit_submit(request: Request, sheet_row: int):
 
         onboard_note = ""
         try:
-            from app.services.oppi_ponto_bridge import maybe_auto_onboard_on_empresa
+            if action == "enviar_ponto":
+                from app.services.oppi_ponto_bridge import sync_or_onboard_company
+                from app.services.oppi_ponto_client import OppiPontoError
 
-            onboard_result = maybe_auto_onboard_on_empresa(
-                sheet_row,
-                values=form_dict,
-                previous_tipo=previous_tipo,
-                new_tipo=form_dict.get("cadastro_tipo", "lead"),
-                status=form_dict.get("status", ""),
-            )
-            if onboard_result and onboard_result.get("ok"):
-                onboard_note = f" {onboard_result.get('message', '')}"
-                if onboard_result.get("password"):
-                    onboard_note += f" Senha gerada: {onboard_result['password']}"
-            elif onboard_result and not onboard_result.get("ok"):
-                onboard_note = f" (Oppi Ponto: {onboard_result.get('message', 'falha no onboard')})"
+                access = load_access_fields(DEFAULT_TENANT_ID, sheet_row)
+                for field in ("email_login_gestor", "email_cobranca", "senha_acesso"):
+                    if not normalize_text(access.get(field)):
+                        access[field] = normalize_text(form_dict.get(field))
+                closed = load_closed_services(
+                    DEFAULT_TENANT_ID,
+                    sheet_row,
+                    servico=form_dict.get("servico", ""),
+                    valor_proposta=form_dict.get("valor_proposta", ""),
+                )
+                try:
+                    onboard_result = sync_or_onboard_company(
+                        sheet_row,
+                        values=form_dict,
+                        access=access,
+                        closed_services=closed,
+                    )
+                except OppiPontoError as error:
+                    onboard_result = {"ok": False, "message": str(error)}
+                if onboard_result and onboard_result.get("ok"):
+                    onboard_note = f" {onboard_result.get('message', '')}"
+                    if onboard_result.get("password"):
+                        onboard_note += f" Senha gerada: {onboard_result['password']}"
+                else:
+                    onboard_note = f" {normalize_text((onboard_result or {}).get('message')) or 'Não consegui enviar ao Oppi Ponto.'}"
+            else:
+                from app.services.oppi_ponto_bridge import maybe_auto_onboard_on_empresa
+
+                onboard_result = maybe_auto_onboard_on_empresa(
+                    sheet_row,
+                    values=form_dict,
+                    previous_tipo=previous_tipo,
+                    new_tipo=form_dict.get("cadastro_tipo", "lead"),
+                    status=form_dict.get("status", ""),
+                )
+                if onboard_result and onboard_result.get("ok"):
+                    onboard_note = f" {onboard_result.get('message', '')}"
+                    if onboard_result.get("password"):
+                        onboard_note += f" Senha gerada: {onboard_result['password']}"
+                elif onboard_result and not onboard_result.get("ok"):
+                    onboard_note = f" (Oppi Ponto: {onboard_result.get('message', 'falha no onboard')})"
         except Exception:
-            pass
+            if action == "enviar_ponto":
+                onboard_note = " Não consegui enviar ao Oppi Ponto agora."
 
         request.session["edit_success"] = (
             f"Cadastro salvo com sucesso.{_raissa_save_note(form_dict, load_billing_plan(DEFAULT_TENANT_ID, sheet_row), sheet_row=sheet_row, update_only=True)}{onboard_note}"
@@ -643,7 +673,15 @@ async def contract_edit_submit(request: Request, sheet_row: int):
     except Exception as error:
         request.session["edit_error"] = f"Não consegui salvar: {error}"
 
-    return RedirectResponse(url=_edit_page_url(sheet_row, from_page=from_page), status_code=303)
+    error_tab = {
+        "save_financeiro": "financeiro",
+        "generate_invoice": "financeiro",
+        "save_acesso": "acesso",
+    }.get(action, "")
+    return RedirectResponse(
+        url=_edit_page_url(sheet_row, tab=error_tab, from_page=from_page),
+        status_code=303,
+    )
 
 
 @router.post("/cadastro/todos/{sheet_row}/excluir")
