@@ -37,7 +37,10 @@ def _save_on_raissa_note(form_dict: dict, billing_plan: dict | None, sheet_row: 
     try:
         from app.services.raissa_company_sync import save_registration_on_raissa
 
-        result = save_registration_on_raissa(form_dict, billing_plan, crm_sheet_row=sheet_row)
+        data = dict(form_dict)
+        if not normalize_text(data.get("situacao_ai")):
+            data["situacao_ai"] = "Ativo"
+        result = save_registration_on_raissa(data, billing_plan, crm_sheet_row=sheet_row)
     except Exception:
         return " Não consegui gravar na aba Raissa agora."
     if result.get("ok"):
@@ -138,7 +141,7 @@ def schedule_training(form_dict: dict, sheet_row: int, empresa: str, created_by:
 
         write_raissa_fields(
             {"empresa": empresa, "cnpj": form_dict.get("cnpj", ""), "create_training": "1"},
-            {"training_date": day},
+            {"training_date": day, "training_time": hour},
             crm_sheet_row=sheet_row,
             only_fields=("data_treinamento",),
         )

@@ -230,6 +230,26 @@ class RaissaCompanySyncTest(unittest.TestCase):
         self.assertEqual(row[35], "02/11/2026")
         self.assertEqual(row[4], "01/01/2020")
 
+    def test_cadastro_grava_ativo_e_treinamento_com_horario(self):
+        headers = [""] * 36
+        headers[0] = "Nome da empresa"
+        headers[34] = "Está Ativo?"
+        headers[35] = "Data"
+        payload = payload_for_raissa(
+            {
+                "empresa": "VILLAR BAR E CAFE LTDA",
+                "situacao_ai": "Ativo",
+                "create_training": "1",
+                "training_date": "2026-11-09",
+                "training_time": "11:00",
+            }
+        )
+        self.assertEqual(payload["situacao_ai"], "Ativo")
+        self.assertEqual(payload["data_treinamento"], "09/11/2026 - 11:00")
+        row = apply_raissa_values(["VILLAR BAR E CAFE LTDA"] + [""] * 35, headers, payload, only_filled=True)
+        self.assertEqual(row[34], "Ativo")
+        self.assertEqual(row[35], "09/11/2026 - 11:00")
+
     def test_data_do_treinamento_so_entra_quando_o_agendamento_existe(self):
         payload = payload_for_raissa(
             {"empresa": "ACME", "training_date": "2026-11-02", "create_training": "0"}

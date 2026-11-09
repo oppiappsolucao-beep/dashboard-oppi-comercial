@@ -268,7 +268,13 @@ def apply_raissa_values(row: list[str], headers: list[str], payload: dict, *, on
     _put_exact(values, headers, payload.get("servico_coluna"), ("servico", "servicos"), 31)
     _put_exact(values, headers, payload.get("valor_coluna"), ("valor do servico",), 32)
     _put_exact(values, headers, payload.get("forma_coluna") or payload.get("forma"), ("forma de pagamento",), 33)
-    _put_exact(values, headers, payload.get("situacao_ai"), ("ai", "ativo", "ativo/inativo", "ativo inativo"), 34)
+    _put_exact(
+        values,
+        headers,
+        payload.get("situacao_ai"),
+        ("esta ativo?", "esta ativo", "esta ativo ?", "ai", "ativo", "ativo/inativo", "ativo inativo"),
+        34,
+    )
     _put_exact(values, headers, payload.get("data_treinamento"), ("data",), 35)
     return values[: max(len(headers), 1)]
 
@@ -416,11 +422,22 @@ def payload_for_raissa(form: dict, billing: dict | None = None) -> dict:
     }
 
 
+def _training_sheet_time(value) -> str:
+    match = re.match(r"^(\d{2}:\d{2})", normalize_text(value))
+    return match.group(1) if match else ""
+
+
 def _training_sheet_date(form: dict) -> str:
     scheduled = normalize_text(form.get("create_training")).lower() in {"1", "on", "true", "yes", "sim"}
     if not scheduled and not normalize_text(form.get("data_treinamento")):
         return ""
-    return _sheet_date(form.get("training_date") or form.get("data_treinamento"))
+    day = _sheet_date(form.get("training_date") or form.get("data_treinamento"))
+    if re.match(r"^\d{2}/\d{2}/\d{4}", day):
+        day = day[:10]
+    hour = _training_sheet_time(form.get("training_time") or form.get("horario_treinamento"))
+    if day and hour:
+        return f"{day} - {hour}"
+    return day
 
 
 def _situacao_label(value) -> str:
