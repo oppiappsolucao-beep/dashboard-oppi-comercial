@@ -719,18 +719,42 @@ def _row_on_sheet(row_number: int, values: list[list[str]], header_at: int) -> i
     return number
 
 
+def trim_empty_raissa_rows(worksheet, values: list[list[str]]) -> int:
+    """Tira do fim da aba as linhas sem nenhum texto. Não mexe em cliente preenchido."""
+    last = 1
+    for index, row in enumerate(values or [], start=1):
+        if any(normalize_text(cell) for cell in (row or [])):
+            last = index
+    limit = int(getattr(worksheet, "row_count", 0) or 0)
+    if limit > last:
+        worksheet.resize(rows=last)
+    return last
+
+
+def next_raissa_append_row(values: list[list[str]], header_at: int) -> int:
+    """Primeira linha livre no fim da aba. Reusa linha vazia que já ficou sobrando."""
+    row_number = max(len(values), header_at + 1) + 1
+    while row_number - 2 > header_at and row_number - 2 < len(values):
+        previous = values[row_number - 2] or []
+        if any(normalize_text(cell) for cell in previous):
+            break
+        row_number -= 1
+    return row_number
+
+
 def _write_raissa_row(worksheet, row_number: int, row_values: list[str]) -> None:
     width = len(row_values)
     if width < 1 or int(row_number) < 2:
         raise RuntimeError("Linha da aba Raissa sem conteúdo para gravar.")
     limit = int(worksheet.row_count or 0)
     if limit and int(row_number) > limit:
-        # Só abre a próxima linha livre. Nunca estica a aba até o id interno do cadastro.
-        if int(row_number) > limit + 3:
+        # Abre só a linha do cliente. A planilha não ganha linha vazia embaixo.
+        missing = int(row_number) - limit
+        if missing > 1:
             raise RuntimeError(
                 f"A aba {worksheet.title} tem {limit} linhas e o cliente não foi encontrado nelas."
             )
-        worksheet.add_rows(int(row_number) - limit + 2)
+        worksheet.resize(rows=int(row_number))
     from gspread.utils import rowcol_to_a1
 
     end = rowcol_to_a1(int(row_number), width)
@@ -793,9 +817,7 @@ def save_registration_on_raissa(
             payload = {key: value for key, value in payload.items() if key in allowed}
         row_values = apply_raissa_values(existing, headers, payload, only_filled=bool(row_number))
         if not row_number:
-            row_number = max(len(values), header_at + 1) + 1
-            if values and not any(normalize_text(cell) for cell in values[-1]):
-                row_number = max(len(values), header_at + 1)
+            row_number = next_raissa_append_row(values, header_at)
         _write_raissa_row(worksheet, int(row_number), row_values)
         _remember_raissa_sheet_row(crm_sheet_row, int(row_number))
         unhide_company_on_raissa_list(payload.get("empresa", ""), payload.get("cnpj", ""))

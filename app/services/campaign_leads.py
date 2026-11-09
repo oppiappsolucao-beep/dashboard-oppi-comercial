@@ -522,7 +522,7 @@ def _raissa_sheet_from_values(title: str, values: list[list[str]]) -> dict:
     }
 
 
-def _fetch_raissa_values() -> tuple[str, list[list[str]]]:
+def _fetch_raissa_values(*, force: bool = False) -> tuple[str, list[list[str]]]:
     from app.config import settings
     from app.services.legacy_core import get_gsheet_client
     from app.services.sheet_read_cache import get_cached_worksheet_values
@@ -542,13 +542,17 @@ def _fetch_raissa_values() -> tuple[str, list[list[str]]]:
         worksheet = _find_raissa_company_worksheet(spreadsheet)
     if worksheet is None:
         raise RuntimeError("Aba Raissa não encontrada na planilha.")
-    values = get_cached_worksheet_values(worksheet.title, worksheet.get_all_values)
+    values = get_cached_worksheet_values(
+        worksheet.title,
+        worksheet.get_all_values,
+        force_refresh=force,
+    )
     if not values:
         raise RuntimeError("Não consegui ler a aba Raissa.")
     return worksheet.title, values
 
 
-def read_raissa_sheet() -> dict:
+def read_raissa_sheet(*, force: bool = False) -> dict:
     """Lê a aba Raissa inteira, com as colunas como estão na planilha."""
     import time
 
@@ -569,13 +573,14 @@ def read_raissa_sheet() -> dict:
                 "Os clientes continuam na planilha. Atualize de novo daqui a pouco."
             )
             return empty
-        from app.services.sheet_read_cache import peek_fresh_worksheet_values
+        if not force:
+            from app.services.sheet_read_cache import peek_fresh_worksheet_values
 
-        for title in ("Raissa", "Raíssa", "Raisa"):
-            fresh = peek_fresh_worksheet_values(title)
-            if fresh:
-                return _raissa_sheet_from_values(title, fresh)
-        title, values = _fetch_raissa_values()
+            for title in ("Raissa", "Raíssa", "Raisa"):
+                fresh = peek_fresh_worksheet_values(title)
+                if fresh:
+                    return _raissa_sheet_from_values(title, fresh)
+        title, values = _fetch_raissa_values(force=force)
         _remember_raissa_values(title, values)
         return _raissa_sheet_from_values(title, values)
     except Exception as exc:

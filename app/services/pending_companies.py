@@ -442,9 +442,15 @@ def sync_pending_companies_to_sheet(*, max_items: int = 20) -> dict:
 
     for item in pending:
         try:
+            from app.services.crm_registrations_storage import _folha1_row_for_company
             from app.services.legacy_core import _folha1_next_row, _write_folha1_row
             from app.services.lead_actions_storage import DEFAULT_TENANT_ID, get_lead_action, save_lead_action
 
+            already = _folha1_row_for_company(item.get("payload") or {})
+            if already > 1:
+                mark_pending_company_synced(item["id"], already)
+                synced += 1
+                continue
             next_row = _folha1_next_row(worksheet, None)
             sheet_row = _write_folha1_row(worksheet, next_row, item["row_values"])
             local_row = int(item.get("local_sheet_row") or -item["id"])

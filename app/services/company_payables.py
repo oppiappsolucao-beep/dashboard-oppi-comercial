@@ -107,16 +107,23 @@ def _row_view(row, today: date) -> dict[str, Any] | None:
     category = row.category if hasattr(row, "category") else row["category"]
     description = row.description if hasattr(row, "description") else row["description"]
     repeat_count = row.repeat_count if hasattr(row, "repeat_count") else row["repeat_count"]
-    amount = row.amount if hasattr(row, "amount") else row["amount"]
+    series_id = row.series_id if hasattr(row, "series_id") else row["series_id"]
+    amount = float((row.amount if hasattr(row, "amount") else row["amount"]) or 0)
+    times = int(repeat_count or 1)
+    series = normalize_text(series_id)
     return {
         "id": int(row.id if hasattr(row, "id") else row["id"]),
         "description": normalize_text(description) or "Conta",
         "supplier": normalize_text(supplier),
         "category": normalize_category(category),
         "category_label": category_label(category),
-        "repeat_count": int(repeat_count or 1),
-        "amount": float(amount or 0),
+        "repeat_count": times,
+        "series_id": series,
+        "repete": bool(series) and times > 1,
+        "amount": amount,
+        "amount_input": money_input(amount),
         "due": due,
+        "due_iso": due.isoformat(),
         "paid": paid,
         "paid_on": paid_on,
         "status": payable_status(due, paid, today),
@@ -125,6 +132,11 @@ def _row_view(row, today: date) -> dict[str, Any] | None:
 
 def _today() -> date:
     return datetime.now(_TZ).date()
+
+
+def money_input(value: float) -> str:
+    formatted = f"{float(value or 0):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    return formatted
 
 
 def parse_money(raw: str) -> float | None:
@@ -285,6 +297,9 @@ def list_payables(start: date, end: date, today: date | None = None) -> list[dic
             continue
         paid_on = _parse_due(row["paid_on"])
         paid = bool(paid_on)
+        times = int(row["repeat_count"] or 1)
+        series = normalize_text(row["series_id"])
+        amount = float(row["amount"] or 0)
         out.append(
             {
                 "id": int(row["id"]),
@@ -292,9 +307,13 @@ def list_payables(start: date, end: date, today: date | None = None) -> list[dic
                 "supplier": normalize_text(row["supplier"]),
                 "category": normalize_category(row["category"]),
                 "category_label": category_label(row["category"]),
-                "repeat_count": int(row["repeat_count"] or 1),
-                "amount": float(row["amount"] or 0),
+                "repeat_count": times,
+                "series_id": series,
+                "repete": bool(series) and times > 1,
+                "amount": amount,
+                "amount_input": money_input(amount),
                 "due": due,
+                "due_iso": due.isoformat(),
                 "paid": paid,
                 "paid_on": paid_on,
                 "status": payable_status(due, paid, today),
@@ -366,6 +385,91 @@ def create_payable(
                 first_id = int(cursor.lastrowid or 0)
         conn.commit()
     return first_id
+
+
+def _due_on_same_month(current: date, new_due: date) -> date:
+    last = calendar.monthrange(current.year, current.month)[1]
+    return date(current.year, current.month, min(new_due.day, last))
+
+
+def update_payable(
+    payable_id: int,
+    *,
+    description: str,
+    amount: float,
+    due: date,
+    supplier: str = "",
+    category: str = "outra",
+    scope: str = "mes",
+) -> int:
+    """Corrige a conta. Em vários meses, scope todos aplica o valor em cada parcela."""
+    _ensure_store()
+    name = normalize_text(description) or "Conta"
+    vendor = normalize_text(supplier)
+    kind = normalize_category(category)
+    value = round(float(amount), 2)
+    apply_all = normalize_text(scope).lower() == "todos"
+    if _uses_postgres():
+        from database.connection import SessionLocal
+        from database.models import CompanyPayable
+
+        db = SessionLocal()
+        try:
+            current = db.query(CompanyPayable).filter(CompanyPayable.id == int(payable_id)).one_or_none()
+            if current is None:
+                return 0
+            series = normalize_text(current.series_id)
+            rows = [current]
+            if apply_all and series:
+                rows = db.query(CompanyPayable).filter(CompanyPayable.series_id == series).all()
+            for row in rows:
+                row.description = name
+                row.amount = value
+                row.supplier = vendor
+                row.category = kind
+                current_due = _parse_due(row.due_date)
+                if apply_all and current_due:
+                    row.due_date = _due_on_same_month(current_due, due).isoformat()
+                else:
+                    row.due_date = due.isoformat()
+            db.commit()
+            return len(rows)
+        except Exception:
+            db.rollback()
+            raise
+        finally:
+            db.close()
+    with _lock, _connect() as conn:
+        current = conn.execute(
+            "SELECT id, series_id, due_date FROM company_payables WHERE id = ?",
+            (int(payable_id),),
+        ).fetchone()
+        if current is None:
+            return 0
+        series = normalize_text(current["series_id"])
+        if apply_all and series:
+            targets = conn.execute(
+                "SELECT id, due_date FROM company_payables WHERE series_id = ?",
+                (series,),
+            ).fetchall()
+        else:
+            targets = [current]
+        for row in targets:
+            current_due = _parse_due(row["due_date"])
+            if apply_all and current_due:
+                next_due = _due_on_same_month(current_due, due)
+            else:
+                next_due = due
+            conn.execute(
+                """
+                UPDATE company_payables
+                SET description = ?, amount = ?, supplier = ?, category = ?, due_date = ?
+                WHERE id = ?
+                """,
+                (name, value, vendor, kind, next_due.isoformat(), int(row["id"])),
+            )
+        conn.commit()
+    return len(targets)
 
 
 def mark_payable_paid(payable_id: int, paid_on: date | None = None) -> bool:
