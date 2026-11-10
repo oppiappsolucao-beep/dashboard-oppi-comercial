@@ -32,22 +32,26 @@ class MercadoPagoBillingTest(unittest.TestCase):
         self.assertEqual(plan["forma"], "boleto_recorrente")
 
     def test_mercado_pago_na_contratacao_e_na_troca_para_anual(self):
+        from app.services.cadastro_billing import BILLING_FORM_OPTIONS, MERCADO_PAGO_FORM_OPTIONS
+
+        self.assertEqual(MERCADO_PAGO_FORM_OPTIONS, BILLING_FORM_OPTIONS)
         novo = parse_billing_plan_from_form({
             "billing_banco": "mercado_pago",
             "billing_ciclo": "mensal",
-            "billing_forma": "pix_automatico",
+            "billing_forma": "pix_recorrente",
             "billing_valor": "197,00",
         })
         self.assertEqual(novo["banco"], "mercado_pago")
-        self.assertEqual(novo["forma"], "pix_automatico")
+        self.assertEqual(novo["forma"], "pix_recorrente")
+        self.assertEqual(novo["forma_label"], "Pix recorrente")
         anual = parse_billing_plan_from_form({
             "billing_banco": "mercado_pago",
-            "billing_ciclo": "mensal",
-            "billing_forma": "cartao_anual",
+            "billing_ciclo": "anual",
+            "billing_forma": "cartao_recorrente",
             "billing_valor": "1.200,00",
         })
         self.assertEqual(anual["ciclo"], "anual")
-        self.assertEqual(anual["forma_label"], "Cartão anual")
+        self.assertEqual(anual["forma_label"], "Cartão recorrente")
 
     def test_boleto_e_cobranca_unica_com_cnpj(self):
         body = build_boleto_body(

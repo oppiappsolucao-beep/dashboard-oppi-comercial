@@ -62,27 +62,22 @@
 
   function sync() {
     var bank = selectedBank();
+    var chosen = "";
+    document.querySelectorAll("[name='billing_forma']").forEach(function (input) {
+      if (input.checked) chosen = input.value;
+    });
     panels.forEach(function (panel) {
       var active = panel.getAttribute("data-billing-bank") === bank;
       panel.hidden = !active;
       panel.querySelectorAll("input").forEach(function (input) {
         input.disabled = !active;
+        if (active) input.checked = input.value === chosen;
       });
     });
     var activePanel = document.querySelector("[data-billing-bank='" + bank + "']");
-    if (activePanel) {
-      var checked = activePanel.querySelector("input:checked");
-      if (!checked) {
-        var first = activePanel.querySelector("input");
-        if (first) first.checked = true;
-      }
-    }
-    if (bank === "mercado_pago") {
-      var card = document.querySelector("[data-billing-bank='mercado_pago'] input[value='cartao_anual']");
-      if (card && card.checked) {
-        var anual = document.querySelector("[name='billing_ciclo'][value='anual']");
-        if (anual) anual.checked = true;
-      }
+    if (activePanel && !activePanel.querySelector("input:checked")) {
+      var first = activePanel.querySelector("input");
+      if (first) first.checked = true;
     }
   }
 

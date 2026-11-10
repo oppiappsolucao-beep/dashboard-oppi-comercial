@@ -42,11 +42,7 @@ BILLING_FORM_OPTIONS = [
     ("cartao_avulso", "Cartão de crédito (Avulso)"),
     ("pix_boleto", "Pix/Boleto (Avulso)"),
 ]
-MERCADO_PAGO_FORM_OPTIONS = [
-    ("boleto", "Boleto"),
-    ("cartao_anual", "Cartão anual"),
-    ("pix_automatico", "Pix Automático"),
-]
+MERCADO_PAGO_FORM_OPTIONS = BILLING_FORM_OPTIONS
 _CYCLE_KEYS = {key for key, _ in PLAN_CYCLE_OPTIONS}
 _ASAAS_FORM_KEYS = {key for key, _ in BILLING_FORM_OPTIONS} | {"pix"}
 _MP_FORM_KEYS = {key for key, _ in MERCADO_PAGO_FORM_OPTIONS}
@@ -88,18 +84,16 @@ def _normalize_plan(raw: dict | None) -> dict[str, Any]:
     ciclo = normalize_text(data.get("ciclo")).lower() or "mensal"
     if ciclo not in _CYCLE_KEYS:
         ciclo = "mensal"
-    forma = normalize_text(data.get("forma")).lower()
+    forma = {
+        "pix_automatico": "pix_recorrente",
+        "cartao_anual": "cartao_avulso",
+        "boleto": "boleto_recorrente",
+    }.get(normalize_text(data.get("forma")).lower(), normalize_text(data.get("forma")).lower())
     banco = normalize_text(data.get("banco")).lower()
     if banco not in {"asaas", "mercado_pago"}:
-        banco = "mercado_pago" if forma in _MP_FORM_KEYS else "asaas"
-    if banco == "mercado_pago":
-        if forma not in _MP_FORM_KEYS:
-            forma = "pix_automatico"
-        if forma == "cartao_anual":
-            ciclo = "anual"
-    else:
-        if forma not in _ASAAS_FORM_KEYS:
-            forma = "cartao_recorrente"
+        banco = "asaas"
+    if forma not in _FORM_KEYS:
+        forma = "cartao_recorrente"
     return {
         "banco": banco,
         "ciclo": ciclo,
@@ -462,10 +456,13 @@ def generate_mercadopago_invoice(
         MercadoPagoError,
         build_boleto_body,
         build_card_preference_body,
+        build_pix_body,
+        build_pix_boleto_preference_body,
         build_pix_subscription_body,
         charge_link,
         create_boleto,
         create_card_link,
+        create_payment,
         create_pix_subscription,
         is_configured as mp_configured,
     )
@@ -489,7 +486,32 @@ def generate_mercadopago_invoice(
     notice = _mp_notification_url()
     back = settings.public_app_url
     forma = normalized["forma"]
-    if forma == "boleto":
+    ciclo = normalized["ciclo"]
+    recurring = forma in {"cartao_recorrente", "pix_recorrente"} and ciclo in {"mensal", "anual"}
+    if recurring:
+        created = create_pix_subscription(build_pix_subscription_body(
+            amount=amount,
+            description=description,
+            email=email,
+            due=due,
+            ciclo=ciclo,
+            sheet_row=sheet_row,
+            notification_url=notice,
+            back_url=back,
+        ))
+        if forma == "pix_recorrente":
+            kind = "Pix recorrente"
+            message = (
+                "Link do Pix recorrente gerado no Mercado Pago. "
+                "O cliente autoriza o débito uma vez. Copie o link no histórico e envie no WhatsApp."
+            )
+        else:
+            kind = "cartão recorrente"
+            message = (
+                "Link do cartão recorrente gerado no Mercado Pago. "
+                "O cliente autoriza no link e as próximas cobranças saem sozinhas."
+            )
+    elif forma == "boleto_recorrente":
         if len(cnpj) != 14:
             raise MercadoPagoError("Informe o CNPJ da empresa para gerar o boleto.")
         created = create_boleto(build_boleto_body(
@@ -504,7 +526,31 @@ def generate_mercadopago_invoice(
         ))
         kind = "boleto"
         message = "Boleto gerado no Mercado Pago. Copie o link no histórico e envie no WhatsApp."
-    elif forma == "cartao_anual":
+    elif forma == "pix_recorrente":
+        created = create_payment(build_pix_body(
+            amount=amount,
+            description=description,
+            due=due,
+            email=email,
+            empresa=empresa,
+            cnpj=cnpj,
+            sheet_row=sheet_row,
+            notification_url=notice,
+        ))
+        kind = "Pix"
+        message = "Pix gerado no Mercado Pago. Copie o link no histórico e envie no WhatsApp."
+    elif forma == "pix_boleto":
+        created = create_card_link(build_pix_boleto_preference_body(
+            amount=amount,
+            description=description,
+            email=email,
+            sheet_row=sheet_row,
+            notification_url=notice,
+            back_url=back,
+        ))
+        kind = "Pix/Boleto"
+        message = "Link de Pix ou boleto gerado no Mercado Pago. O cliente escolhe na hora. Copie e envie no WhatsApp."
+    else:
         created = create_card_link(build_card_preference_body(
             amount=amount,
             description=description,
@@ -513,26 +559,8 @@ def generate_mercadopago_invoice(
             notification_url=notice,
             back_url=back,
         ))
-        kind = "cartão anual"
-        message = "Link do cartão anual gerado no Mercado Pago. Copie no histórico e envie no WhatsApp."
-    else:
-        if normalized["ciclo"] not in {"mensal", "anual"}:
-            raise MercadoPagoError("Pix Automático precisa da periodicidade Mensal ou Anual.")
-        created = create_pix_subscription(build_pix_subscription_body(
-            amount=amount,
-            description=description,
-            email=email,
-            due=due,
-            ciclo=normalized["ciclo"],
-            sheet_row=sheet_row,
-            notification_url=notice,
-            back_url=back,
-        ))
-        kind = "Pix Automático"
-        message = (
-            "Link de autorização do Pix Automático gerado. "
-            "O cliente autoriza uma vez no banco. Copie o link no histórico e envie no WhatsApp."
-        )
+        kind = "cartão"
+        message = "Link do cartão gerado no Mercado Pago. Copie no histórico e envie no WhatsApp."
     link = charge_link(created)
     resource_id = normalize_text(created.get("id"))
     normalized["mercadopago_id"] = resource_id

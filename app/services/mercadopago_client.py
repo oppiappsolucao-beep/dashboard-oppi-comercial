@@ -85,7 +85,7 @@ def build_boleto_body(
     }
 
 
-def build_card_preference_body(
+def build_preference_body(
     *,
     amount: float,
     description: str,
@@ -93,11 +93,12 @@ def build_card_preference_body(
     sheet_row: int,
     notification_url: str,
     back_url: str,
+    excluded_types: list[str],
 ) -> dict[str, Any]:
     return {
         "items": [
             {
-                "title": description[:120] or "Plano anual Oppi",
+                "title": description[:120] or "Plano Oppi",
                 "quantity": 1,
                 "currency_id": "BRL",
                 "unit_price": round(float(amount), 2),
@@ -107,15 +108,45 @@ def build_card_preference_body(
         "external_reference": f"crm-{int(sheet_row)}",
         "notification_url": notification_url,
         "payment_methods": {
-            "excluded_payment_types": [
-                {"id": "ticket"},
-                {"id": "bank_transfer"},
-                {"id": "atm"},
-            ],
+            "excluded_payment_types": [{"id": item} for item in excluded_types],
             "installments": 1,
         },
         "back_urls": {"success": back_url, "pending": back_url, "failure": back_url},
         "auto_return": "approved",
+    }
+
+
+def build_card_preference_body(**kwargs) -> dict[str, Any]:
+    return build_preference_body(excluded_types=["ticket", "bank_transfer", "atm"], **kwargs)
+
+
+def build_pix_boleto_preference_body(**kwargs) -> dict[str, Any]:
+    return build_preference_body(excluded_types=["credit_card", "debit_card"], **kwargs)
+
+
+def build_pix_body(
+    *,
+    amount: float,
+    description: str,
+    due: str,
+    email: str,
+    empresa: str,
+    cnpj: str,
+    sheet_row: int,
+    notification_url: str,
+) -> dict[str, Any]:
+    first, last = payer_names(empresa)
+    payer: dict[str, Any] = {"email": email, "first_name": first, "last_name": last}
+    if len(cnpj) == 14:
+        payer["identification"] = {"type": "CNPJ", "number": cnpj}
+    return {
+        "transaction_amount": round(float(amount), 2),
+        "description": description[:200],
+        "payment_method_id": "pix",
+        "date_of_expiration": _boleto_expiration(due),
+        "external_reference": f"crm-{int(sheet_row)}",
+        "notification_url": notification_url,
+        "payer": payer,
     }
 
 
@@ -237,8 +268,12 @@ def _request(method: str, path: str, body: dict | None = None) -> dict[str, Any]
     return data
 
 
-def create_boleto(body: dict[str, Any]) -> dict[str, Any]:
+def create_payment(body: dict[str, Any]) -> dict[str, Any]:
     return _request("POST", "/v1/payments", body)
+
+
+def create_boleto(body: dict[str, Any]) -> dict[str, Any]:
+    return create_payment(body)
 
 
 def create_card_link(body: dict[str, Any]) -> dict[str, Any]:

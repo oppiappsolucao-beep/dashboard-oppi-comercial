@@ -229,9 +229,11 @@
   if (!box || !button || !hint) return;
   var hints = {
     asaas: "Cartão, boleto e Pix recorrente criam assinatura no Asaas. No Pix recorrente, o cliente autoriza o débito na primeira cobrança. Avulso gera cobrança única.",
-    boleto: "Gera um boleto desta cobrança. O Mercado Pago não renova boleto sozinho. Copie o link e envie no WhatsApp.",
-    cartao_anual: "Gera o link do cartão com o valor anual. O cliente paga no Mercado Pago. Copie o link e envie no WhatsApp.",
-    pix_automatico: "Gera o link de autorização do Pix Automático. O cliente autoriza uma vez no banco e os próximos débitos saem da conta. Copie o link e envie no WhatsApp."
+    cartao_recorrente: "Cartão recorrente cria a assinatura no Mercado Pago. O cliente autoriza no link e as próximas cobranças saem sozinhas.",
+    boleto_recorrente: "Gera o boleto desta cobrança. No Mercado Pago o boleto não renova sozinho. Copie o link e envie no WhatsApp.",
+    pix_recorrente: "Pix recorrente cria a assinatura. O cliente autoriza o débito uma vez e as próximas cobranças saem da conta.",
+    cartao_avulso: "Gera o link do cartão com o valor informado. Copie e envie no WhatsApp.",
+    pix_boleto: "Gera um link em que o cliente escolhe Pix ou boleto. Copie e envie no WhatsApp."
   };
 
   function selected(name) {
@@ -254,7 +256,7 @@
       return;
     }
     var forma = selected("billing_forma");
-    hint.textContent = bank === "mercado_pago" ? (hints[forma] || hints.pix_automatico) : hints.asaas;
+    hint.textContent = bank === "mercado_pago" ? (hints[forma] || hints.cartao_recorrente) : hints.asaas;
   }
 
   document.querySelectorAll("[name='billing_banco'], [name='billing_forma']").forEach(function (input) {
