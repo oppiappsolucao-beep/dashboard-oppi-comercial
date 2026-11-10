@@ -15,6 +15,7 @@ from app.services.raissa_company_sync import (
     next_raissa_append_row,
     payload_for_raissa,
     trim_empty_raissa_rows,
+    _find_row,
     _write_raissa_row,
 )
 
@@ -294,6 +295,77 @@ class RaissaCompanySyncTest(unittest.TestCase):
         self.assertEqual(sheet.row_count, 5)
         self.assertEqual(sheet.updated[0], [["NOVA EMPRESA", "Oppi Ponto"]])
         self.assertEqual(sheet.updated[1], "A5:B5")
+
+    def test_data_de_fechamento_vai_para_a_planilha_em_dia_mes_ano(self):
+        payload = payload_for_raissa(
+            {
+                "empresa": "AUDIOFILM AUTO CENTER LTDA",
+                "cnpj": "11.222.333/0001-81",
+                "data_fechamento": "2026-11-04",
+            }
+        )
+        self.assertEqual(payload["data_fechamento"], "04/11/2026")
+        headers = ["Empresa", "CNPJ", "Serviço", "Data de fechamento"]
+        row = apply_raissa_values(
+            ["AUDIOFILM AUTO CENTER LTDA", "11.222.333/0001-81", "Oppi Ponto", "01/10/2026"],
+            headers,
+            payload,
+            only_filled=True,
+        )
+        self.assertEqual(row[1], "11.222.333/0001-81")
+        self.assertEqual(row[3], "04/11/2026")
+
+    def test_sem_cabecalho_de_fechamento_grava_na_coluna_d(self):
+        headers = ["Empresa", "CNPJ", "Serviço", ""]
+        payload = payload_for_raissa(
+            {"empresa": "AUDIOFILM AUTO CENTER LTDA", "data_fechamento": "2026-11-04"}
+        )
+        row = apply_raissa_values(["AUDIOFILM AUTO CENTER LTDA", "", "", "01/01/2020"], headers, payload, only_filled=True)
+        self.assertEqual(row[3], "04/11/2026")
+
+    def test_nao_escreve_fechamento_em_coluna_d_que_ja_e_outro_campo(self):
+        headers = ["Empresa", "CNPJ", "Serviço", "Valor"]
+        payload = payload_for_raissa(
+            {"empresa": "AUDIOFILM AUTO CENTER LTDA", "data_fechamento": "2026-11-04"}
+        )
+        row = apply_raissa_values(["AUDIOFILM AUTO CENTER LTDA", "", "", "R$ 10,00"], headers, payload, only_filled=True)
+        self.assertEqual(row[3], "R$ 10,00")
+
+    def test_acha_a_linha_pelo_cnpj_da_coluna_b_e_nao_pelo_nome(self):
+        values = [
+            ["Empresa", "CNPJ", "Data de fechamento"],
+            ["AUDIOFILM AUTO CENTER LTDA", "00.000.000/0001-91", "01/01/2020"],
+            ["OUTRA OFICINA", "11.222.333/0001-81", "01/10/2026"],
+        ]
+        found = _find_row(
+            values,
+            0,
+            values[0],
+            {"empresa": "AUDIOFILM AUTO CENTER LTDA", "cnpj": "11.222.333/0001-81"},
+        )
+        self.assertEqual(found, 3)
+
+    def test_cnpj_da_coluna_b_vence_cabecalho_em_outra_coluna(self):
+        values = [
+            ["Empresa", "Documento", "CNPJ"],
+            ["AUDIOFILM AUTO CENTER LTDA", "11.222.333/0001-81", "00.000.000/0001-91"],
+        ]
+        found = _find_row(values, 0, values[0], {"empresa": "OUTRO NOME", "cnpj": "11222333000181"})
+        self.assertEqual(found, 2)
+
+    def test_folha1_atualiza_a_linha_do_cnpj_na_coluna_b(self):
+        from app.services.crm_registrations_storage import match_folha1_row
+
+        values = [
+            ["Nome Empresas", "CNPJ", "Data de fechamento"],
+            ["AUDIOFILM AUTO CENTER LTDA", "00.000.000/0001-91", "01/01/2020"],
+            ["OUTRA", "11.222.333/0001-81", "01/10/2026"],
+        ]
+        row = match_folha1_row(
+            values,
+            {"empresa": "AUDIOFILM AUTO CENTER LTDA", "cnpj": "11.222.333/0001-81"},
+        )
+        self.assertEqual(row, 3)
 
 
 if __name__ == "__main__":

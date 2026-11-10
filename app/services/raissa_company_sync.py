@@ -135,7 +135,7 @@ _FIELD_ALIASES: dict[str, tuple[str, ...]] = {
     "nome_fantasia": ("nome fantasia", "fantasia"),
     "cnpj": ("cnpj",),
     "data_abertura": ("data de abertura", "data abertura"),
-    "data_fechamento": ("data de fechamento", "data fechamento"),
+    "data_fechamento": ("data de fechamento", "data fechamento", "fechamento"),
     "capital": ("capital social", "capital"),
     "endereco": ("endereco", "logradouro", "rua"),
     "endereco_numero": ("numero", "n", "no"),
@@ -276,6 +276,7 @@ def apply_raissa_values(row: list[str], headers: list[str], payload: dict, *, on
         34,
     )
     _put_exact(values, headers, payload.get("data_treinamento"), ("data",), 35)
+    _put_data_fechamento(values, headers, payload, mapping)
     return values[: max(len(headers), 1)]
 
 
@@ -386,8 +387,8 @@ def payload_for_raissa(form: dict, billing: dict | None = None) -> dict:
         "empresa": normalize_text(form.get("empresa")),
         "nome_fantasia": normalize_text(form.get("nome_fantasia")),
         "cnpj": normalize_text(form.get("cnpj")),
-        "data_abertura": normalize_text(form.get("data_abertura")),
-        "data_fechamento": normalize_text(form.get("data_fechamento")),
+        "data_abertura": _sheet_date(form.get("data_abertura")),
+        "data_fechamento": _sheet_date(form.get("data_fechamento")),
         "responsavel_legal": contacts.get("responsavel_legal") or normalize_text(form.get("responsavel_legal") or form.get("nome_responsavel") or form.get("socio_1")),
         "capital": normalize_text(form.get("capital")),
         "endereco": normalize_text(form.get("endereco")),
@@ -481,27 +482,73 @@ def _header_at(values: list[list[str]]) -> int:
     return 0
 
 
+# Coluna B da planilha. O cadastro sempre localiza a empresa por aqui.
+CNPJ_COLUMN_B = 1
+
+
+def row_number_by_cnpj_column_b(values: list[list[str]], cnpj: str, *, start_row: int = 2) -> int:
+    """Linha (1-based) cujo CNPJ está na coluna B. Zero se não existir."""
+    target = cnpj_digits(cnpj)
+    if not target:
+        return 0
+    for row_number, raw in enumerate(values or [], start=1):
+        if row_number < start_row:
+            continue
+        row = list(raw or [])
+        if len(row) > CNPJ_COLUMN_B and cnpj_digits(row[CNPJ_COLUMN_B]) == target:
+            return row_number
+    return 0
+
+
+def _put_data_fechamento(values: list[str], headers: list[str], payload: dict, mapping: dict[str, int]) -> None:
+    """Grava a data de fechamento. Sem o cabeçalho, usa a coluna D, que é a do fechamento."""
+    incoming = normalize_text(payload.get("data_fechamento"))
+    if not incoming or len(values) <= 3 or len(headers) <= 3:
+        return
+    if mapping.get("data_fechamento") is not None:
+        return
+    header_d = normalize_search_text(headers[3])
+    if header_d and "fechamento" not in header_d and header_d not in {"data", "data fechamento"}:
+        return
+    values[3] = incoming
+
+
 def _find_row(values: list[list[str]], header_at: int, headers: list[str], payload: dict) -> int | None:
+    """Acha a empresa pelo CNPJ da coluna B. Nome só entra quando o CNPJ não está na planilha."""
     mapping = _header_map(headers)
     cnpj_index = mapping.get("cnpj")
     name_index = mapping.get("empresa")
-    target_cnpj = _digits(payload.get("cnpj", ""))
+    target_cnpj = cnpj_digits(payload.get("cnpj", ""))
     target_name = normalize_search_text(payload.get("empresa"))
+    if target_cnpj:
+        by_column_b = row_number_by_cnpj_column_b(values, target_cnpj, start_row=header_at + 2)
+        if by_column_b:
+            return by_column_b
     cnpj_fallback = None
     name_fallback = None
     for offset, raw in enumerate(values[header_at + 1 :], start=header_at + 2):
         row = list(raw)
-        if target_cnpj and cnpj_index is not None and cnpj_index < len(row):
-            if _digits(row[cnpj_index]) == target_cnpj:
+        if target_cnpj and cnpj_index not in (None, CNPJ_COLUMN_B) and cnpj_index < len(row):
+            if cnpj_digits(row[cnpj_index]) == target_cnpj:
                 return offset
-        if target_name and name_index is not None and name_index < len(row):
-            if normalize_search_text(row[name_index]) == target_name:
-                return offset
-        if target_cnpj and cnpj_fallback is None and any(_digits(cell) == target_cnpj for cell in row):
-            cnpj_fallback = offset
-        if target_name and name_fallback is None and any(normalize_search_text(cell) == target_name for cell in row):
+        column_b = cnpj_digits(row[CNPJ_COLUMN_B]) if len(row) > CNPJ_COLUMN_B else ""
+        same_name = bool(
+            target_name
+            and name_index is not None
+            and name_index < len(row)
+            and normalize_search_text(row[name_index]) == target_name
+        )
+        if same_name and name_fallback is None and not (target_cnpj and column_b and column_b != target_cnpj):
             name_fallback = offset
-    return cnpj_fallback or name_fallback
+        if target_cnpj and cnpj_fallback is None and any(cnpj_digits(cell) == target_cnpj for cell in row):
+            cnpj_fallback = offset
+        if not target_cnpj and target_name and name_fallback is None and any(
+            normalize_search_text(cell) == target_name for cell in row
+        ):
+            name_fallback = offset
+    if target_cnpj:
+        return cnpj_fallback or name_fallback
+    return name_fallback
 
 
 def _merge_saved_registration(form: dict, crm_sheet_row: int | None) -> tuple[dict, int]:
@@ -796,9 +843,9 @@ def save_registration_on_raissa(
         header_at = _header_at(values)
         headers = [normalize_text(cell) for cell in (values[header_at] if values else [])]
         headers = ensure_raissa_columns(headers)
-        row_number = _row_on_sheet(remembered_row, values, header_at)
-        if not row_number:
-            row_number = _find_row(values, header_at, headers, payload)
+        row_number = _find_row(values, header_at, headers, payload)
+        if not row_number and not cnpj_digits(payload.get("cnpj")):
+            row_number = _row_on_sheet(remembered_row, values, header_at)
         if not row_number and update_only:
             return {
                 "ok": False,

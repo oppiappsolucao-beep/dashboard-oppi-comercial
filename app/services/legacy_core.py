@@ -1458,7 +1458,7 @@ def _apply_registration_profile_fields(row_values: list[str], headers: list[str]
     _set_sheet_value_by_header(
         row_values,
         headers,
-        ["Data de fechamento", "Data fechamento"],
+        ["Data de fechamento", "Data fechamento", "Fechamento"],
         payload.get("data_fechamento"),
     )
     _set_first_alias(
@@ -2202,8 +2202,32 @@ def append_company_to_sheet(payload: dict) -> int:
     return pending_row
 
 
+def _payload_is_filial(payload: dict) -> bool:
+    raw = payload.get("is_filial")
+    if isinstance(raw, bool):
+        return raw
+    return normalize_text(raw).lower() in {"1", "true", "sim", "yes", "on"}
+
+
+def _worksheet_row_by_cnpj_column_b(worksheet, cnpj: str) -> int:
+    """Linha da aba cujo CNPJ está na coluna B. Zero se o CNPJ não estiver lá."""
+    from app.services.raissa_company_sync import cnpj_digits, row_number_by_cnpj_column_b
+
+    if not cnpj_digits(cnpj):
+        return 0
+    try:
+        column_b = worksheet.col_values(2) or []
+    except Exception:
+        return 0
+    rows = [["", cell] for cell in column_b]
+    return row_number_by_cnpj_column_b(rows, cnpj, start_row=2)
+
+
 def update_company_in_sheet(sheet_row: int, payload: dict) -> None:
-    """Atualiza uma empresa diretamente na planilha, preservando as demais colunas da linha."""
+    """Atualiza uma empresa diretamente na planilha, preservando as demais colunas da linha.
+
+    Com CNPJ, a linha é a da coluna B. O número guardado antes não substitui essa busca.
+    """
     client = get_gsheet_client()
     spreadsheet = client.open_by_key(settings.sheet_id)
     worksheet = _open_worksheet(spreadsheet, settings.worksheet_name)
@@ -2211,6 +2235,11 @@ def update_company_in_sheet(sheet_row: int, payload: dict) -> None:
 
     if not headers:
         raise RuntimeError("A primeira linha da planilha precisa conter os cabeçalhos.")
+
+    if not _payload_is_filial(payload):
+        found = _worksheet_row_by_cnpj_column_b(worksheet, payload.get("cnpj", ""))
+        if found > 1:
+            sheet_row = found
 
     if int(sheet_row) < 2 or int(sheet_row) > int(worksheet.row_count or 0):
         raise ValueError(
@@ -2312,7 +2341,7 @@ def identify_columns(df: pd.DataFrame) -> dict:
     return {
         "empresa": first_existing_column(df, ["Nome Empresas", "Nome da empresa", "Empresa", "Nome Empresa", "Nome empresas", "Nome Empresa(s)", "Razão Social", "Razao Social"]),
         "nome_fantasia": first_existing_column(df, ["Nome Fantasia", "Nome fantasia", "Fantasia"]),
-        "data_fechamento": first_existing_column(df, ["Data de fechamento", "Data fechamento"]),
+        "data_fechamento": first_existing_column(df, ["Data de fechamento", "Data fechamento", "Fechamento"]),
         "responsavel_legal": first_existing_column(df, ["Nome do responsável", "Nome do responsavel", "Responsável legal", "Responsavel legal", "Responsável", "Responsavel"]),
         "cargo_responsavel": first_existing_column(df, ["Cargo", "Cargo do responsável", "Cargo responsavel"]),
         "data_abertura": first_existing_column(df, ["Data de abertura", "Data abertura"]),

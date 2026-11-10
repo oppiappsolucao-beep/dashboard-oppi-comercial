@@ -880,23 +880,20 @@ def _company_match_key(value: str) -> str:
     return "".join(character for character in normalize_text(value).lower() if character.isalnum())
 
 
-def _folha1_row_for_company(payload: dict) -> int:
-    """Linha da Folha1 que já tem este CNPJ ou este nome. Zero se ainda não existe."""
-    from app.config import settings
-    from app.services.legacy_core import _open_worksheet, get_gsheet_client
+def match_folha1_row(values: list[list[str]], payload: dict) -> int:
+    """Linha da Folha1 pelo CNPJ da coluna B. Nome só quando esse CNPJ ainda não está na aba."""
+    from app.services.raissa_company_sync import cnpj_digits, row_number_by_cnpj_column_b
 
-    if not settings.sheets_configured:
+    if not values or len(values) < 2:
         return 0
-    cnpj = "".join(character for character in normalize_text(payload.get("cnpj")) if character.isdigit())
+    cnpj = cnpj_digits(payload.get("cnpj"))
     name = _company_match_key(payload.get("empresa") or "")
-    if len(cnpj) < 11 and len(name) < 3:
+    if not cnpj and len(name) < 3:
         return 0
-    client = get_gsheet_client()
-    spreadsheet = client.open_by_key(settings.sheet_id)
-    worksheet = _open_worksheet(spreadsheet, settings.worksheet_name)
-    values = worksheet.get_all_values() or []
-    if len(values) < 2:
-        return 0
+    if cnpj:
+        by_column_b = row_number_by_cnpj_column_b(values, cnpj, start_row=2)
+        if by_column_b:
+            return by_column_b
     headers = [normalize_text(cell).lower() for cell in values[0]]
 
     def column_of(*aliases: str) -> int | None:
@@ -907,15 +904,31 @@ def _folha1_row_for_company(payload: dict) -> int:
 
     cnpj_index = column_of("cnpj")
     name_index = column_of("nome empresas", "nome da empresa", "empresa", "nome empresa")
+    name_fallback = 0
     for offset, raw in enumerate(values[1:], start=2):
-        if cnpj and cnpj_index is not None and cnpj_index < len(raw):
-            cell = "".join(character for character in raw[cnpj_index] if character.isdigit())
+        if cnpj and cnpj_index not in (None, 1) and cnpj_index < len(raw):
+            cell = cnpj_digits(raw[cnpj_index])
             if cell and cell == cnpj:
                 return offset
-        if name and name_index is not None and name_index < len(raw):
-            if _company_match_key(raw[name_index]) == name:
-                return offset
-    return 0
+        column_b = cnpj_digits(raw[1]) if len(raw) > 1 else ""
+        if name and name_index is not None and name_index < len(raw) and not name_fallback:
+            if _company_match_key(raw[name_index]) == name and not (cnpj and column_b and column_b != cnpj):
+                name_fallback = offset
+    return name_fallback
+
+
+def _folha1_row_for_company(payload: dict) -> int:
+    """Linha da Folha1 que já tem este CNPJ na coluna B. Zero se ainda não existe."""
+    from app.config import settings
+    from app.services.legacy_core import _open_worksheet, get_gsheet_client
+
+    if not settings.sheets_configured:
+        return 0
+    client = get_gsheet_client()
+    spreadsheet = client.open_by_key(settings.sheet_id)
+    worksheet = _open_worksheet(spreadsheet, settings.worksheet_name)
+    values = worksheet.get_all_values() or []
+    return match_folha1_row(values, payload)
 
 
 def _mirror_registration_to_folha1(sheet_row: int, *, tenant_id: str | None = None) -> None:
@@ -932,19 +945,22 @@ def _mirror_registration_to_folha1(sheet_row: int, *, tenant_id: str | None = No
         payload = registration_to_payload(row)
         payload.update(_access_fields_from_registration(row))
         extras = payload.get("extras") if isinstance(payload.get("extras"), dict) else {}
+        from app.services.raissa_company_sync import cnpj_digits
+        from app.services.registration import parse_is_filial
+
         stored_row = int(extras.get("folha1_sheet_row") or 0)
         if stored_row > 1 and not _worksheet_accepts_row(stored_row):
             stored_row = 0
-        if stored_row > 1:
-            target = stored_row
-        elif payload.get("is_filial"):
-            target = 0
-        else:
+        is_filial = parse_is_filial(payload.get("is_filial"))
+        target = 0
+        if not is_filial:
             try:
                 target = _folha1_row_for_company(payload)
             except Exception:
                 logger.exception("Não consegui localizar a empresa na Folha1")
                 target = 0
+        if target <= 1 and stored_row > 1 and (is_filial or not cnpj_digits(payload.get("cnpj"))):
+            target = stored_row
         if target > 1:
             try:
                 update_company_in_sheet(target, payload)
