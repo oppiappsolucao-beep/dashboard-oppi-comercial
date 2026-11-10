@@ -27,6 +27,8 @@ class Settings:
     oppi_ponto_crm_api_key: str = ""
     asaas_api_key: str = ""
     asaas_api_url: str = "https://api.asaas.com/v3"
+    mercado_pago_access_token: str = ""
+    mercado_pago_webhook_secret: str = ""
 
     app_username: str
     app_password: str
@@ -96,6 +98,8 @@ class Settings:
             os.getenv("ASAAS_API_URL", "https://api.asaas.com/v3").strip().rstrip("/")
             or "https://api.asaas.com/v3"
         )
+        self.mercado_pago_access_token = os.getenv("MERCADO_PAGO_ACCESS_TOKEN", "").strip()
+        self.mercado_pago_webhook_secret = os.getenv("MERCADO_PAGO_WEBHOOK_SECRET", "").strip()
 
     @property
     def evolution_instances(self) -> list[str]:
@@ -125,6 +129,10 @@ class Settings:
     @property
     def asaas_configured(self) -> bool:
         return bool(self.asaas_api_key)
+
+    @property
+    def mercado_pago_configured(self) -> bool:
+        return bool(self.mercado_pago_access_token)
 
     @property
     def evolution_configured(self) -> bool:

@@ -293,6 +293,9 @@ _FORMA_LABELS = {
     "cartao_avulso": "Cartão de crédito (Avulso)",
     "pix_boleto": "Pix/Boleto (Avulso)",
     "pix": "PIX Avulso",
+    "boleto": "Boleto",
+    "cartao_anual": "Cartão anual",
+    "pix_automatico": "Pix Automático",
 }
 
 

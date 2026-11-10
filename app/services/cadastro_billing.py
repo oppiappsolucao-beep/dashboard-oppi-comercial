@@ -4,6 +4,7 @@ from __future__ import annotations
 from datetime import date, timedelta
 from typing import Any
 
+from app.config import settings
 from app.services.asaas_client import (
     AsaasError,
     create_customer,
@@ -30,6 +31,10 @@ PLAN_CYCLE_OPTIONS = [
     ("anual", "Anual"),
     ("avulso", "Avulso"),
 ]
+BILLING_BANK_OPTIONS = [
+    ("asaas", "Asaas"),
+    ("mercado_pago", "Mercado Pago"),
+]
 BILLING_FORM_OPTIONS = [
     ("cartao_recorrente", "Cartão recorrente"),
     ("boleto_recorrente", "Boleto recorrente"),
@@ -37,8 +42,15 @@ BILLING_FORM_OPTIONS = [
     ("cartao_avulso", "Cartão de crédito (Avulso)"),
     ("pix_boleto", "Pix/Boleto (Avulso)"),
 ]
+MERCADO_PAGO_FORM_OPTIONS = [
+    ("boleto", "Boleto"),
+    ("cartao_anual", "Cartão anual"),
+    ("pix_automatico", "Pix Automático"),
+]
 _CYCLE_KEYS = {key for key, _ in PLAN_CYCLE_OPTIONS}
-_FORM_KEYS = {key for key, _ in BILLING_FORM_OPTIONS} | {"pix"}
+_ASAAS_FORM_KEYS = {key for key, _ in BILLING_FORM_OPTIONS} | {"pix"}
+_MP_FORM_KEYS = {key for key, _ in MERCADO_PAGO_FORM_OPTIONS}
+_FORM_KEYS = _ASAAS_FORM_KEYS | _MP_FORM_KEYS
 
 
 def cycle_label(key: str) -> str:
@@ -48,12 +60,18 @@ def cycle_label(key: str) -> str:
 
 def forma_label(key: str) -> str:
     mapping = dict(BILLING_FORM_OPTIONS)
+    mapping.update(dict(MERCADO_PAGO_FORM_OPTIONS))
     mapping["pix"] = "PIX Avulso"
     return mapping.get(normalize_text(key).lower(), "—")
 
 
+def bank_label(key: str) -> str:
+    return dict(BILLING_BANK_OPTIONS).get(normalize_text(key).lower(), "Asaas")
+
+
 def _empty_plan() -> dict[str, Any]:
     return {
+        "banco": "asaas",
         "ciclo": "mensal",
         "forma": "cartao_recorrente",
         "servico": "",
@@ -61,6 +79,7 @@ def _empty_plan() -> dict[str, Any]:
         "vencimento": "",
         "asaas_customer_id": "",
         "asaas_subscription_id": "",
+        "mercadopago_id": "",
     }
 
 
@@ -69,10 +88,20 @@ def _normalize_plan(raw: dict | None) -> dict[str, Any]:
     ciclo = normalize_text(data.get("ciclo")).lower() or "mensal"
     if ciclo not in _CYCLE_KEYS:
         ciclo = "mensal"
-    forma = normalize_text(data.get("forma")).lower() or "cartao_recorrente"
-    if forma not in _FORM_KEYS:
-        forma = "cartao_recorrente"
+    forma = normalize_text(data.get("forma")).lower()
+    banco = normalize_text(data.get("banco")).lower()
+    if banco not in {"asaas", "mercado_pago"}:
+        banco = "mercado_pago" if forma in _MP_FORM_KEYS else "asaas"
+    if banco == "mercado_pago":
+        if forma not in _MP_FORM_KEYS:
+            forma = "pix_automatico"
+        if forma == "cartao_anual":
+            ciclo = "anual"
+    else:
+        if forma not in _ASAAS_FORM_KEYS:
+            forma = "cartao_recorrente"
     return {
+        "banco": banco,
         "ciclo": ciclo,
         "forma": forma,
         "servico": normalize_text(data.get("servico")),
@@ -80,8 +109,10 @@ def _normalize_plan(raw: dict | None) -> dict[str, Any]:
         "vencimento": normalize_text(data.get("vencimento"))[:10],
         "asaas_customer_id": normalize_text(data.get("asaas_customer_id")),
         "asaas_subscription_id": normalize_text(data.get("asaas_subscription_id")),
+        "mercadopago_id": normalize_text(data.get("mercadopago_id")),
         "ciclo_label": cycle_label(ciclo),
         "forma_label": forma_label(forma),
+        "banco_label": bank_label(banco),
     }
 
 
@@ -111,6 +142,7 @@ def load_billing_plan(tenant_id: str | None, sheet_row: int) -> dict[str, Any]:
         elif "pix" in forma_closed:
             forma = "pix"
         return _normalize_plan({
+            "banco": (stored or {}).get("banco") if isinstance(stored, dict) else "",
             "ciclo": ciclo,
             "forma": forma,
             "servico": first.get("servico"),
@@ -118,6 +150,7 @@ def load_billing_plan(tenant_id: str | None, sheet_row: int) -> dict[str, Any]:
             "vencimento": first.get("vencimento"),
             "asaas_customer_id": (stored or {}).get("asaas_customer_id") if isinstance(stored, dict) else "",
             "asaas_subscription_id": (stored or {}).get("asaas_subscription_id") if isinstance(stored, dict) else "",
+            "mercadopago_id": (stored or {}).get("mercadopago_id") if isinstance(stored, dict) else "",
         })
     return _normalize_plan(_empty_plan())
 
@@ -125,6 +158,7 @@ def load_billing_plan(tenant_id: str | None, sheet_row: int) -> dict[str, Any]:
 def parse_billing_plan_from_form(form: Any, *, previous: dict | None = None) -> dict[str, Any]:
     prev = previous or {}
     return _normalize_plan({
+        "banco": form.get("billing_banco"),
         "ciclo": form.get("billing_ciclo"),
         "forma": form.get("billing_forma"),
         "servico": form.get("billing_servico"),
@@ -132,6 +166,7 @@ def parse_billing_plan_from_form(form: Any, *, previous: dict | None = None) -> 
         "vencimento": form.get("billing_vencimento"),
         "asaas_customer_id": prev.get("asaas_customer_id"),
         "asaas_subscription_id": prev.get("asaas_subscription_id"),
+        "mercadopago_id": prev.get("mercadopago_id"),
     })
 
 
@@ -144,6 +179,7 @@ def save_billing_plan(
 ) -> dict[str, Any]:
     normalized = _normalize_plan(plan)
     payload = {
+        "banco": normalized["banco"],
         "ciclo": normalized["ciclo"],
         "forma": normalized["forma"],
         "servico": normalized["servico"],
@@ -151,6 +187,7 @@ def save_billing_plan(
         "vencimento": normalized["vencimento"],
         "asaas_customer_id": normalized["asaas_customer_id"],
         "asaas_subscription_id": normalized["asaas_subscription_id"],
+        "mercadopago_id": normalized["mercadopago_id"],
     }
     save_lead_action(tenant_id, sheet_row, {"billing_plan": payload}, mirror_sheet=mirror_sheet)
     return load_billing_plan(tenant_id, sheet_row)
@@ -409,3 +446,170 @@ def generate_asaas_invoice(
             f"{'Assinatura' if cycle else 'Fatura'} gerada no Asaas ({normalized['ciclo_label']} · {normalized['forma_label']})."
         ),
     }
+
+
+def _mp_notification_url() -> str:
+    return f"{settings.public_app_url}/webhooks/mercadopago"
+
+
+def generate_mercadopago_invoice(
+    tenant_id: str | None,
+    sheet_row: int,
+    values: dict,
+    plan: dict,
+) -> dict[str, Any]:
+    from app.services.mercadopago_client import (
+        MercadoPagoError,
+        build_boleto_body,
+        build_card_preference_body,
+        build_pix_subscription_body,
+        charge_link,
+        create_boleto,
+        create_card_link,
+        create_pix_subscription,
+        is_configured as mp_configured,
+    )
+
+    if not mp_configured():
+        raise MercadoPagoError("Mercado Pago não está configurado. Defina MERCADO_PAGO_ACCESS_TOKEN no Easypanel.")
+    normalized = _normalize_plan({**plan, "banco": "mercado_pago"})
+    amount = parse_money(normalized.get("valor"))
+    if amount <= 0:
+        raise MercadoPagoError("Informe o valor do plano para gerar a cobrança.")
+    due = normalize_text(normalized.get("vencimento"))[:10]
+    if len(due) != 10:
+        due = (date.today() + timedelta(days=5)).isoformat()
+    email = billing_email_from_values(values)
+    if not email:
+        raise MercadoPagoError("Informe o e-mail de cobrança do responsável antes de gerar no Mercado Pago.")
+    cnpj = normalize_cnpj_for_duplicate(values.get("cnpj") or "")
+    empresa = normalize_text(values.get("empresa")) or "Cliente Oppi"
+    service = normalized.get("servico") or "Plano Oppi"
+    description = f"{service} · {normalized['ciclo_label']} · {normalized['forma_label']}"
+    notice = _mp_notification_url()
+    back = settings.public_app_url
+    forma = normalized["forma"]
+    if forma == "boleto":
+        if len(cnpj) != 14:
+            raise MercadoPagoError("Informe o CNPJ da empresa para gerar o boleto.")
+        created = create_boleto(build_boleto_body(
+            amount=amount,
+            description=description,
+            due=due,
+            email=email,
+            empresa=empresa,
+            cnpj=cnpj,
+            sheet_row=sheet_row,
+            notification_url=notice,
+        ))
+        kind = "boleto"
+        message = "Boleto gerado no Mercado Pago. Copie o link no histórico e envie no WhatsApp."
+    elif forma == "cartao_anual":
+        created = create_card_link(build_card_preference_body(
+            amount=amount,
+            description=description,
+            email=email,
+            sheet_row=sheet_row,
+            notification_url=notice,
+            back_url=back,
+        ))
+        kind = "cartão anual"
+        message = "Link do cartão anual gerado no Mercado Pago. Copie no histórico e envie no WhatsApp."
+    else:
+        if normalized["ciclo"] not in {"mensal", "anual"}:
+            raise MercadoPagoError("Pix Automático precisa da periodicidade Mensal ou Anual.")
+        created = create_pix_subscription(build_pix_subscription_body(
+            amount=amount,
+            description=description,
+            email=email,
+            due=due,
+            ciclo=normalized["ciclo"],
+            sheet_row=sheet_row,
+            notification_url=notice,
+            back_url=back,
+        ))
+        kind = "Pix Automático"
+        message = (
+            "Link de autorização do Pix Automático gerado. "
+            "O cliente autoriza uma vez no banco. Copie o link no histórico e envie no WhatsApp."
+        )
+    link = charge_link(created)
+    resource_id = normalize_text(created.get("id"))
+    normalized["mercadopago_id"] = resource_id
+    save_billing_plan(tenant_id, sheet_row, normalized, mirror_sheet=False)
+    history = load_payment_history(tenant_id, sheet_row)
+    already = {normalize_text(item.get("mercadopago_id")) for item in history}
+    if resource_id and resource_id not in already:
+        history.append({
+            "data": due,
+            "descricao": description,
+            "valor": format_brl(amount),
+            "status": "Pendente",
+            "forma_pagamento": normalized["forma_label"],
+            "invoice_url": link,
+            "fonte": "mercadopago",
+            "mercadopago_id": resource_id,
+        })
+        save_payment_history(tenant_id, sheet_row, history, mirror_sheet=False)
+    return {
+        "ok": True,
+        "created_id": resource_id,
+        "invoice_url": link,
+        "kind": kind,
+        "message": message,
+    }
+
+
+def generate_customer_invoice(
+    tenant_id: str | None,
+    sheet_row: int,
+    values: dict,
+    plan: dict,
+) -> dict[str, Any]:
+    normalized = _normalize_plan(plan)
+    if normalized["banco"] == "mercado_pago":
+        return generate_mercadopago_invoice(tenant_id, sheet_row, values, normalized)
+    return generate_asaas_invoice(tenant_id, sheet_row, values, normalized)
+
+
+_MP_STATUS = {
+    "approved": "Pago",
+    "authorized": "Pendente",
+    "pending": "Pendente",
+    "in_process": "Pendente",
+    "rejected": "Cancelado",
+    "cancelled": "Cancelado",
+    "canceled": "Cancelado",
+    "refunded": "Cancelado",
+    "charged_back": "Cancelado",
+}
+
+
+def apply_mercadopago_status(sheet_row: int, resource_id: str, status: str, invoice_url: str = "") -> None:
+    """Atualiza o histórico local quando o Mercado Pago avisa uma cobrança. Não mexe no Oppi Ponto."""
+    from app.services.lead_actions_storage import DEFAULT_TENANT_ID
+
+    mapped = _MP_STATUS.get(normalize_text(status).lower())
+    if not mapped or int(sheet_row) <= 0:
+        return
+    resource = normalize_text(resource_id)
+    history = load_payment_history(DEFAULT_TENANT_ID, int(sheet_row))
+    target = None
+    for item in history:
+        if resource and normalize_text(item.get("mercadopago_id")) == resource:
+            target = item
+            break
+    if target is None:
+        for item in reversed(history):
+            if item.get("fonte") == "mercadopago" and item.get("status") == "Pendente":
+                target = item
+                break
+    if target is None:
+        return
+    target["status"] = mapped
+    if resource:
+        target["mercadopago_id"] = resource
+    if invoice_url:
+        target["invoice_url"] = invoice_url
+    target["fonte"] = "mercadopago"
+    save_payment_history(DEFAULT_TENANT_ID, int(sheet_row), history, mirror_sheet=False)

@@ -50,8 +50,11 @@ def _normalize_payment(raw: dict | None) -> dict:
         "forma_pagamento": normalize_text(data.get("forma_pagamento")) or "PIX",
         "data_display": _format_date_display(normalize_text(data.get("data"))),
         "asaas_payment_id": normalize_text(data.get("asaas_payment_id")),
+        "mercadopago_id": normalize_text(data.get("mercadopago_id")),
         "invoice_url": normalize_text(data.get("invoice_url")),
-        "fonte": normalize_text(data.get("fonte")) or ("asaas" if data.get("asaas_payment_id") else "manual"),
+        "fonte": normalize_text(data.get("fonte")) or (
+            "mercadopago" if data.get("mercadopago_id") else ("asaas" if data.get("asaas_payment_id") else "manual")
+        ),
     }
 
 
@@ -76,6 +79,8 @@ def parse_payment_history_from_form(form: Any) -> list[dict]:
     formas = form.getlist("pay_forma_pagamento")
     invoice_urls = form.getlist("pay_invoice_url")
     asaas_ids = form.getlist("pay_asaas_payment_id")
+    mp_ids = form.getlist("pay_mercadopago_id")
+    fontes = form.getlist("pay_fonte")
     total = max(len(datas), len(descricoes), len(valores), len(statuses), len(formas), 0)
     if total == 0:
         return []
@@ -92,6 +97,8 @@ def parse_payment_history_from_form(form: Any) -> list[dict]:
                     "forma_pagamento": formas[index] if index < len(formas) else "PIX",
                     "invoice_url": invoice_urls[index] if index < len(invoice_urls) else "",
                     "asaas_payment_id": asaas_ids[index] if index < len(asaas_ids) else "",
+                    "mercadopago_id": mp_ids[index] if index < len(mp_ids) else "",
+                    "fonte": fontes[index] if index < len(fontes) else "",
                 }
             )
         )
@@ -118,6 +125,8 @@ def save_payment_history(
             "status": item.get("status", "Pendente"),
             "forma_pagamento": item.get("forma_pagamento", "PIX"),
             "asaas_payment_id": item.get("asaas_payment_id", ""),
+            "mercadopago_id": item.get("mercadopago_id", ""),
+            "fonte": item.get("fonte", ""),
             "invoice_url": item.get("invoice_url", ""),
         }
         for item in normalized

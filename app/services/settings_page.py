@@ -103,6 +103,7 @@ def build_integrations() -> list[dict]:
         ("Google Sheets", ["GCP_SERVICE_ACCOUNT_B64", "GOOGLE_SERVICE_ACCOUNT_B64"]),
         ("n8n", ["N8N_WEBHOOK_URL"]),
         ("Asaas", ["ASAAS_API_KEY"]),
+        ("Mercado Pago", ["MERCADO_PAGO_ACCESS_TOKEN"]),
         ("ZapSign", ["ZAPSIGN_API_TOKEN"]),
     ]
     rows = []

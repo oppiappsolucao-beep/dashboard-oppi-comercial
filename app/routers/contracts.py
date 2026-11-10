@@ -22,15 +22,18 @@ from app.services.payment_history import (
     save_payment_history,
 )
 from app.services.cadastro_billing import (
+    BILLING_BANK_OPTIONS,
     BILLING_FORM_OPTIONS,
+    MERCADO_PAGO_FORM_OPTIONS,
     PLAN_CYCLE_OPTIONS,
     asaas_history_for_cadastro,
-    generate_asaas_invoice,
+    generate_customer_invoice,
     load_billing_plan,
     parse_billing_plan_from_form,
     save_billing_plan,
 )
 from app.services.asaas_client import AsaasError, is_configured as asaas_is_configured
+from app.services.mercadopago_client import MercadoPagoError, is_configured as mercado_pago_is_configured
 from app.services.legacy_core import (
     DuplicateRegistrationError,
     STATUS_OPTIONS,
@@ -445,8 +448,11 @@ async def contract_edit_page(request: Request, sheet_row: int):
             "asaas_payments": asaas_payments,
             "billing_plan": billing_plan,
             "plan_cycle_options": PLAN_CYCLE_OPTIONS,
+            "billing_bank_options": BILLING_BANK_OPTIONS,
             "billing_form_options": BILLING_FORM_OPTIONS,
+            "mercado_pago_form_options": MERCADO_PAGO_FORM_OPTIONS,
             "asaas_configured": asaas_is_configured(),
+            "mercado_pago_configured": mercado_pago_is_configured(),
             "financial_summary": financial_summary(closed_services, summary_payments),
             "colaborador_options": get_colaborador_options(),
             "vendedor": vendedor,
@@ -601,9 +607,9 @@ async def contract_edit_submit(request: Request, sheet_row: int):
 
             values.update(load_access_fields(DEFAULT_TENANT_ID, sheet_row))
             try:
-                result = generate_asaas_invoice(DEFAULT_TENANT_ID, sheet_row, values, plan)
-                request.session["edit_success"] = result.get("message") or "Fatura gerada no Asaas."
-            except AsaasError as error:
+                result = generate_customer_invoice(DEFAULT_TENANT_ID, sheet_row, values, plan)
+                request.session["edit_success"] = result.get("message") or "Cobrança gerada."
+            except (AsaasError, MercadoPagoError) as error:
                 request.session["edit_error"] = str(error)
             except Exception as error:
                 request.session["edit_error"] = f"Não consegui gerar a fatura: {error}"

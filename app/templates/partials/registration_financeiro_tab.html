@@ -27,7 +27,7 @@
       </div>
     </div>
     {% if billing_plan.ciclo_label and billing_plan.ciclo_label != '—' %}
-    <p class="billing-plan-current">Plano informado: <strong>{{ billing_plan.ciclo_label }}</strong> · {{ billing_plan.forma_label }}{% if billing_plan.servico %} · {{ billing_plan.servico }}{% endif %}{% if billing_plan.valor %} · {{ billing_plan.valor }}{% endif %}</p>
+    <p class="billing-plan-current">Plano informado: <strong>{{ billing_plan.ciclo_label }}</strong> · {{ billing_plan.forma_label }} · {{ billing_plan.banco_label }}{% if billing_plan.servico %} · {{ billing_plan.servico }}{% endif %}{% if billing_plan.valor %} · {{ billing_plan.valor }}{% endif %}</p>
     {% endif %}
   </section>
 
@@ -37,8 +37,8 @@
     <div class="client-edit-section-head">
       <span class="client-edit-section-icon">🧾</span>
       <div>
-        <h2>Gerar fatura</h2>
-        <p>Informe o plano escolhido pelo cliente e gere a cobrança no Asaas.</p>
+        <h2>Gerar cobrança</h2>
+        <p>Escolha o banco. Cliente novo e quem passar de mensal para anual usam a mesma escolha. Quem já está em um plano continua no banco atual até gerar outra cobrança.</p>
       </div>
     </div>
 
@@ -71,13 +71,11 @@
 
     {% include "partials/registration_billing_choices.html" %}
 
-    <div class="billing-plan-actions">
-      {% if asaas_configured %}
-      <button type="submit" name="action" value="generate_invoice" class="btn">Gerar fatura no Asaas</button>
-      <span class="billing-plan-hint">Cartão, boleto e Pix recorrente criam assinatura no Asaas. No Pix recorrente, o cliente autoriza o débito automático na primeira cobrança. Cartão de crédito avulso e Pix/Boleto avulso geram cobrança única.</span>
-      {% else %}
-      <p class="billing-plan-hint">Asaas não está configurado. Você ainda pode salvar o plano escolhido e o histórico manual.</p>
-      {% endif %}
+    <div class="billing-plan-actions" id="billing-generate"
+      data-asaas-ready="{{ '1' if asaas_configured else '0' }}"
+      data-mp-ready="{{ '1' if mercado_pago_configured else '0' }}">
+      <button type="submit" name="action" value="generate_invoice" class="btn" id="billing-generate-btn">Gerar cobrança</button>
+      <span class="billing-plan-hint" id="billing-generate-hint"></span>
     </div>
   </section>
 
@@ -186,6 +184,8 @@
       <input type="hidden" name="pay_forma_pagamento" value="{{ item.forma_pagamento }}">
       <input type="hidden" name="pay_invoice_url" value="{{ item.invoice_url }}">
       <input type="hidden" name="pay_asaas_payment_id" value="{{ item.asaas_payment_id }}">
+      <input type="hidden" name="pay_mercadopago_id" value="{{ item.mercadopago_id }}">
+      <input type="hidden" name="pay_fonte" value="{{ item.fonte }}">
       {% endfor %}
     </div>
   </section>
@@ -221,5 +221,45 @@
       }
     });
   });
+})();
+(function () {
+  var box = document.getElementById("billing-generate");
+  var button = document.getElementById("billing-generate-btn");
+  var hint = document.getElementById("billing-generate-hint");
+  if (!box || !button || !hint) return;
+  var hints = {
+    asaas: "Cartão, boleto e Pix recorrente criam assinatura no Asaas. No Pix recorrente, o cliente autoriza o débito na primeira cobrança. Avulso gera cobrança única.",
+    boleto: "Gera um boleto desta cobrança. O Mercado Pago não renova boleto sozinho. Copie o link e envie no WhatsApp.",
+    cartao_anual: "Gera o link do cartão com o valor anual. O cliente paga no Mercado Pago. Copie o link e envie no WhatsApp.",
+    pix_automatico: "Gera o link de autorização do Pix Automático. O cliente autoriza uma vez no banco e os próximos débitos saem da conta. Copie o link e envie no WhatsApp."
+  };
+
+  function selected(name) {
+    var chosen = "";
+    document.querySelectorAll("[name='" + name + "']").forEach(function (input) {
+      if (input.checked && !input.disabled) chosen = input.value;
+    });
+    return chosen;
+  }
+
+  function refresh() {
+    var bank = selected("billing_banco") || "asaas";
+    var ready = bank === "mercado_pago" ? box.getAttribute("data-mp-ready") === "1" : box.getAttribute("data-asaas-ready") === "1";
+    button.disabled = !ready;
+    button.textContent = bank === "mercado_pago" ? "Gerar cobrança no Mercado Pago" : "Gerar fatura no Asaas";
+    if (!ready) {
+      hint.textContent = bank === "mercado_pago"
+        ? "Mercado Pago não está configurado neste ambiente."
+        : "Asaas não está configurado. Você ainda pode salvar o plano e o histórico manual.";
+      return;
+    }
+    var forma = selected("billing_forma");
+    hint.textContent = bank === "mercado_pago" ? (hints[forma] || hints.pix_automatico) : hints.asaas;
+  }
+
+  document.querySelectorAll("[name='billing_banco'], [name='billing_forma']").forEach(function (input) {
+    input.addEventListener("change", refresh);
+  });
+  refresh();
 })();
 </script>

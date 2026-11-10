@@ -1832,6 +1832,10 @@
   padding: 0;
 }
 
+.billing-choice[hidden] {
+  display: none;
+}
+
 .billing-choice legend {
   font-size: 12px;
   font-weight: 700;
