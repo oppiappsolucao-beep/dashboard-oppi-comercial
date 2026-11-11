@@ -96,6 +96,7 @@ class MercadoPagoBillingTest(unittest.TestCase):
         self.assertEqual(body["status"], "pending")
         self.assertEqual(body["auto_recurring"]["frequency"], 1)
         self.assertEqual(body["auto_recurring"]["frequency_type"], "months")
+        self.assertRegex(body["auto_recurring"]["start_date"], r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.000Z$")
         self.assertTrue(charge_link({"init_point": "https://www.mercadopago.com.br/subscriptions/checkout?preapproval_id=abc"}).startswith("https://"))
 
     def test_aviso_encontra_o_cadastro_e_confere_a_assinatura(self):

@@ -36,15 +36,22 @@ def payer_names(empresa: str) -> tuple[str, str]:
     return parts[0][:40], " ".join(parts[1:])[:40]
 
 
+def _mp_timestamp(moment: datetime) -> str:
+    """O Mercado Pago só aceita data com milissegundos e Z, como 2026-11-16T12:00:00.000Z."""
+    utc = moment.astimezone(ZoneInfo("UTC"))
+    return utc.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+
+
 def _start_at(due: str) -> str:
     try:
         day = date.fromisoformat(due[:10])
     except ValueError:
         day = date.today() + timedelta(days=1)
-    start = datetime(day.year, day.month, day.day, 9, 0, tzinfo=_TZ)
-    if start <= datetime.now(_TZ):
-        start = datetime.now(_TZ) + timedelta(hours=2)
-    return start.isoformat(timespec="seconds")
+    start = datetime(day.year, day.month, day.day, 12, 0, tzinfo=_TZ)
+    earliest = datetime.now(_TZ) + timedelta(hours=2)
+    if start <= earliest:
+        start = earliest
+    return _mp_timestamp(start)
 
 
 def _boleto_expiration(due: str) -> str:
@@ -52,9 +59,9 @@ def _boleto_expiration(due: str) -> str:
         day = date.fromisoformat(due[:10])
     except ValueError:
         day = date.today() + timedelta(days=3)
-    if day < date.today():
+    if day <= date.today():
         day = date.today() + timedelta(days=1)
-    return datetime(day.year, day.month, day.day, 21, 0, tzinfo=_TZ).isoformat(timespec="seconds")
+    return _mp_timestamp(datetime(day.year, day.month, day.day, 21, 0, tzinfo=_TZ))
 
 
 def build_boleto_body(

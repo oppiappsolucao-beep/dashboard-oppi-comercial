@@ -203,9 +203,12 @@ def asaas_billing_type(forma: str) -> str:
 
 
 def asaas_subscription_fields(forma: str) -> dict[str, str]:
-    """Pix recorrente pede a autorização do Pix Automático na primeira cobrança."""
-    if normalize_text(forma).lower() == "pix_recorrente":
-        return {"pixAutomaticAuthorizationMode": "REQUIRED"}
+    """A assinatura Pix, boleto e cartão segue sem campo extra.
+
+    pixAutomaticAuthorizationMode não entra: esta conta do Asaas recusa o valor
+    e a fatura inteira deixa de ser criada.
+    """
+    normalize_text(forma)
     return {}
 
 

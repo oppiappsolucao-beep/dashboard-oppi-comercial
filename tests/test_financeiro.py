@@ -174,10 +174,7 @@ class CadastroBillingMappingTest(unittest.TestCase):
         self.assertFalse(is_recurring_forma("pix_boleto"))
         from app.services.cadastro_billing import asaas_subscription_fields
 
-        self.assertEqual(
-            asaas_subscription_fields("pix_recorrente"),
-            {"pixAutomaticAuthorizationMode": "REQUIRED"},
-        )
+        self.assertEqual(asaas_subscription_fields("pix_recorrente"), {})
         self.assertEqual(asaas_subscription_fields("boleto_recorrente"), {})
 
     def test_parse_billing_plan_from_form_keeps_selected_option(self):
