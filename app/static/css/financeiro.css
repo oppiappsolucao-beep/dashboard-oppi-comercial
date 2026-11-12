@@ -1288,6 +1288,29 @@ button.fin-delete-cancel {
   min-height: 4px;
 }
 
+.fin-bar.is-out {
+  background: linear-gradient(180deg, #fca5a5, #b91c1c);
+}
+
+.fin-bar-chart.is-money {
+  grid-template-columns: 18px 92px minmax(0, 1fr);
+}
+
+.fin-bar-chart.is-money .fin-bar-y {
+  font-size: 10px;
+}
+
+.fin-bar-chart.is-money .fin-bar-col,
+.fin-bar-chart.is-money .fin-bar-label {
+  width: 84px;
+  max-width: 84px;
+}
+
+.fin-compare {
+  width: 100%;
+  margin-top: 16px;
+}
+
 .fin-bar-tip {
   display: none;
   position: absolute;

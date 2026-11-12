@@ -28,6 +28,8 @@ PAGE_BACK_FALLBACKS = {
     "financeiro": "/financeiro",
     "entrada": "/financeiro/entrada",
     "contas_pagar": "/financeiro/contas-a-pagar",
+    "resultados": "/financeiro/resultados",
+    "comparativos": "/financeiro/comparativos",
     "registration_new": "/leads-e-empresas",
     "contracts": "/leads-e-empresas",
     "settings": "/visao-geral",

@@ -343,6 +343,39 @@ class EntradasEContasTest(unittest.TestCase):
         self.assertIn(",", grafico["entrada_pontos"])
         self.assertIn(",", grafico["saida_pontos"])
 
+    def test_graficos_de_contas_separam_categoria_situacao_e_mes(self):
+        from app.services.financeiro import montar_graficos_contas
+
+        rows = [
+            {"amount": 100, "category": "fixa", "category_label": "Fixa", "status": "pago", "due": date(2026, 11, 5)},
+            {"amount": 40, "category": "imposto", "category_label": "Imposto", "status": "atrasado", "due": date(2026, 11, 10)},
+            {"amount": 20, "category": "fixa", "category_label": "Fixa", "status": "a_pagar", "due": date(2026, 12, 2)},
+            {"amount": 15, "category": "servico", "category_label": "Serviço", "status": "a_pagar", "due": date(2027, 1, 8)},
+        ]
+        out = montar_graficos_contas(rows, date(2026, 11, 12))
+        fixa = next(item for item in out["categorias"] if item["key"] == "fixa")
+        self.assertEqual(fixa["valor"], 120.0)
+        self.assertNotIn("servico", [item["key"] for item in out["categorias"]])
+        situacao = {fatia["mes"]: fatia["valor"] for fatia in out["situacao"]["fatias"]}
+        self.assertEqual(situacao, {"Pago": 100.0, "A pagar": 20.0, "Atrasado": 40.0})
+        self.assertTrue(out["situacao"]["fatias"][0]["d"].startswith("M"))
+        meses = {pizza["titulo"]: pizza for pizza in out["meses"]}
+        novembro = {fatia["mes"]: fatia["valor"] for fatia in meses["2026"]["fatias"]}
+        self.assertEqual(novembro["Novembro"], 140.0)
+        self.assertEqual(novembro["Dezembro"], 20.0)
+        janeiro = {fatia["mes"]: fatia["valor"] for fatia in meses["2027"]["fatias"]}
+        self.assertEqual(janeiro["Janeiro"], 15.0)
+
+    def test_comparativo_anexa_a_diferenca_de_cada_ponto(self):
+        from app.services.financeiro import anexar_saldo_nos_pontos
+
+        pontos = anexar_saldo_nos_pontos([
+            {"label": "1–7", "entrada": 100.0, "saida": 40.0, "entrada_label": "R$ 100,00", "saida_label": "R$ 40,00"},
+            {"label": "8–14", "entrada": 10.0, "saida": 30.0, "entrada_label": "R$ 10,00", "saida_label": "R$ 30,00"},
+        ])
+        self.assertEqual([ponto["saldo"] for ponto in pontos], [60.0, -20.0])
+        self.assertEqual(pontos[1]["saldo_label"], "R$ -20,00")
+
     def test_status_e_repeticao_mensal(self):
         from app.services.company_payables import add_months, payable_status
 

@@ -1,0 +1,216 @@
+{% extends "base.html" %}
+{% block content %}
+<link rel="stylesheet" href="/static/css/financeiro.css?v={{ static_version }}-resultados1">
+<div class="page-header">
+  <div>
+    <div class="page-title">Resultados</div>
+    <div class="page-subtitle">Gráficos da base de entradas e das contas lançadas. A lista de clientes continua em Entrada, e as contas em Contas a pagar.</div>
+  </div>
+  <div class="page-actions">
+    <a class="btn btn-secondary" href="/financeiro/entrada">Entrada</a>
+    <a class="btn btn-secondary" href="/financeiro/contas-a-pagar">Contas a pagar</a>
+    <a class="btn btn-secondary" href="/financeiro/comparativos">Comparativos</a>
+  </div>
+</div>
+
+{% if controle.aviso %}
+<div class="fin-banner">{{ controle.aviso }}</div>
+{% endif %}
+{% if contas_aviso %}
+<div class="fin-banner">{{ contas_aviso }}</div>
+{% endif %}
+
+<div class="panel fin-table-card">
+  <div class="section-heading">Entradas · contagem por valor</div>
+  <div class="section-subtitle">Quantidade de clientes em cada valor. Passe o mouse na barra para ver o número.</div>
+  {% if controle.valores %}
+  {% set ns = namespace(max_n=1) %}
+  {% for row in controle.valores %}
+    {% if row.n > ns.max_n %}{% set ns.max_n = row.n %}{% endif %}
+  {% endfor %}
+  <div class="fin-bar-chart" role="img" aria-label="Quantidade de clientes por valor">
+    <div class="fin-bar-y-name">Quantidade</div>
+    <div class="fin-bar-y" aria-hidden="true">
+      <span>{{ ns.max_n }}</span>
+      <span>{{ (ns.max_n / 2)|round|int }}</span>
+      <span>0</span>
+    </div>
+    <div class="fin-bar-plot">
+      <div class="fin-bar-row">
+        {% for row in controle.valores %}
+        <div class="fin-bar-col">
+          <div class="fin-bar-stack">
+            <div class="fin-bar{% if row.n %} is-on{% endif %}" style="height: {{ (row.n / ns.max_n * 100)|round(1) }}%">
+              <span class="fin-bar-tip">{{ row.n }} cliente{{ 's' if row.n != 1 else '' }}</span>
+            </div>
+          </div>
+          <div class="fin-bar-label">{{ row.label }}</div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  {% else %}
+  <p class="fin-empty">Nenhum valor na base Raissa.</p>
+  {% endif %}
+</div>
+
+<div class="panel fin-table-card">
+  <div class="section-heading">Entradas · por mês</div>
+  <div class="section-subtitle">Valor cheio dos ativos. Recorrente cobra todo mês. Plano anual, pela coluna AH, renova só no mês do fechamento (coluna D). Passe o mouse na fatia para ver o valor. Clique para abrir a relação em Entrada.</div>
+  {% if controle.pizzas %}
+  <div class="fin-pies">
+    {% for pizza in controle.pizzas %}
+    <div class="fin-pie">
+      <div class="fin-pie-head">
+        <div class="fin-pie-year">{{ pizza.titulo }}</div>
+        <div class="fin-pie-total">{{ pizza.total_label }}</div>
+        {% if pizza.nota %}<div class="fin-pie-note">{{ pizza.nota }}</div>{% endif %}
+      </div>
+      {% if pizza.fatias %}
+      <div class="fin-pie-body">
+        <svg class="fin-pie-svg" viewBox="0 0 200 200" role="img" aria-label="{{ pizza.titulo }}">
+          {% for fatia in pizza.fatias %}
+          <a href="/financeiro/entrada?period_start={{ fatia.period_start }}&period_end={{ fatia.period_end }}">
+            <path d="{{ fatia.d }}" fill="{{ fatia.cor }}">
+              <title>{{ fatia.mes }} · {{ fatia.valor_label }}</title>
+            </path>
+          </a>
+          {% endfor %}
+        </svg>
+        <ul class="fin-pie-legend">
+          {% for fatia in pizza.fatias %}
+          <li>
+            <a href="/financeiro/entrada?period_start={{ fatia.period_start }}&period_end={{ fatia.period_end }}">
+              <span class="fin-pie-swatch" style="background: {{ fatia.cor }}"></span>
+              <span>{{ fatia.mes }}</span>
+              <strong>{{ fatia.valor_label }}</strong>
+            </a>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% else %}
+      <p class="fin-empty">Nenhum valor em {{ pizza.titulo }}.</p>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="fin-empty">Nenhum vencimento na base Raissa.</p>
+  {% endif %}
+</div>
+
+<div class="panel fin-table-card">
+  <div class="section-heading">Contas a pagar · por classificação</div>
+  <div class="section-subtitle">Soma do que está lançado em {{ contas.ano }}. Passe o mouse na barra para ver o valor.</div>
+  {% if contas.categorias %}
+  <div class="fin-bar-chart is-money" role="img" aria-label="Contas a pagar por classificação em {{ contas.ano }}">
+    <div class="fin-bar-y-name">Valor</div>
+    <div class="fin-bar-y" aria-hidden="true">
+      <span>{{ contas.categorias_max_label }}</span>
+      <span>{{ contas.categorias_meio_label }}</span>
+      <span>R$ 0</span>
+    </div>
+    <div class="fin-bar-plot">
+      <div class="fin-bar-row">
+        {% for row in contas.categorias %}
+        <div class="fin-bar-col">
+          <div class="fin-bar-stack">
+            <div class="fin-bar is-out{% if row.valor %} is-on{% endif %}" style="height: {{ (row.valor / contas.categorias_max * 100)|round(1) }}%">
+              <span class="fin-bar-tip">{{ row.n }} conta{{ 's' if row.n != 1 else '' }} · {{ row.valor_label }}</span>
+            </div>
+          </div>
+          <div class="fin-bar-label">{{ row.label }}</div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  {% else %}
+  <p class="fin-empty">Nenhuma conta lançada em {{ contas.ano }}.</p>
+  {% endif %}
+</div>
+
+<div class="panel fin-table-card">
+  <div class="section-heading">Contas a pagar · por situação</div>
+  <div class="section-subtitle">Pago, em aberto e atrasado em {{ contas.ano }}. Clique na fatia para abrir a lista.</div>
+  <div class="fin-pies">
+    <div class="fin-pie">
+      <div class="fin-pie-head">
+        <div class="fin-pie-year">{{ contas.situacao.titulo }}</div>
+        <div class="fin-pie-total">{{ contas.situacao.total_label }}</div>
+        <div class="fin-pie-note">{{ contas.situacao.nota }}</div>
+      </div>
+      {% if contas.situacao.fatias %}
+      <div class="fin-pie-body">
+        <svg class="fin-pie-svg" viewBox="0 0 200 200" role="img" aria-label="Situação das contas em {{ contas.ano }}">
+          {% for fatia in contas.situacao.fatias %}
+          <a href="/financeiro/contas-a-pagar?period_start={{ fatia.period_start }}&period_end={{ fatia.period_end }}&status={{ fatia.status }}">
+            <path d="{{ fatia.d }}" fill="{{ fatia.cor }}">
+              <title>{{ fatia.mes }} · {{ fatia.valor_label }}</title>
+            </path>
+          </a>
+          {% endfor %}
+        </svg>
+        <ul class="fin-pie-legend">
+          {% for fatia in contas.situacao.fatias %}
+          <li>
+            <a href="/financeiro/contas-a-pagar?period_start={{ fatia.period_start }}&period_end={{ fatia.period_end }}&status={{ fatia.status }}">
+              <span class="fin-pie-swatch" style="background: {{ fatia.cor }}"></span>
+              <span>{{ fatia.mes }}</span>
+              <strong>{{ fatia.valor_label }}</strong>
+            </a>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% else %}
+      <p class="fin-empty">Nenhuma conta lançada em {{ contas.ano }}.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<div class="panel fin-table-card">
+  <div class="section-heading">Contas a pagar · por mês</div>
+  <div class="section-subtitle">Soma das contas lançadas em cada mês. Clique na fatia para abrir aquele mês em Contas a pagar.</div>
+  <div class="fin-pies">
+    {% for pizza in contas.meses %}
+    <div class="fin-pie">
+      <div class="fin-pie-head">
+        <div class="fin-pie-year">{{ pizza.titulo }}</div>
+        <div class="fin-pie-total">{{ pizza.total_label }}</div>
+        {% if pizza.nota %}<div class="fin-pie-note">{{ pizza.nota }}</div>{% endif %}
+      </div>
+      {% if pizza.fatias %}
+      <div class="fin-pie-body">
+        <svg class="fin-pie-svg" viewBox="0 0 200 200" role="img" aria-label="Contas de {{ pizza.titulo }}">
+          {% for fatia in pizza.fatias %}
+          <a href="/financeiro/contas-a-pagar?period_start={{ fatia.period_start }}&period_end={{ fatia.period_end }}">
+            <path d="{{ fatia.d }}" fill="{{ fatia.cor }}">
+              <title>{{ fatia.mes }} · {{ fatia.valor_label }}</title>
+            </path>
+          </a>
+          {% endfor %}
+        </svg>
+        <ul class="fin-pie-legend">
+          {% for fatia in pizza.fatias %}
+          <li>
+            <a href="/financeiro/contas-a-pagar?period_start={{ fatia.period_start }}&period_end={{ fatia.period_end }}">
+              <span class="fin-pie-swatch" style="background: {{ fatia.cor }}"></span>
+              <span>{{ fatia.mes }}</span>
+              <strong>{{ fatia.valor_label }}</strong>
+            </a>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% else %}
+      <p class="fin-empty">Nenhuma conta lançada em {{ pizza.titulo }}.</p>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

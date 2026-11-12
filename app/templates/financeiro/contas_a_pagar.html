@@ -65,6 +65,7 @@
   </div>
   <div class="page-actions">
     <a class="btn" href="/financeiro/contas-a-pagar/nova?period_start={{ filters.period_start }}&period_end={{ filters.period_end }}&status={{ filters.status or '' }}&semana={{ filters.semana }}">Nova conta</a>
+    <a class="btn btn-secondary" href="/financeiro/comparativos?period_start={{ filters.period_start }}&period_end={{ filters.period_end }}">Comparativos</a>
     <a class="btn btn-secondary" href="/financeiro/entrada">Entrada</a>
   </div>
 </div>
@@ -89,31 +90,6 @@
 {% if payables.compare_note %}
 <p class="fin-empty">{{ payables.compare_note }}</p>
 {% endif %}
-
-<div class="panel fin-table-card">
-  <div class="section-heading">Entrada e saída</div>
-  {% if payables.grafico and payables.grafico.pontos %}
-  <svg class="fin-line" viewBox="0 0 {{ payables.grafico.width }} {{ payables.grafico.height }}" role="img" aria-label="Entrada e saída no período">
-    <line x1="12" y1="{{ payables.grafico.topo }}" x2="628" y2="{{ payables.grafico.topo }}" stroke="#E5E7EB" />
-    <line x1="12" y1="{{ payables.grafico.meio }}" x2="628" y2="{{ payables.grafico.meio }}" stroke="#E5E7EB" />
-    <line x1="12" y1="{{ payables.grafico.base }}" x2="628" y2="{{ payables.grafico.base }}" stroke="#E5E7EB" />
-    <polyline points="{{ payables.grafico.entrada_pontos }}" fill="none" stroke="#15803D" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" />
-    <polyline points="{{ payables.grafico.saida_pontos }}" fill="none" stroke="#B91C1C" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" />
-    {% for ponto in payables.grafico.pontos %}
-    <circle cx="{{ ponto.x }}" cy="{{ ponto.y_entrada }}" r="4" fill="#15803D"><title>{{ ponto.label }} · Entrada {{ ponto.entrada_label }}</title></circle>
-    <circle cx="{{ ponto.x }}" cy="{{ ponto.y_saida }}" r="4" fill="#B91C1C"><title>{{ ponto.label }} · Saída {{ ponto.saida_label }}</title></circle>
-    <text x="{{ ponto.x }}" y="{{ payables.grafico.height - 8 }}" text-anchor="middle">{{ ponto.label }}</text>
-    {% endfor %}
-  </svg>
-  <div class="fin-line-legend">
-    <span><i class="fin-line-swatch is-in"></i>Entrada <strong class="fin-money-in">{{ payables.entrada_label }}</strong></span>
-    <span><i class="fin-line-swatch is-out"></i>Saída <strong class="fin-money-out">{{ payables.saida_label }}</strong></span>
-    <span>A receber <strong>{{ payables.a_receber_label }}</strong></span>
-  </div>
-  {% else %}
-  <p class="fin-empty">Sem valores neste período.</p>
-  {% endif %}
-</div>
 
 <div class="panel fin-table-card">
   <form class="fin-period-form fin-bill-filters" method="get" action="/financeiro/contas-a-pagar">

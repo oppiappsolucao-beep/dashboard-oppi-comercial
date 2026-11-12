@@ -7,6 +7,7 @@
     <div class="page-subtitle">Contagem da base Raissa{% if controle.aba %} ({{ controle.aba }}){% endif %}. O dia da coluna D, o fechamento{% if controle.data_coluna %} ({{ controle.data_coluna }}){% endif %}, cobra todo mês. Plano anual cobra só no mês do aniversário.</div>
   </div>
   <div class="page-actions">
+    <a class="btn btn-secondary" href="/financeiro/resultados">Resultados</a>
     <a class="btn btn-secondary" href="/financeiro/contas-a-pagar">Contas a pagar</a>
     <form method="post" action="/financeiro/sincronizar">
       <input type="hidden" name="destino" value="entrada">
@@ -37,87 +38,6 @@
     <div class="metric-note">{{ card.note }}</div>
   </div>
   {% endfor %}
-</div>
-
-<div class="panel fin-table-card">
-  <div class="section-heading">Contagem por valor</div>
-  <div class="section-subtitle">Quantidade de clientes em cada valor. Passe o mouse na barra para ver o número.</div>
-  {% if controle.valores %}
-  {% set ns = namespace(max_n=1) %}
-  {% for row in controle.valores %}
-    {% if row.n > ns.max_n %}{% set ns.max_n = row.n %}{% endif %}
-  {% endfor %}
-  <div class="fin-bar-chart" role="img" aria-label="Quantidade de clientes por valor">
-    <div class="fin-bar-y-name">Quantidade</div>
-    <div class="fin-bar-y" aria-hidden="true">
-      <span>{{ ns.max_n }}</span>
-      <span>{{ (ns.max_n / 2)|round|int }}</span>
-      <span>0</span>
-    </div>
-    <div class="fin-bar-plot">
-      <div class="fin-bar-row">
-        {% for row in controle.valores %}
-        <div class="fin-bar-col">
-          <div class="fin-bar-stack">
-            <div class="fin-bar{% if row.n %} is-on{% endif %}" style="height: {{ (row.n / ns.max_n * 100)|round(1) }}%">
-              <span class="fin-bar-tip">{{ row.n }} cliente{{ 's' if row.n != 1 else '' }}</span>
-            </div>
-          </div>
-          <div class="fin-bar-label">{{ row.label }}</div>
-        </div>
-        {% endfor %}
-      </div>
-    </div>
-  </div>
-  {% else %}
-  <p class="fin-empty">Nenhum valor na base Raissa.</p>
-  {% endif %}
-</div>
-
-<div class="panel fin-table-card">
-  <div class="section-heading">Por mês</div>
-  <div class="section-subtitle">Valor cheio dos ativos. Recorrente cobra todo mês. Plano anual, pela coluna AH, renova só no mês do fechamento (coluna D). Passe o mouse na fatia para ver o valor. Clique para abrir a relação.</div>
-  {% if controle.pizzas %}
-  <div class="fin-pies">
-    {% for pizza in controle.pizzas %}
-    <div class="fin-pie">
-      <div class="fin-pie-head">
-        <div class="fin-pie-year">{{ pizza.titulo }}</div>
-        <div class="fin-pie-total">{{ pizza.total_label }}</div>
-        {% if pizza.nota %}<div class="fin-pie-note">{{ pizza.nota }}</div>{% endif %}
-      </div>
-      {% if pizza.fatias %}
-      <div class="fin-pie-body">
-        <svg class="fin-pie-svg" viewBox="0 0 200 200" role="img" aria-label="{{ pizza.titulo }}">
-          {% for fatia in pizza.fatias %}
-          <a href="/financeiro/entrada?period_start={{ fatia.period_start }}&period_end={{ fatia.period_end }}{% if filters.status %}&status={{ filters.status }}{% endif %}">
-            <path d="{{ fatia.d }}" fill="{{ fatia.cor }}">
-              <title>{{ fatia.mes }} · {{ fatia.valor_label }}</title>
-            </path>
-          </a>
-          {% endfor %}
-        </svg>
-        <ul class="fin-pie-legend">
-          {% for fatia in pizza.fatias %}
-          <li>
-            <a href="/financeiro/entrada?period_start={{ fatia.period_start }}&period_end={{ fatia.period_end }}{% if filters.status %}&status={{ filters.status }}{% endif %}">
-              <span class="fin-pie-swatch" style="background: {{ fatia.cor }}"></span>
-              <span>{{ fatia.mes }}</span>
-              <strong>{{ fatia.valor_label }}</strong>
-            </a>
-          </li>
-          {% endfor %}
-        </ul>
-      </div>
-      {% else %}
-      <p class="fin-empty">Nenhum valor em {{ pizza.titulo }}.</p>
-      {% endif %}
-    </div>
-    {% endfor %}
-  </div>
-  {% else %}
-  <p class="fin-empty">Nenhum vencimento na base Raissa.</p>
-  {% endif %}
 </div>
 
 <div class="panel fin-table-card">

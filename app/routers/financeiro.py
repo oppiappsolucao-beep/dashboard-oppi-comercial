@@ -15,7 +15,12 @@ from app.services.company_payables import (
     reopen_payable,
     update_payable,
 )
-from app.services.financeiro import _week_band, build_financeiro_context
+from app.services.financeiro import (
+    _week_band,
+    build_comparativos_context,
+    build_financeiro_context,
+    build_resultados_context,
+)
 from app.services.legacy_core import normalize_text
 from app.templating import render
 
@@ -143,6 +148,26 @@ async def financeiro_payable_new_page(request: Request):
         "contas_pagar",
         flash=flash,
     )
+
+
+@router.get("/financeiro/resultados", response_class=HTMLResponse)
+async def financeiro_resultados_page(request: Request):
+    denied = require_auth(request)
+    if denied:
+        return denied
+    ctx = build_resultados_context(_params(request))
+    ctx["active_page"] = "resultados"
+    return render(request, "financeiro/resultados.html", ctx)
+
+
+@router.get("/financeiro/comparativos", response_class=HTMLResponse)
+async def financeiro_comparativos_page(request: Request):
+    denied = require_auth(request)
+    if denied:
+        return denied
+    ctx = build_comparativos_context(_params(request))
+    ctx["active_page"] = "comparativos"
+    return render(request, "financeiro/comparativos.html", ctx)
 
 
 @router.get("/financeiro/contas-a-pagar", response_class=HTMLResponse)

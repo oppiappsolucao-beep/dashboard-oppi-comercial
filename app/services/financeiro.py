@@ -894,6 +894,15 @@ def _montar_grafico_caixa(
     }
 
 
+def anexar_saldo_nos_pontos(pontos: list[dict]) -> list[dict]:
+    """Diferença de cada ponto: o que já entrou menos o que saiu."""
+    saida = []
+    for ponto in pontos:
+        saldo = round(float(ponto.get("entrada") or 0) - float(ponto.get("saida") or 0), 2)
+        saida.append({**ponto, "saldo": saldo, "saldo_label": format_brl(saldo)})
+    return saida
+
+
 def attach_cash_compare(payables: dict[str, Any], start: date, end: date, today: date, *, force: bool = False) -> dict[str, Any]:
     """Entrada e A receber vêm do painel de Entrada, no período escolhido."""
     del force
@@ -1525,6 +1534,130 @@ def _year_pizzas(
     return pizzas
 
 
+_STATUS_CONTAS = (
+    ("pago", "Pago", "#15803D"),
+    ("a_pagar", "A pagar", "#2563EB"),
+    ("atrasado", "Atrasado", "#B91C1C"),
+)
+
+
+def montar_graficos_contas(rows: list[dict], today: date) -> dict[str, Any]:
+    """Gráficos das contas lançadas: classificação e situação deste ano, meses deste ano e do próximo."""
+    este_ano = [
+        row for row in rows
+        if isinstance(row.get("due"), date) and row["due"].year == today.year
+    ]
+    categorias_map: dict[str, dict[str, Any]] = {}
+    for row in este_ano:
+        key = normalize_text(row.get("category")).lower() or "outra"
+        bucket = categorias_map.setdefault(
+            key,
+            {"label": normalize_text(row.get("category_label")) or "Outra", "valor": 0.0, "n": 0},
+        )
+        bucket["valor"] += float(row.get("amount") or 0)
+        bucket["n"] += 1
+    categorias = [
+        {
+            "key": key,
+            "label": item["label"],
+            "valor": round(item["valor"], 2),
+            "valor_label": format_brl(item["valor"]),
+            "n": int(item["n"]),
+        }
+        for key, item in categorias_map.items()
+        if item["valor"] > 0 or item["n"]
+    ]
+    categorias.sort(key=lambda item: (-item["valor"], item["label"]))
+    topo = max((item["valor"] for item in categorias), default=0.0)
+
+    status_totais = {key: 0.0 for key, _, _ in _STATUS_CONTAS}
+    for row in este_ano:
+        status = row.get("status") if row.get("status") in status_totais else "a_pagar"
+        status_totais[status] += float(row.get("amount") or 0)
+    ano_ini = date(today.year, 1, 1).isoformat()
+    ano_fim = date(today.year, 12, 31).isoformat()
+    fatias = []
+    total_situacao = sum(status_totais.values())
+    for key, label, cor in _STATUS_CONTAS:
+        valor = status_totais[key]
+        if valor <= 0:
+            continue
+        fatias.append(
+            {
+                "mes": label,
+                "valor": round(valor, 2),
+                "valor_label": format_brl(valor),
+                "cor": cor,
+                "period_start": ano_ini,
+                "period_end": ano_fim,
+                "status": key,
+            }
+        )
+    cursor = 0.0
+    for fatia in fatias:
+        sweep = 360 * fatia["valor"] / total_situacao if total_situacao else 0
+        fatia["d"] = _pie_path(cursor, sweep)
+        cursor += sweep
+
+    por_mes: dict[tuple[int, int], float] = {}
+    for row in rows:
+        due = row.get("due")
+        if not isinstance(due, date):
+            continue
+        chave = (due.year, due.month)
+        por_mes[chave] = por_mes.get(chave, 0.0) + float(row.get("amount") or 0)
+    meses = []
+    for year in (today.year, today.year + 1):
+        fatias_mes = []
+        total_ano = 0.0
+        for month in range(1, 13):
+            valor = por_mes.get((year, month), 0.0)
+            if valor <= 0:
+                continue
+            total_ano += valor
+            month_start = date(year, month, 1)
+            fatias_mes.append(
+                {
+                    "mes": _MESES[month],
+                    "valor": round(valor, 2),
+                    "valor_label": format_brl(valor),
+                    "cor": _PIE_COLORS[month - 1],
+                    "period_start": month_start.isoformat(),
+                    "period_end": _month_last(year, month).isoformat(),
+                    "status": "",
+                }
+            )
+        cursor = 0.0
+        for fatia in fatias_mes:
+            sweep = 360 * fatia["valor"] / total_ano if total_ano else 0
+            fatia["d"] = _pie_path(cursor, sweep)
+            cursor += sweep
+        meses.append(
+            {
+                "titulo": str(year),
+                "nota": "Soma das contas lançadas em cada mês.",
+                "total": round(total_ano, 2),
+                "total_label": format_brl(total_ano),
+                "fatias": fatias_mes,
+            }
+        )
+    return {
+        "ano": today.year,
+        "categorias": categorias,
+        "categorias_max": topo if topo > 0 else 1.0,
+        "categorias_max_label": format_brl(topo),
+        "categorias_meio_label": format_brl(topo / 2 if topo else 0),
+        "situacao": {
+            "titulo": str(today.year),
+            "nota": "Pago, em aberto e atrasado nas contas deste ano.",
+            "total": round(total_situacao, 2),
+            "total_label": format_brl(total_situacao),
+            "fatias": fatias,
+        },
+        "meses": meses,
+    }
+
+
 def _due_in_month(row: dict, year: int, month: int) -> date | None:
     """Vencimento projetado. O dia é o do fechamento; anual só repete nesse mês."""
     fechamento = row.get("fechamento")
@@ -2053,6 +2186,60 @@ def build_raissa_entrada_context(
         "filters": params,
         "tab": TAB_ENTRADAS,
         "boletos": {"error": controle.get("error") or ""},
+    }
+
+
+def build_resultados_context(params: dict | None = None, *, force: bool = False) -> dict[str, Any]:
+    """Gráficos da Entrada e das contas a pagar, fora da lista de clientes."""
+    params = dict(params or {})
+    today = _today()
+    period_start, period_end = resolve_period(params.get("period_start"), params.get("period_end"), today=today)
+    params = {
+        **params,
+        "period_start": period_start.isoformat(),
+        "period_end": period_end.isoformat(),
+    }
+    entrada = build_raissa_entrada_context(params, period_start, period_end, today, force=force)
+    try:
+        contas_rows = list_payables(date(today.year, 1, 1), date(today.year + 1, 12, 31), today)
+        contas = montar_graficos_contas(contas_rows, today)
+        contas_aviso = ""
+    except Exception:
+        logger.exception("Falha ao montar os gráficos de contas a pagar")
+        contas = montar_graficos_contas([], today)
+        contas_aviso = "Não consegui ler as contas a pagar agora."
+    return {
+        "controle": entrada["controle"],
+        "contas": contas,
+        "contas_aviso": contas_aviso,
+        "filters": params,
+    }
+
+
+def build_comparativos_context(params: dict | None = None) -> dict[str, Any]:
+    """Entrada marcada como já paga contra a saída das contas, no período escolhido."""
+    params = dict(params or {})
+    today = _today()
+    period_start, period_end = resolve_period(params.get("period_start"), params.get("period_end"), today=today)
+    params = {
+        **params,
+        "period_start": period_start.isoformat(),
+        "period_end": period_end.isoformat(),
+        "status": "",
+        "search": "",
+        "semana": "",
+    }
+    payables = _payables_view(period_start, period_end, "", "", today)
+    payables = attach_cash_compare(payables, period_start, period_end, today)
+    grafico = payables.get("grafico") or {}
+    pontos = anexar_saldo_nos_pontos(list(grafico.get("pontos") or []))
+    if grafico:
+        grafico["pontos"] = pontos
+        payables["grafico"] = grafico
+    return {
+        "payables": payables,
+        "pontos": pontos,
+        "filters": params,
     }
 
 
