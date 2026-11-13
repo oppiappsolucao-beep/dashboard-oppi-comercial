@@ -11,9 +11,10 @@ log = logging.getLogger(__name__)
 
 _CACHE = None
 _GRAPH = "https://graph.facebook.com/v26.0"
+# O mesmo nome que o Gerenciador chama de conversa por mensagem iniciada.
+# Os dois rótulos são o mesmo fato; somar os dois dobra a quantidade.
 _CONVERSATION_ACTIONS = (
     "onsite_conversion.messaging_conversation_started_7d",
-    "onsite_conversion.total_messaging_connection",
     "messaging_conversation_started_7d",
 )
 
@@ -48,15 +49,18 @@ def _int(value) -> int:
 
 
 def _action_value(actions: list | None, names: tuple[str, ...]) -> int:
-    wanted = {name.lower() for name in names}
-    total = 0
+    """Usa um único tipo de conversa iniciada. Não soma apelidos do mesmo evento."""
+    found: dict[str, int] = {}
     for action in actions or []:
         if not isinstance(action, dict):
             continue
         kind = str(action.get("action_type") or "").lower()
-        if kind in wanted:
-            total += _int(action.get("value"))
-    return total
+        found[kind] = found.get(kind, 0) + _int(action.get("value"))
+    for name in names:
+        total = found.get(name.lower())
+        if total:
+            return total
+    return 0
 
 
 def _money(value: float, currency: str = "BRL") -> str:
@@ -165,6 +169,8 @@ def _insights(account: str, token: str, start: str, end: str) -> list[dict]:
         "level": "ad",
         "time_range": json.dumps({"since": start, "until": end}),
         "fields": "campaign_name,adset_name,ad_name,impressions,clicks,spend,ctr,actions",
+        "action_report_time": "conversion",
+        "use_unified_attribution_setting": "true",
         "limit": "200",
     }
     rows: list[dict] = []

@@ -31,6 +31,25 @@ class MetaAdsMirrorTest(unittest.TestCase):
         self.assertEqual(row["spend_label"], "R$ 80,00")
         self.assertEqual(row["cost_label"], "R$ 10,00")
 
+    def test_nao_soma_apelidos_da_mesma_conversa(self):
+        row = _row(
+            {
+                "impressions": "100",
+                "clicks": "10",
+                "spend": "20",
+                "actions": [
+                    {
+                        "action_type": "onsite_conversion.messaging_conversation_started_7d",
+                        "value": "4",
+                    },
+                    {"action_type": "messaging_conversation_started_7d", "value": "4"},
+                    {"action_type": "onsite_conversion.total_messaging_connection", "value": "9"},
+                ],
+            }
+        )
+        self.assertEqual(row["conversations"], 4)
+        self.assertEqual(row["cost_per_conversation"], 5)
+
     def test_totals_sum_creatives(self):
         rows = [
             _row({"impressions": "100", "clicks": "10", "spend": "20", "actions": []}),
