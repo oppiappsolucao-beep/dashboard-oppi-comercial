@@ -32,7 +32,8 @@ class PessoalAccessTest(unittest.TestCase):
             "org_sector_name": "Comercial",
             "org_accesses": ["kanban"],
         })
-        admin = _Request({"authenticated": True, "username": "oppi", "user_role": "Administrador"})
+        admin = _Request({"authenticated": True, "username": "oppitech", "user_role": "Administrador"})
+        oppi = _Request({"authenticated": True, "username": "oppi", "user_role": "Administrador"})
         vendedor = _Request({"authenticated": True, "username": "higo", "user_role": "Vendedor"})
 
         self.assertTrue(pessoal_allowed(financeiro_1))
@@ -42,7 +43,8 @@ class PessoalAccessTest(unittest.TestCase):
             "username": "financeiro1",
             "org_sector_name": "Financeiro",
         })))
-        self.assertTrue(pessoal_allowed(admin))
+        self.assertFalse(pessoal_allowed(admin))
+        self.assertFalse(pessoal_allowed(oppi))
         self.assertFalse(pessoal_allowed(financeiro))
         self.assertFalse(pessoal_allowed(_Request({
             "authenticated": True,
@@ -54,7 +56,8 @@ class PessoalAccessTest(unittest.TestCase):
         self.assertFalse(pessoal_allowed(_Request({})))
 
         self.assertTrue(nav_permissions(financeiro_1)["pessoal"])
-        self.assertTrue(nav_permissions(admin)["pessoal"])
+        self.assertFalse(nav_permissions(admin)["pessoal"])
+        self.assertFalse(nav_permissions(oppi)["pessoal"])
         self.assertFalse(nav_permissions(financeiro)["pessoal"])
         self.assertFalse(nav_permissions(vendedor)["pessoal"])
         self.assertTrue(nav_permissions(admin)["financeiro"])

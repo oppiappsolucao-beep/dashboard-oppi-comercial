@@ -57,20 +57,28 @@ def _is_financeiro1(value: str) -> bool:
     return _sector_key(value) == "financeiro1"
 
 
-def pessoal_allowed(request: Request) -> bool:
-    """Só a vida pessoal do dono do financeiro.
+def _is_oppitech(request: Request) -> bool:
+    """Login principal do painel. Não vê a aba Pessoal."""
+    username = _sector_key(str(request.session.get("username") or ""))
+    if username in {"oppi", "oppitech"}:
+        return True
+    try:
+        from app.config import settings
 
-    Entra o administrador do painel, ou quem entra com nome, usuário ou setor Financeiro 1.
-    Vendedor, Raíssa, Higo e os outros setores ficam de fora.
-    """
-    if not request.session.get("authenticated"):
+        admin = _sector_key(settings.app_username or "")
+    except Exception:
+        admin = ""
+    return bool(admin) and username == admin
+
+
+def pessoal_allowed(request: Request) -> bool:
+    """Só quem entra como Financeiro 1. O acesso oppitech fica de fora."""
+    if not request.session.get("authenticated") or _is_oppitech(request):
         return False
     for key in ("username", "org_person_name", "org_sector_name"):
         if _is_financeiro1(str(request.session.get(key) or "")):
             return True
-    if is_employee(request):
-        return False
-    return str(request.session.get("user_role") or "") == "Administrador"
+    return False
 
 
 def nav_permissions(request: Request) -> dict[str, bool]:
