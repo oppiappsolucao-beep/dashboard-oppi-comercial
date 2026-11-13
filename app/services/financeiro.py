@@ -2127,11 +2127,11 @@ def _raissa_kpi_cards(controle: dict) -> list[dict]:
             "icon": "✓",
         },
         {
-            "label": "Cancelados",
-            "value": str(int(controle.get("cancelados_n") or 0)),
-            "note": "Inativo na coluna AI",
-            "tone": "orange",
-            "icon": "!",
+            "label": "Clientes a pagar",
+            "value": str(int(controle.get("vai_pagar_n") or 0)),
+            "note": f"{controle.get('vai_pagar_label') or format_brl(0)} · {periodo}",
+            "tone": "blue",
+            "icon": "↓",
         },
         {
             "label": "Já pagou",

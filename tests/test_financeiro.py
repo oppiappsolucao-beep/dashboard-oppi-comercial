@@ -1053,6 +1053,9 @@ class RaissaEntradaTest(unittest.TestCase):
         asaas.assert_not_called()
         boletos.assert_not_called()
         self.assertEqual(ctx["kpi_cards"][0]["label"], "Ativos")
+        self.assertEqual(ctx["kpi_cards"][1]["label"], "Clientes a pagar")
+        self.assertEqual(ctx["kpi_cards"][1]["value"], str(ctx["controle"]["vai_pagar_n"]))
+        self.assertIn(ctx["controle"]["vai_pagar_label"], ctx["kpi_cards"][1]["note"])
         self.assertEqual(ctx["controle"]["aba"], "Raissa")
         self.assertEqual(ctx["filters"]["period_start"], "2026-11-01")
 
