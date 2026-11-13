@@ -14,33 +14,71 @@ class PessoalAccessTest(unittest.TestCase):
     def test_so_o_setor_financeiro_1_ve_a_aba(self):
         from app.services.access_scope import nav_permissions, pessoal_allowed
 
-        financeiro_1 = _Request({"org_person_id": "p1", "org_sector_name": "Financeiro 1", "org_accesses": ["financeiro"]})
-        financeiro = _Request({"org_person_id": "p2", "org_sector_name": "Financeiro", "org_accesses": ["financeiro"]})
-        outro = _Request({"org_person_id": "p3", "org_sector_name": "Comercial", "org_accesses": ["kanban"]})
-        admin = _Request({})
+        financeiro_1 = _Request({
+            "authenticated": True,
+            "org_person_id": "p1",
+            "org_sector_name": "Financeiro 1",
+            "org_accesses": ["financeiro"],
+        })
+        financeiro = _Request({
+            "authenticated": True,
+            "org_person_id": "p2",
+            "org_sector_name": "Financeiro",
+            "org_accesses": ["financeiro"],
+        })
+        outro = _Request({
+            "authenticated": True,
+            "org_person_id": "p3",
+            "org_sector_name": "Comercial",
+            "org_accesses": ["kanban"],
+        })
+        admin = _Request({"authenticated": True, "username": "oppi", "user_role": "Administrador"})
+        vendedor = _Request({"authenticated": True, "username": "higo", "user_role": "Vendedor"})
 
         self.assertTrue(pessoal_allowed(financeiro_1))
-        self.assertTrue(pessoal_allowed(_Request({"org_person_id": "p1", "org_sector_name": "financeiro1"})))
+        self.assertTrue(pessoal_allowed(_Request({
+            "authenticated": True,
+            "org_person_id": "p1",
+            "username": "financeiro1",
+            "org_sector_name": "Financeiro",
+        })))
+        self.assertTrue(pessoal_allowed(admin))
         self.assertFalse(pessoal_allowed(financeiro))
-        self.assertFalse(pessoal_allowed(_Request({"org_person_id": "p9", "org_sector_name": "Financeiro 2"})))
+        self.assertFalse(pessoal_allowed(_Request({
+            "authenticated": True,
+            "org_person_id": "p9",
+            "org_sector_name": "Financeiro 2",
+        })))
         self.assertFalse(pessoal_allowed(outro))
-        self.assertFalse(pessoal_allowed(admin))
+        self.assertFalse(pessoal_allowed(vendedor))
+        self.assertFalse(pessoal_allowed(_Request({})))
 
         self.assertTrue(nav_permissions(financeiro_1)["pessoal"])
+        self.assertTrue(nav_permissions(admin)["pessoal"])
         self.assertFalse(nav_permissions(financeiro)["pessoal"])
-        self.assertFalse(nav_permissions(admin)["pessoal"])
+        self.assertFalse(nav_permissions(vendedor)["pessoal"])
         self.assertTrue(nav_permissions(admin)["financeiro"])
 
     def test_endereco_direto_nao_abre_para_os_outros(self):
         from app.services.access_scope import enforce_access
 
         bloqueado = enforce_access(
-            _Request({"org_person_id": "p2", "org_sector_name": "Financeiro", "org_accesses": ["financeiro"]})
+            _Request({
+                "authenticated": True,
+                "org_person_id": "p2",
+                "org_sector_name": "Financeiro",
+                "org_accesses": ["financeiro"],
+            })
         )
         self.assertIsNotNone(bloqueado)
         self.assertIsNone(
             enforce_access(
-                _Request({"org_person_id": "p1", "org_sector_name": "Financeiro 1", "org_accesses": []})
+                _Request({
+                    "authenticated": True,
+                    "org_person_id": "p1",
+                    "org_sector_name": "Financeiro 1",
+                    "org_accesses": [],
+                })
             )
         )
         self.assertIsNone(enforce_access(_Request({})))

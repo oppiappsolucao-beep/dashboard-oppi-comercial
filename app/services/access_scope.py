@@ -53,11 +53,24 @@ def _sector_key(name: str) -> str:
     return "".join(ch for ch in str(name or "").lower() if ch.isalnum())
 
 
+def _is_financeiro1(value: str) -> bool:
+    return _sector_key(value) == "financeiro1"
+
+
 def pessoal_allowed(request: Request) -> bool:
-    """Somente o setor Financeiro 1. O administrador e os outros setores não entram."""
-    if not is_employee(request):
+    """Só a vida pessoal do dono do financeiro.
+
+    Entra o administrador do painel, ou quem entra com nome, usuário ou setor Financeiro 1.
+    Vendedor, Raíssa, Higo e os outros setores ficam de fora.
+    """
+    if not request.session.get("authenticated"):
         return False
-    return _sector_key(request.session.get("org_sector_name") or "") == "financeiro1"
+    for key in ("username", "org_person_name", "org_sector_name"):
+        if _is_financeiro1(str(request.session.get(key) or "")):
+            return True
+    if is_employee(request):
+        return False
+    return str(request.session.get("user_role") or "") == "Administrador"
 
 
 def nav_permissions(request: Request) -> dict[str, bool]:
