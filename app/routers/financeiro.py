@@ -6,6 +6,7 @@ from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from app.dependencies import require_auth
+from app.services.access_scope import home_url, pessoal_allowed
 from app.services.asaas_client import invalidate_cache
 from app.services.company_payables import (
     create_payable,
@@ -19,7 +20,15 @@ from app.services.financeiro import (
     _week_band,
     build_comparativos_context,
     build_financeiro_context,
+    build_pessoal_context,
     build_resultados_context,
+)
+from app.services.personal_payables import (
+    create_payable as create_personal_payable,
+    delete_payable as delete_personal_payable,
+    mark_payable_paid as mark_personal_paid,
+    reopen_payable as reopen_personal_payable,
+    update_payable as update_personal_payable,
 )
 from app.services.legacy_core import normalize_text
 from app.templating import render
@@ -168,6 +177,198 @@ async def financeiro_comparativos_page(request: Request):
     ctx = build_comparativos_context(_params(request))
     ctx["active_page"] = "comparativos"
     return render(request, "financeiro/comparativos.html", ctx)
+
+
+def _pessoal_guard(request: Request):
+    denied = require_auth(request)
+    if denied:
+        return denied
+    if not pessoal_allowed(request):
+        return RedirectResponse(url=home_url(request), status_code=303)
+    return None
+
+
+def _pessoal_back(
+    period_start: str,
+    period_end: str,
+    flash: str,
+    status: str = "",
+    semana: str = "",
+    search: str = "",
+) -> RedirectResponse:
+    query = urlencode(
+        {
+            "period_start": period_start,
+            "period_end": period_end,
+            "status": status,
+            "semana": semana,
+            "search": search,
+            "flash": flash,
+        }
+    )
+    return RedirectResponse(url=f"/financeiro/pessoal?{query}", status_code=303)
+
+
+@router.get("/financeiro/pessoal", response_class=HTMLResponse)
+async def financeiro_pessoal_page(request: Request):
+    denied = _pessoal_guard(request)
+    if denied:
+        return denied
+    ctx = build_pessoal_context(_params(request))
+    ctx["flash"] = normalize_text(request.query_params.get("flash"))
+    ctx["active_page"] = "pessoal"
+    return render(request, "financeiro/pessoal.html", ctx)
+
+
+@router.post("/financeiro/pessoal")
+async def financeiro_pessoal_create(
+    request: Request,
+    description: str = Form(""),
+    amount: str = Form(""),
+    due_date: str = Form(""),
+    supplier: str = Form(""),
+    category: str = Form("outra"),
+    repeat_mode: str = Form("unico"),
+    repeat_count: str = Form("1"),
+    period_start: str = Form(""),
+    period_end: str = Form(""),
+    status: str = Form(""),
+    semana: str = Form(""),
+    search: str = Form(""),
+):
+    denied = _pessoal_guard(request)
+    if denied:
+        return denied
+    name = normalize_text(description)
+    value = parse_money(amount)
+    try:
+        due = date.fromisoformat(normalize_text(due_date)[:10])
+    except ValueError:
+        due = None
+    back_start = normalize_text(period_start)
+    back_end = normalize_text(period_end)
+    back_status = normalize_text(status)
+    back_semana = normalize_text(semana)
+    back_search = normalize_text(search)
+    if not name or value is None or due is None:
+        return _pessoal_back(back_start, back_end, "Informe descrição, valor e vencimento.", back_status, back_semana, back_search)
+    times = 1
+    if normalize_text(repeat_mode).lower() == "vezes":
+        try:
+            times = int(normalize_text(repeat_count) or "1")
+        except ValueError:
+            times = 1
+        if times < 2:
+            return _pessoal_back(back_start, back_end, "Informe quantas vezes, a partir de 2.", back_status, back_semana, back_search)
+    create_personal_payable(name, value, due, supplier=supplier, category=category, repeat_count=times)
+    start, end = _month_bounds(due)
+    if times > 1:
+        flash = f"Conta lançada {times} vezes, uma por mês. Use De e Até para ver os outros meses."
+    else:
+        flash = "Conta lançada."
+    return _pessoal_back(start, end, flash, back_status, str(_week_band(due.day)[0] + 1), back_search)
+
+
+@router.post("/financeiro/pessoal/{payable_id}/editar")
+async def financeiro_pessoal_edit(
+    request: Request,
+    payable_id: int,
+    description: str = Form(""),
+    amount: str = Form(""),
+    due_date: str = Form(""),
+    supplier: str = Form(""),
+    category: str = Form("outra"),
+    scope: str = Form("mes"),
+    period_start: str = Form(""),
+    period_end: str = Form(""),
+    status: str = Form(""),
+    semana: str = Form(""),
+    search: str = Form(""),
+):
+    denied = _pessoal_guard(request)
+    if denied:
+        return denied
+    name = normalize_text(description)
+    value = parse_money(amount)
+    try:
+        due = date.fromisoformat(normalize_text(due_date)[:10])
+    except ValueError:
+        due = None
+    chosen = normalize_text(scope).lower()
+    if not name or value is None or due is None:
+        return _pessoal_back(period_start, period_end, "Informe descrição, valor e vencimento.", status, semana, search)
+    if chosen not in {"mes", "todos"}:
+        return _pessoal_back(period_start, period_end, "Escolha se a correção vale só neste mês ou em todos.", status, semana, search)
+    changed = update_personal_payable(
+        payable_id,
+        description=name,
+        amount=value,
+        due=due,
+        supplier=supplier,
+        category=category,
+        scope=chosen,
+    )
+    if not changed:
+        return _pessoal_back(period_start, period_end, "Não encontrei essa conta.", status, semana, search)
+    if chosen == "todos" and changed > 1:
+        flash = f"Valor corrigido em {changed} meses."
+    else:
+        flash = "Valor corrigido neste mês."
+    return _pessoal_back(period_start, period_end, flash, status, str(_week_band(due.day)[0] + 1), search)
+
+
+@router.post("/financeiro/pessoal/{payable_id}/pagar")
+async def financeiro_pessoal_pay(
+    request: Request,
+    payable_id: int,
+    period_start: str = Form(""),
+    period_end: str = Form(""),
+    status: str = Form(""),
+    semana: str = Form(""),
+    search: str = Form(""),
+):
+    denied = _pessoal_guard(request)
+    if denied:
+        return denied
+    mark_personal_paid(payable_id)
+    return _pessoal_back(period_start, period_end, "Conta marcada como paga.", status, semana, search)
+
+
+@router.post("/financeiro/pessoal/{payable_id}/reabrir")
+async def financeiro_pessoal_reopen(
+    request: Request,
+    payable_id: int,
+    period_start: str = Form(""),
+    period_end: str = Form(""),
+    status: str = Form(""),
+    semana: str = Form(""),
+    search: str = Form(""),
+):
+    denied = _pessoal_guard(request)
+    if denied:
+        return denied
+    reopen_personal_payable(payable_id)
+    return _pessoal_back(period_start, period_end, "Conta voltou para a pagar.", status, semana, search)
+
+
+@router.post("/financeiro/pessoal/{payable_id}/excluir")
+async def financeiro_pessoal_delete(
+    request: Request,
+    payable_id: int,
+    period_start: str = Form(""),
+    period_end: str = Form(""),
+    status: str = Form(""),
+    semana: str = Form(""),
+    search: str = Form(""),
+    confirm_text: str = Form(""),
+):
+    denied = _pessoal_guard(request)
+    if denied:
+        return denied
+    if normalize_text(confirm_text).lower() != "excluir":
+        return _pessoal_back(period_start, period_end, "A conta continua salva. Digite excluir para apagar.", status, semana, search)
+    delete_personal_payable(payable_id)
+    return _pessoal_back(period_start, period_end, "Conta excluída.", status, semana, search)
 
 
 @router.get("/financeiro/contas-a-pagar", response_class=HTMLResponse)

@@ -94,6 +94,7 @@ from app.routers.financeiro import (  # noqa: E402
     financeiro_filters,
     financeiro_page,
     financeiro_pagar_page,
+    financeiro_pessoal_page,
     financeiro_refresh,
     financeiro_resultados_page,
     financeiro_sync,
@@ -103,6 +104,7 @@ app.add_api_route("/financeiro", financeiro_page, methods=["GET"], tags=["financ
 app.add_api_route("/financeiro/entrada", financeiro_entrada_page, methods=["GET"], tags=["financeiro"])
 app.add_api_route("/financeiro/resultados", financeiro_resultados_page, methods=["GET"], tags=["financeiro"])
 app.add_api_route("/financeiro/comparativos", financeiro_comparativos_page, methods=["GET"], tags=["financeiro"])
+app.add_api_route("/financeiro/pessoal", financeiro_pessoal_page, methods=["GET"], tags=["financeiro"])
 app.add_api_route("/financeiro/contas-a-pagar", financeiro_pagar_page, methods=["GET"], tags=["financeiro"])
 app.add_api_route("/financeiro/filtros", financeiro_filters, methods=["POST"], tags=["financeiro"])
 app.add_api_route("/financeiro/atualizar", financeiro_refresh, methods=["POST"], tags=["financeiro"])

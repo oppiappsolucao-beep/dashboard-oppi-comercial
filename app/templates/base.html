@@ -83,6 +83,11 @@
           <span class="sidebar-link-icon">↔</span> Comparativos
         </a>
         {% endif %}
+        {% if nav.pessoal %}
+        <a href="/financeiro/pessoal" class="sidebar-link {% if active_page == 'pessoal' %}active{% endif %}">
+          <span class="sidebar-link-icon">⌂</span> Pessoal
+        </a>
+        {% endif %}
         {% if nav.cadastro %}
         <a href="/cadastros" class="sidebar-link {% if active_page == 'org_registry' %}active{% endif %}">
           <span class="sidebar-link-icon">✎</span> Sistema

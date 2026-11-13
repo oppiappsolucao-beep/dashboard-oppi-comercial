@@ -522,9 +522,22 @@ def apply_boleto_status(boletos: dict[str, Any], status: str) -> dict[str, Any]:
     return out
 
 
-def _payables_view(start: date, end: date, search: str, status: str = "", today: date | None = None) -> dict[str, Any]:
+def _payables_view(
+    start: date,
+    end: date,
+    search: str,
+    status: str = "",
+    today: date | None = None,
+    ledger: str = "empresa",
+) -> dict[str, Any]:
     today = today or _today()
-    rows = list_payables(start, end, today)
+    if ledger == "pessoal":
+        from app.services.personal_payables import list_payables as load_rows
+        from app.services.personal_payables import list_suppliers as load_suppliers
+    else:
+        load_rows = list_payables
+        load_suppliers = list_suppliers
+    rows = load_rows(start, end, today)
     atrasados = [row for row in rows if row.get("status") == "atrasado"]
     atraso_total = sum(float(row["amount"]) for row in atrasados)
     saida = sum(float(row["amount"]) for row in rows)
@@ -602,7 +615,7 @@ def _payables_view(start: date, end: date, search: str, status: str = "", today:
         "saldo": 0.0,
         "saldo_label": format_brl(0),
         "compare_note": "",
-        "suppliers": list_suppliers(),
+        "suppliers": load_suppliers(),
         "month_label": month_label(start, end),
         "semanas": _group_payable_weeks(listed, today, start, end),
         "saida_por_semana": [
@@ -2240,6 +2253,65 @@ def build_comparativos_context(params: dict | None = None) -> dict[str, Any]:
         "payables": payables,
         "pontos": pontos,
         "filters": params,
+    }
+
+
+def build_pessoal_context(params: dict | None = None) -> dict[str, Any]:
+    """Contas pessoais. Não lê a Entrada nem as contas da empresa."""
+    params = dict(params or {})
+    today = _today()
+    period_start, period_end = resolve_period(params.get("period_start"), params.get("period_end"), today=today)
+    params = {
+        **params,
+        "period_start": period_start.isoformat(),
+        "period_end": period_end.isoformat(),
+        "status": normalize_text(params.get("status")),
+        "search": normalize_text(params.get("search")),
+        "semana": normalize_text(params.get("semana")),
+    }
+    payables = _payables_view(
+        period_start,
+        period_end,
+        params["search"],
+        params["status"],
+        today,
+        ledger="pessoal",
+    )
+    _apply_week_choice(payables, params, period_start, period_end, today)
+    periodo = payables.get("month_label") or "Período"
+    return {
+        "payables": payables,
+        "filters": params,
+        "kpi_cards": [
+            {
+                "label": "A pagar",
+                "value": payables.get("a_pagar_label") or format_brl(0),
+                "note": "Em aberto no período, incluindo as atrasadas",
+                "tone": "orange",
+                "icon": "!",
+            },
+            {
+                "label": "Pago",
+                "value": payables.get("pago_label") or format_brl(0),
+                "note": "Contas quitadas no período",
+                "tone": "green",
+                "icon": "✓",
+            },
+            {
+                "label": "Atrasado",
+                "value": payables.get("atrasado_label") or format_brl(0),
+                "note": f"{payables.get('atrasado_n') or 0} conta(s) vencida(s)",
+                "tone": "orange",
+                "icon": "!",
+            },
+            {
+                "label": "Total",
+                "value": payables.get("saida_label") or format_brl(0),
+                "note": periodo,
+                "tone": "purple",
+                "icon": "≡",
+            },
+        ],
     }
 
 

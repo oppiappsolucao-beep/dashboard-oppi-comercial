@@ -49,9 +49,22 @@ def allowed_accesses(request: Request) -> set[str]:
     return allowed
 
 
+def _sector_key(name: str) -> str:
+    return "".join(ch for ch in str(name or "").lower() if ch.isalnum())
+
+
+def pessoal_allowed(request: Request) -> bool:
+    """Somente o setor Financeiro 1. O administrador e os outros setores não entram."""
+    if not is_employee(request):
+        return False
+    return _sector_key(request.session.get("org_sector_name") or "") == "financeiro1"
+
+
 def nav_permissions(request: Request) -> dict[str, bool]:
     allowed = allowed_accesses(request)
-    return {key: key in allowed for key in FULL_ACCESS}
+    nav = {key: key in allowed for key in FULL_ACCESS}
+    nav["pessoal"] = pessoal_allowed(request)
+    return nav
 
 
 def home_url(request: Request) -> str:
@@ -95,6 +108,10 @@ def enforce_access(request: Request):
         return None
     path = request.url.path
     if path.startswith("/configuracoes"):
+        return RedirectResponse(url=home_url(request), status_code=303)
+    if path.startswith("/financeiro/pessoal"):
+        if pessoal_allowed(request):
+            return None
         return RedirectResponse(url=home_url(request), status_code=303)
     needed = _required_access(path)
     if needed and needed not in allowed_accesses(request):
